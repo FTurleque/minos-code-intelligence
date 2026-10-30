@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.command.TeamCommand;
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;
@@ -33,7 +35,7 @@ class TeamCommandTest {
         MinosApplication application = MinosApplication.builder(home)
                 .hostedTenantKeyProvider(keys()).build();
         AtomicReference<String> token = new AtomicReference<>();
-        TeamCommand command = new TeamCommand(application.hostedControlPlaneService().orElseThrow(), token::get);
+        TeamCommand command = new TeamCommand(application.teamControlPlane().orElseThrow(), token::get);
         UUID tenant = UUID.randomUUID();
         StringBuilder output = new StringBuilder();
         StringBuilder error = new StringBuilder();

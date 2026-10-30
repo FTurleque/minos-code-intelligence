@@ -1,5 +1,15 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.sandbox.WindowsJobObjectProcessOwnership;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
+import com.minos.runtime.local.process.CommandLocator;
+import com.minos.runtime.local.process.IndexerProcessPlan;
+import com.minos.runtime.local.process.ProcessIndexerExecutor;
+import com.minos.runtime.local.process.ProcessSandboxCapableIndexerExecutor;
+import com.minos.runtime.local.sandbox.LinuxCgroupJob;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
+import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
+import com.minos.runtime.local.workspace.LocalProviderWorkspace;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
@@ -26,8 +36,12 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
     private final BoundaryProvider boundaryProvider;
     private final LocalIsolation localIsolation;
 
-    /** Strong descendant ownership only; managed providers must use the explicit network-policy constructor. */
-    public StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) {
+    /**
+     * Strong descendant ownership only, with no sandbox and no network policy. Package-private: managed
+     * providers use the explicit network-policy constructor, and the containment tests that qualify the
+     * ownership boundary alone reach this one through a test factory.
+     */
+    StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) {
         Path home = normalizedHome(minosHome);
         this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
         this.boundaryProvider = platformBoundary(home);

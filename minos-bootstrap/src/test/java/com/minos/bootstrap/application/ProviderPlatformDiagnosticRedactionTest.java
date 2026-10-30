@@ -18,7 +18,7 @@ class ProviderPlatformDiagnosticRedactionTest {
 
     @Test
     void sharedProviderViewRedactsRuntimeDiagnosticsBeforeApiOrMcpCanObserveThem() {
-        IndexerProvider provider = ScipIndexerCatalog.qualifiedM24Providers().getFirst();
+        IndexerProvider provider = ScipIndexerCatalog.qualifiedProviders().getFirst();
         ProviderRuntimeStatus status = new ProviderRuntimeStatus(
                 provider.descriptor().id(),
                 provider.descriptor().version(),

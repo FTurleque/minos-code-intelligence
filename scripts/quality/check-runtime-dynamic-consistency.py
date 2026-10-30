@@ -45,12 +45,12 @@ def main() -> int:
         port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
         codec = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeObservationEnvelopeCodec.java")
         service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
-        store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
+        store = read("minos-storage/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
         bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
-        command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
+        command = read("minos-cli/src/main/java/com/minos/cli/command/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
+        local_storage = read("minos-storage/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_schemas = read("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
@@ -87,7 +87,7 @@ def main() -> int:
 
         require_facts("FileRuntimeObservationStore.java", store,
                       "DEFAULT_MAX_SESSIONS_PER_PROJECT = 128", "DEFAULT_MAX_PROJECT_BYTES",
-                      "DEFAULT_MAX_SESSION_BYTES", "BoundedFileLease", "LOCK_TIMEOUT", "ATOMIC_MOVE",
+                      "DEFAULT_MAX_SESSION_BYTES", "BoundedFileLease", "LOCK_TIMEOUT", "DurableAtomicFile.publish",
                       "LinkOption.NOFOLLOW_LINKS", "checksum mismatch", "session is immutable",
                       "must not be a symbolic link", "capacity reached")
         require_facts("BoundedFileLease.java", bounded_lease,
@@ -119,12 +119,12 @@ def main() -> int:
 
         tests = {
             "RuntimeObservationModelTest.java": read("minos-engine/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
-            "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
-            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
+            "FileRuntimeObservationStoreTest.java": read("minos-storage/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreTest.java"),
+            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage/src/test/java/com/minos/storage/local/store/FileRuntimeObservationStoreSymlinkTest.java"),
             "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java"),
             # A3 / ADR 0044: the file-adapter half of the split runtime service test (real local stores).
             "RuntimeIntelligenceFileAdaptersTest.java": read("minos-bootstrap/src/test/java/com/minos/bootstrap/RuntimeIntelligenceFileAdaptersTest.java"),
-            "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
+            "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/command/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
         }
         require_facts("RuntimeObservationModelTest.java", tests["RuntimeObservationModelTest.java"],
@@ -158,20 +158,20 @@ def main() -> int:
         forbid("scripts/m26/run-final.ps1", windows, "gh workflow", "gh run", "workflow_dispatch")
         forbid("scripts/m26/run-final.sh", linux, "gh workflow", "gh run", "workflow_dispatch")
 
-        execution = read("docs/roadmap/M26_EXECUTION.md")
-        adr = read("docs/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md")
+        execution = read("docs/project/roadmap/M26_EXECUTION.md")
+        adr = read("docs/architecture/adr/DATA-0034-partial-runtime-observations-with-explicit-static-correlation.md")
         user = read("docs/user/runtime-intelligence.md")
         developer = read("docs/developer/runtime-dynamic-intelligence.md")
-        for relative, document in (("docs/roadmap/M26_EXECUTION.md", execution),
-                                   ("docs/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md", adr),
+        for relative, document in (("docs/project/roadmap/M26_EXECUTION.md", execution),
+                                   ("docs/architecture/adr/DATA-0034-partial-runtime-observations-with-explicit-static-correlation.md", adr),
                                    ("docs/user/runtime-intelligence.md", user),
                                    ("docs/developer/runtime-dynamic-intelligence.md", developer)):
             require_facts(relative, document, "minos-runtime-observation-v1", "PARTIAL",
                           "OBSERVED_PARTIAL", "snapshot", "borné", "absence")
-        require_facts("docs/roadmap/M26_EXECUTION.md", execution,
+        require_facts("docs/project/roadmap/M26_EXECUTION.md", execution,
                       "#87", "#88", BASE, "M26-S9",
                       "M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**")
-        require_facts("docs/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md", adr,
+        require_facts("docs/architecture/adr/DATA-0034-partial-runtime-observations-with-explicit-static-correlation.md", adr,
                       "Partial runtime observations with explicit static correlation",
                       "NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS")
 

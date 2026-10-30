@@ -10,13 +10,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 README = "README.md"
-STATUS = "docs/STATUS.md"
-ROADMAP = "docs/ROADMAP.md"
-RELEASE_101 = "docs/releases/1.0.1.md"
+STATUS = "docs/project/governance/STATUS.md"
+ROADMAP = "docs/project/governance/ROADMAP.md"
+RELEASE_101 = "docs/user/release-notes/1.0.1.md"
 PRODUCTION_INSTALL = "docs/user/production-installation.md"
 POM = "pom.xml"
-POSTGRES_POM = "minos-storage-postgresql/pom.xml"
-POSTGRES_SUPPORT = "minos-storage-postgresql/src/test/java/com/minos/storage/postgresql/PostgresTestSupport.java"
+POSTGRES_POM = "minos-storage/pom.xml"
+POSTGRES_SUPPORT = "minos-storage/src/test/java/com/minos/storage/postgresql/PostgresTestSupport.java"
 PR_WORKFLOW = ".github/workflows/pr-ci.yml"
 INTELLIJ_WORKFLOW = ".github/workflows/intellij-plugin.yml"
 RELEASE_WORKFLOW = ".github/workflows/release-windows.yml"
@@ -136,8 +136,8 @@ def validate_release_documentation() -> None:
 def validate_security_and_storage() -> None:
     pom = read(POM)
     require_all(POM, pom, (
-        "<jackson2.version>2.22.3</jackson2.version>",
-        "<jackson3.version>3.2.3</jackson3.version>",
+        "<jackson2.version>2.22.4</jackson2.version>",
+        "<jackson3.version>3.2.4</jackson3.version>",
         "com.fasterxml.jackson", "tools.jackson", "jackson-bom",
     ))
     forbid(POM, pom, "<jackson2.version>2.22.0</jackson2.version>")
@@ -208,7 +208,7 @@ def validate_ci_contracts() -> None:
     forbid(RELEASE_WORKFLOW, release, "pull_request:")
     require_all(RELEASE_WORKFLOW, release, (
         "Preflight exact ref and immutable tag", "git ls-remote --tags", "already exists on origin",
-        "IntelliJ Plugin Verifier", "verifyPlugin", "Set up Java 24 for MINOS release",
+        "IntelliJ Plugin Verifier", "verifyPlugin", "Set up Java 25 for MINOS release",
         "publish-windows-release.ps1", "TargetCommit $env:TARGET_COMMIT",
     ))
 

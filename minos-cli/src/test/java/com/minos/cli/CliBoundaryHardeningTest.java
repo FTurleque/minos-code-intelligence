@@ -1,7 +1,10 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.IndexCommand;
+import com.minos.cli.command.ToolsCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectOperations;
-import com.minos.orchestration.IndexingMode;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -107,7 +110,7 @@ class CliBoundaryHardeningTest {
                 List.of("MAVEN"),
                 List.of("scip-java"),
                 provider == null ? List.of() : List.of(provider),
-                IndexingMode.FULL,
+                "FULL",
                 List.of("test"),
                 List.of(),
                 false);

@@ -202,7 +202,7 @@ function Assert-NoRunningMinosProdContainer {
 }
 
 function Invoke-MinosDockerSmoke {
-    $java = Resolve-MinosJava24
+    $java = Resolve-MinosJava
     $smokeSource = Join-Path $projectRoot 'docker\scripts\MinosDockerMcpSmoke.java'
     Invoke-MinosNative -FilePath $java.JavaExecutable -ArgumentList @($smokeSource, $composeFile, $environmentFile) `
         -FailureMessage 'Le handshake MCP STDIO dans Docker a echoue'
@@ -222,13 +222,13 @@ switch ($Action) {
         Assert-NoRunningMinosProdContainer
         $backup = New-MinosProdBackup
 
-        $java = Resolve-MinosJava24
+        $java = Resolve-MinosJava
         $env:JAVA_HOME = $java.JavaHome
         $env:Path = "$($java.JavaHome)\bin;$env:Path"
         Push-Location $projectRoot
         try {
             Invoke-MinosNative -FilePath '.\mvnw.cmd' -ArgumentList @('-q', '-DskipTests', 'clean', 'package') `
-                -FailureMessage 'Le packaging MINOS sous Java 24 a echoue'
+                -FailureMessage 'Le packaging MINOS sous Java 25 a echoue'
         } finally {
             Pop-Location
         }
@@ -260,12 +260,19 @@ switch ($Action) {
             -Destination $composeFile -Force
         Remove-Item -LiteralPath $legacyComposeFile -Force -ErrorAction SilentlyContinue
         $preservedOverrides = @(Get-PreservedCeilingOverrides -Path $environmentFile)
+        # AUD-DEP-15: compose-mcp.prod.yaml runs minos-mcp on MINOS_QUERY_IMAGE. The image this development
+        # launcher builds (docker\Dockerfile.mcp) is already a JRE and the MINOS jar, with no compiler and no
+        # provider tool: it IS a query image, and the only service this launcher starts is minos-mcp. The same
+        # image is therefore named by both variables; the provider-complete administration image only exists
+        # in the packaged workflow (prod-mcp-release.ps1).
         $environmentContent = @"
 MINOS_COMPOSE_PROJECT=$composeProject
 MINOS_CONTAINER_NAME=$containerName
 MINOS_IMAGE=$image
+MINOS_QUERY_IMAGE=$image
 MINOS_DATA_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $dataDirectory))
 MINOS_PROJECTS_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $ProjectsRoot))
+MINOS_HOST_PROJECTS_ROOT=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $ProjectsRoot))
 MINOS_VERSION=$version
 MINOS_GIT_COMMIT=$commit
 "@
@@ -277,7 +284,7 @@ MINOS_GIT_COMMIT=$commit
             -FailureMessage 'La configuration Docker Compose MINOS est invalide'
         Invoke-MinosNative -FilePath 'docker' -ArgumentList @(
             'run', '--rm', '--network', 'none', '--entrypoint', 'java', $image, '-version'
-        ) -FailureMessage "Le runtime Java 24 de l'image MINOS est invalide"
+        ) -FailureMessage "Le runtime Java 25 de l'image MINOS est invalide"
         Invoke-MinosDockerSmoke
 
         $previousInstalledAt = $null

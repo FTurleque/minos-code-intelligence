@@ -23,11 +23,17 @@ final class JavaProgramGraphEngine {
     }
 
     String cacheKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
+        return sourceStateKey(project, snapshot).key();
+    }
+
+    /** The content-derived cache key, and whether obtaining it read at least one Java source. */
+    SourceStateKey sourceStateKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
         Objects.requireNonNull(project, "project");
         Objects.requireNonNull(snapshot, "snapshot");
         JavaSourceWorkspace.Discovery discovery = JavaSourceWorkspace.discover(project, snapshot);
-        return JavaSourceProgramGraphProvider.PROVIDER_ID + ":"
+        String key = JavaSourceProgramGraphProvider.PROVIDER_ID + ":"
                 + JavaSourceWorkspace.stateFingerprint(project, snapshot, discovery);
+        return new SourceStateKey(key, !discovery.sources().isEmpty());
     }
 
     ProgramGraph analyze(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
@@ -57,5 +63,8 @@ final class JavaProgramGraphEngine {
 
     private static ProgramGraph empty(String projectId, String snapshotId, String limitation) {
         return new ProgramGraph(projectId, snapshotId, Set.of(), List.of(), List.of(), List.of(limitation));
+    }
+
+    record SourceStateKey(String key, boolean readsSources) {
     }
 }

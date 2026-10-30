@@ -1,7 +1,9 @@
 package com.minos.cli;
 
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.MinosApplication;
-import com.minos.orchestration.IndexingResumePolicy;
+import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
@@ -18,7 +20,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -83,17 +84,17 @@ class NoResumeIndexingTest {
                 .providerRuntimeManager(readyRuntime()).build()) {
             RegisteredProject project = indexedAndUnchanged(application);
             LocalAutonomousIndexOperations operations =
-                    new LocalAutonomousIndexOperations(application, UnaryOperator.identity());
+                    new LocalAutonomousIndexOperations(application);
 
             // Control: with the default policy an unchanged project is not indexed again.
             AutonomousIndexOperations.IndexExecutionView untouched = operations.execute(
-                    project.id().toString(), null, false, IndexingResumePolicy.RESUME);
+                    project.id().toString(), null, false, IndexingResumeChoice.RESUME);
             assertEquals("NO_CHANGES", untouched.status());
             assertEquals(0, executed.get());
 
             // --no-resume: do not reopen anything and run fully -- the provider is executed.
             IllegalStateException failure = assertThrows(IllegalStateException.class, () -> operations.execute(
-                    project.id().toString(), null, false, IndexingResumePolicy.NO_RESUME));
+                    project.id().toString(), null, false, IndexingResumeChoice.NO_RESUME));
             assertTrue(failure.getMessage().contains("failed") || failure.getMessage().contains("executor reached"),
                     failure.getMessage());
             assertEquals(1, executed.get(), "--no-resume must execute the providers fully, not answer NO_CHANGES");
@@ -106,10 +107,10 @@ class NoResumeIndexingTest {
                 .providerRuntimeManager(readyRuntime()).build()) {
             RegisteredProject project = indexedAndUnchanged(application);
             LocalAutonomousIndexOperations operations =
-                    new LocalAutonomousIndexOperations(application, UnaryOperator.identity());
+                    new LocalAutonomousIndexOperations(application);
 
             IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> operations.execute(
-                    project.id().toString(), null, false, IndexingResumePolicy.RESUME_ONLY));
+                    project.id().toString(), null, false, IndexingResumeChoice.RESUME_ONLY));
             assertTrue(refusal.getMessage().contains("resume-only indexing refused"), refusal.getMessage());
             assertEquals(0, executed.get());
         }

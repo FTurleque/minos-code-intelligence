@@ -2,7 +2,7 @@
 
 ## Why
 
-L'intégration initiale (`ajouter-audit-spotbugs-pitest`) limitait PIT à trois classes, n'avait ni ArchUnit, ni Dependency-Check, ni Gitleaks, et concluait à l'analyse SpotBugs de « tous les modules » sur la foi d'un build vert. L'audit outillé du 8 octobre 2026 (`docs/quality/code-audit-couverture.md`) a montré que les rapports SpotBugs du plugin Maven ne prouvent pas le périmètre analysé (MINOS-AUD-H01), que le plugin IntelliJ échappe aux contrôles locaux (H09), que la clé NVD disponible est refusée (H04), que Dependency-Check produit des faux rapprochements sur des modules MINOS (H02) et que Gitleaks n'est ni configuré ni exécuté par la CI (H06). Ce changement fixe ce que l'audit outillé doit garantir pour qu'aucune conclusion de couverture ne repose sur un périmètre supposé.
+L'intégration initiale (`ajouter-audit-spotbugs-pitest`) limitait PIT à trois classes, n'avait ni ArchUnit, ni Dependency-Check, ni Gitleaks, et concluait à l'analyse SpotBugs de « tous les modules » sur la foi d'un build vert. L'audit outillé du 8 octobre 2026 (`docs/developer/quality/code-audit-couverture.md`) a montré que les rapports SpotBugs du plugin Maven ne prouvent pas le périmètre analysé (MINOS-AUD-H01), que le plugin IntelliJ échappe aux contrôles locaux (H09), que la clé NVD disponible est refusée (H04), que Dependency-Check produit des faux rapprochements sur des modules MINOS (H02) et que Gitleaks n'est ni configuré ni exécuté par la CI (H06). Ce changement fixe ce que l'audit outillé doit garantir pour qu'aucune conclusion de couverture ne repose sur un périmètre supposé.
 
 ## What Changes
 

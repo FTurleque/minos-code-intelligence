@@ -20,10 +20,10 @@ class ProviderCatalogPortTest {
     @Test
     void defaultCompositionServesTheQualifiedScipCatalogThroughThePort(@TempDir Path temp) throws Exception {
         try (MinosApplication application = MinosApplication.builder(temp.resolve("home")).build()) {
-            List<String> expected = ScipIndexerCatalog.qualifiedM24Providers().stream()
+            List<String> expected = ScipIndexerCatalog.qualifiedProviders().stream()
                     .map(provider -> provider.descriptor().id())
                     .toList();
-            assertEquals(expected, application.providerCatalog().providers().stream()
+            assertEquals(expected, application.compositionRoot().providerCatalog().providers().stream()
                     .map(provider -> provider.descriptor().id())
                     .toList());
             assertEquals(expected.stream().sorted().toList(),
@@ -37,7 +37,7 @@ class ProviderCatalogPortTest {
     void theCatalogIsReadWhenThePlatformViewIsBuiltNotWhenTheApplicationIsComposed(@TempDir Path temp)
             throws Exception {
         AtomicInteger reads = new AtomicInteger();
-        IndexerProvider only = ScipIndexerCatalog.qualifiedM24Providers().getFirst();
+        IndexerProvider only = ScipIndexerCatalog.qualifiedProviders().getFirst();
         IndexerProviderCatalog counting = () -> {
             reads.incrementAndGet();
             return List.of(only);

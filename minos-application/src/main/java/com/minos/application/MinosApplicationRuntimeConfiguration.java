@@ -50,7 +50,8 @@ final class MinosApplicationRuntimeConfiguration {
             Duration timeout = timeoutValue == null || timeoutValue.isBlank()
                     ? OllamaEmbeddingProvider.DEFAULT_TIMEOUT
                     : Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds"));
-            builder.embeddingProvider(new OllamaEmbeddingProvider(endpoint, model, dimensions, timeout));
+            builder.embeddingProvider(new OllamaEmbeddingProvider(
+                    endpoint, model, dimensions, timeout, settings.runtimeLocation()));
             return;
         }
         if (!"disabled".equals(provider)) {

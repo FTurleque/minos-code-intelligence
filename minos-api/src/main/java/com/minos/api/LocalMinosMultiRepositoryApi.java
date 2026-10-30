@@ -1,7 +1,14 @@
 package com.minos.api;
 
+import com.minos.application.LocalProjectGitQuery;
 import com.minos.application.MinosApplication;
-import com.minos.git.GitIntelligence;
+import com.minos.application.ProjectGitQuery;
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.CommitActivity;
+import com.minos.domain.git.FileActivity;
+import com.minos.domain.git.RepositoryView;
+import com.minos.domain.git.ZoneActivity;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
 import java.nio.file.Path;
@@ -16,7 +23,7 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     private final MinosApplication application;
     private final boolean ownsApplication;
     private final LocalMinosApi delegate;
-    private final GitIntelligence gitIntelligence;
+    private final ProjectGitQuery gitQuery;
     private final WorkspaceIntelligenceService workspaceIntelligence;
 
     public LocalMinosMultiRepositoryApi(Path home) throws MinosApiException {
@@ -33,7 +40,7 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         this.application = app;
         this.ownsApplication = ownsApplication;
         this.delegate = new LocalMinosApi(app);
-        this.gitIntelligence = app.gitIntelligence();
+        this.gitQuery = new LocalProjectGitQuery(app);
         this.workspaceIntelligence = app.workspaceIntelligence();
     }
 
@@ -189,7 +196,7 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     @Override
     public GitRepositoryDto inspectGit(String projectIdentifier) throws MinosApiException {
         ProjectDto project = delegate.getProject(projectIdentifier);
-        return execute(() -> repository(gitIntelligence.inspect(Path.of(project.rootPath()))));
+        return execute(() -> repository(gitQuery.inspect(Path.of(project.rootPath()))));
     }
 
     @Override
@@ -200,10 +207,11 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         ProjectDto project = delegate.getProject(projectIdentifier);
         return execute(() -> {
             GitActivityQuery value = required(query, "query");
-            return gitActivity(gitIntelligence.analyze(
+            return gitActivity(gitQuery.analyze(
                     Path.of(project.rootPath()),
-                    new GitIntelligence.ActivityQuery(
-                            value.since(), value.maxCommits(), value.maxFiles(), value.zoneDepth()
+                    new ActivityQuery(
+                            value.since(), value.maxCommits(), value.maxFiles(), value.zoneDepth(),
+                            value.includeAuthorEmails()
                     )
             ));
         });
@@ -239,14 +247,14 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         );
     }
 
-    private static GitRepositoryDto repository(GitIntelligence.RepositoryView value) {
+    private static GitRepositoryDto repository(RepositoryView value) {
         return new GitRepositoryDto(
                 value.repositoryId(), value.workTree(), value.originRemote(), value.branch(), value.headCommit(),
                 value.detachedHead(), value.shallow(), value.clean(), value.limitations()
         );
     }
 
-    private static GitActivityDto gitActivity(GitIntelligence.ActivityReport report) {
+    private static GitActivityDto gitActivity(ActivityReport report) {
         return new GitActivityDto(
                 repository(report.repository()),
                 report.query().since().toString(),
@@ -263,21 +271,21 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         );
     }
 
-    private static GitCommitDto commit(GitIntelligence.CommitActivity value) {
+    private static GitCommitDto commit(CommitActivity value) {
         return new GitCommitDto(
                 value.commitId(), value.committedAt().toString(), value.authorName(), value.authorEmail(),
                 value.message(), value.changedPaths()
         );
     }
 
-    private static GitFileActivityDto fileActivity(GitIntelligence.FileActivity value) {
+    private static GitFileActivityDto fileActivity(FileActivity value) {
         return new GitFileActivityDto(
                 value.path(), value.commitCount(), value.uniqueAuthorCount(), value.lastChangedAt().toString(),
                 value.lastCommitId()
         );
     }
 
-    private static GitZoneActivityDto zoneActivity(GitIntelligence.ZoneActivity value) {
+    private static GitZoneActivityDto zoneActivity(ZoneActivity value) {
         return new GitZoneActivityDto(
                 value.zone(), value.commitTouches(), value.distinctFileCount(), value.lastChangedAt().toString()
         );

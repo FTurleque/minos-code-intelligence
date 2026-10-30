@@ -1,6 +1,13 @@
 package com.minos.integration.git;
 
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.CommitActivity;
+import com.minos.domain.git.FileActivity;
+import com.minos.domain.git.RepositoryView;
+import com.minos.domain.git.ZoneActivity;
 import com.minos.git.GitIntelligence;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
@@ -8,22 +15,27 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.storage.file.FileBasedConfig;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.EmptyTreeIterator;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.TreeFilter;
 import org.eclipse.jgit.util.io.DisabledOutputStream;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.UserPrincipal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,6 +48,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * M12 factual Git intelligence over a local repository.
@@ -50,7 +67,14 @@ public final class GitIntelligenceService implements GitIntelligence {
     /** Consecutive commits older than {@code since} after which the rest of the history is taken as older too. */
     static final int OLDER_COMMIT_RUN_LIMIT = 1_000;
 
+    private static final String FILTER_SECTION = "filter";
+    private static final String OWNER_PROBE_DIRECTORY = "owner-probe";
+    /** The SCP form of a network remote; a one-letter host is a Windows drive, not a host. */
+    private static final Pattern SCP_REMOTE =
+            Pattern.compile("(?:[^@/\\\\]+@)?(?<host>[^@/\\\\:]{2,}):(?<path>[^\\\\]+)");
+
     private final ActivityBudget budget;
+    private final Supplier<UserPrincipal> expectedOwner;
 
     public GitIntelligenceService() {
         this(ActivityBudget.DEFAULT);
@@ -58,7 +82,16 @@ public final class GitIntelligenceService implements GitIntelligence {
 
     /** Explicit budget, so a caller (and an adversarial test) can bound the analysis frontier itself. */
     public GitIntelligenceService(ActivityBudget budget) {
+        this(budget, null);
+    }
+
+    /**
+     * Test seam: the owner a repository must have. {@code null} means the owner the system gives a file
+     * this process creates.
+     */
+    GitIntelligenceService(ActivityBudget budget, Supplier<UserPrincipal> expectedOwner) {
         this.budget = Objects.requireNonNull(budget, "budget");
+        this.expectedOwner = expectedOwner;
     }
 
     /** The resource frontier this service enforces while it walks history. */
@@ -68,16 +101,18 @@ public final class GitIntelligenceService implements GitIntelligence {
 
     @Override
     public RepositoryView inspect(Path projectRoot) throws IOException, GitAPIException {
-        try (Repository repository = open(projectRoot); Git git = new Git(repository)) {
-            return repositoryView(repository, git);
+        OpenedRepository opened = open(projectRoot);
+        try (Repository repository = opened.repository(); Git git = new Git(repository)) {
+            return repositoryView(repository, git, opened);
         }
     }
 
     @Override
     public ActivityReport analyze(Path projectRoot, ActivityQuery query) throws IOException, GitAPIException {
         Objects.requireNonNull(query, "query");
-        try (Repository repository = open(projectRoot); Git git = new Git(repository)) {
-            RepositoryView repositoryView = repositoryView(repository, git);
+        OpenedRepository opened = open(projectRoot);
+        try (Repository repository = opened.repository(); Git git = new Git(repository)) {
+            RepositoryView repositoryView = repositoryView(repository, git, opened);
             Set<String> limitations = new LinkedHashSet<>(repositoryView.limitations());
             List<CommitActivity> commits = new ArrayList<>();
             Map<String, MutableFileActivity> files = new HashMap<>();
@@ -133,7 +168,7 @@ public final class GitIntelligenceService implements GitIntelligence {
                             commit.getName(),
                             committedAt,
                             commit.getAuthorIdent().getName(),
-                            commit.getAuthorIdent().getEmailAddress(),
+                            query.includeAuthorEmails() ? commit.getAuthorIdent().getEmailAddress() : MASKED_AUTHOR_EMAIL,
                             commit.getShortMessage(),
                             retained
                     ));
@@ -175,29 +210,136 @@ public final class GitIntelligenceService implements GitIntelligence {
         }
     }
 
-    private static Repository open(Path projectRoot) throws IOException {
+    /** The repository found for a project root, and what had to be set aside to open it safely. */
+    private record OpenedRepository(Repository repository, Path projectRoot, boolean filtersNotApplied) {
+    }
+
+    private OpenedRepository open(Path projectRoot) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Path root = projectRoot.toRealPath();
         if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + leafName(projectRoot));
         }
         // No readEnvironment(): GIT_DIR, GIT_WORK_TREE and GIT_CEILING_DIRECTORIES must not redirect
         // the analysis to a repository other than the one under the requested root.
         FileRepositoryBuilder builder = new FileRepositoryBuilder()
                 .findGitDir(root.toFile());
         if (builder.getGitDir() == null) {
-            throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + root);
+            throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + leafName(root));
         }
-        return builder.build();
+        Repository repository = builder.build();
+        try {
+            // A linked worktree keeps its own git dir but shares configuration, objects and hooks with the
+            // main repository (the common directory): both are written by whoever owns them.
+            requireExpectedOwner(repository.getDirectory().toPath());
+            requireExpectedOwner(repository.getCommonDirectory().toPath());
+            return new OpenedRepository(repository, root, redirectRepositoryFiltersToPassThrough(repository));
+        } catch (IOException | RuntimeException failure) {
+            repository.close();
+            throw failure;
+        }
     }
 
-    private static RepositoryView repositoryView(Repository repository, Git git)
+    /**
+     * A repository found on disk is not trusted: the directories the analysis opens, directly or by
+     * walking up from the project root, must belong to the account this process runs as, otherwise
+     * their configuration and attributes were written by someone else. The path is resolved first, so a
+     * link owned by the user cannot stand for a directory owned by another account.
+     */
+    private void requireExpectedOwner(Path gitDirectory) throws IOException {
+        UserPrincipal found;
+        UserPrincipal expected;
+        try {
+            found = Files.getOwner(gitDirectory.toRealPath());
+            expected = expectedOwner != null ? expectedOwner.get() : processOwner();
+        } catch (IOException | UncheckedIOException | UnsupportedOperationException _) {
+            throw new IOException(
+                    "The owner of the Git repository cannot be read; the analysis is refused (fail-closed)");
+        }
+        if (!found.equals(expected)) {
+            throw new IOException("The Git repository is owned by '" + found.getName()
+                    + "', not by the account running this process ('" + expected.getName()
+                    + "'); change the repository owner before analysing it");
+        }
+    }
+
+    private static final AtomicReference<UserPrincipal> PROCESS_OWNER = new AtomicReference<>();
+
+    /**
+     * The owner the system gives a file this process creates, read once from a throw-away file in the
+     * private MINOS directory (never in the shared system temporary directory, and never inside the
+     * analysed repository: an analysis writes nothing there and may not be allowed to). The owner of a new
+     * file does not depend on the directory that holds it. The directory follows the rule of
+     * {@code MinosHome} ({@code minos.home}, {@code MINOS_HOME}, then {@code ~/.minos}), which an adapter
+     * cannot import from the application layer.
+     */
+    private static UserPrincipal processOwner() {
+        UserPrincipal known = PROCESS_OWNER.get();
+        if (known != null) {
+            return known;
+        }
+        try {
+            Path probe = PrivateLocalStorage.createPrivateTempFile(probeDirectory(), "minos-owner-", ".probe");
+            try {
+                PROCESS_OWNER.compareAndSet(null, Files.getOwner(probe));
+                return PROCESS_OWNER.get();
+            } finally {
+                Files.deleteIfExists(probe);
+            }
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+    }
+
+    private static Path probeDirectory() {
+        String property = System.getProperty("minos.home");
+        if (property != null && !property.isBlank()) {
+            return Path.of(property).resolve(OWNER_PROBE_DIRECTORY);
+        }
+        String environment = System.getenv("MINOS_HOME");
+        if (environment != null && !environment.isBlank()) {
+            return Path.of(environment).resolve(OWNER_PROBE_DIRECTORY);
+        }
+        return Path.of(System.getProperty("user.home")).resolve(".minos").resolve(OWNER_PROBE_DIRECTORY);
+    }
+
+    /**
+     * Neutralises, in memory only, every {@code filter.*} driver declared by the repository's own
+     * configuration (included files comprised): a {@code clean} filter is a shell command, and the
+     * repository is not trusted to run one. Each such driver is pointed at a built-in pass-through, so
+     * the working-tree comparison is still computed, on the raw content. {@code JGit} does not drop
+     * lines that come from an included file, so overriding the value is what covers them. The
+     * configuration file is never written, and drivers known only to the user or system configuration
+     * are left alone. Answers whether anything was set aside.
+     */
+    private static boolean redirectRepositoryFiltersToPassThrough(Repository repository) throws IOException {
+        FileBasedConfig declared = new FileBasedConfig(
+                new File(repository.getCommonDirectory(), "config"), repository.getFS());
+        try {
+            declared.load();
+        } catch (ConfigInvalidException _) {
+            throw new IOException("The Git repository configuration is invalid");
+        }
+        Set<String> drivers = declared.getSubsections(FILTER_SECTION);
+        if (drivers.isEmpty()) {
+            return false;
+        }
+        PassThroughFilter.register();
+        for (String driver : drivers) {
+            repository.getConfig().setString(FILTER_SECTION, driver, "clean", PassThroughFilter.COMMAND);
+            repository.getConfig().setString(FILTER_SECTION, driver, "smudge", PassThroughFilter.COMMAND);
+        }
+        return true;
+    }
+
+    private static RepositoryView repositoryView(Repository repository, Git git, OpenedRepository opened)
             throws IOException, GitAPIException {
         Path workTree = repository.isBare()
                 ? repository.getDirectory().toPath().toAbsolutePath().normalize()
                 : repository.getWorkTree().toPath().toRealPath();
         String rawRemote = repository.getConfig().getString("remote", "origin", "url");
         String remote = sanitizeRemote(rawRemote);
+        String disclosed = disclosedRemote(rawRemote);
         String head = objectId(repository.resolve(Constants.HEAD));
         String fullBranch = repository.getFullBranch();
         boolean detached = fullBranch != null && !fullBranch.startsWith(Constants.R_HEADS);
@@ -210,6 +352,8 @@ public final class GitIntelligenceService implements GitIntelligence {
         List<String> limitations = new ArrayList<>();
         if (remote == null) {
             limitations.add("NO_ORIGIN_REMOTE");
+        } else if (disclosed == null) {
+            limitations.add("ORIGIN_REMOTE_NOT_DISCLOSED");
         }
         if (detached) {
             limitations.add("DETACHED_HEAD");
@@ -220,12 +364,18 @@ public final class GitIntelligenceService implements GitIntelligence {
         if (head == null) {
             limitations.add("UNBORN_HEAD");
         }
+        if (!workTree.equals(opened.projectRoot())) {
+            limitations.add("REPOSITORY_ABOVE_PROJECT_ROOT");
+        }
+        if (opened.filtersNotApplied()) {
+            limitations.add("REPOSITORY_FILTERS_NOT_APPLIED");
+        }
 
         String identityBasis = remote == null ? "path:" + workTree : "remote:" + remote;
         return new RepositoryView(
                 Sha256.hex(identityBasis),
                 workTree.toString(),
-                remote,
+                disclosed,
                 branch,
                 head,
                 detached,
@@ -386,6 +536,33 @@ public final class GitIntelligenceService implements GitIntelligence {
         String[] segments = normalized.substring(0, slash).split("/");
         int count = Math.min(depth, segments.length);
         return String.join("/", java.util.Arrays.copyOf(segments, count));
+    }
+
+    /**
+     * The origin remote as rendered by the public surfaces: a recognised network form (a URL with a host and a scheme
+     * other than {@code file}, or the SCP form {@code [user@]host:path}) without credentials, query or fragment. Any
+     * other value -- an unparsable URL, a local or UNC path -- is withheld ({@code null}): it could carry a password or
+     * an absolute path of the machine. The repository identity keeps using {@link #sanitizeRemote(String)}.
+     */
+    static String disclosedRemote(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.contains("://")) {
+            try {
+                URI uri = new URI(value);
+                if (uri.getHost() == null || "file".equalsIgnoreCase(uri.getScheme())) {
+                    return null;
+                }
+                return new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), trimGitSuffix(uri.getPath()),
+                        null, null).toString();
+            } catch (URISyntaxException _) {
+                return null;
+            }
+        }
+        Matcher scp = SCP_REMOTE.matcher(value);
+        return scp.matches() ? trimGitSuffix(scp.group("host") + ":" + scp.group("path")) : null;
     }
 
     private static String sanitizeRemote(String raw) {

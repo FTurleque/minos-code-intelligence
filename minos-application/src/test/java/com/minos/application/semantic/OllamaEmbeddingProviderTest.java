@@ -1,5 +1,6 @@
 package com.minos.application.semantic;
 
+import com.minos.domain.registry.ProjectPathMapping.RuntimeLocation;
 import com.minos.semantic.SemanticVector;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +39,8 @@ class OllamaEmbeddingProviderTest {
         new OllamaEmbeddingProvider(
                 URI.create("http://[::1]:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2));
         OllamaEmbeddingProvider docker = new OllamaEmbeddingProvider(
-                OllamaEmbeddingProvider.MANAGED_DOCKER_ENDPOINT, "fixture", 384, Duration.ofSeconds(2));
+                OllamaEmbeddingProvider.MANAGED_DOCKER_ENDPOINT, "fixture", 384, Duration.ofSeconds(2),
+                RuntimeLocation.DOCKER);
         assertEquals("minos-ollama", docker.endpoint().getHost());
 
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(

@@ -98,7 +98,7 @@ internal static class MavenCommandShim
 
     private static int Main(string[] args)
     {
-        string mavenCommand = Environment.GetEnvironmentVariable("MINOS_M14_MAVEN_CMD");
+        string mavenCommand = Environment.GetEnvironmentVariable("MINOS_SCIP_JAVA_MAVEN_CMD");
         if (String.IsNullOrEmpty(mavenCommand) || !File.Exists(mavenCommand))
         {
             Console.Error.WriteLine("MINOS Maven command not found: " + mavenCommand);
@@ -120,13 +120,13 @@ internal static class MavenCommandShim
             if (args[i].StartsWith(compilerPrefix, StringComparison.Ordinal))
             {
                 string script = args[i].Substring(compilerPrefix.Length);
-                string shim = Environment.GetEnvironmentVariable("MINOS_M14_SCIP_JAVAC_EXE");
+                string shim = Environment.GetEnvironmentVariable("MINOS_SCIP_JAVA_SCIP_JAVAC_EXE");
                 if (String.IsNullOrEmpty(shim) || !File.Exists(shim))
                 {
                     Console.Error.WriteLine("MINOS scip-java javac shim not found: " + shim);
                     return 2;
                 }
-                Environment.SetEnvironmentVariable("MINOS_M14_SCIP_JAVAC_SCRIPT", script);
+                Environment.SetEnvironmentVariable("MINOS_SCIP_JAVA_SCIP_JAVAC_SCRIPT", script);
                 args[i] = compilerPrefix + shim;
             }
         }
@@ -169,8 +169,8 @@ internal static class ScipJavacCommandShim
 
     private static int Main(string[] args)
     {
-        string bash = Environment.GetEnvironmentVariable("MINOS_M14_BASH_EXE");
-        string script = Environment.GetEnvironmentVariable("MINOS_M14_SCIP_JAVAC_SCRIPT");
+        string bash = Environment.GetEnvironmentVariable("MINOS_SCIP_JAVA_BASH_EXE");
+        string script = Environment.GetEnvironmentVariable("MINOS_SCIP_JAVA_SCIP_JAVAC_SCRIPT");
         if (String.IsNullOrEmpty(bash) || !File.Exists(bash))
         {
             Console.Error.WriteLine("MINOS Git Bash executable not found: " + bash);
@@ -392,13 +392,13 @@ Remove-Item -LiteralPath $destination, $backup -Force -ErrorAction SilentlyConti
 if ($hadExisting) { Move-Item -LiteralPath $generated -Destination $backup -Force }
 
 $oldPath = $env:PATH
-$oldMaven = [Environment]::GetEnvironmentVariable('MINOS_M14_MAVEN_CMD', 'Process')
-$oldJavac = [Environment]::GetEnvironmentVariable('MINOS_M14_SCIP_JAVAC_EXE', 'Process')
-$oldBash = [Environment]::GetEnvironmentVariable('MINOS_M14_BASH_EXE', 'Process')
+$oldMaven = [Environment]::GetEnvironmentVariable('MINOS_SCIP_JAVA_MAVEN_CMD', 'Process')
+$oldJavac = [Environment]::GetEnvironmentVariable('MINOS_SCIP_JAVA_SCIP_JAVAC_EXE', 'Process')
+$oldBash = [Environment]::GetEnvironmentVariable('MINOS_SCIP_JAVA_BASH_EXE', 'Process')
 $kotlinFilesystemBaseline = $null
-$env:MINOS_M14_MAVEN_CMD = $maven
-$env:MINOS_M14_SCIP_JAVAC_EXE = $shims.Javac
-$env:MINOS_M14_BASH_EXE = $bash
+$env:MINOS_SCIP_JAVA_MAVEN_CMD = $maven
+$env:MINOS_SCIP_JAVA_SCIP_JAVAC_EXE = $shims.Javac
+$env:MINOS_SCIP_JAVA_BASH_EXE = $bash
 $env:PATH = "$(Split-Path -Parent $shims.Maven);$oldPath"
 
 try {
@@ -420,7 +420,10 @@ try {
                 --scip-config $config --targetroot $targetRoot --output $generated
         }
         else {
-            & $java -classpath "$patch;$classpath" org.scip_code.scip_java.ScipJava index
+            # Outside the project's own build tree: a module building into the root target/ would delete it in its clean.
+            $targetRoot = Join-Path $output 'scip-java-target'
+            Remove-Item -LiteralPath $targetRoot -Recurse -Force -ErrorAction SilentlyContinue
+            & $java -classpath "$patch;$classpath" org.scip_code.scip_java.ScipJava index --targetroot $targetRoot
         }
         $exit = $LASTEXITCODE
     }
@@ -439,9 +442,9 @@ finally {
         Move-Item -LiteralPath $backup -Destination $generated -Force
     }
     $env:PATH = $oldPath
-    [Environment]::SetEnvironmentVariable('MINOS_M14_MAVEN_CMD', $oldMaven, 'Process')
-    [Environment]::SetEnvironmentVariable('MINOS_M14_SCIP_JAVAC_EXE', $oldJavac, 'Process')
-    [Environment]::SetEnvironmentVariable('MINOS_M14_BASH_EXE', $oldBash, 'Process')
+    [Environment]::SetEnvironmentVariable('MINOS_SCIP_JAVA_MAVEN_CMD', $oldMaven, 'Process')
+    [Environment]::SetEnvironmentVariable('MINOS_SCIP_JAVA_SCIP_JAVAC_EXE', $oldJavac, 'Process')
+    [Environment]::SetEnvironmentVariable('MINOS_SCIP_JAVA_BASH_EXE', $oldBash, 'Process')
     if ($null -ne $kotlinFilesystemBaseline) {
         Remove-NewKotlinCompilerOutputs -Project $project -Baseline $kotlinFilesystemBaseline
     }

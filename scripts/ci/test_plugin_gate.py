@@ -33,8 +33,19 @@ class ScopeTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(gate.in_scope([path]))
 
+    def test_the_engine_launcher_and_the_parity_gate_are_in_scope(self):
+        # AUD-QUA-01: the plugin carries a copy of the engine's Job Object launcher; a change on the engine side must
+        # run the plugin tests, the Windows launcher tests included.
+        for path in ("minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-fragments/"
+                     "command-line-builder.ps1frag",
+                     "minos-runtime-local/src/main/resources/com/minos/runtime/local/"
+                     "windows-job-object-owner-v1.ps1.template",
+                     "scripts/quality/check-job-object-launcher-parity.py"):
+            with self.subTest(path=path):
+                self.assertTrue(gate.in_scope([path]))
+
     def test_a_change_elsewhere_is_out_of_scope(self):
-        self.assertFalse(gate.in_scope(["README.md", "docs/adr/0058-declarer-les-usages-de-modules.md",
+        self.assertFalse(gate.in_scope(["README.md", "docs/architecture/adr/ARCH-0058-declarer-les-usages-de-modules.md",
                                         "minos-engine/src/main/java/com/minos/store/InMemoryCodeKnowledgeStore.java"]))
 
     def test_one_file_in_scope_is_enough_and_windows_separators_are_understood(self):

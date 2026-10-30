@@ -2,7 +2,7 @@
 
 Le plugin **MINOS Code Intelligence** ajoute une surface IDE native au moteur MINOS local. Il ne remplace ni l'index IntelliJ ni le MCP : il consomme les faits et services MINOS via le protocole externe versionné `minos-ide`.
 
-M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité et recherche sémantique/hybride, **sans embarquer ni réimplémenter le moteur Java 24 dans le plugin**.
+M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité et recherche sémantique/hybride, **sans embarquer ni réimplémenter le moteur Java 25 dans le plugin**.
 
 ## Prérequis
 
@@ -11,7 +11,7 @@ M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité e
 3. disposer d'un projet local ouvrable par IntelliJ ;
 4. installer le ZIP du plugin produit par le build MINOS.
 
-Le plugin et le moteur sont volontairement séparés : le plugin s'exécute en Java 21 avec la JVM IntelliJ, tandis que MINOS reste un processus local Java 24 indépendant.
+Le plugin et le moteur sont volontairement séparés : le plugin s'exécute en Java 21 avec la JVM IntelliJ, tandis que MINOS reste un processus local Java 25 indépendant.
 
 ### Ownership OS des commandes CLI
 
@@ -22,6 +22,8 @@ Le plugin ne lance plus le CLI sous une simple supervision PID. La frontière d'
 - **autres plateformes** : aucune garantie forte n'est annoncée et les commandes du plugin restent fail-closed tant qu'une primitive équivalente n'est pas qualifiée.
 
 Le polling `ProcessHandle` reste actif uniquement comme défense en profondeur et protection PID-reuse.
+
+Sous Windows, le plugin réserve à leur propriétaire le dossier MINOS (`MINOS_HOME` des réglages, sinon `%USERPROFILE%\.minos`) et ses sous-dossiers `intellij\process-ownership`. Ce dossier doit donc être **dédié à MINOS** : le plugin refuse, sans rien modifier, le profil lui-même, un de ses dossiers parents, une racine de volume, ou un dossier qui existe déjà et appartient à un autre compte (message « … must be a directory dedicated to MINOS » ou « … already exists and belongs to another account »). Remède : choisir un `MINOS_HOME` dédié, ou reprendre la propriété du dossier. Avant cette garde, un `MINOS_HOME` posé sur le profil réduisait l'accès au profil à son propriétaire, Système, et rendait le poste inutilisable (incident MINOS-AUD-H23).
 
 ## Installation du plugin
 
@@ -70,6 +72,8 @@ C:\Users\<user>\AppData\Local\Programs\MINOS\minos.cmd
 ```
 
 Un nom simple comme `minos.cmd` ou `minos` est résolu **avant** l'application du working directory projet et uniquement à partir d'entrées `PATH` absolues. Les éléments `PATH` vides ou relatifs et les chemins de launcher relatifs tels que `tools\minos.cmd` sont refusés : la racine du projet ne participe jamais à la résolution de l'exécutable.
+
+**Lanceur de développement.** Le `minos.cmd` de la racine du dépôt MINOS n'est pas le lanceur distribué : il lance le JAR ombré de `target\` avec Java et ne sert qu'à développer MINOS. Comme le plugin exécute sa commande depuis le projet ouvert, et que `cmd.exe` cherche une commande sans chemin dans le répertoire courant avant le `PATH`, ce lanceur appelle `%JAVA_HOME%\bin\java.exe` quand il existe, et sinon fixe `NoDefaultCurrentDirectoryInExePath=1` avant d'appeler `java` : un `java.bat` ou `java.exe` déposé dans un projet n'est jamais exécuté. La variable est héritée par Java et par les processus qu'il lance ; elle ne subsiste pas dans l'interpréteur appelant. Le lanceur installé (`...\Programs\MINOS\minos.cmd`) appelle `app\minos.exe` par chemin absolu et n'est pas concerné.
 
 ## Protocole IDE
 
@@ -300,7 +304,7 @@ Le score hybride est une **sélection/ranking dérivé**, pas un nouveau fact de
 
 ### Build hybrid context…
 
-Construit un contexte borné en documents/tokens à partir du ranking hybride. Le plugin transmet uniquement la requête et les bornes ; la sélection et la troncature restent exécutées dans MINOS Java 24.
+Construit un contexte borné en documents/tokens à partir du ranking hybride. Le plugin transmet uniquement la requête et les bornes ; la sélection et la troncature restent exécutées dans MINOS Java 25.
 
 ## Frontière d'architecture
 
@@ -314,7 +318,7 @@ IntelliJ Java 21
     └── JSON minos-ide v1
             │
             ▼
-MINOS Java 24
+MINOS Java 25
     ├── ProgramGraphService
     ├── AdvancedImpactService
     ├── SecurityAnalysisService
@@ -325,6 +329,10 @@ MINOS Java 24
 ```
 
 Le build du plugin ne dépend d'aucun artefact Maven `com.minos:*`.
+
+## Couverture du plugin
+
+Les tests du plugin sont des tests JUnit sans fixture de plateforme : la logique testable vit dans des classes sans type IntelliJ (`MinosSymbolRanking`, `MinosJsonFields`, `MinosRegistryNoticeText`, `MinosSettingsRules`, gardées par `PlatformFreeLogicTest`). La couverture est mesurée par JaCoCo (`./gradlew test jacocoTestReport`) et bornée par `jacocoTestCoverageVerification`, jugé par le job Linux de `IntelliJ plugin (gate)` : 0,33 en lignes et en branches pour le plugin, 0,47 / 0,39 pour `protocol/` (mesure Linux du 15 octobre 2026 moins 2 points : 0,359 / 0,357 et 0,498 / 0,419). Le job Windows publie son rapport, où le lanceur à propriété forte s'exécute aussi. Ne sont pas couverts par des tests unitaires, par construction : la fenêtre d'outils (`MinosToolWindowPanel`, `MinosToolWindowFactory`, `MinosUiController`), l'écran de réglages (`MinosSettingsConfigurable`), la navigation (`MinosNavigation`), les enveloppes d'action et les appels de la plateforme (`MinosProjectService`, `MinosRegistryNotice`, `MinosSettingsState`).
 
 ## Compatibilité IntelliJ
 
@@ -346,6 +354,7 @@ Le client :
 - applique le timeout configuré ;
 - tue un processus dépassant ce délai ;
 - affiche les erreurs dans la Tool Window sans modifier le snapshot actif.
+- journalise l'échec d'une tâche d'arrière-plan avec sa pile dans `idea.log` (menu `Help > Show Log in Explorer`, recherche « MINOS task failed ») ; quand l'exception n'a pas de message, la Tool Window affiche `Unknown failure (<type>)`. L'annulation par l'utilisateur n'est pas journalisée.
 
 ## Dépannage
 

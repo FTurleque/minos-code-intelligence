@@ -18,11 +18,21 @@ concurrency:
 jobs:
   vulnerability-scan:
     name: Dependency vulnerability gate
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # v2.3.8
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a96bc4d2b09685b6142bcfe25a3dc17cb2d7347 # commit sans tag (v2.7.0 + 2 commits), appelle osv-scanner-action v2.7.0
     with:
+      # The scanner recognises an npm lockfile by its file name (package-lock.json). The two lockfiles shipped
+      # with the product are prefixed with the name of their tool, so --recursive does not see them: each is
+      # passed explicitly, parsed as a package-lock.json (AUD-DEP-03). scripts/quality/check-ci-wiring.py fails
+      # when a lockfile under a src/main/resources directory is missing from this list.
+      # AUD-DEP-04: minos-intellij/gradle.lockfile (what the plugin ships and tests with) is scanned. The lock of the
+      # plugin's build script classpath (buildscript-gradle.lockfile) and gradle/verification-metadata.xml are scanned
+      # too: --experimental-exclude only excludes directories. Jackson and jsoup are raised there by build.gradle.kts;
+      # undertow-core, with no fixed version, is the only exception (minos-intellij/osv-scanner.toml, expiring).
       scan-args: |-
         --recursive
         --experimental-exclude=g:**/fixtures/**
+        --lockfile=package-lock.json:minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-python-package-lock.json
+        --lockfile=package-lock.json:minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/scip-typescript-package-lock.json
         ./
       fail-on-vuln: true
     permissions:
@@ -34,16 +44,18 @@ jobs:
   # (Python-only, no Java/Maven setup) instead of once per OS or once per now-retired
   # remediation workflow. Formerly split across pr-ci's own OS matrix plus
   # mnd-remediation.yml, mne-remediation.yml, post-mne-remediation.yml and
-  # post-228-hardening.yml (see docs/audit/archive/2026-09/CI-HYGIENE-SUIVI.md for the inventory that
+  # post-228-hardening.yml (see docs/project/audits/archive/2026-09/CI-HYGIENE-SUIVI.md for the inventory that
   # justified each merge).
   invariants:
     name: Static invariants (single run)
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
@@ -56,12 +68,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
-      - name: Immutable workflow supply-chain gate
+      - name: Immutable workflow supply-chain gate (actions by SHA, Inno Setup provenance, no floating runner image)
         run: python scripts/quality/check-workflow-pins.py
+
+      - name: Immutable workflow supply-chain gate self-test
+        run: python scripts/quality/test_check_workflow_pins.py -v
 
       - name: Single execution gate (Maven verify, product facts, JaCoCo and sandbox toolchain run once per OS, here only)
         run: python scripts/quality/check-single-execution.py
@@ -81,6 +96,27 @@ jobs:
       - name: Compose resource limits gate self-test
         run: python scripts/quality/test_check_compose_limits.py -v
 
+      - name: Toolchain baseline gate (the Gradle wrapper and the policy state one version, no workflow installs Gradle)
+        run: python scripts/quality/check-toolchain-baseline.py
+
+      - name: Toolchain baseline gate self-test
+        run: python scripts/quality/test_check_toolchain_baseline.py -v
+
+      - name: Installation secret file tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_secret_file_acl.py -v
+
+      - name: Development launcher tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_dev_launcher.py -v
+
+      - name: Docker lifecycle query-image tests (pwsh here, Windows PowerShell 5.1 and pwsh in the verify job)
+        run: python scripts/install/test_mcp_lifecycle_query_image.py -v
+
+      - name: Docker script context tests (runtime .env and image build context; whole verification script in the verify job)
+        run: python scripts/install/test_docker_script_contexts.py -v
+
+      - name: Delegated cgroup root validation tests (provisioning scripts run with a recording sudo)
+        run: python scripts/deploy/test_cgroup_root_validation.py -v
+
       - name: Shipped tools gate (one description shared by Java, the Docker image and the Windows distribution)
         run: python scripts/quality/check-tools-manifest.py
 
@@ -88,6 +124,17 @@ jobs:
         run: |
           python scripts/quality/test_check_tools_manifest.py -v
           python scripts/release/test_build_embedded_tools.py -v
+
+      # The watch itself queries an advisory service and runs on a schedule (embedded-tools-advisories.yml):
+      # an advisory published during the week must not fail an unrelated pull request. Only its self-test,
+      # which uses simulated answers and no network, runs here; it also proves that the tables of the script
+      # know every entry of the catalogue and every jar of the classpath lock.
+      - name: Embedded tools advisory watch self-test (simulated answers, no network)
+        run: python scripts/quality/check-embedded-tools-advisories.py --self-test
+
+      # AUD-DEP-11: the comparison of two builds, on simulated archives (the real double build is reproducible-build.yml).
+      - name: Reproducible build comparison self-test
+        run: python scripts/quality/check-reproducible-build.py --self-test
 
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
@@ -113,6 +160,20 @@ jobs:
       - name: CI wiring gate (required checks resolve to jobs that can report; every gate self-test runs here)
         run: python scripts/quality/check-ci-wiring.py
 
+      # AUD-QUA-01: the plugin's copy of the Job Object launcher against the one the engine assembles.
+      - name: Job Object launcher parity gate
+        run: python scripts/quality/check-job-object-launcher-parity.py
+
+      - name: Job Object launcher parity gate self-test
+        run: python scripts/quality/test_check_job_object_launcher_parity.py -v
+
+      # AUD-QUA-09: functions copied between shipped, install, release and CI scripts stay identical.
+      - name: Twin script functions gate
+        run: python scripts/quality/check-twin-script-functions.py
+
+      - name: Twin script functions gate self-test
+        run: python scripts/quality/test_check_twin_script_functions.py -v
+
       - name: CI wiring, ruleset comparison and plugin gate self-tests
         run: |
           python scripts/quality/test_check_ci_wiring.py -v
@@ -124,6 +185,24 @@ jobs:
 
       - name: Milestone artifact reference guard self-test
         run: python scripts/quality/check-milestone-artifact-references.py --self-test
+
+      - name: Bounded helpers gate (a bounded-arithmetic helper is named after its overflow behaviour)
+        run: python scripts/quality/check-bounded-helpers.py
+
+      - name: Bounded helpers gate self-test
+        run: python scripts/quality/check-bounded-helpers.py --self-test
+
+      - name: Milestone identifiers gate (no milestone number in a production name)
+        run: python scripts/quality/check-milestone-identifiers.py
+
+      - name: Milestone identifiers gate self-test
+        run: python scripts/quality/check-milestone-identifiers.py --self-test
+
+      - name: Comment language gate (no file mixes French and English comments; per-module counters only go down)
+        run: python scripts/quality/check-comment-language.py
+
+      - name: Comment language gate self-test
+        run: python scripts/quality/check-comment-language.py --self-test
 
       - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
@@ -158,13 +237,23 @@ jobs:
         shell: pwsh
         run: ./scripts/release/test-iscc-provenance.ps1
 
+      # AUD-DEP-06: the release signature guard and the recomputed checksums (PowerShell 7 here, 5.1 under Windows
+      # below), and the Authenticode state of the release manifest.
+      - name: Release signature guard and manifest state tests
+        shell: pwsh
+        run: |
+          ./scripts/release/test-release-signature.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/release/test_release_manifest.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Docker upgrade evidence checker unit tests
         run: python scripts/release/test_check_docker_upgrade_evidence.py -v
 
   # The ONLY Maven build of a pull request, and so the only executor of the JaCoCo gate, the
   # Linux sandbox toolchain and the delegated cgroup. The path-filtered
   # M19 and M20 workflows used to repeat this exact job on a subset of paths (audit C2); they were
-  # retired because nothing they asserted was missing here (docs/audit/archive/2026-09/S23-SUIVI.md, "Lot 3").
+  # retired because nothing they asserted was missing here (docs/project/audits/archive/2026-09/S23-SUIVI.md, "Lot 3").
   # scripts/quality/check-single-execution.py keeps a second copy from coming back.
   verify:
     name: Verify (${{ matrix.os }})
@@ -173,26 +262,57 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
 
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      # AUD-DEP-13: the tests start only the pre-pulled images (any other is refused by name) and no Ryuk sidecar.
+      TESTCONTAINERS_PULL_POLICY: com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy
+      TESTCONTAINERS_RYUK_DISABLED: 'true'
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
+      # AUD-DEP-13: the images Testcontainers starts are listed before the Docker Hub login, so no code of the
+      # repository runs while the token is on disk.
+      - name: List the Testcontainers images
+        id: testcontainers-images
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          images="$(python3 scripts/quality/check-image-pins.py --testcontainers-images | tr '\n' ' ')"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+
       # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
       # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
-      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), pulls are authenticated, Testcontainers
-      # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
+      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), the next step pulls the Testcontainers
+      # images authenticated, then logs out before any test runs; without them (forks, secrets not created) this step
+      # is skipped and the next one pulls anonymously.
       - name: Log in to Docker Hub (when the secrets exist)
         if: ${{ runner.os == 'Linux' && env.DOCKERHUB_USERNAME != '' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # AUD-DEP-13: the listed images are pulled, then the Docker Hub token is removed before any Maven plugin or
+      # test runs. A failed logout fails the step.
+      - name: Pull the Testcontainers images, then log out of Docker Hub
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        env:
+          IMAGES: ${{ steps.testcontainers-images.outputs.images }}
+        run: |
+          set -euo pipefail
+          log_out() { docker logout || { echo "logging out of Docker Hub failed: the token would stay readable" >&2; exit 1; }; }
+          trap log_out EXIT
+          test -n "$IMAGES"
+          for image in $IMAGES; do docker pull "$image"; done
 
       - name: Assert exact candidate HEAD (Unix)
         if: runner.os != 'Windows'
@@ -226,15 +346,15 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Java 24
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '24'
+          java-version: '25'
           cache: maven
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -271,29 +391,50 @@ jobs:
         if: runner.os != 'Windows'
         run: python scripts/quality/check-jacoco.py
 
-      # Off by default: SonarCloud currently runs as Automatic Analysis (GitHub App), which cannot
-      # import coverage. This step gives an operator an explicit, opt-in path to CI-based analysis
-      # with real JaCoCo coverage once SONAR_TOKEN is provisioned and Automatic Analysis is turned
-      # off in the SonarCloud project settings (the two modes are mutually exclusive). See
-      # docs/STATUS.md "SonarCloud" for the activation steps. No effect while the variable is unset.
-      - name: SonarCloud CI-based analysis (opt-in)
-        if: runner.os != 'Windows' && vars.SONAR_CI_ANALYSIS_ENABLED == 'true'
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # AUD-SEC-12, AUD-SEC-13: the installation scripts and the development launcher are Windows code that no
+      # Maven module runs. Their tests are skipped in the invariants job (Ubuntu) and really run here.
+      - name: Installation secret file and development launcher tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          ./mvnw -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
-            -Dsonar.projectKey=FTurleque_atlas \
-            -Dsonar.organization=fturleque \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco-aggregate/jacoco.xml
+          python scripts/install/test_secret_file_acl.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/install/test_dev_launcher.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # AUD-DEP-15: the Docker lifecycle script is started by the installer under Windows PowerShell 5.1.
+          python scripts/install/test_mcp_lifecycle_query_image.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The Docker helper scripts under Windows PowerShell 5.1 and pwsh, and verify-run-configurations.ps1 when Compose answers.
+          python scripts/install/test_docker_script_contexts.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # AUD-DEP-06: the release scripts run under Windows PowerShell 5.1 too; the real Get-AuthenticodeSignature.
+          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File scripts/release/test-release-signature.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Targeted JaCoCo gate (Windows, PostgreSQL scope qualified on Linux)
         if: runner.os == 'Windows'
         run: python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector
 
+      # The JaCoCo report of every module on this operating system, for the SonarCloud job below. Linux cannot
+      # run the AppContainer and Job Object code, Windows cannot run bubblewrap and cgroup: each side covers
+      # what the other cannot. The scanner reads coverage module by module, from a path relative to the module:
+      # the aggregate report of the reactor root is not attached to any source file (regression of 2026-10-12,
+      # when only that aggregate was published and every new line counted as uncovered). The XML names packages
+      # and source files, never a path of the runner.
+      - name: Upload the JaCoCo report of every module
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jacoco-modules-${{ runner.os }}
+          # A re-run of this job replaces the reports of the previous attempt: the analysis reads the latest.
+          overwrite: true
+          if-no-files-found: ignore
+          retention-days: 3
+          path: '**/target/site/jacoco/jacoco.xml'
+
       - name: Upload verification diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pr-validation-${{ runner.os }}-${{ github.run_attempt }}
           if-no-files-found: ignore
@@ -303,3 +444,103 @@ jobs:
             **/target/failsafe-reports/**
             target/site/jacoco-aggregate/**
             target/m15-quality/**
+
+  # CI-based SonarCloud analysis (Automatic Analysis is off in the SonarCloud project: the two modes are
+  # mutually exclusive). It runs after both Verify jobs and imports the coverage of both operating systems;
+  # until 2026-10-12 it ran inside the Ubuntu Verify job with the Linux reports alone, so code that only
+  # Windows can execute counted as uncovered. It compiles the candidate again (no test is run: the tests ran
+  # in Verify) because the scanner needs the class files. No effect while the repository variable is unset.
+  # Each module receives its Linux report at target/site/jacoco/jacoco.xml and its Windows report at
+  # target/site/jacoco-windows/jacoco.xml: the scanner resolves both paths from the module directory.
+  # When a Verify job failed and left no report, the analysis still runs with the reports that exist, so that
+  # issues are reported; the Linux reports are required, and the job fails if the scanner imported fewer
+  # reports than there are modules with one (a silent zero-coverage analysis is refused).
+  sonar:
+    name: SonarCloud analysis (Linux and Windows coverage)
+    needs: verify
+    if: ${{ !cancelled() && vars.SONAR_CI_ANALYSIS_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # One step per operating system, each in its own directory. Reports are absent when a Verify job failed
+      # before its tests ended: the download then fails and the analysis step decides what to do without them.
+      - name: Download the Linux JaCoCo reports
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jacoco-modules-Linux
+          path: coverage-reports/linux
+
+      - name: Download the Windows JaCoCo reports
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jacoco-modules-Windows
+          path: coverage-reports/windows
+
+      - name: SonarCloud CI-based analysis
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SONAR_TOKEN:-}" ]; then
+            echo "SONAR_TOKEN is not available to this run. GitHub does not give the repository secrets to Dependabot" >&2
+            echo "pull requests or to forks: for Dependabot, add SONAR_TOKEN to the Dependabot secrets of the repository." >&2
+            exit 1
+          fi
+          # Puts every downloaded report inside its module, where the scanner looks for it.
+          place_reports() {
+            local source="$1" directory="$2" count=0 report module
+            if [ -d "$source" ]; then
+              while IFS= read -r report; do
+                module="${report#"$source"/}"
+                module="${module%%/*}"
+                if [ -f "$module/pom.xml" ]; then
+                  mkdir -p "$module/target/site/$directory"
+                  cp "$report" "$module/target/site/$directory/jacoco.xml"
+                  count=$((count + 1))
+                fi
+              done < <(find "$source" -type f -path '*/target/site/jacoco/jacoco.xml' | sort)
+            fi
+            echo "$count"
+          }
+          linux_modules="$(place_reports coverage-reports/linux jacoco)"
+          windows_modules="$(place_reports coverage-reports/windows jacoco-windows)"
+          echo "JaCoCo reports placed in their module: linux=$linux_modules windows=$windows_modules"
+          if [ "$linux_modules" -eq 0 ]; then
+            echo "No Linux JaCoCo report: Verify (ubuntu-24.04) did not produce any." >&2
+            exit 1
+          fi
+          if [ "$windows_modules" -eq 0 ]; then
+            echo "::warning::No Windows JaCoCo report: Windows-only code will count as uncovered."
+          fi
+          chmod +x mvnw
+          ./mvnw -B -ntp -DskipTests -Djacoco.skip=true test-compile \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
+            -Dsonar.projectKey=FTurleque_atlas \
+            -Dsonar.organization=fturleque \
+            -Dsonar.host.url=https://sonarcloud.io \
+            "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml,target/site/jacoco-windows/jacoco.xml" \
+            | tee sonar-scanner.log
+          # The scanner does not fail when it finds no report: it reports zero coverage. Count what it imported.
+          importing_modules="$(grep -c 'Importing [0-9][0-9]* report(s)' sonar-scanner.log || true)"
+          echo "Modules for which the scanner imported coverage: $importing_modules (expected at least $linux_modules)"
+          if [ "$importing_modules" -lt "$linux_modules" ]; then
+            echo "The scanner imported coverage for $importing_modules module(s), fewer than the $linux_modules with a report." >&2
+            exit 1
+          fi

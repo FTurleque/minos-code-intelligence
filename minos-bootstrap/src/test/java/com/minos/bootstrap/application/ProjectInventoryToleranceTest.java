@@ -6,7 +6,7 @@ import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDetector;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.orchestration.IndexStateStore;
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 import com.minos.registry.RegisteredProject;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.registry.LocalProjectRegistry;

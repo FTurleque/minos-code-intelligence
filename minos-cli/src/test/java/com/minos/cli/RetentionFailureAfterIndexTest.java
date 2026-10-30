@@ -1,7 +1,9 @@
 package com.minos.cli;
 
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.MinosApplication;
-import com.minos.orchestration.IndexingResumePolicy;
+import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
@@ -17,7 +19,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -79,10 +80,10 @@ class RetentionFailureAfterIndexTest {
                 .build()) {
             RegisteredProject project = indexedAndUnchanged(application);
             LocalAutonomousIndexOperations operations =
-                    new LocalAutonomousIndexOperations(application, UnaryOperator.identity());
+                    new LocalAutonomousIndexOperations(application);
 
             AutonomousIndexOperations.IndexExecutionView view = operations.execute(
-                    project.id().toString(), null, false, IndexingResumePolicy.RESUME);
+                    project.id().toString(), null, false, IndexingResumeChoice.RESUME);
 
             assertEquals("NO_CHANGES", view.status());
             assertNotNull(view.diagnostic(), "the skipped retention is reported");

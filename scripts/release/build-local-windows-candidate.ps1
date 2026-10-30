@@ -34,7 +34,7 @@ foreach ($Required in @($BuildDistribution, $BuildInstaller, $McpProbe)) {
 
 $Java = if (-not [string]::IsNullOrWhiteSpace($env:JAVA_HOME)) { Join-Path $env:JAVA_HOME 'bin\java.exe' } else { '' }
 if ([string]::IsNullOrWhiteSpace($Java) -or -not (Test-Path -LiteralPath $Java -PathType Leaf)) {
-    throw 'JAVA_HOME must point to a JDK 24 installation before building the Windows candidate.'
+    throw 'JAVA_HOME must point to a JDK 25 installation before building the Windows candidate.'
 }
 $Python = @('python.exe','python','python3.exe','python3') |
     ForEach-Object { Get-Command $_ -ErrorAction SilentlyContinue } |
@@ -81,6 +81,19 @@ function Test-ExactDockerImage([string] $DockerPath, [string] $Image, [string] $
         [string]$VersionLabel.Value -eq $ExpectedVersion -and
         [string]$RevisionLabel.Value -eq $ExpectedCommit -and
         [string]$PreparedLabel.Value -eq 'true'
+}
+
+# The build context of docker\Dockerfile.mcp.release: every file its COPY instructions take from the context,
+# the MINOS jar and the npm lockfiles of the embedded scip-typescript and scip-python. The worktree is clean
+# (checked above), so the lockfiles of the source tree are the bytes packaged in the jar; docker\scripts\
+# mcp-lifecycle.ps1 assembles the same context for the installer.
+function Copy-DockerBuildContext([string] $Jar, [string] $LockDirectory, [string] $Context) {
+    Copy-Item -LiteralPath $Jar -Destination (Join-Path $Context 'minos.jar') -Force
+    foreach ($Lock in @('scip-typescript-package-lock.json', 'scip-python-package-lock.json')) {
+        $Source = Join-Path $LockDirectory $Lock
+        if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { throw "Docker prebuild input missing: $Source" }
+        Copy-Item -LiteralPath $Source -Destination (Join-Path $Context $Lock) -Force
+    }
 }
 
 function Get-LocalCandidateStagingProcesses([string] $StagingRoot) {
@@ -190,7 +203,9 @@ if ($Modules -notcontains 'java.xml') { throw 'Candidate runtime does not contai
 $SmokeHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-local-candidate-mcp-' + [Guid]::NewGuid())
 try {
     New-Item -ItemType Directory -Force -Path $SmokeHome | Out-Null
-    & $McpProbe -LauncherPath $Launcher -CandidateHome $SmokeHome -TimeoutSeconds 30
+    # A cold jpackage runtime on a hosted Windows runner can take longer than 30 s to answer initialize. The probe
+    # still fails closed after this bound (90 s for initialize and tools/list, plus its 15 s process deadline).
+    & $McpProbe -LauncherPath $Launcher -CandidateHome $SmokeHome -TimeoutSeconds 90
     if ($LASTEXITCODE -ne 0) { throw "Native MCP handshake failed for local candidate (exit=$LASTEXITCODE)." }
 }
 finally {
@@ -206,6 +221,7 @@ if ($PrepareDockerImage) {
 
     $Jar = Join-Path $DistRoot 'lib\minos.jar'
     $Dockerfile = Join-Path $DistRoot 'docker\Dockerfile.mcp.release'
+    $LockDirectory = Join-Path $RepoRoot 'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime'
     foreach ($Required in @($Jar, $Dockerfile)) {
         if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Docker prebuild input missing: $Required" }
     }
@@ -221,7 +237,7 @@ if ($PrepareDockerImage) {
         $Context = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-local-docker-image-' + [Guid]::NewGuid())
         try {
             New-Item -ItemType Directory -Force -Path $Context | Out-Null
-            Copy-Item -LiteralPath $Jar -Destination (Join-Path $Context 'minos.jar') -Force
+            Copy-DockerBuildContext -Jar $Jar -LockDirectory $LockDirectory -Context $Context
             $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
             & $Docker.Source build --file $Dockerfile --tag $PreparedImage `
                 --build-arg "MINOS_VERSION=$Version" `

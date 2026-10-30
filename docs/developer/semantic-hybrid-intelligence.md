@@ -67,7 +67,7 @@ MINOS_SEMANTIC_DIMENSIONS=<dimensions>
 MINOS_SEMANTIC_ENDPOINT=http://127.0.0.1:11434/api/embed   # optionnel
 ```
 
-`OllamaEmbeddingProvider` accepte uniquement un endpoint loopback, ne suit pas les redirects, borne timeout/réponse et vérifie les dimensions retournées. MINOS ne télécharge aucun modèle. La qualité du modèle est validée séparément par Recall@3/MRR/nDCG@3 ; un endpoint fonctionnel ne suffit pas à qualifier un modèle.
+`OllamaEmbeddingProvider` accepte uniquement un endpoint loopback (ou, depuis le runtime Docker seulement, le service géré `minos-ollama` ; hors Docker, `embed` le refuse avant toute résolution de nom, ADR 0031), ne suit pas les redirects, borne timeout/réponse et vérifie les dimensions retournées. MINOS ne télécharge aucun modèle. La qualité du modèle est validée séparément par Recall@3/MRR/nDCG@3 ; un endpoint fonctionnel ne suffit pas à qualifier un modèle.
 
 Un provider inconnu doit échouer explicitement ; il ne peut pas provoquer un fallback silencieux vers un service distant.
 
@@ -157,7 +157,7 @@ Avec index READY, le mode devient `LEXICAL_GRAPH_SEMANTIC`. La combinaison reste
 
 ## Mesures de pertinence
 
-`SemanticSearchEvaluator` fournit :
+`SemanticSearchEvaluator`, outil de test des sources de test de `minos-bootstrap` (`com.minos.bootstrap.semantic`, hors de la production depuis le changement `retirer-les-services-sans-appelant-de-production`), fournit :
 
 - Recall@K ;
 - MRR ;
@@ -216,7 +216,7 @@ Cette séparation évite que la couche sémantique transforme MINOS en orchestra
 
 ## Qualification
 
-M20 a été qualifié par `scripts/m20/run-final.ps1`, archivé depuis (jalon clos, aucun appelant vivant — voir [ADR 0043](../adr/0043-retrait-des-artefacts-de-jalon.md)) :
+M20 a été qualifié par `scripts/m20/run-final.ps1`, archivé depuis (jalon clos, aucun appelant vivant — voir [ADR 0043](../architecture/adr/GEN-0043-retrait-des-artefacts-de-jalon.md)) :
 
 ```text
 scripts/history/m20/run-final.ps1

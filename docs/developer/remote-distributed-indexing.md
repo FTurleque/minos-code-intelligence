@@ -39,7 +39,7 @@ Le lifecycle attendu est :
 materialize -> lease actif -> register project -> pin -> index/stage/promote -> release lease
 ```
 
-Si la première indexation d’une nouvelle registration échoue, `LocalRemoteIndexOperations` supprime d’abord la registration puis appelle `unpin()`. L’unpin n’est donc jamais exécuté tant qu’une identité projet durable référence encore le checkout. Une registration déjà existante conserve son pin en cas d’échec d’un refresh.
+Si la première indexation d’une nouvelle registration échoue, `RemoteIndexingUseCase` (`minos-application`, package `com.minos.application.remote`) supprime d’abord la registration puis appelle `unpin()`. L’unpin n’est donc jamais exécuté tant qu’une identité projet durable référence encore le checkout. Une registration déjà existante conserve son pin en cas d’échec d’un refresh.
 
 Le credential est converti en `char[]`, transmis au seul clone puis effacé au mieux. Sa valeur et le nom de la variable ne sont pas persistés ni rendus par la CLI.
 
@@ -75,7 +75,7 @@ Les champs inconnus, doublons, chemins supplémentaires, traversal, tailles inco
 
 ## Composition et extension
 
-`LocalRemoteIndexOperations` décore les `IndexerExecutor` choisis par le lifecycle existant avec `DistributedIndexerExecutor`. Aucun branchement langage/provider n’est ajouté à discovery.
+`RemoteIndexingUseCase` (`minos-application`) décore les `IndexerExecutor` choisis par le lifecycle existant avec `DistributedIndexerExecutor`, par le décorateur d'exécuteur de `ProjectIndexingUseCase`. La CLI (`LocalRemoteIndexOperations`) ne fait que convertir ses options et projeter les résumés ; la requête distante est validée par la commande avant l'ouverture de l'application (`RemoteSourceRequest.of`). Aucun branchement langage/provider n’est ajouté à discovery.
 
 Un backend distant futur implémente `Worker`. Pour annoncer `DENY`, `enforcesNetworkDeny()` doit être vrai et la plateforme doit réellement imposer cette politique. Transport, authentification du worker et attestation supplémentaires devront rester derrière l’adapter, sans affaiblir le manifest v1.
 

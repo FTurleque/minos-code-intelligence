@@ -17,25 +17,51 @@
         <dependency><groupId>com.minos</groupId><artifactId>minos-domain</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-engine</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-runtime-local</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>com.minos</groupId><artifactId>minos-storage-local</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>com.minos</groupId><artifactId>minos-storage</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-provider-scip</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-integration-git</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-application</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>com.minos</groupId><artifactId>minos-storage-postgresql</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-bootstrap</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-nexus</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-cli</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-api</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-mcp</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-nop</artifactId></dependency>
+        <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-jdk14</artifactId></dependency>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>${junit.version}</version><scope>test</scope></dependency>
-        <!-- Architecture tests over the compiled classes of every module (com.minos.app.architecture, docs/quality/code-audit.md). -->
+        <!-- Architecture tests over the compiled classes of every module (com.minos.app.architecture, docs/developer/quality/code-audit.md). -->
         <dependency><groupId>com.tngtech.archunit</groupId><artifactId>archunit</artifactId><version>${archunit.version}</version><scope>test</scope></dependency>
     </dependencies>
 
     <build>
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
+        <resources>
+            <resource><directory>src/main/resources</directory></resource>
+            <!-- AUD-DEP-16: the distributed JAR carries the MINOS licence as META-INF/LICENSE. -->
+            <resource><directory>${maven.multiModuleProjectDirectory}</directory><includes><include>LICENSE</include></includes><targetPath>META-INF</targetPath></resource>
+        </resources>
         <plugins>
+            <!--
+              AUD-DEP-16: the licence and notice files of every runtime dependency are copied, unmodified, to
+              META-INF/licenses/<artifact>-<version>/ before packaging, so that same-named files of two dependencies
+              no longer overwrite each other in the shaded JAR. Build-time only; nothing is added to the runtime
+              classpath (docs/developer/supply-chain.md). ShadedJarNoticesIT fails when a dependency ships such a file
+              under a name these patterns miss.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>${maven.dependency.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>keep-third-party-licences</id><phase>prepare-package</phase><goals><goal>unpack-dependencies</goal></goals>
+                        <configuration>
+                            <includeScope>runtime</includeScope><excludeGroupIds>com.minos</excludeGroupIds>
+                            <includes>META-INF/*LICENSE*,META-INF/*LICENCE*,META-INF/*NOTICE*,META-INF/*COPYING*,LICENSE*,LICENCE*,NOTICE*,COPYING*,about.html</includes>
+                            <outputDirectory>${project.build.outputDirectory}/META-INF/licenses</outputDirectory>
+                            <useSubDirectoryPerArtifact>true</useSubDirectoryPerArtifact><stripType>true</stripType>
+                            <fileMappers><org.codehaus.plexus.components.io.filemappers.FlattenFileMapper /></fileMappers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId>
                 <configuration><useModulePath>false</useModulePath><workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory></configuration>
@@ -60,9 +86,34 @@
                         <phase>package</phase><goals><goal>shade</goal></goals>
                         <configuration>
                             <shadedArtifactAttached>true</shadedArtifactAttached><shadedClassifierName>all</shadedClassifierName><createDependencyReducedPom>false</createDependencyReducedPom>
-                            <filters><filter><artifact>*:*</artifact><excludes><exclude>META-INF/*.SF</exclude><exclude>META-INF/*.RSA</exclude><exclude>META-INF/*.DSA</exclude></excludes></filter></filters>
+                            <!--
+                              META-INF/LICENSE is the MINOS licence (resource above; the project's own artifact is shaded
+                              first). A top-level META-INF/LICENSE.txt or LICENSE.md cannot be attributed to a dependency:
+                              each dependency keeps its own under META-INF/licenses/<artifact>-<version>/ instead.
+                            -->
+                            <filters><filter><artifact>*:*</artifact><excludes><exclude>META-INF/*.SF</exclude><exclude>META-INF/*.RSA</exclude><exclude>META-INF/*.DSA</exclude><exclude>META-INF/LICENSE.txt</exclude><exclude>META-INF/LICENSE.md</exclude></excludes></filter></filters>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                                <!--
+                                  AUD-DEP-16: the META-INF/NOTICE(.txt|.md) of every dependency are aggregated into one
+                                  META-INF/NOTICE instead of overwriting each other. addHeader=false alone is not enough:
+                                  maven-shade-plugin 3.6.2 still writes "Copyright <years> The Apache Software Foundation" and
+                                  "This product includes software developed at The Apache Software Foundation" in the name of
+                                  the shaded project, and with an empty projectName it takes the copyright line of a
+                                  dependency for the project's. MINOS is proprietary: the project, its copyright holder and
+                                  the sentence are therefore stated here. ApacheLicenseResourceTransformer is NOT used: it
+                                  drops the licence files (its processResource is empty).
+                                -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    <addHeader>false</addHeader>
+                                    <projectName>MINOS Code Intelligence</projectName>
+                                    <inceptionYear>2026</inceptionYear>
+                                    <organizationName>Fabrice Turleque</organizationName>
+                                    <organizationURL>https://github.com/FTurleque/minos-code-intelligence</organizationURL>
+                                    <preamble3 xml:space="preserve">MINOS Code Intelligence is proprietary source-available software, see META-INF/LICENSE.
+The notices below are those of the third-party components redistributed in this archive;
+their licence files are kept under META-INF/licenses/. Copyright holder of MINOS: </preamble3>
+                                </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"><mainClass>com.minos.cli.MinosLauncher</mainClass><manifestEntries><Implementation-Version>${project.version}</Implementation-Version></manifestEntries></transformer>
                             </transformers>
                         </configuration>

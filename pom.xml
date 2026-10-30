@@ -24,11 +24,10 @@
         <module>minos-domain</module>
         <module>minos-engine</module>
         <module>minos-runtime-local</module>
-        <module>minos-storage-local</module>
+        <module>minos-storage</module>
         <module>minos-provider-scip</module>
         <module>minos-integration-git</module>
         <module>minos-application</module>
-        <module>minos-storage-postgresql</module>
         <module>minos-bootstrap</module>
         <module>minos-nexus</module>
         <module>minos-cli</module>
@@ -41,7 +40,7 @@
         <!-- CI-friendly version: release scripts override with -Drevision=... -->
         <revision>1.3.0-SNAPSHOT</revision>
 
-        <maven.compiler.release>24</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- Local developer default. CI/release overrides this with -D...=true. -->
@@ -50,15 +49,15 @@
         <minos.sandbox.tests.required>false</minos.sandbox.tests.required>
 
         <scip.java.bindings.version>0.10.0</scip.java.bindings.version>
-        <mcp.sdk.version>2.0.1</mcp.sdk.version>
+        <mcp.sdk.version>2.1.0</mcp.sdk.version>
         <!--
           Keep both Jackson generations centrally pinned. MINOS' PostgreSQL codec uses
-          Jackson 2 while MCP SDK 2.0.0 brings Jackson 3 through mcp-json-jackson3.
-          2.22.2 and 3.2.2 contain the 2026 security fixes required by the release gate
-          (patch releases on top of the original 2.22.1/3.1.5 fix versions).
+          Jackson 2 while the MCP SDK brings Jackson 3 through mcp-json-jackson3.
+          The two versions below contain the 2026 security fixes required by the release gate
+          (first shipped in 2.22.1 and 3.1.5); scripts/docs/check-current-docs.py pins them.
         -->
-        <jackson2.version>2.22.3</jackson2.version>
-        <jackson3.version>3.2.3</jackson3.version>
+        <jackson2.version>2.22.4</jackson2.version>
+        <jackson3.version>3.2.4</jackson3.version>
         <slf4j.version>2.0.20</slf4j.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <jgit.version>7.8.0.202609011348-r</jgit.version>
@@ -66,20 +65,25 @@
         <jacoco.version>0.8.15</jacoco.version>
         <cyclonedx.maven.plugin.version>2.9.2</cyclonedx.maven.plugin.version>
         <maven.compiler.plugin.version>3.16.0</maven.compiler.plugin.version>
-        <maven.surefire.plugin.version>3.6.0</maven.surefire.plugin.version>
+        <maven.surefire.plugin.version>3.6.1</maven.surefire.plugin.version>
         <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
         <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
         <maven.shade.plugin.version>3.6.2</maven.shade.plugin.version>
+        <!--
+          Build-time only (minos-app): copies the licence and notice files of the runtime dependencies into the
+          distributed JAR, one directory per dependency (AUD-DEP-16, docs/developer/supply-chain.md).
+        -->
+        <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
 
         <!--
-          Audit tooling (docs/quality/code-audit.md). Both tools live in opt-in profiles only
+          Audit tooling (docs/developer/quality/code-audit.md). Both tools live in opt-in profiles only
           (audit-spotbugs, audit-mutation): the default clean verify never loads them.
           spotbugs-maven-plugin 4.10.4.1 is the wrapper release built around SpotBugs 4.10.4; the engine
           version is pinned separately below so that upgrading one is a visible decision.
         -->
-        <spotbugs.maven.plugin.version>4.10.4.1</spotbugs.maven.plugin.version>
-        <spotbugs.version>4.10.4</spotbugs.version>
-        <pitest.maven.plugin.version>1.30.0</pitest.maven.plugin.version>
+        <spotbugs.maven.plugin.version>4.10.5.0</spotbugs.maven.plugin.version>
+        <spotbugs.version>4.10.5</spotbugs.version>
+        <pitest.maven.plugin.version>1.30.1</pitest.maven.plugin.version>
         <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
         <!--
           Defaults of the audit settings, so that a direct goal call without a profile (spotbugs:check,
@@ -100,13 +104,13 @@
         <!--
           PIT mutates every production class of the module it runs in (com.minos.*), with every test of that
           module. crossModule=true also mutates upstream reactor classes against the tests of the current module
-          (much more expensive; used for the cross-module pass of docs/quality/code-audit.md).
+          (much more expensive; used for the cross-module pass of docs/developer/quality/code-audit.md).
         -->
         <pit.crossModule>false</pit.crossModule>
 
         <!--
           ArchUnit: test-scope library of minos-app (architecture tests over the compiled classes of every module,
-          docs/quality/code-audit.md). Same version as the MORPHEUS architecture tests.
+          docs/developer/quality/code-audit.md). Same version as the MORPHEUS architecture tests.
         -->
         <archunit.version>1.5.1</archunit.version>
         <!--
@@ -119,6 +123,23 @@
         -->
         <dependency-check.maven.plugin.version>13.0.0</dependency-check.maven.plugin.version>
         <dependency-check.failBuildOnCVSS>11</dependency-check.failBuildOnCVSS>
+        <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
+        <!--
+          AUD-DEP-11: the date written on every entry of the JARs (jar, shade) and of the SBOM, so that two builds
+          of one commit give the same bytes. The scripts that build a deliverable pass the date of the commit
+          (-Dproject.build.outputTimestamp=<git show -s format=%cI>); this fixed, older value serves a build without
+          Git (a source archive) or a developer build, and is never presented as the build date.
+        -->
+        <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
+        <!--
+          AUD-DEP-11: the plugins Maven binds to the lifecycle by default, pinned at the version the wrapper
+          resolved on 2026-10-15 (help:effective-pom), so that requirePluginVersions holds and a new Maven
+          cannot change them silently. deploy and site never run: the rule checks their phases too.
+        -->
+        <maven.clean.plugin.version>3.5.0</maven.clean.plugin.version>
+        <maven.install.plugin.version>3.2.0</maven.install.plugin.version>
+        <maven.deploy.plugin.version>3.2.0</maven.deploy.plugin.version>
+        <maven.site.plugin.version>3.22.0</maven.site.plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -163,7 +184,7 @@
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
-                <artifactId>slf4j-nop</artifactId>
+                <artifactId>slf4j-jdk14</artifactId>
                 <version>${slf4j.version}</version>
             </dependency>
         </dependencies>
@@ -190,8 +211,9 @@
                         <goals><goal>enforce</goal></goals>
                         <configuration>
                             <rules>
-                                <requireJavaVersion><version>[24,25)</version></requireJavaVersion>
+                                <requireJavaVersion><version>[25,26)</version></requireJavaVersion>
                                 <requireMavenVersion><version>[3.9,4.0)</version></requireMavenVersion>
+                                <requirePluginVersions/>
                             </rules>
                         </configuration>
                     </execution>
@@ -245,6 +267,37 @@
 
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven.resources.plugin.version}</version>
+                </plugin>
+                <!-- AUD-DEP-11: lifecycle plugins pinned (see the properties). -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven.jar.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>${maven.clean.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven.install.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>${maven.deploy.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>${maven.site.plugin.version}</version>
+                </plugin>
                 <!--
                   Shared configuration of the audit tools. Only the profiles below put these plugins in the
                   build; this block gives a direct goal invocation (spotbugs:check, pitest:mutationCoverage) the
@@ -315,7 +368,7 @@
 
     <profiles>
         <!--
-          audit-spotbugs: static bug-pattern analysis (docs/quality/code-audit.md).
+          audit-spotbugs: static bug-pattern analysis (docs/developer/quality/code-audit.md).
           Off by default. Reports: target/spotbugsXml.xml, target/spotbugs.html, target/spotbugsSarif.json per module.
           The blocking gate is the explicit goal spotbugs:check, never part of the default lifecycle.
         -->
@@ -340,7 +393,7 @@
         </profile>
 
         <!--
-          audit-mutation: PIT mutation testing (docs/quality/code-audit.md).
+          audit-mutation: PIT mutation testing (docs/developer/quality/code-audit.md).
           Off by default and never bound to a phase: it runs only through pitest:mutationCoverage.
           Default scope: every production class of each module (com.minos.*), with every test of the same module.
           The initial three-class scope of minos-engine (2026-10-07) is no longer the default; narrow a run without
@@ -370,7 +423,7 @@
                  org.owasp:dependency-check-maven:aggregate
           Not covered by this Maven scan: Maven plugins and their dependencies (build tooling), the Gradle-built
           IntelliJ plugin (minos-intellij), Docker base images, embedded SCIP tools, Python scripts. See
-          docs/quality/code-audit.md.
+          docs/developer/quality/code-audit.md.
           OSS Index requires Sonatype credentials since 2025; it is disabled rather than left to fail silently.
         -->
         <profile>

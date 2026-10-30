@@ -6,14 +6,15 @@ M14 relie désormais le lifecycle interne historique à une exécution réelle d
 
 ```mermaid
 sequenceDiagram
-    participant C as LocalAutonomousIndexOperations
+    participant C as ProjectIndexingUseCase
     participant D as ProjectDiscoveryService
     participant N as IndexerRegistry
     participant P as IncrementalIndexingPlanner
     participant L as IndexingLifecycleService
     participant E as IndexerExecutor
     participant ST as ScipProjectSnapshotLifecycle
-    participant S as FileSymbolSnapshotStore
+    participant W as StagingSnapshotStores
+    participant S as CodeKnowledgeSnapshotStore (actif)
 
     C->>D: discover(projectRoot)
     C->>N: negotiate(discovery, requirements)
@@ -27,8 +28,10 @@ sequenceDiagram
             E-->>L: stable IndexingArtifact
         end
         L->>ST: stage(artifacts)
+        ST->>W: open(staged-snapshots/{run}/providers/…, puis …/project)
         ST-->>L: stagedSnapshotId
         L->>ST: promote(project, run, stagedSnapshot)
+        ST->>W: open(staged-snapshots/{run}/project)
         ST->>S: publish active project snapshot
     end
 ```
@@ -148,7 +151,7 @@ artifact provider B ─┼→ normalisation temporaire
                active store
 ```
 
-`ScipProjectSnapshotLifecycle` normalise chaque artefact dans un store temporaire. Les collisions d'identifiants sont rejetées explicitement ; aucune fusion implicite contradictoire n'est effectuée.
+`ScipProjectSnapshotLifecycle` normalise chaque artefact dans un magasin de travail, puis publie le snapshot fusionné dans le magasin de mise en place ; la promotion le relit et le publie dans le magasin actif. Le cycle ne crée aucun magasin : il reçoit le magasin actif du backend choisi et ouvre ses magasins de travail par le port `StagingSnapshotStores` du moteur, sous `staged-snapshots/<run>` seulement. `minos-bootstrap` y passe `FileSymbolSnapshotStore::new` pour les deux backends : le travail de mise en place reste sur fichiers sous `MINOS_HOME`, et une promotion reprise par un autre processus relit le même arbre. Les collisions d'identifiants sont rejetées explicitement ; aucune fusion implicite contradictoire n'est effectuée.
 
 ## Promotion atomique
 

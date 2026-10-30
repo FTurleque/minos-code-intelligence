@@ -1,10 +1,10 @@
 package com.minos.application.resolution;
 
 import com.minos.diagnostics.PublicErrorMessages;
-import com.minos.registry.DegradedEntry;
+import com.minos.domain.registry.DegradedEntry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -125,7 +125,7 @@ public final class ProjectResolver {
             return registry.listProjects().stream().filter(project -> displayName.equals(project.displayName())).toList();
         } catch (IOException | RuntimeException failure) {
             if (Thread.currentThread().isInterrupted()) throw failure;
-            Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+            Optional<UnreadableRegistryException> explained = registry.explainUnreadable(
                     "the project name cannot be resolved with certainty; use its UUID");
             if (explained.isEmpty()) throw failure;
             explained.get().addSuppressed(failure);

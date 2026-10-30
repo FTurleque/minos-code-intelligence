@@ -32,18 +32,66 @@
 #   scripts/deploy/provision-linux-sandbox-cgroup.sh --attach-pid $$
 #   export MINOS_SANDBOX_CGROUP_ROOT=/sys/fs/cgroup/minos.slice
 #
+#   # optionally append MINOS_SANDBOX_CGROUP_ROOT=<root> to an environment file once provisioned
+#   # (a systemd EnvironmentFile, $GITHUB_ENV in CI)
+#   scripts/deploy/provision-linux-sandbox-cgroup.sh --env-file FILE
+#
+# DELEGATED ROOT
+# --------------
+# MINOS_SANDBOX_CGROUP_ROOT (default /sys/fs/cgroup/minos.slice) is chowned recursively to the
+# MINOS account and interpolated into privileged commands. It must therefore be a canonical path
+# under /sys/fs/cgroup -- no empty, `.` or `..` component, only letters, digits, `.`, `_`, `@` and
+# `-` -- whose last component starts with `minos`, so that no existing foreign cgroup (user.slice,
+# a system service) and no path outside the cgroup hierarchy can ever be handed over. Anything else
+# is refused before the first privileged command.
+#
 # Privileged operations are performed through `sudo`, so run this as a sudo-capable account.
 # See docs/user/remote-indexing.md for the full Linux sandbox operator prerequisites (bubblewrap,
 # util-linux, userns/LSM policy, and this cgroup delegation). scripts/ci/delegate-linux-cgroup.sh is
-# the CI-specific sibling: it additionally pins the exact GitHub Actions Ubuntu package versions so
+# the CI wrapper of this script: it first checks the exact GitHub Actions Ubuntu package versions so
 # CI never silently qualifies against an unreviewed toolchain, which is not meaningful outside CI.
 set -euo pipefail
 
-ROOT="${MINOS_SANDBOX_CGROUP_ROOT:-/sys/fs/cgroup/minos.slice}"
 CONTROLLERS='+memory +pids +cpu'
 TARGET_USER="${SUDO_UID:-$(id -u)}"
 TARGET_GROUP="${SUDO_GID:-$(id -g)}"
 ATTACH_PID=''
+ENV_FILE=''
+
+# Prints the canonical form of a delegated cgroup root (trailing slashes removed), or explains on
+# stderr why it is refused and returns 2. See DELEGATED ROOT above.
+require_minos_cgroup_root() {
+  local LC_ALL=C
+  local root="$1"
+  while [ "${root%/}" != "$root" ]; do root="${root%/}"; done
+  local relative="${root#/sys/fs/cgroup/}"
+  local refused=''
+  case "$root" in
+    /sys/fs/cgroup/?*) ;;
+    *) refused='it is not a subdirectory of /sys/fs/cgroup' ;;
+  esac
+  if [ -z "$refused" ]; then
+    case "$relative" in
+      *[!A-Za-z0-9._@/-]*) refused='it contains a character other than letters, digits, ".", "_", "@", "-" and "/"' ;;
+    esac
+  fi
+  if [ -z "$refused" ]; then
+    case "/$relative/" in
+      *//*|*/./*|*/../*) refused='it has an empty, "." or ".." component' ;;
+    esac
+  fi
+  if [ -z "$refused" ]; then
+    case "${relative##*/}" in
+      minos*) ;;
+      *) refused='its last component does not start with "minos"' ;;
+    esac
+  fi
+  if [ -n "$refused" ]; then
+    echo "MINOS_SANDBOX_CGROUP_ROOT must be a canonical cgroup dedicated to MINOS, but $refused: $1" >&2
+    return 2
+  fi
+  printf '%s\n' "$root"
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -55,8 +103,16 @@ while [ $# -gt 0 ]; do
       fi
       shift 2
       ;;
+    --env-file)
+      ENV_FILE="${2:-}"
+      if [ -z "$ENV_FILE" ]; then
+        echo '--env-file requires a file argument.' >&2
+        exit 2
+      fi
+      shift 2
+      ;;
     --help|-h)
-      sed -n '2,38p' "$0"
+      sed -n '2,52p' "$0"
       exit 0
       ;;
     *)
@@ -66,18 +122,19 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Strip trailing slashes so the attach verification below can compare the resolved cgroup path
-# reported by /proc/PID/cgroup against this one literally.
-while [ "${ROOT%/}" != "$ROOT" ]; do ROOT="${ROOT%/}"; done
+# Everything is validated before the first privileged command.
+if [ -n "$ATTACH_PID" ]; then
+  case "$ATTACH_PID" in
+    *[!0-9]*)
+      echo "--attach-pid must be a numeric PID, got: $ATTACH_PID" >&2
+      exit 2
+      ;;
+  esac
+fi
+# Canonical, so the attach verification below can compare the resolved cgroup path reported by
+# /proc/PID/cgroup against it literally.
+ROOT="$(require_minos_cgroup_root "${MINOS_SANDBOX_CGROUP_ROOT:-/sys/fs/cgroup/minos.slice}")" || exit 2
 CONTROLLER="$ROOT/minos-controller"
-
-case "$ROOT" in
-  /sys/fs/cgroup/?*) ;;
-  *)
-    echo "MINOS_SANDBOX_CGROUP_ROOT must be a proper subdirectory of /sys/fs/cgroup, got: $ROOT" >&2
-    exit 2
-    ;;
-esac
 
 test -f /sys/fs/cgroup/cgroup.controllers || {
   echo 'MINOS sandbox cgroup delegation requires a cgroup v2 mount at /sys/fs/cgroup.' >&2
@@ -103,12 +160,6 @@ for controller in memory pids cpu; do
 done
 
 if [ -n "$ATTACH_PID" ]; then
-  case "$ATTACH_PID" in
-    ''|*[!0-9]*)
-      echo "--attach-pid must be a numeric PID, got: $ATTACH_PID" >&2
-      exit 2
-      ;;
-  esac
   test -d "/proc/$ATTACH_PID" || {
     echo "--attach-pid target process does not exist: $ATTACH_PID" >&2
     exit 1
@@ -125,6 +176,9 @@ if [ -n "$ATTACH_PID" ]; then
   echo "Attached PID $ATTACH_PID to $CONTROLLER"
 fi
 
+if [ -n "$ENV_FILE" ]; then
+  echo "MINOS_SANDBOX_CGROUP_ROOT=$ROOT" >> "$ENV_FILE"
+fi
 echo "MINOS delegated cgroup root: $ROOT"
 echo "Export it before launching MINOS: export MINOS_SANDBOX_CGROUP_ROOT=$ROOT"
 if [ -z "$ATTACH_PID" ]; then

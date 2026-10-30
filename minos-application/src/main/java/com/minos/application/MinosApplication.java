@@ -7,6 +7,7 @@ import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.application.semantic.SemanticSearchService;
+import com.minos.application.team.TeamControlPlane;
 import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.discovery.ProjectDiscoveryService;
@@ -80,6 +81,7 @@ public final class MinosApplication implements AutoCloseable {
     private final Queries queries;
     private final Semantic semantic;
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
+    private final Optional<TeamControlPlane> teamControlPlane;
     private final MinosApplicationComposer compositionRoot;
 
     /**
@@ -203,6 +205,7 @@ public final class MinosApplication implements AutoCloseable {
                 semanticIndexService, semanticSearchService, hybridSearchService, hybridContextBuilder);
         this.hostedControlPlaneService = Objects.requireNonNull(
                 hostedControlPlaneService, "hostedControlPlaneService");
+        this.teamControlPlane = hostedControlPlaneService.map(TeamControlPlane::new);
         this.compositionRoot = Objects.requireNonNull(compositionRoot, "compositionRoot");
     }
 
@@ -215,8 +218,8 @@ public final class MinosApplication implements AutoCloseable {
      * MINOS has not yet confirmed it can protect.</p>
      */
     public static MinosApplication open(Path home) throws IOException {
-        // ADR 0042 : la racine de composition est résolue d'abord, sans effet de bord ; absente ou
-        // ambiguë, l'ouverture échoue avant de toucher au MINOS_HOME.
+        // ADR 0042: the composition root is resolved first, without side effects; when it is missing or
+        // ambiguous, opening fails before touching MINOS_HOME.
         MinosApplicationComposer composer = MinosApplicationComposers.resolve();
         Path validatedHome = PrivateLocalStorage.ensurePrivateDirectory(home);
         MinosRuntimeSettings settings = MinosRuntimeSettings.load(validatedHome);
@@ -248,8 +251,8 @@ public final class MinosApplication implements AutoCloseable {
     public String storageBackendId() { return storageBackendId; }
 
     /**
-     * Racine de composition qui a construit cette application (ADR 0042) : les surfaces lui demandent
-     * les adaptateurs qu'elles créent elles-mêmes, au moment où elles les créaient.
+     * Composition root that built this application (ADR 0042): the surfaces ask it for the adapters they
+     * create themselves, at the point where they used to create them.
      */
     public MinosApplicationComposer compositionRoot() { return compositionRoot; }
 
@@ -269,10 +272,10 @@ public final class MinosApplication implements AutoCloseable {
     public IncrementalIndexingPlanner incrementalIndexingPlanner() { return indexing.incrementalIndexingPlanner(); }
     public ProviderRuntimeManager providerRuntimeManager() { return indexing.providerRuntimeManager(); }
     public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
-    /** Port du catalogue de providers ; consulté à la demande, jamais figé à la composition. */
-    public IndexerProviderCatalog providerCatalog() { return indexing.providerCatalog(); }
-    /** Port d'import SCIP explicite (import-scip) ; l'adaptateur est instancié à chaque import. */
-    public ScipArtifactImporter scipArtifactImporter() { return indexing.scipArtifactImporter(); }
+    /** Provider catalog port; consulted on demand, never frozen at composition (ProviderPlatformService). */
+    IndexerProviderCatalog providerCatalog() { return indexing.providerCatalog(); }
+    /** Explicit SCIP import port (import-scip, LocalProjectOperations); the adapter is instantiated for each import. */
+    ScipArtifactImporter scipArtifactImporter() { return indexing.scipArtifactImporter(); }
     public SnapshotStager snapshotStager() { return indexing.snapshotStager(); }
     public SnapshotPromoter snapshotPromoter() { return indexing.snapshotPromoter(); }
 
@@ -292,7 +295,8 @@ public final class MinosApplication implements AutoCloseable {
     }
 
     // Queries (ADR 0045: derived services grouped in Queries).
-    public GitIntelligence gitIntelligence() { return gitIntelligence; }
+    /** Git facts port, read by LocalProjectGitQuery; the surfaces use ProjectGitQuery. */
+    GitIntelligence gitIntelligence() { return gitIntelligence; }
     public ProjectInspectionService projectInspectionService() { return queries.projectInspectionService(); }
     public ProjectQueryService projectQueryService() { return queries.projectQueryService(); }
     public ProjectArchitectureQuery architectureQuery() { return queries.architectureQuery(); }
@@ -310,7 +314,10 @@ public final class MinosApplication implements AutoCloseable {
     public HybridContextBuilder hybridContextBuilder() { return semantic.hybridContextBuilder(); }
 
     // Hosted team control plane (opt-in).
-    public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
+    /** Engine service behind {@link #teamControlPlane()}; empty when the hosted mode is disabled. */
+    Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
+    /** The team control plane the surfaces consume; empty when the hosted mode is disabled. */
+    public Optional<TeamControlPlane> teamControlPlane() { return teamControlPlane; }
 
     @Override
     public void close() throws IOException {
@@ -358,7 +365,7 @@ public final class MinosApplication implements AutoCloseable {
         EmbeddingProvider embeddingProvider;
         HostedTenantKeyProvider hostedTenantKeyProvider;
         Clock hostedClock = Clock.systemUTC();
-        /** Racine de composition résolue une fois par construction (ADR 0042). */
+        /** Composition root resolved once per build (ADR 0042). */
         MinosApplicationComposer composer;
 
         private Builder(Path home) {

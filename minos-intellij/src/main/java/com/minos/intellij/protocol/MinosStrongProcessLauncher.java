@@ -119,18 +119,67 @@ final class MinosStrongProcessLauncher {
         restrictWindowsOwnerOnly(Objects.requireNonNull(plan, "plan"), "Windows ownership plan");
     }
 
+    /**
+     * MINOS-AUD-H23: the DACL of the MINOS directory is replaced by its owner alone, so the directory must be dedicated
+     * to MINOS. The user profile (owned by SYSTEM on Windows), any ancestor of it and a volume root are refused before
+     * anything is created or changed.
+     */
+    static void refuseSharedLocation(Path directory, Path userHome, String label) throws IOException {
+        Path resolved = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
+        Path home = userHome == null ? null : userHome.toAbsolutePath().normalize();
+        if (resolved.getParent() == null || (home != null && home.startsWith(resolved))) {
+            throw new IOException(label + " must be a directory dedicated to MINOS, not the user profile, one of its "
+                    + "parents or a volume root. Choose another MINOS home in the plugin settings.");
+        }
+    }
+
+    /**
+     * A directory the launcher did not create is made private only if it belongs to {@code expected}: rewriting the
+     * DACL of a directory owned by another account would hand that account sole access (MINOS-AUD-H23).
+     */
+    static void requireOwnedBy(Path directory, UserPrincipal expected, String label) throws IOException {
+        UserPrincipal owner = Files.getOwner(directory, LinkOption.NOFOLLOW_LINKS);
+        if (!owner.equals(Objects.requireNonNull(expected, "expected"))) {
+            throw new IOException(label + " already exists and belongs to another account (" + owner.getName()
+                    + "); MINOS leaves its permissions unchanged. Take ownership of it, or choose another MINOS home.");
+        }
+    }
+
+    private static volatile UserPrincipal currentUser;
+
+    /**
+     * The account this process runs as, read as the owner the system gives a file the process creates, never from a
+     * name or a property that the environment could set. Read once per JVM.
+     */
+    private static UserPrincipal currentUser() throws IOException {
+        UserPrincipal known = currentUser;
+        if (known != null) return known;
+        Path probe = Files.createTempFile("minos-intellij-owner-", ".probe");
+        try {
+            known = Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
+            currentUser = known;
+            return known;
+        } finally {
+            Files.deleteIfExists(probe);
+        }
+    }
+
     private static void ensureWindowsPrivateDirectory(Path directory, String label) throws IOException {
         Path resolved = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
-        if (Files.exists(resolved, LinkOption.NOFOLLOW_LINKS) && !isPhysicalDirectory(resolved)) {
-            throw new IOException(label + " must be a physical directory, not a symlink or reparse point: " + resolved);
+        String home = System.getProperty("user.home", "").trim();
+        refuseSharedLocation(resolved, home.isEmpty() ? null : Path.of(home), label);
+        boolean existed = Files.exists(resolved, LinkOption.NOFOLLOW_LINKS);
+        if (existed && !isPhysicalDirectory(resolved)) {
+            throw new IOException(label + " must be a physical directory, not a symlink or reparse point");
         }
         Files.createDirectories(resolved);
         if (!isPhysicalDirectory(resolved)) {
-            throw new IOException(label + " is not a private physical directory: " + resolved);
+            throw new IOException(label + " is not a private physical directory");
         }
+        if (existed) requireOwnedBy(resolved, currentUser(), label);
         restrictWindowsOwnerOnly(resolved, label);
         if (!isPhysicalDirectory(resolved)) {
-            throw new IOException(label + " changed while securing it: " + resolved);
+            throw new IOException(label + " changed while securing it");
         }
     }
 
@@ -145,12 +194,12 @@ final class MinosStrongProcessLauncher {
         BasicFileAttributes attributes = Files.readAttributes(
                 file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
         if (attributes.isSymbolicLink() || attributes.isOther()) {
-            throw new IOException(label + " must not be a symbolic link or reparse point: " + file);
+            throw new IOException(label + " must not be a symbolic link or reparse point");
         }
         AclFileAttributeView view = Files.getFileAttributeView(
                 file, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
         if (view == null) {
-            throw new IOException(label + " filesystem does not expose ACLs: " + file);
+            throw new IOException(label + " filesystem does not expose ACLs");
         }
         UserPrincipal owner = Files.getOwner(file, LinkOption.NOFOLLOW_LINKS);
         AclEntry ownerOnly = AclEntry.newBuilder()
@@ -166,7 +215,7 @@ final class MinosStrongProcessLauncher {
         BasicFileAttributes securedAttributes = Files.readAttributes(
                 file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
         if (!ownerOnlyApplied || securedAttributes.isSymbolicLink() || securedAttributes.isOther()) {
-            throw new IOException(label + " ACL is not restricted to its owner: " + file);
+            throw new IOException(label + " ACL is not restricted to its owner");
         }
     }
 
@@ -330,7 +379,7 @@ final class MinosStrongProcessLauncher {
             moveWindowsLauncherAtomically(temporary, target);
             published = true;
             if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(target)) {
-                throw new IOException(WINDOWS_LAUNCHER_LABEL + " is not a regular file: " + target);
+                throw new IOException(WINDOWS_LAUNCHER_LABEL + " is not a regular file");
             }
             restrictWindowsOwnerOnly(target, WINDOWS_LAUNCHER_LABEL);
         } catch (IOException failure) {
@@ -436,7 +485,7 @@ final class MinosStrongProcessLauncher {
         Path system32 = windowsSystem32();
         Path resolved = system32.resolve(executable).toRealPath();
         if (!resolved.startsWith(system32) || !Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Windows system executable is unavailable: " + resolved);
+            throw new IOException("Windows system executable is unavailable: " + resolved.getFileName());
         }
         return resolved;
     }
@@ -445,7 +494,7 @@ final class MinosStrongProcessLauncher {
         Path system32 = windowsSystem32();
         Path powershell = system32.resolve("WindowsPowerShell").resolve("v1.0").resolve("powershell.exe").toRealPath();
         if (!powershell.startsWith(system32) || !Files.isRegularFile(powershell, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Windows PowerShell is unavailable: " + powershell);
+            throw new IOException("Windows PowerShell is unavailable");
         }
         return powershell;
     }
@@ -458,7 +507,7 @@ final class MinosStrongProcessLauncher {
         Path realRoot = windowsRoot.toRealPath();
         Path system32 = realRoot.resolve("System32").toRealPath();
         if (!system32.startsWith(realRoot) || !Files.isDirectory(system32, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Windows System32 directory is unavailable: " + system32);
+            throw new IOException("Windows System32 directory is unavailable");
         }
         return system32;
     }

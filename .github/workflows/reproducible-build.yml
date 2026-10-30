@@ -1,0 +1,53 @@
+name: Reproducible build
+
+# AUD-DEP-11: two builds of one commit give the same shaded JAR. scripts/quality/check-reproducible-build.py clones the
+# commit twice, builds `package -DskipTests -pl minos-app -am` in each clone with the commit date as
+# project.build.outputTimestamp, and compares the two JARs (entries that differ are named). Not a required check: it
+# runs on the pull requests that touch the Maven build, and the release workflow calls it before publishing.
+# Linux only: a JAR built on Windows is reproducible on Windows, not proven identical to this one.
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**/pom.xml'
+      - '.mvn/**'
+      - 'mvnw'
+      - 'mvnw.cmd'
+      - 'scripts/quality/check-reproducible-build.py'
+      - '.github/workflows/reproducible-build.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reproducible-build-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  twice:
+    name: Shaded JAR built twice (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Build the shaded JAR twice from clean clones and compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x mvnw
+          python3 scripts/quality/check-reproducible-build.py twice --work "$RUNNER_TEMP/reproducible-build"

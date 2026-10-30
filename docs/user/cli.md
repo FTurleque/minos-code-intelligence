@@ -164,6 +164,8 @@ minos.cmd index nexus --force-full --format json
 
 Le plan expose les providers retenus, leurs runtimes, la portée (`NONE`, `INCREMENTAL`, `FULL`) et les raisons.
 
+Quand la baseline d'empreinte active ne peut pas être lue, le plan est `FULL` et le résultat de l'exécution porte le diagnostic `active fingerprint baseline unreadable; a full indexing was required` (sans chemin ni cause). Un échec de publication de l'empreinte après un run réussi reste une erreur de la commande.
+
 Une capacité incrémentale n'est utilisée que si le provider la déclare explicitement et si la planification MINOS l'autorise.
 
 ### Provider explicite
@@ -261,6 +263,8 @@ Une liste vide n'est donc pas une réponse « rien n'appelle ce symbole » quand
 
 `find-implementations` et `related-tests` gardent leur sortie historique.
 
+Les preuves d'une relation `related-tests` sont bornées depuis les indexations postérieures à AUD-PERF-09 : au plus 5 emplacements par type de preuve (les premiers dans l'ordre fichier, ligne, colonne) ; au-delà, une preuve de synthèse du même type, sans emplacement, annonce le nombre d'emplacements omis (description `…: N additional locations omitted`). La confiance, l'ordre et l'ensemble des tests liés n'en dépendent pas ; un snapshot antérieur reste lu tel quel, preuves complètes.
+
 ## Architecture et graphe
 
 ```text
@@ -338,6 +342,14 @@ $env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed'
 
 Voir `docs/developer/semantic-retrieval-2.md` pour les limitations et gates.
 
+## Activité Git
+
+```powershell
+minos.cmd git-activity <projet> [--days 30] [--max-commits 500] [--max-files 500] [--zone-depth 2] [--include-author-emails] [--format text|json]
+```
+
+Activité factuelle du dépôt du projet (commits, fichiers, zones). En JSON, chaque commit porte `authorName` et `authorEmail` : **l'adresse e-mail est masquée par défaut** (`"authorEmail":"[masked]"`) et n'est rendue qu'avec `--include-author-emails`. Le masquage ne change pas le décompte des auteurs distincts d'un fichier (`uniqueAuthorCount`). Dans la section `repository`, `workTree` est le chemin absolu du dépôt (la CLI est locale) ; `originRemote` n'est rendu que pour un remote réseau (URL à hôte, ou forme SCP `utilisateur@hôte:chemin`), sans identifiants, requête ni fragment ; un remote local (chemin POSIX ou Windows, partage UNC, `file://`) ou une URL illisible est rendu `null`, avec la limitation `ORIGIN_REMOTE_NOT_DISCLOSED`.
+
 ## Remote & Distributed Indexing
 
 M25 ajoute les opérations remote sur révision immuable. Exemple conceptuel :
@@ -359,7 +371,7 @@ backend natif/process-only → refusé dans les deux modes
 
 Linux utilise bubblewrap/namespaces et une frontière de job cgroup v2 (`memory.max`, `pids.max`, `cpu.max`, `cgroup.kill`); Windows utilise AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
 
-État actuel : ces deux backends déclarent leur quota d'écriture disque `SUPERVISED_HARD_KILL` (supervisé par MINOS, non appliqué par l'OS) et sont donc rétrogradés en `UNTRUSTED_CODE_UNSUPPORTED` — **par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)), pas comme un défaut en attente. `remote index` échoue sur tous les OS, en `ALLOW` comme en `DENY`, sans contournement ; il refuse avant toute matérialisation avec un message `remote index failed: …` (exit 1) propre à la cause : le backend écarté et les dimensions manquantes (`REJECTED_BY_DECISION`), ou le prérequis manquant quand aucun backend OS n'est découvert (`NO_OS_BACKEND_AVAILABLE`) ; `doctor` expose la même cause. Le bloc ci-dessus décrit le contrat cible. Voir [`remote-indexing.md`](remote-indexing.md) et le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md).
+État actuel : ces deux backends déclarent leur quota d'écriture disque `SUPERVISED_HARD_KILL` (supervisé par MINOS, non appliqué par l'OS) et sont donc rétrogradés en `UNTRUSTED_CODE_UNSUPPORTED` — **par décision** ([ADR 0041](../architecture/adr/archive/0041-indexation-distante-de-code-non-fiable.md)), pas comme un défaut en attente. `remote index` échoue sur tous les OS, en `ALLOW` comme en `DENY`, sans contournement ; il refuse avant toute matérialisation avec un message `remote index failed: …` (exit 1) propre à la cause : le backend écarté et les dimensions manquantes (`REJECTED_BY_DECISION`), ou le prérequis manquant quand aucun backend OS n'est découvert (`NO_OS_BACKEND_AVAILABLE`) ; `doctor` expose la même cause. Le bloc ci-dessus décrit le contrat cible. Voir [`remote-indexing.md`](remote-indexing.md) et le constat A1 de [`../project/audits/archive/2026-09/AUDIT-2026-09.md`](../project/audits/archive/2026-09/AUDIT-2026-09.md).
 
 ## Runtime & Dynamic Intelligence
 
@@ -437,7 +449,7 @@ minos_team_members
 minos_team_audit
 ```
 
-Le catalogue exact est généré dans [`../generated/product-facts.md`](../generated/product-facts.md). Voir aussi [Serveur MCP](mcp.md).
+Le catalogue exact est généré dans [`product-facts.md`](../developer/generated/product-facts.md). Voir aussi [Serveur MCP](mcp.md).
 
 ### Particularité Windows
 

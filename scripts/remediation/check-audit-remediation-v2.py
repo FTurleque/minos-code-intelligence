@@ -10,11 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-# The runtime image is eclipse-temurin 24 (maven.compiler.release), written <image>:<tag>@sha256:<digest>.
+# The runtime image is eclipse-temurin 25 on Ubuntu 24.04 `noble` (maven.compiler.release; the untagged variant moved to
+# Ubuntu 26.04, which the pinned apt snapshot of the release image does not serve), written <image>:<tag>@sha256:<digest>.
 # The tag is deliberately a PATTERN, not a literal: a Dependabot bump to another 24.x JRE (new tag, new
 # digest) must keep this gate green, while a floating tag (24-jre), another major (25.x), a tag without a
 # digest and a digest without a tag must all stay red.
-TEMURIN_JRE_FROM = re.compile(r"^FROM eclipse-temurin:24\.[0-9._]+-jre@sha256:[0-9a-f]{64}\s*$", re.MULTILINE)
+TEMURIN_JRE_FROM = re.compile(r"^FROM eclipse-temurin:25\.[0-9._]+-jre-noble@sha256:[0-9a-f]{64}\s*$", re.MULTILINE)
 
 
 def read(path: str) -> str:
@@ -67,16 +68,16 @@ def main() -> int:
             'package-ecosystem: "github-actions"',
         )
         require(
-            "docs/TOOLCHAIN_POLICY.md",
-            "Java: **24**",
+            "docs/developer/TOOLCHAIN_POLICY.md",
+            "Java: **25**",
             "Java: **21**",
-            "Gradle: **9.6.1**",
+            "Gradle: **9.8.2**",
             "IntelliJ Platform: **2026.1**",
             "Dependabot covers Maven, the `minos-intellij` Gradle build, and GitHub Actions",
         )
 
         require(
-            "docs/STATUS.md",
+            "docs/project/governance/STATUS.md",
             "28 août 2026",
             "PR Validation",
             "gate statique ciblé Ubuntu",
@@ -85,16 +86,16 @@ def main() -> int:
             "main` doit être ancêtre",
         )
         require(
-            "docs/ROADMAP.md",
+            "docs/project/governance/ROADMAP.md",
             "28 août 2026",
             "Post-228 — invariants statiques ciblés",
             "Docker release et upgrade réel",
             "deux commits/JAR distincts",
             "main ⊆ develop",
         )
-        forbid("docs/ROADMAP.md", "Vérification manuelle encore ouverte")
+        forbid("docs/project/governance/ROADMAP.md", "Vérification manuelle encore ouverte")
 
-        # Post-228 hardening was its own workflow file; C1 (docs/adr/0043) folded it into pr-ci.yml
+        # Post-228 hardening was its own workflow file; C1 (docs/architecture/adr/0043) folded it into pr-ci.yml
         # as the dedicated "invariants" job so it runs once instead of in a separate parallel
         # workflow. The property this protects is unchanged: these are fast, ubuntu-only, non-Maven
         # checks that must never grow into (or duplicate) the OS-matrixed Maven verify job.
@@ -126,8 +127,8 @@ def main() -> int:
         dockerfile = read("docker/Dockerfile.mcp")
         if not TEMURIN_JRE_FROM.search(dockerfile):
             raise RuntimeError(
-                "docker/Dockerfile.mcp: FROM must be eclipse-temurin:24.<x>-jre@sha256:<digest> (tag and digest)")
-        if "FROM eclipse-temurin:24-jre" in dockerfile:
+                "docker/Dockerfile.mcp: FROM must be eclipse-temurin:25.<x>-jre-noble@sha256:<digest> (tag and digest)")
+        if "FROM eclipse-temurin:25-jre" in dockerfile:
             raise RuntimeError("docker/Dockerfile.mcp still uses a floating 24-jre tag")
 
         require(
@@ -136,7 +137,7 @@ def main() -> int:
             "requireCapacity",
         )
         require(
-            "minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java",
+            "minos-storage/src/main/java/com/minos/storage/codec/SnapshotBinaryCodecSupport.java",
             "BoundedInputStream",
             "BoundedOutputStream",
             "MAX_PERSISTED_SNAPSHOT_BYTES",
@@ -157,7 +158,7 @@ def main() -> int:
             "new String(input.readAllBytes(), StandardCharsets.UTF_8)",
         )
         require(
-            "minos-storage-local/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java",
+            "minos-storage/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java",
             "if (derived != null) Arrays.fill(derived, (byte) 0)",
             "Arrays.fill(master, (byte) 0)",
         )

@@ -8,9 +8,12 @@ paths:
 Conventions relevées dans les gates, les ADR et les revues du dépôt. La convention du **module touché** fait foi quand elle est plus précise.
 
 ## Architecture
-- Respecter la direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0022). Aucune dépendance Maven nouvelle sans relire `scripts/architecture/check-module-boundaries.py` (règles A2, A3, A7, A8, A9).
-- Un package appartient à **un seul module** (ADR 0044). Déplacer une classe plutôt que renommer ; un déplacement fait entrer la classe en « code neuf » pour SonarCloud : ses tests vivent dans son module.
+- Respecter la direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0068). Aucune dépendance Maven nouvelle sans relire `scripts/architecture/check-module-boundaries.py` (règles A2, A3, A7 à A16).
+- Un package appartient à **un seul module** (ADR 0068). Déplacer une classe plutôt que renommer ; un déplacement fait entrer la classe en « code neuf » pour SonarCloud : ses tests vivent dans son module.
 - `application` ne nomme aucune classe d'adaptateur ; les surfaces non plus (ADR 0042, 0058). Le câblage est dans `minos-bootstrap`.
+- Hors de `minos-runtime-local`, ne nommer que les types de ses packages `process`, `sandbox` et `workspace` listés dans `RUNTIME_LOCAL_EXPORTED_TYPES` (règle A10) ; allonger cette liste est une décision relue, pas un correctif de compilation.
+- La dette d'architecture est figée par des listes fermées du même garde (ADR 0068) : une surface ne nomme que les types de `minos-engine` listés pour elle (A11) ; aucun `ProcessBuilder` ni `Runtime.exec` dans le domaine, le moteur ou l'application hors `PROCESS_LAUNCHERS` (A12) ; un adaptateur ne nomme d'un autre que les types listés pour le couple, et chaque couple porte sa raison écrite (A13). Ces listes se réduisent, elles ne s'allongent que par une décision relue.
+- **Nouveau package** : sous une racine `com.minos.<x>` que son module possède déjà (A14, `PACKAGE_ROOTS_BY_MODULE`), de préférence sous l'espace de noms propre au module (`com.minos.application.…`, `com.minos.storage.local.…`, `com.minos.runtime.local.…`, `com.minos.adapter.scip.…`). Aucun package existant n'est renommé ; une nouvelle racine est une décision d'architecture (ADR 0068).
 - Pas de cycle de packages : un nouveau package est une feuille tant qu'il peut l'être (callbacks plutôt que dépendances vers `ui`/`actions`).
 - Constructeur unique et point d'entrée nommé (ADR 0045, règle A4) : pas de constructeurs télescopiques. Aucune E/S dans un constructeur de `record`.
 
@@ -21,13 +24,14 @@ Conventions relevées dans les gates, les ADR et les revues du dépôt. La conve
 - Aucun secret, jeton ni mot de passe en clair dans le code, les messages ou les journaux.
 
 ## E/S et processus
-- E/S privées uniquement par les primitives (`ConfinedFileOpener`, `DurableAtomicFile`, `BoundedFileLease`, `BoundedProperties`, `PrivateLocalStorage`, `FileTreeOperations`) : `Files.write`, `Files.createDirectories`, `Files.newInputStream`, `FileChannel.open`/`lock` sont interdits ailleurs (`check-private-io.py`, liste de tolérance en cliquet).
+- E/S privées uniquement par les primitives du gate (`ConfinedFileOpener`, `DurableAtomicFile`, `BoundedFileLease`, `BoundedProperties`) et par `PrivateLocalStorage` (qui crée à droits privés, par entrées de liste nominatives). Sont interdits ailleurs (`check-private-io.py`, liste de tolérance en cliquet) : `Files.write`, `writeString`, `createDirectories`, `createDirectory`, `createFile`, `createTempFile`, `createTempDirectory`, `newInputStream`, `newOutputStream`, `newBufferedWriter`, `newByteChannel`, `copy`, `move`, `FileChannel.open`/`lock` et la redirection de la sortie d'un processus vers un fichier (`redirectOutput(File)`, `Redirect.to`). Une écriture nouvelle ne passe pas par une entrée de liste : elle passe par une primitive. Écrire en flux : `PrivateLocalStorage.openPrivateOutputStream` (créer privé ou durcir, puis tronquer), `createPrivateOutputStream` (création exclusive durcie, pour ce que MINOS relit dans un dossier inscriptible par un provider) ; `openNewTreeFile` (création exclusive dans un arbre privé par sa racine : droits `0600` à la création, ACL héritée, **ni DACL réécrite ni confidentialité revérifiée**, niveau partiel, ADR 0061). Lire par canal : `ConfinedFileOpener.openRegularFileNoFollowChannel`. Publier un répertoire : `DurableAtomicFile.moveDirectory` (rename atomique exclusif, sans repli par copie).
 - Un processus externe ne reçoit **jamais** l'environnement hérité : liste d'autorisation (`ProviderProcessEnvironment`), motifs de secret exclus.
 - Code non fiable : bac à sable OS ou refus, jamais de mode dégradé silencieux ; une dégradation de confinement doit être observable.
 
 ## Hygiène
 - `Locale.ROOT` sur toute comparaison ou transformation de casse.
 - Aucun numéro de jalon (`m24`, `s5`…) dans un nom de fichier, de classe ou de script (ADR 0043).
+- Commentaires et Javadoc en **anglais**, sans numéro de jalon ; un fichier ne mêle pas deux langues. Reprendre un commentaire français d'un fichier touché abaisse le maximum de son module (`scripts/quality/comment-language.json`, gate `check-comment-language.py`, `CONTRIBUTING.md`).
 - Sorties « déterministes » : ordre de clés stable, pas de `NaN`/`Infinity`, échappement JSON par l'encodeur unique `DeterministicJson`.
 - Une capacité n'est annoncée que si le provider produit réellement les faits correspondants ; une limite se déclare dans la sortie (limitations), pas seulement en documentation.
 

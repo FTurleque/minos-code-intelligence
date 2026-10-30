@@ -122,6 +122,14 @@ JAVA_SECURITY_RULES_NOT_CONFIGURED
 
 et `SECURITY_TAINT` n’est jamais publié.
 
+Avec un fichier, quel que soit son contenu (même vide de sources) :
+
+```text
+SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY
+```
+
+Les règles `sources`, `sinks` et `sanitizers` viennent **exclusivement du dépôt analysé**, qui n'est pas de confiance : un dépôt qui omet ses sources ou ses puits fait rapporter « aucun chemin » (`SECURITY_SOURCE_OR_SINK_ANNOTATIONS_UNAVAILABLE`, `ABSENCE_OF_PATH_IS_NOT_PROOF_OF_SAFETY`). Cette limitation, exclusive de `JAVA_SECURITY_RULES_NOT_CONFIGURED`, est portée par le graphe de programme et relayée telle quelle par `minos_program_graph`, `minos_impact_v2` et `minos_security_paths` (MCP, CLI, API Java). Un assainisseur déclaré ne retire jamais un chemin : le chemin traversant un assainisseur est rapporté avec `sanitizedPathObserved=true` et la liste des assainisseurs traversés. Des règles fournies par l'opérateur hors du dépôt ne sont pas supportées.
+
 La propagation M22 v1 est intraprocédurale. Un appel inconnu stoppe le taint plutôt que de supposer qu’il préserve la valeur.
 
 ## Nature, confiance et provenance
@@ -168,6 +176,15 @@ La clé de cache du provider inclut :
 
 Modifier source ou taxonomy invalide donc le fragment Java sans demander de redémarrage du service.
 
+En production, ce provider est enveloppé par `FingerprintConstrainedJavaProgramGraphProvider`, qui choisit la clé selon le snapshot :
+
+| Snapshot | Clé de cache | Sources lues pour la clé | Limitation |
+|---|---|---|---|
+| Avec empreinte exacte de l'arbre source | empreinte du snapshot et empreinte du fichier de règles | aucune | aucune ; une source qui diffère de l'état indexé est refusée à la construction (`JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT`) |
+| Sans empreinte exacte (un fichier a changé pendant l'indexation) | la clé par contenu ci-dessus, **réutilisée pendant 5 secondes** | toutes, au plus une fois par délai | `PROGRAM_GRAPH_REFLECTS_DISK_AS_OF_AT_MOST_5_SECONDS_AGO_NOT_INDEXED_STATE` |
+
+Le délai est la constante `ProgramGraphService.SOURCE_STATE_REUSE_SECONDS` ; il n'est pas réglable, et l'identifiant de la limitation porte sa valeur. Il est mesuré sur une horloge monotone injectable (constructeur à deux arguments du provider), et la mémorisation (`SourceStateKeyMemo`) est bornée à 64 projets. Sans empreinte exacte, une modification est donc vue au premier appel qui suit l'expiration du délai. La limitation est émise par `ProgramGraphService` : un provider la déclenche en rendant, par `ProgramGraphProvider.resolveCacheKey`, une clé marquée `sourceStateReused`.
+
 ## Limitations v1 importantes
 
 Les limitations suivantes sont contractuelles :
@@ -181,6 +198,7 @@ JAVA_INTERPROCEDURAL_UNIQUE_NAME_ARITY_ONLY
 JAVA_INTERPROCEDURAL_EXTERNAL_OR_AMBIGUOUS_CALLS_SKIPPED
 JAVA_SECURITY_FLOW_INTRAPROCEDURAL_CONFIGURED_RULES_ONLY
 JAVA_SECURITY_UNKNOWN_CALL_STOPS_FLOW
+SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY
 ```
 
 Elles peuvent apparaître uniquement lorsque le cas correspondant est rencontré.

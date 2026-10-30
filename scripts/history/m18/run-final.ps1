@@ -130,8 +130,8 @@ function Resolve-Gradle {
 
 function Assert-M18Structure {
     $required = @(
-        'docs\roadmap\M18_EXECUTION.md',
-        'docs\adr\0027-intellij-external-client-and-versioned-cli-protocol.md',
+        'docs\project\roadmap\M18_EXECUTION.md',
+        'docs\architecture\adr\ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md',
         'docs\user\intellij-plugin.md',
         'minos-cli\src\main\java\com\minos\cli\IdeCommand.java',
         'minos-cli\src\main\java\com\minos\cli\GitActivityCommand.java',

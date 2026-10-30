@@ -1,5 +1,8 @@
 package com.minos.runtime.local;
 
+import com.minos.runtime.local.process.IndexerProcessPlan;
+import com.minos.runtime.local.process.ProcessIndexerExecutor;
+import com.minos.runtime.local.process.ProcessSandboxCapableIndexerExecutor;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerCapability;

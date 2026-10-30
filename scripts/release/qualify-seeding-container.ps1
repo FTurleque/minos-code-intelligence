@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $Distribution,
 
-    # Any local image that has a Java 24 `java` on its PATH.
+    # Any local image that has a Java 25 `java` on its PATH.
     [string] $Image = 'minos-code-intelligence:1.2.0-730b760020b8'
 )
 

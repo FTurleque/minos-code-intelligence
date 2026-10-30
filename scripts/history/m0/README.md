@@ -53,8 +53,8 @@ compatibilité compte contre Glean ; il ne devient ni un modèle MINOS ni une
 réécriture de l'identité fournisseur.
 
 Le protocole et les résultats réels C1 sont suivis dans
-`docs/m0/RAPPORT_GLEAN_C1.md`. La comparaison décisionnelle avec le backend
-mémoire est dans `docs/m0/COMPARATIF_BACKENDS.md`.
+`docs/project/history/m0/RAPPORT_GLEAN_C1.md`. La comparaison décisionnelle avec le backend
+mémoire est dans `docs/project/history/m0/COMPARATIF_BACKENDS.md`.
 
 ## Versions de référence
 
@@ -348,7 +348,7 @@ Objectif : tester un dépôt Maven Java réel avec :
 
 Résultat confirmé : 160 sources principales et 60 sources de test compilées en
 `release 17`, 220 shards agrégés et ingérés par MINOS. Le détail se trouve dans
-`docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md`.
+`docs/project/history/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md`.
 
 ### A4 — `java-multi-module`
 
@@ -381,9 +381,9 @@ analysé modifié.
 Les résultats mesurés de A1 à A5 sont documentés dans :
 
 ```text
-docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md
-docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md
-docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md
+docs/project/history/m0/RAPPORT_SCIP_JAVA_A1_A2.md
+docs/project/history/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md
+docs/project/history/m0/RAPPORT_SCIP_JAVA_A4_A5.md
 ```
 
 ## Baseline SCIP → MINOS
@@ -457,7 +457,7 @@ Baseline MINOS sur le même index :
 ```
 
 Les résultats mesurés et les limitations sont consignés dans
-`docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
+`docs/project/history/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
 
 ## Expérience D2 — TypeScript multi-projet, héritage et non-résolution
 
@@ -513,7 +513,7 @@ Exécuter ensuite la baseline MINOS, par exemple :
 Le harness expose aussi les combinaisons de rôles, les identifiants ayant
 plusieurs définitions, les relations dont la cible est cataloguée et les
 identifiants occurrence-only. Les résultats et leurs limites sont dans
-`docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.
+`docs/project/history/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.
 
 ## Expérience E1 — benchmark du backend mémoire
 
@@ -555,4 +555,4 @@ le calcul SHA-256 est effectué après la fenêtre mesurée.
 
 Le benchmark ne mesure pas encore le RSS complet et ne doit pas être confondu
 avec une CLI produit. Le rapport E1 est dans
-`docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md`.
+`docs/project/history/m0/RAPPORT_BACKEND_MEMOIRE_E1.md`.

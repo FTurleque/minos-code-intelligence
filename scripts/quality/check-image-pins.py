@@ -5,8 +5,9 @@ Scope (the whole container supply chain of this repository):
 
 * every ``FROM`` of ``docker/Dockerfile*`` (stage references and ``scratch`` excepted);
 * every ``image:`` of ``docker/compose*.y*ml``: a literal, or the default of ``${VAR:-default}``,
-  must be pinned; ``${MINOS_IMAGE}`` (the MINOS image itself, built or loaded by the release
-  workflow, never pulled from a registry) is the only reference allowed without a pin;
+  must be pinned; ``${MINOS_IMAGE}`` and ``${MINOS_QUERY_IMAGE}`` (the two MINOS images themselves,
+  administration and query, built or loaded by the release workflow, never pulled from a registry)
+  are the only references allowed without a pin;
 * a managed-service image named by a compose pin (pgvector, ollama, ...) must not be written a
   second time, with a tag, anywhere else in scripts, workflows or sources: the compose file is
   its single source.
@@ -24,6 +25,13 @@ Why both a tag and a digest: the digest is the immutable pin, the tag is what De
 ecosystem) follows to propose a new digest. A reference with a digest and no tag is moved to
 ``latest`` by Dependabot; a tag without a digest is mutable.
 
+``--testcontainers-images`` prints, one per line, the images Testcontainers starts during the Maven
+tests and PIT (AUD-DEP-13, option B of decision D4 of durcir-les-workflows-github): the pinned
+compose defaults named by TESTCONTAINERS_IMAGE_VARIABLES, the single source the tests read too
+(``PostgresTestSupport.pinnedPostgresImage``). The CI pulls them while logged in to Docker Hub,
+then logs out before any test runs; the tests refuse every other image
+(``PrePulledImagesOnlyPullPolicy``). A default that is missing, unpinned or ambiguous fails.
+
 Self-test: scripts/quality/test_check_image_pins.py.
 """
 from __future__ import annotations
@@ -32,6 +40,9 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gate_cli  # noqa: E402 - after the script's directory is added to the path
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -44,7 +55,12 @@ IMAGE_KEY = re.compile(r"^\s*image:\s*(?P<value>.+?)\s*(?:#.*)?$")
 VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(?P<default>[^}]+)\}$")
 # ${VAR} or ${VAR:?message} (a required variable, MINOS-AUD-H20): the value comes from the launcher.
 VARIABLE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?::\?[^}]*)?\}$")
-UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE"})
+UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE", "MINOS_QUERY_IMAGE"})
+NAMED_VARIABLE_WITH_DEFAULT = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*):-(?P<default>[^}]+)\}$")
+
+# The images Testcontainers starts: (compose file under docker/, variable whose pinned default the tests read).
+# Ryuk, Testcontainers' cleanup sidecar, is not one of them: the jobs that pull this list disable it.
+TESTCONTAINERS_IMAGE_VARIABLES = (("compose-mcp.connected.yaml", "MINOS_POSTGRES_IMAGE"),)
 
 # dependabot-core, docker/lib/dependabot/docker_compose/file_fetcher.rb (read 2026-10-02): the fetcher keeps a file of the
 # configured directory when ``f.name.match?(FILENAME_REGEX)`` (a search, not a full match). Python >= 3.11 for the
@@ -52,7 +68,6 @@ UNPINNED_ALLOWED_VARIABLES = frozenset({"MINOS_IMAGE"})
 DEPENDABOT_COMPOSE_FILENAME = re.compile(r"(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml", re.IGNORECASE)
 DEPENDABOT_CONFIG = ".github/dependabot.yml"
 
-PR_CI = ".github/workflows/pr-ci.yml"
 CI_STEPS = ("scripts/quality/check-image-pins.py", "scripts/quality/test_check_image_pins.py")
 
 SKIPPED_DIRECTORIES = frozenset({".git", "target", "node_modules", "build", ".gradle", ".idea", "history"})
@@ -124,12 +139,12 @@ def find_compose_violations(path: Path, root: Path) -> tuple[list[str], set[str]
 
 
 def iter_scanned_files(root: Path):
-    for path in sorted(root.rglob("*")):
+    # Only the files of this repository: a worktree under .claude/worktrees/ (git-ignored) or any nested checkout
+    # holds a copy of every file, and the exemptions below do not reach the copies.
+    for path in gate_cli.repository_files(root, SKIPPED_DIRECTORIES):
         if not path.is_file() or path.suffix.lower() not in SCANNED_SUFFIXES:
             continue
         relative = path.relative_to(root).as_posix()
-        if any(part in SKIPPED_DIRECTORIES for part in path.relative_to(root).parts):
-            continue
         if relative.startswith(SKIPPED_RELATIVE_PREFIXES):
             continue
         if re.fullmatch(r"docker/compose[^/]*\.ya?ml", relative):
@@ -186,46 +201,9 @@ def find_dependabot_violations(root: Path, compose_files: list[Path]) -> list[st
     return failures
 
 
-def find_ci_wiring_violations(root: Path) -> list[str]:
-    """Each CI step must be a step of the ``invariants`` job, with no ``if:`` on the step or the job.
-
-    Line-based (no YAML parser): the job is the block under ``  invariants:``; a step is a ``- `` item
-    of that block; ``if:`` is looked for at job level and at step level. What it does not prove: that the
-    job runs on the events you care about (``on:``), or that an enclosing workflow-level condition is absent.
-    """
-    workflow = root / PR_CI
-    if not workflow.is_file():
-        return [f"{PR_CI} not found: the gate would not run in CI"]
-    lines = [line for line in workflow.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
-    start = next((i for i, line in enumerate(lines) if re.match(r"^  invariants:\s*$", line)), None)
-    if start is None:
-        return [f"{PR_CI}: job `invariants` not found"]
-    end = next((i for i in range(start + 1, len(lines)) if re.match(r"^  [A-Za-z0-9_-]+:\s*$", lines[i])), len(lines))
-    job = lines[start + 1:end]
-    failures: list[str] = []
-    if any(re.match(r"^    if:", line) for line in job):
-        failures.append(f"{PR_CI}: job `invariants` has an `if:` condition; its gates may be skipped")
-    items = [len(line) - len(line.lstrip()) for line in job if re.match(r"^\s*- ", line)]
-    step_indent = min(items) if items else 0
-    steps: list[list[str]] = []
-    for line in job:
-        if re.match(r"^\s*- ", line) and len(line) - len(line.lstrip()) == step_indent:
-            steps.append([line])
-        elif steps:
-            steps[-1].append(line)
-    for step in CI_STEPS:
-        owner = [block for block in steps
-                 if any(line.strip().removeprefix("- ").startswith(f"run: python {step}") for line in block)]
-        if not owner:
-            failures.append(f"{PR_CI}: job `invariants` has no step running `python {step}`")
-        elif any(re.match(r"^\s*(- )?if:", line) for line in owner[0]):
-            failures.append(f"{PR_CI}: the step running `python {step}` has an `if:` condition; it may be skipped")
-    return failures
-
-
 def check(root: Path) -> tuple[list[str], int]:
     docker = root / "docker"
-    failures: list[str] = find_ci_wiring_violations(root)
+    failures: list[str] = gate_cli.find_ci_wiring_violations(root, CI_STEPS)
     inspected = 0
     repositories: set[str] = set()
     compose_files: list[Path] = []
@@ -246,10 +224,40 @@ def check(root: Path) -> tuple[list[str], int]:
     return failures, inspected
 
 
+def testcontainers_images(root: Path) -> list[str]:
+    """The pinned images Testcontainers starts, in TESTCONTAINERS_IMAGE_VARIABLES order; ValueError when one cannot
+    be read as exactly one pinned default."""
+    images: list[str] = []
+    for file, variable in TESTCONTAINERS_IMAGE_VARIABLES:
+        path = root / "docker" / file
+        if not path.is_file():
+            raise ValueError(f"docker/{file} is missing: the default of {variable} cannot be read")
+        defaults = {match.group("default")
+                    for _number, value in compose_images(path)
+                    if (match := NAMED_VARIABLE_WITH_DEFAULT.match(value)) and match.group("name") == variable}
+        if len(defaults) != 1:
+            raise ValueError(f"docker/{file} must give {variable} exactly one default, found {len(defaults)}")
+        image = defaults.pop()
+        if not PINNED.match(image):
+            raise ValueError(f"docker/{file}: the default of {variable} is not <image>:<tag>@sha256:<64 hex>: {image}")
+        if image not in images:
+            images.append(image)
+    return images
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--testcontainers-images", action="store_true",
+                        help="print the pinned images Testcontainers starts, one per line, and exit")
     arguments = parser.parse_args(argv)
+    if arguments.testcontainers_images:
+        try:
+            print("\n".join(testcontainers_images(arguments.root.resolve())))
+        except ValueError as error:
+            print(f"TESTCONTAINERS IMAGE LIST FAILED: {error}", file=sys.stderr)
+            return 1
+        return 0
     failures, inspected = check(arguments.root.resolve())
     if failures:
         print("CONTAINER IMAGE PIN GATE FAILED")

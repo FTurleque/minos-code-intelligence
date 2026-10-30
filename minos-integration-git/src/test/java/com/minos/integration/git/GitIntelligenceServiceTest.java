@@ -1,5 +1,11 @@
 package com.minos.integration.git;
 
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.CommitActivity;
+import com.minos.domain.git.FileActivity;
+import com.minos.domain.git.RepositoryView;
+import com.minos.domain.git.ZoneActivity;
 import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,16 +46,16 @@ class GitIntelligenceServiceTest {
         }
 
         GitIntelligenceService service = new GitIntelligenceService();
-        GitIntelligenceService.RepositoryView repository = service.inspect(repositoryRoot);
+        RepositoryView repository = service.inspect(repositoryRoot);
         assertNotNull(repository.repositoryId());
         assertNotNull(repository.headCommit());
         assertTrue(repository.clean());
         assertFalse(repository.shallow());
         assertTrue(repository.limitations().contains("NO_ORIGIN_REMOTE"));
 
-        GitIntelligenceService.ActivityReport report = service.analyze(
+        ActivityReport report = service.analyze(
                 repositoryRoot,
-                new GitIntelligenceService.ActivityQuery(Instant.EPOCH, 100, 100, 1)
+                new ActivityQuery(Instant.EPOCH, 100, 100, 1)
         );
 
         assertEquals(2, report.scannedCommitCount());
@@ -57,20 +63,20 @@ class GitIntelligenceServiceTest {
         assertFalse(report.filesTruncated());
         assertEquals(2, report.recentCommits().size());
 
-        GitIntelligenceService.FileActivity app = report.files().stream()
+        FileActivity app = report.files().stream()
                 .filter(file -> file.path().equals("src/App.java"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(2, app.commitCount());
         assertEquals(2, app.uniqueAuthorCount());
 
-        GitIntelligenceService.FileActivity readme = report.files().stream()
+        FileActivity readme = report.files().stream()
                 .filter(file -> file.path().equals("README.md"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(1, readme.commitCount());
 
-        GitIntelligenceService.ZoneActivity src = report.zones().stream()
+        ZoneActivity src = report.zones().stream()
                 .filter(zone -> zone.zone().equals("src"))
                 .findFirst()
                 .orElseThrow();
@@ -87,10 +93,46 @@ class GitIntelligenceServiceTest {
             );
             config.save();
         }
-        GitIntelligenceService.RepositoryView sanitized = service.inspect(repositoryRoot);
+        RepositoryView sanitized = service.inspect(repositoryRoot);
         assertEquals("https://example.com/org/repo", sanitized.originRemote());
         assertFalse(sanitized.originRemote().contains("secret"));
         assertFalse(sanitized.originRemote().contains("token"));
+    }
+
+    @Test
+    void authorEmailsAreMaskedUnlessRequestedAndStillCountDistinctAuthors(@TempDir Path temp) throws Exception {
+        Path root = temp.resolve("repo");
+        Files.createDirectories(root);
+        try (Git git = Git.init().setDirectory(root.toFile()).call()) {
+            commitAs(git, root, "shared.txt", "first", "Sam", "sam@first.example");
+            commitAs(git, root, "shared.txt", "second", "Sam", "sam@second.example");
+        }
+        GitIntelligenceService service = new GitIntelligenceService();
+        Instant since = Instant.EPOCH;
+
+        ActivityReport masked = service.analyze(
+                root, new ActivityQuery(since, 100, 100, 1));
+        ActivityReport requested = service.analyze(
+                root, new ActivityQuery(since, 100, 100, 1, true));
+
+        assertEquals(2, masked.recentCommits().size());
+        masked.recentCommits().forEach(commit -> {
+            assertEquals(GitIntelligenceService.MASKED_AUTHOR_EMAIL, commit.authorEmail());
+            assertEquals("Sam", commit.authorName());
+        });
+        assertEquals(2, masked.files().getFirst().uniqueAuthorCount(), "two addresses are still two authors");
+        assertEquals(java.util.List.of("sam@first.example", "sam@second.example"),
+                requested.recentCommits().stream().map(CommitActivity::authorEmail)
+                        .sorted().toList());
+        assertEquals(2, requested.files().getFirst().uniqueAuthorCount());
+    }
+
+    private static void commitAs(Git git, Path root, String file, String message, String name, String email)
+            throws Exception {
+        Files.writeString(root.resolve(file), message + "\n");
+        git.add().addFilepattern(file).call();
+        org.eclipse.jgit.lib.PersonIdent ident = new org.eclipse.jgit.lib.PersonIdent(name, email);
+        git.commit().setMessage(message).setAuthor(ident).setCommitter(ident).call();
     }
 
     @Test
@@ -114,8 +156,8 @@ class GitIntelligenceServiceTest {
             commit(git, root, "third.txt", "recent-newest", recent.plusSeconds(60));
         }
 
-        GitIntelligenceService.ActivityReport report = new GitIntelligenceService().analyze(
-                root, new GitIntelligenceService.ActivityQuery(Instant.parse("2026-01-01T00:00:00Z"), 100, 100, 1));
+        ActivityReport report = new GitIntelligenceService().analyze(
+                root, new ActivityQuery(Instant.parse("2026-01-01T00:00:00Z"), 100, 100, 1));
 
         // Git lists newest-first: third, second (dated 2001), first. Stopping at the old date lost "first".
         assertEquals(2, report.scannedCommitCount());
@@ -153,7 +195,7 @@ class GitIntelligenceServiceTest {
         public static void main(String[] arguments) throws Exception {
             var report = new GitIntelligenceService().analyze(
                     Path.of(arguments[0]),
-                    new GitIntelligenceService.ActivityQuery(Instant.EPOCH, 100, 100, 1));
+                    new ActivityQuery(Instant.EPOCH, 100, 100, 1));
             report.files().forEach(file -> System.out.println(file.path()));
         }
     }

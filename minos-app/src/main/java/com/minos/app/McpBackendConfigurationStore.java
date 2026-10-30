@@ -3,18 +3,18 @@ package com.minos.app;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.io.PrivateProperties;
 
 import java.io.IOException;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Atomic, fail-closed persistence for the MCP runtime backend selection. */
 public final class McpBackendConfigurationStore {
@@ -87,13 +87,7 @@ public final class McpBackendConfigurationStore {
 
         Path temporary = PrivateLocalStorage.createPrivateTempFile(file.getParent(), FILE_NAME + ".", ".tmp");
         try {
-            try (Writer writer = Files.newBufferedWriter(
-                    temporary,
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING)) {
-                properties.store(writer, "MINOS MCP backend configuration v1");
-            }
+            PrivateProperties.write(temporary, properties, "MINOS MCP backend configuration v1", StandardCharsets.UTF_8);
             DurableAtomicFile.replace(temporary, file, "MCP backend configuration replacement");
             PrivateLocalStorage.verifyPrivateFile(file);
         } finally {
@@ -112,7 +106,7 @@ public final class McpBackendConfigurationStore {
 
     private void secureExistingConfigurationFile() throws IOException {
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("MCP backend configuration is not a real regular file: " + file);
+            throw new IOException("MCP backend configuration is not a real regular file: " + leafName(file));
         }
         PrivateLocalStorage.hardenExistingFile(file);
     }

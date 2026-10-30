@@ -41,7 +41,9 @@ function Invoke-NativeChecked {
         & $File @Arguments
         $Exit = $LASTEXITCODE
     }
-    finally { $ErrorActionPreference = $Previous }
+    finally {
+        $ErrorActionPreference = $Previous
+    }
     if ($Exit -ne 0) { throw "$Failure (exit=$Exit)" }
 }
 
@@ -146,7 +148,7 @@ if (-not $PublishOnly) {
     # build/validate job already produced and verified, so it never needs a JDK or the MCP smoke
     # harness to publish them.
     $JavaHome = $env:JAVA_HOME
-    if ([string]::IsNullOrWhiteSpace($JavaHome)) { throw 'JAVA_HOME must point to JDK 24 for release validation.' }
+    if ([string]::IsNullOrWhiteSpace($JavaHome)) { throw 'JAVA_HOME must point to JDK 25 for release validation.' }
     $script:Java = Join-Path $JavaHome 'bin\java.exe'
     $script:McpSmokeSource = Join-Path $RepoRoot 'scripts\m14\MinosNativeMcpSmoke.java'
     foreach ($Required in @($script:Java, $script:McpSmokeSource)) {
@@ -222,6 +224,11 @@ $NoticesHash = Verify-Sha256 $Notices $NoticesChecksum
 $LiteZipHash = Verify-Sha256 $LiteZip $LiteZipChecksum
 $LiteSbomHash = Verify-Sha256 $LiteSbom $LiteSbomChecksum
 $LiteNoticesHash = Verify-Sha256 $LiteNotices $LiteNoticesChecksum
+
+# AUD-DEP-06: the installer is checked like the executables of the distribution (build-windows-distribution.ps1). The
+# sums above are recomputed on the final files in both modes, so a file signed after its sum was written fails there.
+. (Join-Path $RepoRoot 'scripts\release\release-signature.ps1')
+$SetupSignatureState = Get-ReleaseSignatureState -Required (Get-ReleaseSignatureRequirement $env:MINOS_REQUIRE_SIGNED_RELEASE) -Mode $env:MINOS_SIGNING_MODE -Executable @($Setup)
 
 if (-not $PublishOnly) {
     if (-not (Test-Path -LiteralPath $SmokeSetup -PathType Leaf)) { throw "Isolated smoke setup missing: $SmokeSetup" }
@@ -324,6 +331,7 @@ if ($ValidateOnly) {
     Write-Host "MCP handshake : PASS (ZIP + isolated setup)"
     Write-Host "SBOM SHA-256  : $SbomHash"
     Write-Host "Notices SHA   : $NoticesHash"
+    Write-Host "Authenticode  : $SetupSignatureState"
     return
 }
 
@@ -344,7 +352,8 @@ if ($ExistingTag.Count -gt 0) { throw "Git tag $Tag already exists on origin wit
 $ReleaseArguments = @(
     'release','create',$Tag,$Setup,$SetupChecksum,$Zip,$ZipChecksum,$Sbom,$SbomChecksum,$Notices,$NoticesChecksum,
     $LiteZip,$LiteZipChecksum,$LiteSbom,$LiteSbomChecksum,$LiteNotices,$LiteNoticesChecksum,
-    '--repo',$Repository,'--target',$TargetCommit,'--title',"MINOS $Version",'--generate-notes'
+    '--repo',$Repository,'--target',$TargetCommit,'--title',"MINOS $Version",
+    '--notes',(Get-ReleaseIntegrityNotes -State $SetupSignatureState -Repository $Repository),'--generate-notes'
 )
 if ($Version -match '-') { $ReleaseArguments += '--prerelease' }
 Invoke-NativeChecked -File $Gh.Source -Arguments $ReleaseArguments -Failure "GitHub Release $Tag publication failed"
@@ -357,6 +366,7 @@ Write-Host "Commit        : $TargetCommit"
 Write-Host "Setup SHA-256 : $SetupHash"
 Write-Host "ZIP SHA-256   : $ZipHash"
 Write-Host "Lite ZIP SHA  : $LiteZipHash"
+Write-Host "Authenticode  : $SetupSignatureState"
 Write-Host "MCP handshake : PASS (ZIP + isolated setup)"
 Write-Host "SBOM SHA-256  : $SbomHash"
 Write-Host "Notices SHA   : $NoticesHash"

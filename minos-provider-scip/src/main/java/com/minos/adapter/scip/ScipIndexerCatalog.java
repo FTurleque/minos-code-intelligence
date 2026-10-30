@@ -38,16 +38,16 @@ public final class ScipIndexerCatalog {
     }
 
     /** Historical M1 catalog preserved for compatibility/replay. */
-    public static List<IndexerDescriptor> qualifiedM1Descriptors() {
+    public static List<IndexerDescriptor> javaTypeScriptDescriptors() {
         return List.of(scipJava(), scipTypeScript());
     }
 
-    public static void registerQualifiedM1(IndexerRegistry registry) {
-        registry.registerAll(qualifiedM1Descriptors());
+    public static void registerJavaTypeScript(IndexerRegistry registry) {
+        registry.registerAll(javaTypeScriptDescriptors());
     }
 
     /** Historical M17 catalog preserved for exact regression replays. */
-    public static List<IndexerProvider> qualifiedM17Providers() {
+    public static List<IndexerProvider> regressionReplayProviders() {
         return List.of(
                 provider(scipJava(), scipJavaProfile(), scipJavaOperationalProfile()),
                 provider(scipTypeScript(), scipTypeScriptProfile(), scipTypeScriptOperationalProfile()),
@@ -55,13 +55,9 @@ public final class ScipIndexerCatalog {
         );
     }
 
-    public static List<IndexerDescriptor> qualifiedM17Descriptors() {
-        return qualifiedM17Providers().stream().map(IndexerProvider::descriptor).toList();
-    }
-
     /** M24 catalog with final dispositions derived from exact-head platform evidence. */
-    public static List<IndexerProvider> qualifiedM24Providers() {
-        List<IndexerProvider> providers = new ArrayList<>(qualifiedM17Providers());
+    public static List<IndexerProvider> qualifiedProviders() {
+        List<IndexerProvider> providers = new ArrayList<>(regressionReplayProviders());
         providers.add(provider(scipClang(), scipClangProfile(), scipClangOperationalProfile()));
         providers.add(provider(scipDotnet(), scipDotnetProfile(), scipDotnetOperationalProfile()));
         providers.add(provider(scipGo(), scipGoProfile(), scipGoOperationalProfile()));
@@ -69,13 +65,13 @@ public final class ScipIndexerCatalog {
         return List.copyOf(providers);
     }
 
-    public static List<IndexerDescriptor> qualifiedM24Descriptors() {
-        return qualifiedM24Providers().stream().map(IndexerProvider::descriptor).toList();
+    public static List<IndexerDescriptor> qualifiedDescriptors() {
+        return qualifiedProviders().stream().map(IndexerProvider::descriptor).toList();
     }
 
     public static IndexerDescriptor scipJava() {
         return new IndexerDescriptor(
-                "scip-java", "0.13.1", "scip-java",
+                "scip-java", "0.13.2", "scip-java",
                 Set.of(Language.JAVA, Language.KOTLIN), Set.of(BuildSystem.MAVEN),
                 Set.of(
                         IndexerCapability.SYMBOLS,
@@ -92,7 +88,7 @@ public final class ScipIndexerCatalog {
                         "Kotlin support is provided by scip-java and must pass the M17 Kotlin fixture before promotion",
                         "Windows execution uses the M0-qualified Maven/javac shims and ScipWriter compatibility patch",
                         "no final index may be promoted when provider execution or project compilation fails",
-                        "incremental indexing has not been qualified for scip-java 0.13.1",
+                        "incremental indexing has not been qualified for scip-java 0.13.2",
                         "CALLS relations are not emitted explicitly",
                         "some symbol kinds remain unspecified"));
     }
@@ -333,7 +329,7 @@ public final class ScipIndexerCatalog {
     private static ProviderOperationalProfile scipJavaOperationalProfile() {
         return operational(
                 scipJava(), Set.of(ProviderPlatform.WINDOWS_X64),
-                List.of("Java 24 JDK", "Maven", "PowerShell", "Git Bash", "C# compiler shim on qualified Windows runtime"),
+                List.of("Java 25 JDK", "Maven", "PowerShell", "Git Bash", "C# compiler shim on qualified Windows runtime"),
                 "READY only after the M17/M22 packaged scip-java runtime and required local tools are present",
                 "managed under MINOS_HOME/tools with the historical M17 Windows compatibility runtime",
                 "M2/M17 qualified deterministic MINOS identity; provider raw symbols remain preserved",

@@ -1,6 +1,7 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ModuleAssignmentRule;
+import com.minos.incremental.ProjectFingerprintService;
 import com.minos.io.CommitUncertainException;
 import com.minos.orchestration.IndexingResumePlanner.Outcome;
 import com.minos.orchestration.IndexingResumePlanner.ReusedTarget;
@@ -32,37 +33,46 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
- * Exécute un run d'indexation sous le bail exclusif du projet : providers, mise en snapshot,
- * promotion, métadonnées. Depuis l'ADR 0039 un run {@code INTERRUPTED} offert par le projet est
- * rouvert par défaut (même {@code runId}, tentative suivante) : les cibles dont le point de contrôle
- * est valide sont réutilisées sans relancer leur provider, les autres sont réexécutées.
+ * Runs an indexing run under the exclusive lease of the project: providers, snapshot staging,
+ * promotion, metadata. Since ADR 0039 an {@code INTERRUPTED} run offered by the project is reopened
+ * by default (same {@code runId}, next attempt): the targets whose checkpoint is valid are reused
+ * without relaunching their provider, the others are run again.
  */
 final class IndexingRunExecutor {
     private static final System.Logger LOGGER = System.getLogger(IndexingRunExecutor.class.getName());
 
     private IndexingRunExecutor() { }
 
-    static IndexingRun execute(UUID projectId, Path projectRoot, List<IndexingExecutionTarget> targets,
-                               IndexingMode mode, List<String> changedFiles,
-                               Map<String, IndexerExecutor> executors, SnapshotStager stager,
-                               SnapshotPromoter promoter, IndexStateStore stateStore,
-                               ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy,
-                               IndexingResumePolicy resumePolicy, ModuleAssignmentRule moduleAssignment,
-                               Clock clock) {
+    /**
+     * Validates the request (resume policy, then root, then ports in the order of {@link Ports}), then runs the run,
+     * resumed or new. Neither record validates at construction: the order and the messages of the refusals are those
+     * of this method.
+     */
+    static IndexingRun execute(RunRequest request, Collaborators collaborators) {
+        UUID projectId = request.projectId();
+        List<IndexingExecutionTarget> targets = request.targets();
+        IndexingMode mode = request.mode();
+        List<String> changedFiles = request.changedFiles();
+        IndexingResumePolicy resumePolicy = request.resumePolicy();
+        IndexStateStore stateStore = collaborators.stateStore();
+        ResumableRunMarkers markers = collaborators.markers();
+        Clock clock = collaborators.clock();
         Objects.requireNonNull(resumePolicy, "resumePolicy");
-        ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
-        Ports ports = new Ports(executors, stager, promoter, stateStore, markers, moduleAssignment, clock);
+        ValidatedProjectRoot root = validateExecutionRoot(request.projectRoot(), targets, mode);
+        Ports ports = new Ports(collaborators.executors(), collaborators.stager(), collaborators.promoter(), stateStore,
+                markers, request.moduleAssignment(), clock, collaborators.fingerprints(), request.rootScopeFingerprint());
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, ports, createdAt);
 
         Optional<ResumeTrace> trace = Optional.empty();
         if (resumePolicy != IndexingResumePolicy.NO_RESUME) {
             // The resume plan is requested under the exclusive lease, before any supersession.
-            Outcome outcome = IndexingResumePlanner.plan(stateStore, markers, artifactPolicy,
+            Outcome outcome = IndexingResumePlanner.plan(stateStore, markers, collaborators.artifactPolicy(),
                     new IndexingResumePlanner.Request(previous, root.lexicalRoot(), targets, mode, changedFiles,
-                            createdAt, IndexingResumePlanner.DEFAULT_RESUME_TTL));
+                            createdAt, IndexingResumePlanner.DEFAULT_RESUME_TTL, ports.fingerprints()));
             Optional<String> refusal;
             switch (outcome) {
                 case Outcome.Resume resume -> {
@@ -117,10 +127,10 @@ final class IndexingRunExecutor {
     }
 
     /**
-     * Rouvre le run interrompu : ses cibles réutilisées sont injectées sans lancer leur provider, les
-     * autres sont exécutées, puis chaque artefact réutilisé est revérifié juste avant la mise en
-     * snapshot. Une revérification qui échoue annule la reprise (run FAILED) et l'appelant bascule
-     * sur un run complet.
+     * Reopens the interrupted run: its reused targets are injected without launching their provider,
+     * the others are run, then each reused artifact is verified again just before snapshot staging. A
+     * verification that fails cancels the resumption (run FAILED) and the caller falls back to a full
+     * run.
      */
     private static ResumedAttempt executeResumed(
             Outcome.Resume resume,
@@ -246,7 +256,7 @@ final class IndexingRunExecutor {
     ) {
         Path lexicalRoot = projectRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(lexicalRoot)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + leafName(projectRoot));
         }
         long scopes = targets.stream().map(IndexingExecutionTarget::projectRelativeRoot).distinct().count();
         if (mode == IndexingMode.INCREMENTAL && scopes > 1) {
@@ -257,7 +267,7 @@ final class IndexingRunExecutor {
             return new ValidatedProjectRoot(lexicalRoot, lexicalRoot.toRealPath());
         } catch (IOException failure) {
             throw new IllegalArgumentException(
-                    "projectRoot could not be resolved to a canonical directory: " + projectRoot, failure);
+                    "projectRoot could not be resolved to a canonical directory: " + leafName(projectRoot), failure);
         }
     }
 
@@ -317,8 +327,12 @@ final class IndexingRunExecutor {
         // capture differs from the recorded fingerprint, so a later resume can never reuse an artifact
         // built from sources it did not fingerprint (fail-closed, ADR 0039 §3). Beyond the source
         // budget (100 000 files / 2 GiB) the capture fails and no checkpoint is persisted.
+        // AUD-PERF-04: the root scope reuses the reference fingerprint of the orchestration when its rules are proved
+        // equal (ReferenceFingerprint); every other scope, and an unproved one, is captured as before.
         CheckpointMaterial material = context.scopeFingerprints.computeIfAbsent(
-                relative.normalize(), scope -> captureScopeFingerprint(root.lexicalRoot(), scope));
+                relative.normalize(), scope -> scope.toString().isEmpty() && context.ports.rootScopeFingerprint().isPresent()
+                        ? new CheckpointMaterial(context.ports.rootScopeFingerprint(), Optional.empty())
+                        : captureScopeFingerprint(context.ports.fingerprints(), root.lexicalRoot(), scope));
         IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
                 context.runId,
                 context.projectId,
@@ -342,9 +356,11 @@ final class IndexingRunExecutor {
                         + checkpoint.withheldReason().map(reason -> ", checkpoint withheld: " + reason).orElse("")));
     }
 
-    private static CheckpointMaterial captureScopeFingerprint(Path projectRoot, Path relative) {
+    private static CheckpointMaterial captureScopeFingerprint(
+            ProjectFingerprintService fingerprints, Path projectRoot, Path relative) {
         try {
-            return new CheckpointMaterial(Optional.of(ExecutionCheckpoints.scopeFingerprint(projectRoot, relative)),
+            return new CheckpointMaterial(
+                    Optional.of(ExecutionCheckpoints.scopeFingerprint(fingerprints, projectRoot, relative)),
                     Optional.empty());
         } catch (ExecutionCheckpoints.Unavailable unavailable) {
             return new CheckpointMaterial(Optional.empty(), Optional.of(unavailable.getMessage()));
@@ -451,8 +467,8 @@ final class IndexingRunExecutor {
         String stagedId = context.ports.stager().stage(new IndexSnapshotStageRequest(
                 context.runId, context.projectId, context.artifacts(), context.ports.moduleAssignment()));
         if (stagedId == null || stagedId.isBlank()) {
-            // Etat interne invalide (le port de mise en scene a rendu un identifiant vide), pas un argument :
-            // IllegalStateException, dont le nom de classe figure dans le message du run persiste.
+            // Invalid internal state (the staging port returned a blank identifier), not an argument:
+            // IllegalStateException, whose class name appears in the message of the persisted run.
             throw new IllegalStateException("stagedSnapshotId must not be blank");
         }
         context.staged = Optional.of(stagedId);
@@ -821,7 +837,9 @@ final class IndexingRunExecutor {
             try {
                 action.run();
                 return true;
-            } catch (RuntimeException failure) {
+            } catch (IndexStateStoreException failure) {
+                // AUD-QUA-03: only a storage failure of the index state is retried or kept as suppressed; a
+                // programming error goes up as it is.
                 if (attempt >= PERSISTENCE_ATTEMPTS_UNDER_INTERRUPTION || !isInterruption(failure)) {
                     original.addSuppressed(failure);
                     return false;
@@ -844,6 +862,40 @@ final class IndexingRunExecutor {
         }
     }
 
+    /**
+     * Inputs specific to one run. No validation here: {@link #execute(RunRequest, Collaborators)}
+     * checks the resume policy, then the root, then {@code moduleAssignment} and {@code rootScopeFingerprint}
+     * with the other ports.
+     */
+    record RunRequest(
+            UUID projectId,
+            Path projectRoot,
+            List<IndexingExecutionTarget> targets,
+            IndexingMode mode,
+            List<String> changedFiles,
+            IndexingResumePolicy resumePolicy,
+            ModuleAssignmentRule moduleAssignment,
+            Optional<String> rootScopeFingerprint
+    ) {
+    }
+
+    /**
+     * Collaborators of the lifecycle service, built once with it. No validation here: the service checks
+     * them at its construction, and {@link #execute(RunRequest, Collaborators)} in the order of
+     * {@link Ports}.
+     */
+    record Collaborators(
+            Map<String, IndexerExecutor> executors,
+            SnapshotStager stager,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            ResumableRunMarkers markers,
+            ResumableArtifactPolicy artifactPolicy,
+            Clock clock,
+            ProjectFingerprintService fingerprints
+    ) {
+    }
+
     private record Ports(
             Map<String, IndexerExecutor> executors,
             SnapshotStager stager,
@@ -851,9 +903,13 @@ final class IndexingRunExecutor {
             IndexStateStore stateStore,
             ResumableRunMarkers markers,
             ModuleAssignmentRule moduleAssignment,
-            Clock clock
+            Clock clock,
+            ProjectFingerprintService fingerprints,
+            Optional<String> rootScopeFingerprint
     ) {
         private Ports {
+            Objects.requireNonNull(fingerprints, "fingerprints");
+            Objects.requireNonNull(rootScopeFingerprint, "rootScopeFingerprint");
             Objects.requireNonNull(executors, "executors");
             Objects.requireNonNull(stager, "stager");
             Objects.requireNonNull(promoter, "promoter");

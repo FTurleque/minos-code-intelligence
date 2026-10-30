@@ -1,6 +1,6 @@
 package com.minos.packaging;
 
-import com.minos.adapter.scip.runtime.EmbeddedToolsCatalog;
+import com.minos.adapter.scip.runtime.install.EmbeddedToolsCatalog;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -78,7 +78,7 @@ class M29DockerAdministrationContractTest {
                 "probe must preserve scip-java diagnostics instead of hiding failures behind grep");
         assertTrue(providerProbe.contains("scip-java version 0.0.0-SNAPSHOT"),
                 "standalone scip-java reports embedded build metadata rather than the Maven artifact version");
-        assertFalse(providerProbe.contains("scip-java version 0.13.1"),
+        assertFalse(providerProbe.contains("scip-java version 0.13.2"),
                 "runtime probe must not claim a version string the standalone executable does not report");
         assertFalse(providerProbe.contains("cs launch org.scip-code:scip-java"),
                 "offline provider probe must not require network-time Coursier resolution");
@@ -119,9 +119,9 @@ class M29DockerAdministrationContractTest {
         String workflow = normalizedText(root.resolve("docker/scripts/mcp-lifecycle.ps1"));
         String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
         String javaPlan = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java"));
         String polyglotRuntime = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java"));
 
         assertTrue(workflow.contains("'minos-tools-bootstrap'"));
         assertTrue(workflow.contains("'minos-provider-probe'"));
@@ -141,7 +141,7 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.matches("(?s).*FROM rust:[\\w.-]+@sha256:[0-9a-f]{64} AS rust-toolchain.*"));
         assertTrue(dockerfile.matches("(?s).*FROM golang:[\\w.-]+@sha256:[0-9a-f]{64} AS go-toolchain.*"));
         assertTrue(dockerfile.matches("(?s).*FROM mcr\\.microsoft\\.com/dotnet/sdk:[\\w.-]+@sha256:[0-9a-f]{64} AS dotnet-toolchain.*"));
-        assertTrue(dockerfile.contains("UBUNTU_APT_SNAPSHOT=20260814T000000Z"));
+        assertTrue(dockerfile.contains("UBUNTU_APT_SNAPSHOT=20261003T000000Z"));
         assertTrue(dockerfile.contains("snapshot.ubuntu.com/ubuntu/${UBUNTU_APT_SNAPSHOT}"),
                 "OS packages must resolve from one dated Ubuntu archive snapshot");
         assertTrue(dockerfile.contains("COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61"));
@@ -159,7 +159,7 @@ class M29DockerAdministrationContractTest {
                 "Maven integrity must not depend on a checksum downloaded beside the payload");
         assertTrue(dockerfile.contains("mvn --version | grep -F \"Apache Maven ${MAVEN_VERSION}\""));
         assertTrue(dockerfile.contains("SCIP_TYPESCRIPT_VERSION=0.4.0"));
-        assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.1"));
+        assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.2"));
         assertTrue(dockerfile.contains("SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT"));
         assertTrue(dockerfile.contains("SCIP_PYTHON_VERSION=0.6.6"));
         assertTrue(dockerfile.contains("SCIP_CLANG_VERSION=0.4.0"));
@@ -230,7 +230,7 @@ class M29DockerAdministrationContractTest {
     @Test
     void providerProcessPlansKeepGeneratedIndexesOutOfProjectRoots() throws Exception {
         Path root = repoRoot();
-        Path runtime = root.resolve("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime");
+        Path runtime = root.resolve("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan");
 
         // Executable-backed plans now inherit run-directory resolution from a single skeleton, so the
         // invariant is enforced there once instead of being restated in every provider factory.
@@ -260,12 +260,12 @@ class M29DockerAdministrationContractTest {
                     factory + " must never emit index.scip into the project root");
         }
         String javaPlan = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java"));
         assertTrue(javaPlan.contains("prepareWritableWorkspace"));
         assertTrue(javaPlan.contains("STAGING_EXCLUDED_DIRECTORIES"));
         assertTrue(javaPlan.contains("STAGING_EXCLUDED_ROOT_FILES"));
         String rust = normalizedText(root.resolve(
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"));
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/RustAnalyzerScipProcessPlanFactory.java"));
         assertTrue(rust.contains("CARGO_TARGET_DIR"));
     }
 

@@ -23,4 +23,27 @@
       <Message>At SemanticVector.java:[line 9]</Message>
     </SourceLine>
   </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="736d7020c485e442721c2493fcc224a7" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
+    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
+    <LongMessage>La méthode com.minos.domain.registry.UnreadableRegistryException.unreadable() risque d'exposer sa représentation interne en renvoyant com.minos.domain.registry.UnreadableRegistryException.unreadable</LongMessage>
+    <Class classname="com.minos.domain.registry.UnreadableRegistryException" primary="true">
+      <SourceLine classname="com.minos.domain.registry.UnreadableRegistryException" start="21" end="39" sourcepath="com/minos/domain/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
+        <Message>At UnreadableRegistryException.java:[lines 21-39]</Message>
+      </SourceLine>
+      <Message>In class com.minos.domain.registry.UnreadableRegistryException</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.domain.registry.UnreadableRegistryException" signature="()Ljava/util/List;" name="unreadable" primary="true">
+      <SourceLine endBytecode="46" classname="com.minos.domain.registry.UnreadableRegistryException" start="34" end="34" sourcepath="com/minos/domain/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="0" />
+      <Message>In method com.minos.domain.registry.UnreadableRegistryException.unreadable()</Message>
+    </Method>
+    <Field isStatic="false" classname="com.minos.domain.registry.UnreadableRegistryException" signature="Ljava/util/List;" name="unreadable" primary="true">
+      <SourceLine classname="com.minos.domain.registry.UnreadableRegistryException" sourcepath="com/minos/domain/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
+        <Message>In UnreadableRegistryException.java</Message>
+      </SourceLine>
+      <Message>Field com.minos.domain.registry.UnreadableRegistryException.unreadable</Message>
+    </Field>
+    <SourceLine endBytecode="4" classname="com.minos.domain.registry.UnreadableRegistryException" start="34" end="34" sourcepath="com/minos/domain/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="4" primary="true">
+      <Message>At UnreadableRegistryException.java:[line 34]</Message>
+    </SourceLine>
+  </BugInstance>
 </BugCollection>

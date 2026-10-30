@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Intégration de {@link RuntimeIntelligenceService} sur les adaptateurs fichiers réels (registre local,
- * snapshots et observations runtime de minos-storage-local), par son constructeur public (horloge système).
+ * snapshots et observations runtime de minos-storage), par son constructeur public (horloge système).
  *
  * <p>Le contrat complet, horloge figée comprise, et le codec d'enveloppe sont vérifiés dans minos-application
  * ({@code com.minos.application.dynamic.RuntimeIntelligenceServiceTest}) sur des doublures en mémoire des

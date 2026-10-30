@@ -39,20 +39,13 @@ class ProviderConformanceKitTest {
     }
 
     @Test
-    void providerRegistryRejectsDescriptorProfileMismatchAndDuplicates() {
-        IndexerProviderRegistry registry = new IndexerProviderRegistry();
+    void negotiationRegistryRejectsDuplicateProviderDescriptors() {
+        IndexerRegistry registry = new IndexerRegistry();
         IndexerProvider provider = provider("fixture", exhaustive(CapabilitySupportLevel.FULL));
-        registry.register(provider);
-        assertEquals(List.of("fixture"), registry.descriptors().stream().map(IndexerDescriptor::id).toList());
-        assertThrows(IllegalArgumentException.class, () -> registry.register(provider));
-
-        IndexerProvider mismatched = new IndexerProvider() {
-            @Override public IndexerDescriptor descriptor() { return ProviderConformanceKitTest.descriptor("other"); }
-            @Override public ProviderCapabilityProfile capabilityProfile() {
-                return new ProviderCapabilityProfile("profile", exhaustive(CapabilitySupportLevel.FULL), List.of());
-            }
-        };
-        assertThrows(IllegalArgumentException.class, () -> new IndexerProviderRegistry().register(mismatched));
+        registry.register(provider.descriptor());
+        assertEquals(List.of("fixture"), registry.list().stream().map(IndexerDescriptor::id).toList());
+        IndexerDescriptor duplicate = provider.descriptor();
+        assertThrows(IllegalArgumentException.class, () -> registry.register(duplicate));
     }
 
     private static IndexerProvider provider(String id, Map<IndexerCapability, CapabilitySupportLevel> support) {

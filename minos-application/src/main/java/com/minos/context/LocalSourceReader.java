@@ -22,7 +22,7 @@ import java.util.Optional;
 import static com.minos.domain.Preconditions.requireText;
 
 /**
- * Lecteur UTF-8 confiné à la racine réelle d'un projet enregistré.
+ * UTF-8 reader confined to the real root of a registered project.
  */
 public final class LocalSourceReader implements SourceReader {
 
@@ -44,64 +44,102 @@ public final class LocalSourceReader implements SourceReader {
             int maxTokens
     ) throws IOException {
         Objects.requireNonNull(location, "location");
+        requireExcerptBounds(contextLines, maxTokens);
+        Optional<SourceFile> file = read(location.fileId());
+        return file.isEmpty() ? Optional.empty() : file.orElseThrow().excerpt(location, contextLines, maxTokens);
+    }
+
+    /**
+     * Reads one project source once, as it is on the disk now: the excerpts of its symbols are then cut in
+     * memory by {@link SourceFile#excerpt}, with exactly the code {@link #readExcerpt} uses. Empty when the
+     * identifier names no readable project file. Nothing is kept by this reader: the content lives as long
+     * as the returned object.
+     */
+    public Optional<SourceFile> read(String fileId) throws IOException {
+        Optional<Path> source = resolveReadableSource(fileId);
+        if (source.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new SourceFile(fileId, readSource(source.orElseThrow())));
+    }
+
+    /** The lines of one source read once, and the excerpts cut from them. */
+    public static final class SourceFile {
+        private final String fileId;
+        private final LoadedSource loaded;
+
+        private SourceFile(String fileId, LoadedSource loaded) {
+            this.fileId = fileId;
+            this.loaded = loaded;
+        }
+
+        public String fileId() {
+            return fileId;
+        }
+
+        /** The excerpt {@link LocalSourceReader#readExcerpt} gives for {@code location} in this content. */
+        public Optional<SourceExcerpt> excerpt(SymbolLocation location, int contextLines, int maxTokens) {
+            Objects.requireNonNull(location, "location");
+            requireExcerptBounds(contextLines, maxTokens);
+            if (!fileId.equals(location.fileId())) {
+                throw new IllegalArgumentException("location belongs to another source file");
+            }
+            List<String> lines = loaded.lines();
+            if (lines.isEmpty() || location.startLine() > lines.size()) {
+                return Optional.empty();
+            }
+
+            int declarationStart = location.startLine() - 1;
+            int declarationEnd = Math.min(lines.size() - 1, location.endLine() - 1);
+            int start = Math.max(0, declarationStart - contextLines);
+            int end = Math.min(lines.size() - 1, declarationEnd + contextLines);
+            int requestedStart = start;
+            int requestedEnd = end;
+            String content = join(lines, start, end);
+
+            while (TokenEstimator.estimate(content) > maxTokens
+                    && (start < declarationStart || end > declarationEnd)) {
+                int leftContext = declarationStart - start;
+                int rightContext = end - declarationEnd;
+                if (rightContext >= leftContext && rightContext > 0) {
+                    end--;
+                } else if (leftContext > 0) {
+                    start++;
+                }
+                content = join(lines, start, end);
+            }
+
+            boolean contentTruncated = TokenEstimator.estimate(content) > maxTokens;
+            if (contentTruncated) {
+                content = TokenEstimator.truncate(content, maxTokens);
+            }
+            int totalFileTokens = loaded.totalTokens();
+            boolean truncated = start != requestedStart || end != requestedEnd || contentTruncated;
+            int actualEnd = content.isEmpty()
+                    ? start + 1
+                    : start + 1 + (int) content.chars().filter(character -> character == '\n').count();
+
+            return Optional.of(new SourceExcerpt(
+                    location.fileId(),
+                    start + 1,
+                    Math.max(start + 1, actualEnd),
+                    content,
+                    false,
+                    truncated,
+                    TokenEstimator.estimate(content),
+                    lines.size(),
+                    totalFileTokens
+            ));
+        }
+    }
+
+    private static void requireExcerptBounds(int contextLines, int maxTokens) {
         if (contextLines < 0) {
             throw new IllegalArgumentException("contextLines must not be negative");
         }
         if (maxTokens < 1) {
             throw new IllegalArgumentException("maxTokens must be greater than zero");
         }
-
-        Optional<Path> source = resolveReadableSource(location.fileId());
-        if (source.isEmpty()) {
-            return Optional.empty();
-        }
-        LoadedSource loaded = readSource(source.orElseThrow());
-        List<String> lines = loaded.lines();
-        if (lines.isEmpty() || location.startLine() > lines.size()) {
-            return Optional.empty();
-        }
-
-        int declarationStart = location.startLine() - 1;
-        int declarationEnd = Math.min(lines.size() - 1, location.endLine() - 1);
-        int start = Math.max(0, declarationStart - contextLines);
-        int end = Math.min(lines.size() - 1, declarationEnd + contextLines);
-        int requestedStart = start;
-        int requestedEnd = end;
-        String content = join(lines, start, end);
-
-        while (TokenEstimator.estimate(content) > maxTokens
-                && (start < declarationStart || end > declarationEnd)) {
-            int leftContext = declarationStart - start;
-            int rightContext = end - declarationEnd;
-            if (rightContext >= leftContext && rightContext > 0) {
-                end--;
-            } else if (leftContext > 0) {
-                start++;
-            }
-            content = join(lines, start, end);
-        }
-
-        boolean contentTruncated = TokenEstimator.estimate(content) > maxTokens;
-        if (contentTruncated) {
-            content = TokenEstimator.truncate(content, maxTokens);
-        }
-        int totalFileTokens = loaded.totalTokens();
-        boolean truncated = start != requestedStart || end != requestedEnd || contentTruncated;
-        int actualEnd = content.isEmpty()
-                ? start + 1
-                : start + 1 + (int) content.chars().filter(character -> character == '\n').count();
-
-        return Optional.of(new SourceExcerpt(
-                location.fileId(),
-                start + 1,
-                Math.max(start + 1, actualEnd),
-                content,
-                false,
-                truncated,
-                TokenEstimator.estimate(content),
-                lines.size(),
-                totalFileTokens
-        ));
     }
 
     @Override
@@ -128,7 +166,7 @@ public final class LocalSourceReader implements SourceReader {
     }
 
     /**
-     * Reads the current file contents for every excerpt request.
+     * Reads the current file contents for every excerpt request, and once per {@link #read} call.
      *
      * <p>The previous single-path cache could return stale source indefinitely when a file changed
      * between requests. Timestamp/size based invalidation would still be heuristic on file systems

@@ -1,6 +1,6 @@
 # Runtime Docker autonome MINOS
 
-> **État courant : M29 est terminé et intégré.** Les références S3/S4/S5 ci-dessous sont des checkpoints historiques de qualification, pas l'état produit actuel. Le runtime Docker fait partie du routage `native|docker` décrit par [`STATUS.md`](../STATUS.md). Les claims de sécurité et de supply-chain restent capability-honest : MINOS ne revendique pas une reproductibilité bit-à-bit du bootstrap Coursier `scip-java` tant que son graphe transitif n'est pas verrouillé par un lockfile possédé par le dépôt.
+> **État courant : M29 est terminé et intégré.** Les références S3/S4/S5 ci-dessous sont des checkpoints historiques de qualification, pas l'état produit actuel. Le runtime Docker fait partie du routage `native|docker` décrit par [`STATUS.md`](../project/governance/STATUS.md). Les claims de sécurité et de supply-chain restent capability-honest : MINOS ne revendique pas une reproductibilité bit-à-bit du bootstrap Coursier `scip-java` tant que son graphe transitif n'est pas verrouillé par un lockfile possédé par le dépôt.
 
 M29 sépare volontairement le runtime Docker en plusieurs plans afin que l'administration et l'indexation puissent écrire l'état MINOS et les artefacts de build sans rendre le serveur MCP mutable.
 
@@ -28,6 +28,35 @@ Le serveur MCP persistant, les bootstraps et le probe provider gardent `network_
 
 Le plan admin n'obtient jamais le droit de modifier le code source. Il écrit état métier, caches et staging uniquement sous `/var/lib/minos`.
 
+### Le plan de requête lit sans écrire
+
+`minos-mcp` monte `/var/lib/minos` en lecture seule et répond sur ce montage : une requête ne crée, ne durcit ni n'ouvre en écriture aucun fichier, fichiers de verrou compris. Pour rester cohérent avec une commande d'administration lancée en même temps, il prend un verrou **partagé** sur les fichiers de verrou existants (registre des projets, observations runtime), ouverts en lecture ; une écriture de `minos-admin` attend la fin des lectures en cours et réciproquement, dans la limite de dix secondes. La qualification de l'image vérifie ce comportement sur un volume réellement monté en lecture seule (`scripts/ci/qualify-docker-release.sh`).
+
+Limites :
+
+- Le répertoire de données doit avoir été **initialisé par le plan d'administration** : sur un répertoire vide ou incomplet monté en lecture seule, le serveur MCP ne démarre pas, puisqu'il ne peut pas créer l'arborescence. Il en va de même après une mise à niveau qui laisse des fichiers à migrer : lancer une commande `minos-admin` avant la première requête.
+- Une entrée de registre encore à l'ancien format (chemin absolu) est lue telle quelle par le plan de requête ; elle est réécrite au format portable par la prochaine commande d'administration qui modifie le registre.
+- Hors conteneur, sous **Windows**, un volume en lecture seule n'est pas supporté : à l'ouverture, MINOS réécrit les ACL de son répertoire de données.
+
+## Deux images : requête et administration
+
+`docker/Dockerfile.mcp.release` construit **deux images** par release, une par cible (`docker build --target …`) ; le fichier `.env` du runtime les nomme par deux variables.
+
+| Image | Cible | Variable | Contenu | Services |
+|---|---|---|---|---|
+| Requête | `query` | `MINOS_QUERY_IMAGE` | JRE 25, `minos.jar`, notices ; **aucun** JDK, compilateur C, Rust, Go, .NET, Node, `pip`/`npm`, ni outil de provider | `minos-mcp` (persistant), `minos-bootstrap`, `minos-data-bootstrap`, `minos-ollama-bootstrap` |
+| Administration | `admin` | `MINOS_IMAGE` | l'image provider-complete décrite plus bas | `minos-admin`, `minos-tools-bootstrap`, `minos-provider-probe` |
+
+Règle de classement : un service qui lance un provider, copie les outils embarqués ou sonde les toolchains utilise l'image d'administration ; tout autre utilise l'image de requête. Chaque service des fichiers compose porte, au-dessus de sa ligne `image:`, la raison de son classement ; un test de contrat (`M29DockerQueryImageContractTest`) refuse un service non classé ou mal classé, et une cible `query` qui copierait une toolchain ou installerait un paquet.
+
+L'image de requête porte le nom de l'image d'administration suivi de `-query` (`minos-code-intelligence:<tag>` et `minos-code-intelligence:<tag>-query`). Les deux portent l'étiquette `io.minos.image.plane` (`admin` ou `query`) et la même révision. Tailles mesurées le 2026-10-13 (Docker Desktop, `linux/amd64`) : 5,83 Go pour l'image d'administration, 511 Mo pour l'image de requête, que la cible `query` construit en quelques secondes une fois le JRE de base présent.
+
+Le conteneur persistant `minos-mcp` **n'utilise jamais l'image d'administration**. Si le fichier compose du runtime demande l'image de requête alors que `MINOS_QUERY_IMAGE` est absente ou vide du `.env`, `Start`, `Validate` et `Admin` échouent avant tout appel à Docker, avec la commande de réparation ; `Start` et `Validate` refusent aussi une `MINOS_QUERY_IMAGE` qui ne désigne pas une image de requête. `Stop` et `Uninstall` restent possibles.
+
+La qualification de release (`scripts/ci/qualify-docker-release.sh`) construit les deux cibles et prouve le **contenu** de l'image de requête : `gcc`, `cc`, `cargo`, `rustc`, `go`, `dotnet`, `pip3`, `npm`, `node` et `javac` y sont cherchés et doivent être absents (les mêmes commandes doivent être trouvées dans l'image d'administration), puis le serveur MCP de cette image répond à la poignée de main et à une requête de symboles sur un index importé.
+
+Le lanceur de développement (`docker/scripts/prod-mcp.ps1`) construit une seule image, celle de `docker/Dockerfile.mcp` (JRE et jar) : c'est déjà une image de requête, qu'il déclare sous les deux variables.
+
 ## Mapping des projets
 
 Configuration runtime versionnée :
@@ -41,10 +70,10 @@ Le registre persiste `rootRelativePath`, pas le chemin physique host/container. 
 
 ## Image provider-complete
 
-L'image prépare au BUILD :
+C'est l'image d'**administration** (`MINOS_IMAGE`, cible `admin`). Elle prépare au BUILD :
 
 ```text
-scip-java            0.13.1
+scip-java            0.13.2
 scip-typescript      0.4.0
 scip-python          0.6.6
 scip-clang           0.4.0
@@ -54,7 +83,7 @@ rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
 Apache Maven         3.9.16
 ```
 
-Les toolchains nécessaires sont JDK 24, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
+Les toolchains nécessaires sont JDK 25, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
 
 Le bundle provider est initialisé dans le volume Docker nommé :
 
@@ -62,7 +91,7 @@ Le bundle provider est initialisé dans le volume Docker nommé :
 minos-provider-tools
 ```
 
-monté sous `/var/lib/minos/tools`, read-only dans les plans métier. L'image produit aussi `provider-inventory.json` et `provider-binary-sha256.txt`.
+monté sous `/var/lib/minos/tools`, read-only dans les plans métier. L'image produit aussi `provider-inventory.json` et `provider-binary-sha256.txt`. Les versions de .NET, Go, Rust et Node de cet inventaire sont lues sur les binaires installés pendant la construction de l'image.
 
 Le probe `minos-provider-probe` reste le gate explicite offline. La CLI ajoute le gate capability-honest :
 
@@ -75,7 +104,7 @@ minos tools verify --all
 La construction provider-complete applique désormais les invariants suivants :
 
 - images de base Docker épinglées par digest OCI ;
-- paquets Ubuntu résolus depuis l'archive datée `20260814T000000Z`, et non depuis les miroirs mouvants `archive/security` ;
+- paquets Ubuntu résolus depuis l'archive datée `20261003T000000Z`, et non depuis les miroirs mouvants `archive/security` ;
 - Maven 3.9.16 vérifié par le SHA-256 possédé par le dépôt (`MAVEN_ZIP_SHA256` de `docker/Dockerfile.mcp.release`), distinct du checksum du Maven Wrapper, qui pointe sur Maven 3.10.0 ;
 - Node vérifié par une empreinte SHA-256 épinglée dans `embedded-tools.json` (la description unique des outils, voir `docs/developer/quality-gates.md`) ;
 - launcher Coursier, `scip-clang` et `rust-analyzer` vérifiés par SHA-256 attendu ;
@@ -89,7 +118,7 @@ La construction provider-complete applique désormais les invariants suivants :
 La coordonnée autoritative reste :
 
 ```text
-org.scip-code:scip-java:0.13.1
+org.scip-code:scip-java:0.13.2
 ```
 
 Le launcher standalone construit via Coursier retourne actuellement `scip-java version 0.0.0-SNAPSHOT`; cette chaîne n'est pas la provenance de l'artefact. L'inventaire conserve séparément la coordonnée/version attendue et le checksum du binaire réellement exécuté.
@@ -186,6 +215,14 @@ Exemple d'installation :
 
 `local-hash` expose le provider `minos-local-hash`, 384 dimensions. C'est un provider déterministe zéro-réseau destiné à valider le plumbing provider/store/search. **Ce n'est pas un modèle appris et il ne remplace pas la qualification de qualité M23.**
 
+## `minos-ollama` : réservé au runtime Docker
+
+Le nom `minos-ollama` n'existe que sur le réseau Docker géré par MINOS. Le fournisseur d'embeddings ne l'utilise que si l'emplacement d'exécution est Docker : `MINOS_RUNTIME_LOCATION=docker`, posé par les images (`ENV`) et par les services `minos-mcp`, `minos-admin` et `minos-bootstrap` des fichiers `docker/compose-mcp.*.yaml`. Hors Docker, ce nom serait résolu par le DNS du réseau local, LLMNR ou NBT-NS : une autre machine pourrait y répondre et recevoir en clair le code envoyé pour l'embedding.
+
+Le `MINOS_HOME` d'une installation Docker avec Ollama contient `minos.semantic.endpoint=http://minos-ollama:11434/api/embed`. Si un lanceur **natif** ouvre ce même dossier, l'ouverture réussit et les commandes qui n'utilisent pas la recherche sémantique fonctionnent. Seule la recherche sémantique est refusée, avant toute résolution de nom, par une erreur qui nomme `minos.semantic.endpoint` et `MINOS_RUNTIME_LOCATION=docker`, et le statut de l'index sémantique porte la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`. Aucun autre endpoint n'est essayé à la place. La valeur de `MINOS_RUNTIME_LOCATION` est `native` ou `docker` ; toute autre valeur est refusée en la nommant. Elle est lue dans la propriété système `minos.runtime.location` puis la variable d'environnement, jamais dans `minos.properties`.
+
+Un conteneur lancé hors des fichiers compose fournis doit exporter `MINOS_RUNTIME_LOCATION=docker` pour garder la recherche sémantique.
+
 ## Vector store
 
 Le store existant est conservé :
@@ -239,6 +276,23 @@ Quand un provider s'exécute (hôte natif), ses sorties Java, TypeScript, C/C++,
 
 Les fichiers compose livrés s'appellent `compose-mcp.prod.yaml` et `compose-mcp.connected.yaml` (ils s'appelaient `compose.mcp.prod.yaml` et `compose.mcp.connected.yaml`). La copie active du runtime (`%LOCALAPPDATA%\MINOS\docker\runtime`) est **renommée automatiquement**, contenu intact (profil connecté compris), par la première action qui suit la mise à jour (`Start`, `Status`, `Install`...) : les conteneurs, volumes et le projet Compose (`MINOS_COMPOSE_PROJECT`) ne changent pas, rien n'est recréé du seul fait du renommage. Si l'ancien et le nouveau fichier coexistent, le nouveau est utilisé, l'ancien n'est ni supprimé ni écrasé et un avertissement le signale : le supprimer à la main après vérification. Un `Install` retire l'ancien fichier.
 
+### Mise à jour d'une installation existante : image de requête
+
+Une installation faite par une version antérieure n'a qu'**une** image, qui sert tous ses services. La mise à jour des fichiers du programme ne touche pas au runtime (`%LOCALAPPDATA%\MINOS\docker\runtime`) : c'est l'action `Install`, que l'installateur rejoue après la mise à jour, qui construit l'image de requête (l'image d'administration est réutilisée si elle existe déjà pour cette version), remplace le fichier compose et écrit `MINOS_QUERY_IMAGE` dans le `.env`. Aucune intervention manuelle ; les données (`docker-data`), les projets enregistrés, les volumes et le projet Compose sont conservés.
+
+Entre la mise à jour des fichiers et cet `Install` :
+
+- le runtime laissé par l'ancienne version reste cohérent (son fichier compose ne demande qu'une image) : `Start` fonctionne et avertit que le plan de requête tourne encore sur l'image complète ;
+- un runtime à moitié migré (nouveau fichier compose, ancien `.env`) est refusé avant tout appel à Docker, sans rien modifier.
+
+Réparation, dans tous les cas : relancer l'installateur MINOS, ou
+
+```powershell
+.\docker\scripts\prod-mcp-release.ps1 -Action Install -Jar <minos.jar> -Version <version>
+```
+
+Si la construction d'une des deux images échoue, le runtime installé n'est pas modifié. La qualification de mise à niveau (`scripts/ci/qualify-docker-upgrade.ps1`) rejoue ce passage d'une image à deux et vérifie que le plan de requête mis à niveau tourne sur l'image de requête.
+
 ## Limites de ressources
 
 Chaque service des deux fichiers compose a un plafond **mémoire** et **PID**, défini une fois par rôle (blocs `x-limits-<rôle>` en tête de `docker/compose-mcp.prod.yaml` et `docker/compose-mcp.connected.yaml`, identiques dans les deux) et surchargeable depuis le `.env` du runtime. `memswap_limit` égale `mem_limit` : aucun swap. Les variables, leurs défauts et leurs unités sont aussi listés dans [`docker/.env.example`](../../docker/.env.example). Une ligne `MINOS_<RÔLE>_…` ajoutée au `.env` survit à une mise à jour (l'installation régénère le `.env` et reporte ces lignes). Docker applique ces clés hors Swarm : vérifié par `docker inspect` et par les fichiers cgroup du conteneur (`memory.max`, `memory.swap.max`, `pids.max`).
@@ -253,7 +307,7 @@ Chaque service des deux fichiers compose a un plafond **mémoire** et **PID**, d
 
 **Aucun plafond CPU par défaut** (`0` = pas de plafond, la forme que Docker et Compose acceptent : une valeur vide fait échouer l'interpolation). Un plafond dur par défaut au-dessus du nombre de CPU de l'hôte fait refuser la création du conteneur par le démon (`range of CPUs is from 0.01 to N`) : un Docker Desktop ou une VM à 2 CPU ne démarrerait plus, avec une erreur du démon sans lien apparent avec MINOS. Un plafond de 1 CPU démarre partout, mais ralentirait le démarrage des JVM ; il reste donc au choix de l'opérateur (`MINOS_<RÔLE>_CPUS=2` dans le `.env`), qui connaît son hôte. La protection par défaut est la mémoire et les PID.
 
-Les PID comptent les **threads** : une JVM MCP en pèse environ 30. Chaque client MCP (IDE, agent) lance sa propre JVM dans `minos-mcp` : la mémoire et les PID croissent avec le nombre de clients simultanés (environ 90 Mio et 30 PID chacun, mesuré). **Le nombre de threads d'une JVM dépend du nombre de CPU qu'elle voit** : sans plafond CPU (le défaut), chaque JVM voit tous les CPU de l'hôte et crée davantage de threads de ramasse-miettes et de compilation ; avec `MINOS_MCP_CPUS=4` le pic des 9 clients passe d'environ 280-313 à 218-240 PID. Un projet très volumineux, ou davantage de clients, se règle dans le `.env` (par exemple `MINOS_MCP_MEM_LIMIT=6g`). Une JVM dimensionne son tas à 25 % du plafond mémoire du conteneur (`UseContainerSupport`, vérifié : 128 Mio sous 512m, 512 Mio sous 2g, 768 Mio sous 3g) : aucun `-Xmx` n'est posé, le tas suit le plafond. Les tâches ponctuelles (JVM de `minos-bootstrap`, sonde providers) passent sous 512 Mio avec un tas de 128 Mio.
+Les PID comptent les **threads** : une JVM MCP en pèse environ 30. Chaque client MCP (IDE, agent) lance sa propre JVM dans `minos-mcp` : la mémoire et les PID croissent avec le nombre de clients simultanés (environ 90 Mio et 30 PID chacun, mesuré). **Le nombre de threads d'une JVM dépend du nombre de CPU qu'elle voit** : sans plafond CPU (le défaut), chaque JVM voit tous les CPU de l'hôte et crée davantage de threads de ramasse-miettes et de compilation ; avec `MINOS_MCP_CPUS=4` le pic des 9 clients passe d'environ 280-313 à 218-240 PID. Un projet très volumineux, ou davantage de clients, se règle dans le `.env` (par exemple `MINOS_MCP_MEM_LIMIT=6g`). Une JVM dimensionne son tas à 25 % du plafond mémoire du conteneur (`UseContainerSupport`, vérifié : 128 Mio sous 512m, 512 Mio sous 2g, 768 Mio sous 3g) : aucun `-Xmx` n'est posé, le tas suit le plafond. Les tâches ponctuelles (JVM de `minos-bootstrap`, sonde providers) passent sous 512 Mio avec un tas de 128 Mio. Le serveur MCP garde en cache la vue de requête du snapshot actif : elle retient environ 1,1 à 1,5 fois la taille du snapshot (mesuré le 2026-10-15 : 129,6 Mo de tas pour un snapshot de 114 Mo), le cache l'estime à deux fois cette taille et se plafonne à 512 Mio. Pour un gros projet, prévoir un tas qui contienne cette vue, soit un `MINOS_MCP_MEM_LIMIT` d'au moins quatre fois le poids estimé de la vue (le tas vaut 25 % du plafond).
 
 ### Mesures et marges
 
@@ -298,7 +352,7 @@ Prouvé en local avec l'image épinglée dans le compose : volume neuf (téléch
 
 ## Qualification et historique M29
 
-L'état produit courant est celui de [`STATUS.md`](../STATUS.md) : **M29 terminé et intégré**. Les lignes suivantes sont conservées uniquement comme checkpoints historiques de la montée en qualification :
+L'état produit courant est celui de [`STATUS.md`](../project/governance/STATUS.md) : **M29 terminé et intégré**. Les lignes suivantes sont conservées uniquement comme checkpoints historiques de la montée en qualification :
 
 ```text
 3df1b40ca0daf50779596f6e955d966ed5eb4973

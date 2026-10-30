@@ -2,7 +2,7 @@ name: Code audit (SpotBugs, PIT and Dependency-Check)
 
 on:
   # Politique du dépôt : aucun déclenchement automatique. SpotBugs et PIT ne sont pas des contrôles de
-  # fusion ; ce workflow ne sert qu'à produire leurs rapports à la demande (docs/quality/code-audit.md).
+  # fusion ; ce workflow ne sert qu'à produire leurs rapports à la demande (docs/developer/quality/code-audit.md).
   workflow_dispatch:
     inputs:
       run_spotbugs:
@@ -46,19 +46,22 @@ jobs:
     name: SpotBugs
     if: ${{ inputs.run_spotbugs }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - name: Installer Java 24
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - name: Installer Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '24'
+          java-version: '25'
           cache: maven
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -66,7 +69,7 @@ jobs:
         shell: bash
         run: |
           chmod +x mvnw
-          # test-compile, not compile: minos-runtime-local and minos-storage-local depend on the test-jar of
+          # test-compile, not compile: minos-runtime-local and minos-storage depend on the test-jar of
           # minos-engine, which the reactor only provides once test classes are compiled (on a fresh runner, compile
           # alone sent Maven to Maven Central for it, 2026-10-09).
           ./mvnw --batch-mode --no-transfer-progress -Paudit-spotbugs -DskipTests test-compile spotbugs:spotbugs -fae
@@ -96,7 +99,7 @@ jobs:
 
       - name: Publier les rapports SpotBugs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spotbugs-reports
           path: |
@@ -113,32 +116,62 @@ jobs:
     name: PIT (module choisi)
     if: ${{ inputs.run_mutation }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      # AUD-DEP-13: PIT replays the tests, which start only the pre-pulled images and no Ryuk sidecar.
+      TESTCONTAINERS_PULL_POLICY: com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy
+      TESTCONTAINERS_RYUK_DISABLED: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # AUD-DEP-13: the images Testcontainers starts are listed before the Docker Hub login, so no code of the
+      # repository runs while the token is on disk.
+      - name: List the Testcontainers images
+        id: testcontainers-images
+        shell: bash
+        run: |
+          set -euo pipefail
+          images="$(python3 scripts/quality/check-image-pins.py --testcontainers-images | tr '\n' ' ')"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
 
       # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
       # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
-      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), pulls are authenticated, Testcontainers
-      # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
+      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), the next step pulls the Testcontainers
+      # images authenticated, then logs out before any test runs; without them (forks, secrets not created) this step
+      # is skipped and the next one pulls anonymously.
       - name: Log in to Docker Hub (when the secrets exist)
         if: ${{ env.DOCKERHUB_USERNAME != '' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Installer Java 24
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      # AUD-DEP-13: the listed images are pulled, then the Docker Hub token is removed before any Maven plugin or
+      # test runs. A failed logout fails the step.
+      - name: Pull the Testcontainers images, then log out of Docker Hub
+        shell: bash
+        env:
+          IMAGES: ${{ steps.testcontainers-images.outputs.images }}
+        run: |
+          set -euo pipefail
+          log_out() { docker logout || { echo "logging out of Docker Hub failed: the token would stay readable" >&2; exit 1; }; }
+          trap log_out EXIT
+          test -n "$IMAGES"
+          for image in $IMAGES; do docker pull "$image"; done
+
+      - name: Installer Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '24'
+          java-version: '25'
           cache: maven
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -168,7 +201,7 @@ jobs:
 
       - name: Publier les rapports PIT
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pit-reports
           path: |
@@ -180,19 +213,22 @@ jobs:
     name: OWASP Dependency-Check
     if: ${{ inputs.run_dependency_check }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - name: Installer Java 24
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - name: Installer Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '24'
+          java-version: '25'
           cache: maven
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -216,7 +252,7 @@ jobs:
 
       - name: Publier les rapports Dependency-Check
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dependency-check-reports
           path: |
@@ -235,9 +271,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Java 21
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '21'
@@ -253,7 +291,7 @@ jobs:
 
       - name: Publier les rapports du plugin
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: intellij-plugin-audit-reports
           path: |

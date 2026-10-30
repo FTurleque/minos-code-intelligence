@@ -43,9 +43,9 @@ def main() -> int:
         provider_path = "minos-application/src/main/java/com/minos/program/analysis/JavaSourceProgramGraphProvider.java"
         service_path = "minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java"
         test_path = "minos-application/src/test/java/com/minos/program/analysis/JavaSourceProgramGraphProviderTest.java"
-        roadmap_path = "docs/roadmap/M22_EXECUTION.md"
+        roadmap_path = "docs/project/roadmap/M22_EXECUTION.md"
         provider_doc_path = "docs/developer/java-advanced-provider.md"
-        adr_path = "docs/adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md"
+        adr_path = "docs/architecture/adr/BE-0030-java-ast-reference-provider-with-explicit-capability-limits.md"
         quality_path = "scripts/quality/check-jacoco.py"
         runner_path = "scripts/m22/run-final.ps1"
 
@@ -89,6 +89,7 @@ def main() -> int:
             "JAVA_LOCAL_DATA_FLOW_NAME_BASED_WITHIN_METHOD",
             "JAVA_INTERPROCEDURAL_UNIQUE_NAME_ARITY_ONLY",
             "JAVA_SECURITY_FLOW_INTRAPROCEDURAL_CONFIGURED_RULES_ONLY",
+            "SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY",
             "JAVA_ADVANCED_PROVIDER_PARSE_FAILED",
             "TreeScanner",
             "JavacTask",

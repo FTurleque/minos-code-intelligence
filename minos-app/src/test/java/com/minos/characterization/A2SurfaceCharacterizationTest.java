@@ -340,6 +340,21 @@ class A2SurfaceCharacterizationTest {
         Golden.assertMatches("cli-runtime.golden", transcript.text());
     }
 
+    /** NEXUS export contract v1 (minos nexus-export): the full JSON of the active snapshot, and the refusals. */
+    @Test
+    void cliNexusExportOutputsAreUnchanged(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        Transcript transcript = new Transcript(new CharacterizationNormalizer(temp, REPOSITORY));
+        transcript.cli(home, "project", "add", FIXTURE.toString(), "--name", PROJECT, "--format", "json");
+        pinProjectIdentity(home);
+        transcript.cli(home, "nexus-export", "--root", FIXTURE.toString());
+        transcript.cli(home, "index", PROJECT, "--scip", SCIP.toString(),
+                "--provider", "scip-typescript", "--provider-version", "0.4.0", "--format", "json");
+        transcript.cli(home, "nexus-export", "--root", FIXTURE.toString());
+        transcript.cli(home, "nexus-export", "--root", Files.createDirectories(temp.resolve("unregistered")).toString());
+        Golden.assertMatches("nexus-export.golden", transcript.text());
+    }
+
     /** V38 — intelligence Git (GitIntelligenceService) sur un dépôt JGit à auteurs et dates figés. */
     @Test
     void cliGitActivityOutputsAreUnchanged(@TempDir Path temp) throws Exception {
@@ -369,6 +384,8 @@ class A2SurfaceCharacterizationTest {
             transcript.cli(home, "git-activity", "a2-git", "--days", "3650", "--zone-depth", "1", "--max-files", "1",
                     "--format", format);
         }
+        // AUD-SEC-10: the address is masked above and rendered only on this explicit request.
+        transcript.cli(home, "git-activity", "a2-git", "--days", "3650", "--include-author-emails", "--format", "json");
         Golden.assertMatches("cli-git.golden", transcript.text());
     }
 

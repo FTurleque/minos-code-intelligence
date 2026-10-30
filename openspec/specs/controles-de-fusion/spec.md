@@ -132,3 +132,129 @@ La portée du plugin SHALL inclure `minos-application/src/main/java/com/minos/ou
 #### Scenario: Scope sur le dépôt
 - **WHEN** `python scripts/quality/check-jacoco.py` s'exécute après un `verify` complet
 - **THEN** le scope `m29-backend-routing` mesure les classes `com/minos/app/McpBackend*` sur le rapport de `minos-app` et son statut est celui des seuils (ligne 0,55, branche 0,30), jamais « rapport introuvable » ni une couverture nulle
+
+### Requirement: La couverture globale du reactor est bornée sur chaque système de qualification
+Le gate JaCoCo SHALL évaluer un scope `global` couvrant `com/minos/`, avec un plancher de lignes et de branches déclaré pour Linux et pour Windows. Il SHALL échouer quand la mesure est sous le plancher du système courant et SHALL écrire la mesure, le plancher et les exclusions nommées du scope dans `jacoco-gate.json`.
+
+#### Scenario: Mesure sous le plancher du système courant
+- **GIVEN** un rapport JaCoCo dont la couverture de `com/minos/` est inférieure au plancher déclaré pour le système courant
+- **WHEN** `python scripts/quality/check-jacoco.py <rapport>` est exécuté
+- **THEN** le gate échoue en nommant `global`, la mesure et le plancher
+
+#### Scenario: Résultat publié
+- **GIVEN** un rapport dont la couverture respecte le plancher
+- **WHEN** le gate est exécuté
+- **THEN** `jacoco-gate.json` contient pour `global` la mesure, le plancher du système courant et la liste des exclusions
+
+#### Scenario: Exclusion sans objet
+- **GIVEN** un scope dont une exclusion ne désigne aucune classe du rapport
+- **WHEN** `python scripts/quality/check-jacoco.py --self-test` est exécuté
+- **THEN** le scénario correspondant constate l'échec du scope
+
+### Requirement: Un scope sans plancher pour le système courant échoue
+Quand un scope déclare ses planchers par système, l'absence de plancher pour le système courant SHALL faire échouer le gate. Seuls un scope réservé à un autre système et une exclusion explicite en ligne de commande SHALL produire le statut `SKIPPED`, avec leur raison.
+
+#### Scenario: Plancher manquant
+- **GIVEN** un scope qui déclare un plancher pour Linux seulement, sans être réservé à Linux
+- **WHEN** l'auto-test du gate l'évalue sur un autre système
+- **THEN** le scope est en échec et non sauté
+
+#### Scenario: Scope réservé à un autre système
+- **GIVEN** un scope réservé à un système qui n'est pas le système courant
+- **WHEN** le gate est exécuté
+- **THEN** le scope est `SKIPPED` et la raison nomme le système courant
+
+### Requirement: Les classes du cœur nommées sont sous un scope ciblé
+Le codec binaire des snapshots, les stores d'état d'index et d'empreinte, le registre de projets, les primitives d'E/S de `com/minos/io/` et la rétention des dossiers de run SHALL chacun appartenir à un scope JaCoCo ciblé. Le gate SHALL échouer si l'une de ces classes disparaît du rapport ou passe sous son plancher.
+
+#### Scenario: Classe renommée ou supprimée
+- **GIVEN** un rapport JaCoCo où `SnapshotBinaryCodecSupport` n'apparaît plus
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant le préfixe qui ne désigne plus aucune classe
+
+#### Scenario: Érosion d'une primitive d'E/S
+- **GIVEN** un rapport où la couverture de `com/minos/io/` est sous le plancher du scope
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant le scope des primitives d'E/S confinées
+
+### Requirement: Une classe propre à une plateforme est jugée sur sa plateforme
+Une classe qui ne s'exécute que sur un système SHALL appartenir à un scope réservé à ce système et y porter un plancher de classe. La propriété de processus par cgroup SHALL être jugée sur Linux et la propriété par Job Object sur Windows ; aucune des deux SHALL NOT être évaluée sur l'autre système.
+
+#### Scenario: Job Object sous Windows
+- **GIVEN** un rapport produit sous Windows où `WindowsJobObjectProcessOwnership` est sous son plancher de classe
+- **WHEN** le gate est exécuté sous Windows
+- **THEN** il échoue en nommant le scope Windows et la classe
+
+#### Scenario: Job Object sous Linux
+- **GIVEN** le gate exécuté sous Linux
+- **WHEN** il atteint le scope Windows
+- **THEN** ce scope est `SKIPPED` et n'entre pas dans le verdict
+
+### Requirement: Un plancher de classe empêche un store de se cacher dans son paquet
+Dans un scope défini par un préfixe de paquet, une classe désignée SHALL porter son propre plancher. Le store PostgreSQL des observations d'exécution SHALL en porter un dans le scope du stockage PostgreSQL. Là où ce scope n'est pas évalué, le résultat SHALL le dire (`SKIPPED`) et SHALL NOT être présenté comme réussi.
+
+#### Scenario: Classe faible dans un paquet bien couvert
+- **GIVEN** un rapport où le paquet respecte son plancher mais où la classe désignée est sous le sien
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant la classe, sa mesure et son plancher
+
+#### Scenario: Scope écarté sous Windows
+- **GIVEN** le gate exécuté avec `--skip-scope m30-postgresql-pgvector`
+- **WHEN** `jacoco-gate.json` est lu
+- **THEN** le scope y figure avec le statut `SKIPPED` et sa raison
+
+### Requirement: Les fonctions de scripts recopiées restent identiques
+Une fonction PowerShell recopiée entre scripts livrés, d'installation, de release ou de CI SHALL figurer dans une liste fermée de jumelles. Un gate exécuté par le job des invariants SHALL échouer si deux copies listées diffèrent hors fins de ligne et espaces de fin de ligne, si un fichier ou une définition listée manque, si une entrée nomme moins de deux fichiers, ou si une copie identique n'est couverte par aucune entrée.
+
+#### Scenario: Dépôt réel accepté
+- **GIVEN** le dépôt, où chaque fonction listée a le même corps dans tous ses fichiers
+- **WHEN** `python scripts/quality/check-twin-script-functions.py` est exécuté
+- **THEN** le gate se termine avec le code 0 et affiche le nombre d'entrées et de copies comparées
+
+#### Scenario: Correction faite dans une seule copie
+- **GIVEN** une copie du dépôt où une ligne de `Read-BoundedUtf8` a été modifiée dans un seul des deux scripts
+- **WHEN** le gate est exécuté avec `--root` sur cette copie
+- **THEN** il se termine avec un code non nul en nommant la fonction et les deux fichiers
+
+#### Scenario: Entrée morte
+- **GIVEN** une copie du dépôt où un fichier listé est absent, ne définit plus la fonction listée, ou reste seul dans son entrée
+- **WHEN** le gate est exécuté avec `--root` sur cette copie
+- **THEN** il se termine avec un code non nul en nommant l'entrée
+
+#### Scenario: Copie non déclarée
+- **GIVEN** une copie du dépôt où une fonction d'un script du périmètre est recopiée à l'identique dans un autre script du périmètre sans entrée qui les couvre
+- **WHEN** le gate est exécuté avec `--root` sur cette copie
+- **THEN** il se termine avec un code non nul en nommant la fonction et les deux fichiers
+
+#### Scenario: Fins de ligne différentes
+- **GIVEN** deux copies listées dont les corps ne diffèrent que par CRLF et LF ou par des espaces de fin de ligne
+- **WHEN** le gate est exécuté sur cet arbre
+- **THEN** elles sont tenues pour identiques
+
+#### Scenario: Auto-test du gate
+- **GIVEN** le dépôt
+- **WHEN** `python scripts/quality/test_check_twin_script_functions.py -v` est exécuté
+- **THEN** il réussit, avec au moins un cas refusé par règle et le dépôt réel accepté
+
+### Requirement: La vérification du câblage CI des gates n'est écrite qu'une fois
+La vérification qu'un gate et son auto-test sont des étapes sans condition du job des invariants SHALL être définie dans un seul module de `scripts/quality`, importé par les gates qui s'en servent ; chaque gate SHALL garder son auto-test et son refus d'une étape absente ou conditionnée. Un gate qui ne peut pas importer ce module SHALL échouer avec un code non nul, sans repli sur une copie locale.
+
+#### Scenario: Définition unique
+- **GIVEN** le dépôt après le changement
+- **WHEN** `git grep -l "def find_ci_wiring_violations" -- scripts` est exécuté
+- **THEN** il ne renvoie qu'un fichier
+
+#### Scenario: Auto-tests conservés
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/quality/test_check_compose_limits.py -v` puis `python scripts/quality/test_check_image_pins.py -v` sont exécutés
+- **THEN** les deux réussissent, y compris leurs cas où l'étape du gate manque ou porte une condition `if:`
+
+#### Scenario: Étape conditionnée refusée
+- **GIVEN** une copie du dépôt où l'étape du gate d'identité dans le job des invariants porte `if: false`
+- **WHEN** `python scripts/quality/check-twin-script-functions.py` est exécuté avec `--root` sur cette copie
+- **THEN** il se termine avec un code non nul en nommant l'étape
+
+#### Scenario: Module partagé absent
+- **GIVEN** une copie de `scripts/quality` sans le module partagé
+- **WHEN** `check-compose-limits.py` ou `check-image-pins.py` de cette copie est exécuté
+- **THEN** il se termine avec un code non nul

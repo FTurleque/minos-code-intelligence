@@ -55,13 +55,8 @@ import java.util.Set;
  */
 public final class ConfinedFileOpener {
 
-    /**
-     * TEST-ONLY seam. Runs after the last validation step and immediately before the file is
-     * opened, which is exactly the instant a real attacker would need to hit. A test uses it to
-     * perform the replacement deterministically -- with a latch or a direct call -- instead of
-     * racing a timer and calling the result reproducible.
-     */
-    static volatile Runnable beforeOpenForTests = () -> { };
+    /** The step production runs between the last validation and the open: none. */
+    private static final Runnable NO_STEP = () -> { };
 
     private ConfinedFileOpener() {
     }
@@ -90,6 +85,18 @@ public final class ConfinedFileOpener {
      * @throws java.nio.file.NoSuchFileException if the file (or one of its directories) is absent
      */
     public static SeekableByteChannel openConfinedRegularFile(Path root, Path relative) throws IOException {
+        return openConfinedRegularFile(root, relative, NO_STEP);
+    }
+
+    /**
+     * Same as the public overload, running {@code beforeOpen} after the last validation step and
+     * immediately before the file is opened, which is exactly the instant a real attacker would need to hit.
+     * A test passes its own step to perform the replacement deterministically -- with a latch or a direct
+     * call -- instead of racing a timer and calling the result reproducible. The step belongs to this call
+     * alone: nothing is kept for the next one.
+     */
+    static SeekableByteChannel openConfinedRegularFile(Path root, Path relative, Runnable beforeOpen)
+            throws IOException {
         // The boundary is resolved here rather than trusted from the caller. Establishing where the
         // project *is* happens once, before anything is opened, and is not the race this class
         // exists to close -- but comparing a canonicalized ancestor against a boundary that is not
@@ -99,10 +106,10 @@ public final class ConfinedFileOpener {
         Path target = requireConfinedRelativePath(Objects.requireNonNull(relative, "relative"));
         try (DirectoryStream<Path> rootStream = Files.newDirectoryStream(boundary)) {
             if (rootStream instanceof SecureDirectoryStream<Path> secureRoot) {
-                return openThroughDirectoryHandles(secureRoot, target);
+                return openThroughDirectoryHandles(secureRoot, target, beforeOpen);
             }
         }
-        return openAndVerifyWhileHeld(boundary, target);
+        return openAndVerifyWhileHeld(boundary, target, beforeOpen);
     }
 
     /**
@@ -122,13 +129,13 @@ public final class ConfinedFileOpener {
      * @throws NoSuchFileException  if the file is absent
      */
     public static InputStream openRegularFileNoFollow(Path file) throws IOException {
-        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
-        BasicFileAttributes attributes =
-                Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-        if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
-            throw new ConfinementException("source is not a regular physical file");
-        }
-        beforeOpenForTests.run();
+        return openRegularFileNoFollow(file, NO_STEP);
+    }
+
+    /** Same as the public overload, with the per-call step described on {@code openConfinedRegularFile}. */
+    static InputStream openRegularFileNoFollow(Path file, Runnable beforeOpen) throws IOException {
+        Path target = requireRegularLeaf(file);
+        beforeOpen.run();
         try {
             return Files.newInputStream(target, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
         } catch (NoSuchFileException | AccessDeniedException propagated) {
@@ -138,6 +145,45 @@ public final class ConfinedFileOpener {
                     () -> Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS),
                     failure);
         }
+    }
+
+    /**
+     * Same single, link-free open as {@link #openRegularFileNoFollow(Path)}, handing back the channel instead of a
+     * stream, for the callers that need {@code size()} and {@code position(0)} on the one descriptor (a digest that
+     * checks the size again afterwards, a reader that rewinds after a preflight). Read only: the channel cannot write.
+     *
+     * @throws ConfinementException if the leaf is a link, a special object or not a regular file;
+     *                              never carries the path
+     * @throws NoSuchFileException  if the file is absent
+     */
+    public static SeekableByteChannel openRegularFileNoFollowChannel(Path file) throws IOException {
+        return openRegularFileNoFollowChannel(file, NO_STEP);
+    }
+
+    /** Same as the public overload, with the per-call step described on {@code openConfinedRegularFile}. */
+    static SeekableByteChannel openRegularFileNoFollowChannel(Path file, Runnable beforeOpen) throws IOException {
+        Path target = requireRegularLeaf(file);
+        beforeOpen.run();
+        try {
+            return Files.newByteChannel(target, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
+        } catch (NoSuchFileException | AccessDeniedException propagated) {
+            throw propagated;
+        } catch (IOException failure) {
+            throw classifyOpenFailure(
+                    () -> Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS),
+                    failure);
+        }
+    }
+
+    /** The type look before a single-open read: it only keeps the open from blocking, it never picks the file. */
+    private static Path requireRegularLeaf(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        BasicFileAttributes attributes =
+                Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
+            throw new ConfinementException("source is not a regular physical file");
+        }
+        return target;
     }
 
     /** Whether this platform can offer the {@code openat}-style guarantee at all. */
@@ -163,7 +209,8 @@ public final class ConfinedFileOpener {
 
     private static SeekableByteChannel openThroughDirectoryHandles(
             SecureDirectoryStream<Path> root,
-            Path relative
+            Path relative,
+            Runnable beforeOpen
     ) throws IOException {
         Deque<SecureDirectoryStream<Path>> descended = new ArrayDeque<>();
         try {
@@ -198,7 +245,7 @@ public final class ConfinedFileOpener {
             if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
                 throw new ConfinementException("source is not a regular physical file");
             }
-            beforeOpenForTests.run();
+            beforeOpen.run();
             // NOFOLLOW_LINKS here is what makes a leaf replacement by a symbolic link fail instead
             // of following the attacker's new target.
             try {
@@ -219,10 +266,11 @@ public final class ConfinedFileOpener {
         }
     }
 
-    private static SeekableByteChannel openAndVerifyWhileHeld(Path root, Path relative) throws IOException {
+    private static SeekableByteChannel openAndVerifyWhileHeld(Path root, Path relative, Runnable beforeOpen)
+            throws IOException {
         Path candidate = root.resolve(relative);
         verifyAncestorChain(root, relative);
-        beforeOpenForTests.run();
+        beforeOpen.run();
         SeekableByteChannel channel;
         try {
             channel = Files.newByteChannel(

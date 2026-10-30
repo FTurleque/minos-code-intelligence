@@ -21,7 +21,7 @@ RUNTIME_TESTS = "minos-runtime-local/src/test/java/com/minos/runtime/local"
 WINDOWS_LAUNCHER = "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1"
 
 ADVERSARIAL_TESTS = {
-    f"{RUNTIME_TESTS}/LinuxCgroupJobContainmentTest.java": (
+    f"{RUNTIME_TESTS}/sandbox/LinuxCgroupJobContainmentTest.java": (
         "@EnabledOnOs(OS.LINUX)",
         "theDelegatedCgroupAppliesAggregateMemoryProcessAndCpuLimits",
         "severalDescendantsCannotExceedTheAggregateMemoryLimitTogether",
@@ -31,27 +31,27 @@ ADVERSARIAL_TESTS = {
         "aJobDirectoryCanNeverEscapeTheDelegatedRoot",
         "theSandboxJoinsTheJobBeforeItExecutesAnyProviderCode",
     ),
-    f"{RUNTIME_TESTS}/WindowsJobObjectContainmentTest.java": (
+    f"{RUNTIME_TESTS}/sandbox/WindowsJobObjectContainmentTest.java": (
         "@EnabledOnOs(OS.WINDOWS)",
         "neitherChildNorGrandchildSurvivesTheJobObject",
         "theSandboxPlanCarriesEveryAggregateJobLimit",
         "theQualifiedBackendDeclaresTheAggregateContainmentItReallyEnforces",
     ),
-    f"{RUNTIME_TESTS}/ProviderWriteContainmentTest.java": (
+    f"{RUNTIME_TESTS}/workspace/ProviderWriteContainmentTest.java": (
         "aHostileProviderIsKilledDuringExecutionAndItsResidueIsReclaimed",
         "theRunThatFollowsAHostileRunStartsNormally",
     ),
-    f"{RUNTIME_TESTS}/ProviderWriteQuotaSupervisorTest.java": (
+    f"{RUNTIME_TESTS}/workspace/ProviderWriteQuotaSupervisorTest.java": (
         "aProviderThatFillsTheDiskIsDetectedAndTheJobIsDestroyed",
         "aProviderThatExhaustsInodesIsDetectedAndTheJobIsDestroyed",
         "aProviderStayingInsideItsBudgetIsNeverKilled",
     ),
-    f"{RUNTIME_TESTS}/RunDirectoryRetentionTest.java": (
+    f"{RUNTIME_TESTS}/workspace/RunDirectoryRetentionTest.java": (
         "anOversizedHostileRunIsReclaimedInsteadOfBlockingEveryFutureIndexation",
         "aRunTooLargeToDeleteInOnePassIsQuarantinedAndDrainedLater",
         "pruneNeverDeletesOutsideTheRunsRoot",
     ),
-    f"{RUNTIME_TESTS}/WorkerResourceContainmentTest.java": (
+    f"{RUNTIME_TESTS}/sandbox/WorkerResourceContainmentTest.java": (
         "aBackendWithoutAnAggregateJobBoundaryIsNeverQualifiedForUntrustedCode",
         "supervisionIsNeverAcceptedAsASubstituteForAnAggregateOsJobBoundary",
         "aMeasurementAfterExecutionIsNeverContainment",
@@ -83,18 +83,18 @@ def forbid(relative: str, text: str, *needles: str) -> None:
 
 def main() -> int:
     try:
-        containment = read(f"{RUNTIME}/WorkerResourceContainment.java")
-        qualification = read(f"{RUNTIME}/WorkerSandboxQualification.java")
-        backend = read(f"{RUNTIME}/WorkerSandboxBackend.java")
-        cgroup = read(f"{RUNTIME}/LinuxCgroupJob.java")
-        linux = read(f"{RUNTIME}/LinuxBubblewrapWorkerSandboxBackend.java")
-        windows = read(f"{RUNTIME}/WindowsAppContainerWorkerSandboxBackend.java")
+        containment = read(f"{RUNTIME}/sandbox/WorkerResourceContainment.java")
+        qualification = read(f"{RUNTIME}/sandbox/WorkerSandboxQualification.java")
+        backend = read(f"{RUNTIME}/sandbox/WorkerSandboxBackend.java")
+        cgroup = read(f"{RUNTIME}/sandbox/LinuxCgroupJob.java")
+        linux = read(f"{RUNTIME}/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
+        windows = read(f"{RUNTIME}/sandbox/WindowsAppContainerWorkerSandboxBackend.java")
         launcher = read(WINDOWS_LAUNCHER)
-        quota = read(f"{RUNTIME}/ProviderWriteQuota.java")
-        supervisor = read(f"{RUNTIME}/ProviderWriteQuotaSupervisor.java")
-        reclamation = read(f"{RUNTIME}/ProviderResidueReclamation.java")
-        executor = read(f"{RUNTIME}/ProcessIndexerExecutor.java")
-        retention = read(f"{RUNTIME}/RunDirectoryRetention.java")
+        quota = read(f"{RUNTIME}/workspace/ProviderWriteQuota.java")
+        supervisor = read(f"{RUNTIME}/workspace/ProviderWriteQuotaSupervisor.java")
+        reclamation = read(f"{RUNTIME}/workspace/ProviderResidueReclamation.java")
+        executor = read(f"{RUNTIME}/process/ProcessIndexerExecutor.java")
+        retention = read(f"{RUNTIME}/workspace/RunDirectoryRetention.java")
         worker = read(f"{RUNTIME}/LocalIsolatedIndexWorker.java")
 
         # 1. Containment is per dimension, and supervision never substitutes an aggregate OS boundary.
@@ -194,8 +194,11 @@ def main() -> int:
         require("docs/developer/quality-gates.md", quality, "check-minos-01.py")
 
         # 10. The CI gate itself is wired and provisions a real delegated cgroup on Linux.
-        delegation = read("scripts/ci/delegate-linux-cgroup.sh")
-        require("scripts/ci/delegate-linux-cgroup.sh", delegation,
+        # The CI script wraps the operator provisioning script, which performs the delegation itself.
+        require("scripts/ci/delegate-linux-cgroup.sh", read("scripts/ci/delegate-linux-cgroup.sh"),
+                "MINOS_SANDBOX_CGROUP_ROOT", "scripts/deploy/provision-linux-sandbox-cgroup.sh")
+        require("scripts/deploy/provision-linux-sandbox-cgroup.sh",
+                read("scripts/deploy/provision-linux-sandbox-cgroup.sh"),
                 "MINOS_SANDBOX_CGROUP_ROOT", "cgroup.subtree_control", "cgroup.procs")
         require(".github/workflows/pr-ci.yml", read(".github/workflows/pr-ci.yml"),
                 "scripts/remediation/check-minos-01.py", "scripts/ci/delegate-linux-cgroup.sh")

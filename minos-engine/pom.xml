@@ -24,7 +24,21 @@
     <build>
         <plugins>
             <plugin>
-                <!-- Q13: test support shared by the tests of the other modules (LogCapture), published as a test-jar so the production jar carries none of it -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- SH-08: registers IcaclsTestAccessControl (minos-engine test-jar) as the platform access control of this
+                         module's tests, which cannot see minos-runtime-local; kept out of target/test-classes so that no
+                         module using a test-jar of this one finds a second implementation -->
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.basedir}/src/test/platform-access-control</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- Q13: test support shared by the tests of the other modules (com.minos.testsupport:
+                     LogCapture, WriteProtectedTree, UnreadableDirectory, DerivedTenantKeys), published as a
+                     test-jar so the production jar carries none of it -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>${maven.jar.plugin.version}</version>

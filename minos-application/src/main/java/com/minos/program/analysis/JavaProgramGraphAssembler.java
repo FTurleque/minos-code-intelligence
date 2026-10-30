@@ -74,7 +74,11 @@ final class JavaProgramGraphAssembler {
             capabilities.add(ProgramGraphCapability.SECURITY_TAINT);
             context.addLimitation("JAVA_SECURITY_FLOW_INTRAPROCEDURAL_CONFIGURED_RULES_ONLY");
         }
-        if (!securityRules.configured()) {
+        if (securityRules.configured()) {
+            // AUD-SEC-11: the rules are read from the analysed repository, which is not trusted; a repository that omits
+            // its sources or sinks makes the analysis report no path, and the reader must be told whose rules those are.
+            context.addLimitation("SECURITY_RULES_SUPPLIED_BY_ANALYZED_REPOSITORY");
+        } else {
             context.addLimitation("JAVA_SECURITY_RULES_NOT_CONFIGURED");
         }
         return context.toGraph(capabilities);

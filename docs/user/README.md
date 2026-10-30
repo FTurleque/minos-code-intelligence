@@ -84,7 +84,7 @@ CLI / IntelliJ / API Java / MCP / NEXUS
 
 Le `setup.exe` est le **canal recommandé** pour un poste Windows. Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**. Le plugin IntelliJ est, lui, distribué sous forme de ZIP installable depuis l'IDE.
 
-L'étape `minos tools install <provider>` reste nécessaire aujourd'hui : la distribution n'embarque aucun indexeur et cette commande télécharge le provider et ses dépendances (accès réseau requis). L'auto-portance est décidée par l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md), non encore implémentée.
+L'étape `minos tools install <provider>` reste nécessaire aujourd'hui : la distribution n'embarque aucun indexeur et cette commande télécharge le provider et ses dépendances (accès réseau requis). L'auto-portance est décidée par l'[ADR 0040](../architecture/adr/archive/0040-distribution-auto-portante-indexeurs-embarques.md), non encore implémentée.
 
 L'utilisateur normal ne prépare plus `index.scip` manuellement. `minos index <project>` découvre le projet, sélectionne le provider qualifié, calcule la portée d'indexation, exécute le provider puis promeut le nouveau snapshot de manière atomique. Le plugin IntelliJ réutilise exactement ce lifecycle lorsqu'il déclenche une indexation ou un reindex.
 
@@ -231,7 +231,7 @@ Le `setup.exe` peut aussi **configurer, construire, démarrer et valider le MCP 
 
 MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pendant le setup, l'installation native reste valide.
 
-Le MCP expose **31 tools read-only**. Le catalogue courant inclut notamment `minos_architecture_graph`, `minos_program_graph`, `minos_impact_v2`, `minos_security_paths`, `minos_semantic_search`, `minos_hybrid_search`, `minos_hybrid_context`, `minos_runtime_sessions`, `minos_runtime_report`, `minos_runtime_symbol` et les cinq vues `minos_team_*`. La liste exacte est générée dans [`../generated/product-facts.md`](../generated/product-facts.md).
+Le MCP expose **31 tools read-only**. Le catalogue courant inclut notamment `minos_architecture_graph`, `minos_program_graph`, `minos_impact_v2`, `minos_security_paths`, `minos_semantic_search`, `minos_hybrid_search`, `minos_hybrid_context`, `minos_runtime_sessions`, `minos_runtime_report`, `minos_runtime_symbol` et les cinq vues `minos_team_*`. La liste exacte est générée dans [`product-facts.md`](../developer/generated/product-facts.md).
 
 Le plugin IntelliJ est distinct du MCP : il fonctionne sans LLM et ajoute une UX native, de la navigation et des actions locales d'administration. Les deux intégrations peuvent être installées simultanément.
 

@@ -1,7 +1,7 @@
 package com.minos.query;
 
 import com.minos.domain.SymbolSearchCriteria;
-import com.minos.store.CodeKnowledgeStore;
+import com.minos.store.CodeKnowledgeReader;
 
 import java.util.Objects;
 
@@ -21,7 +21,7 @@ public final class ModuleFilterGuard {
     private ModuleFilterGuard() {
     }
 
-    public static void require(CodeKnowledgeStore store, String projectId, SymbolSearchCriteria criteria) {
+    public static void require(CodeKnowledgeReader store, String projectId, SymbolSearchCriteria criteria) {
         Objects.requireNonNull(store, "store");
         Objects.requireNonNull(criteria, "criteria");
         if (criteria.moduleId() != null && store.lacksModuleAttribution(projectId)) {

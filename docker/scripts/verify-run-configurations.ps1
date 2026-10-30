@@ -109,10 +109,10 @@ foreach ($script in @($prodScript, $devScript, $windowsFunctions, $MyInvocation.
 $dockerfileContent = Read-Utf8Text -Path $dockerfile
 $composeContent = Read-Utf8Text -Path $composeTemplate
 $smokeContent = Read-Utf8Text -Path $smokeSource
-Assert-Condition -Condition ($dockerfileContent -match '(?m)^FROM eclipse-temurin:24\.[0-9._]+-jre@sha256:[0-9a-f]{64}\s*$') `
-    -Message "L'image MCP doit utiliser Eclipse Temurin Java 24 sous la forme tag@digest immuable (le tag est suivi par Dependabot)."
-Assert-Condition -Condition (-not $dockerfileContent.Contains('FROM eclipse-temurin:24-jre')) `
-    -Message "L'image MCP ne doit pas revenir au tag flottant eclipse-temurin:24-jre."
+Assert-Condition -Condition ($dockerfileContent -match '(?m)^FROM eclipse-temurin:25\.[0-9._]+-jre-noble@sha256:[0-9a-f]{64}\s*$') `
+    -Message "L'image MCP doit utiliser Eclipse Temurin Java 25 sur Ubuntu noble sous la forme tag@digest immuable (le tag est suivi par Dependabot)."
+Assert-Condition -Condition (-not $dockerfileContent.Contains('FROM eclipse-temurin:25-jre')) `
+    -Message "L'image MCP ne doit pas revenir au tag flottant eclipse-temurin:25-jre."
 Assert-Condition -Condition ($dockerfileContent.Contains('USER 10001:10001')) `
     -Message "L'image MCP doit s'executer sans privileges root."
 Assert-Condition -Condition ($composeContent.Contains('network_mode: none')) `
@@ -123,7 +123,7 @@ Assert-Condition -Condition ($composeContent.Contains('no-new-privileges:true'))
     -Message 'Le runtime MCP doit activer no-new-privileges.'
 Assert-Condition -Condition ($composeContent.Contains('restart: unless-stopped')) `
     -Message 'Le conteneur PROD doit redemarrer automatiquement.'
-Assert-Condition -Condition ($composeContent.Contains('- infinity')) `
+Assert-Condition -Condition ($composeContent -match '(?m)^\s*entrypoint:\s*\[\s*sleep\s*,\s*infinity\s*\]\s*$') `
     -Message 'Le conteneur PROD doit rester disponible entre deux sessions STDIO.'
 Assert-Condition -Condition ($smokeContent.Contains('"--entrypoint", "java"')) `
     -Message 'Le smoke test doit lancer explicitement le serveur MCP dans le conteneur.'
@@ -144,8 +144,10 @@ try {
 MINOS_COMPOSE_PROJECT=minos-mcp-verify
 MINOS_CONTAINER_NAME=minos-mcp-verify
 MINOS_IMAGE=minos-code-intelligence:verify
+MINOS_QUERY_IMAGE=minos-code-intelligence:verify-query
 MINOS_DATA_DIR=$($temporaryRoot.Replace('\', '/'))/data
 MINOS_PROJECTS_DIR=$($temporaryRoot.Replace('\', '/'))/projects
+MINOS_HOST_PROJECTS_ROOT=$($temporaryRoot.Replace('\', '/'))/projects
 MINOS_VERSION=verify
 MINOS_GIT_COMMIT=verify
 "@

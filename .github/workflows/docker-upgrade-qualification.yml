@@ -37,6 +37,7 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ github.sha }}
           fetch-depth: 0
 
@@ -46,16 +47,26 @@ jobs:
       # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
       - name: Log in to Docker Hub (when the secrets exist)
         if: ${{ env.DOCKERHUB_USERNAME != '' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set up Java 24
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      # Candidate A (the previous commit, or `main` in a promotion) may still be built for the previous Java
+      # baseline: its own Maven Enforcer refuses Java 25. qualify-docker-upgrade.ps1 builds each candidate with
+      # the JDK its POM names and finds this one through JAVA_HOME_24_X64. The step after it selects Java 25.
+      # Remove this step, and its entry in check-toolchain-baseline.py, once no candidate A is built for Java 24.
+      - name: Set up the previous Java baseline for candidate A
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '24'
+
+      - name: Set up Java 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25'
           cache: maven
 
       - name: Assert exact candidate HEAD
@@ -86,7 +97,7 @@ jobs:
 
       - name: Upload Docker upgrade qualification evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docker-upgrade-${{ github.sha }}-${{ github.run_attempt }}
           if-no-files-found: warn

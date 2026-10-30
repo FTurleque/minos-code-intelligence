@@ -102,3 +102,230 @@ Le chemin du lanceur Windows que la documentation du plugin propose par défaut 
 #### Scenario: Chemin documenté inexistant
 - **WHEN** la documentation cite `…\Programs\MINOS\bin\minos.cmd`
 - **THEN** le contrôle documentaire échoue en nommant le fichier, la ligne et l'emplacement attendu
+
+### Requirement: Un échec de tâche d'arrière-plan est journalisé et jamais avalé
+Toute tâche d'arrière-plan du plugin SHALL laisser passer `ProcessCanceledException` et les `Error`, SHALL journaliser toute autre exception dans `idea.log` avec sa pile et son message, et SHALL transmettre l'échec à l'affichage. Quand l'exception n'a pas de message ou un message vide, l'affichage SHALL nommer le type de l'exception.
+
+#### Scenario: Exception sans message
+- **GIVEN** une opération qui lève une `NullPointerException` sans message
+- **WHEN** la tâche d'arrière-plan l'exécute
+- **THEN** l'enregistreur reçoit l'exception avec sa pile, et le texte affiché contient `NullPointerException`, jamais `Unknown failure` seul
+
+#### Scenario: Exception avec message
+- **GIVEN** une opération qui lève une `IllegalStateException("projet absent")`
+- **WHEN** la tâche d'arrière-plan l'exécute
+- **THEN** l'enregistreur la reçoit avec sa pile et l'affichage contient `projet absent`
+
+#### Scenario: Erreur de la JVM
+- **GIVEN** une opération qui lève une `OutOfMemoryError`
+- **WHEN** la tâche d'arrière-plan l'exécute
+- **THEN** l'erreur est relancée telle quelle, sans être mémorisée comme un échec affichable
+
+#### Scenario: Annulation
+- **GIVEN** une opération qui lève une `ProcessCanceledException`
+- **WHEN** la tâche d'arrière-plan l'exécute
+- **THEN** l'exception est relancée sans journal ni affichage d'erreur
+
+### Requirement: Une seule tâche d'arrière-plan sert toutes les actions du plugin
+Les actions de l'éditeur, les actions M21 et le panneau d'outils SHALL exécuter leurs opérations par la même classe de tâche, sans `catch (Throwable)` dans le code des actions.
+
+#### Scenario: Aucune capture générique dans le plugin
+- **WHEN** `grep -rn "catch (Throwable" minos-intellij/src/main/java` est exécuté
+- **THEN** il ne renvoie aucune ligne
+
+#### Scenario: Pas de cycle de packages introduit
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** la règle A8 rapporte 0 cycle, plugin compris
+
+### Requirement: Le lanceur de développement ne résout pas java depuis le répertoire courant
+Le lanceur `minos.cmd` de la racine du dépôt SHALL appeler `%JAVA_HOME%\bin\java.exe` quand ce fichier existe et SHALL, sinon, interdire la recherche de `java` dans le répertoire courant. Un fichier `java.bat` ou `java.exe` du projet ouvert par le plugin SHALL NOT être exécuté.
+
+#### Scenario: java.bat piégé dans le répertoire courant
+- **GIVEN** un répertoire courant contenant un `java.bat` qui écrit un marqueur, un `java` valide dans le `PATH`, et la variable `NoDefaultCurrentDirectoryInExePath` retirée de l'environnement transmis au lanceur
+- **WHEN** `minos.cmd` est exécuté depuis ce répertoire
+- **THEN** le `java` du `PATH` s'exécute et le marqueur du `java.bat` n'est pas écrit
+
+#### Scenario: JAVA_HOME défini
+- **GIVEN** `JAVA_HOME` désignant un JDK de test dont `bin\java.exe` écrit un marqueur, et un `java.bat` piégé dans le répertoire courant
+- **WHEN** `minos.cmd` est exécuté
+- **THEN** le marqueur du JDK de `JAVA_HOME` est écrit et celui du piège ne l'est pas
+
+#### Scenario: Aucune fuite vers l'appelant
+- **GIVEN** un interpréteur appelant dont l'environnement ne contient pas `NoDefaultCurrentDirectoryInExePath`
+- **WHEN** `minos.cmd` est appelé puis se termine, et l'appelant affiche ensuite la variable
+- **THEN** l'appelant ne la voit toujours pas (portée limitée par `setlocal`)
+
+### Requirement: Les dépendances du plugin IntelliJ sont verrouillées et analysées
+Le build du plugin SHALL verrouiller, en mode strict, les dépendances de son classpath de compilation, d'exécution, de test et de script de build dans un fichier de verrou versionné. Le gate de vulnérabilités des pull requests SHALL analyser ce verrou. Un gate statique SHALL échouer si le verrou ou son activation disparaît.
+
+#### Scenario: Verrou absent
+- **GIVEN** une copie du dépôt sans `minos-intellij/gradle.lockfile`
+- **WHEN** le gate du plugin est exécuté sur cette copie
+- **THEN** il échoue en nommant le fichier attendu
+
+#### Scenario: Dépendance résolue hors verrou
+- **GIVEN** une copie du dépôt où la version d'une dépendance du plugin est modifiée sans régénérer le verrou
+- **WHEN** le build du plugin est exécuté
+- **THEN** il échoue en nommant la dépendance
+
+#### Scenario: Dépendance vulnérable dans le verrou
+- **GIVEN** une copie du dépôt dont le verrou référence une version touchée par un avis connu
+- **WHEN** OSV-Scanner est exécuté avec les arguments du job de pull request
+- **THEN** l'analyse échoue en nommant la dépendance et l'avis
+
+#### Scenario: Build identique sur les deux systèmes
+- **GIVEN** le verrou versionné
+- **WHEN** les tests du plugin sont exécutés sous Linux puis sous Windows
+- **THEN** les deux builds réussissent sans modifier le verrou
+
+### Requirement: L'intégrité des artefacts résolus par le plugin est vérifiée ou sa limite déclarée
+Le build du plugin SHALL vérifier la somme SHA-256 des artefacts qu'il résout d'après des métadonnées versionnées, pour le périmètre retenu par la décision du design. Tout artefact hors de ce périmètre SHALL être nommé dans la documentation de la chaîne d'approvisionnement comme non vérifié.
+
+#### Scenario: Artefact dont la somme diffère
+- **GIVEN** des métadonnées de vérification où la somme d'une dépendance a été altérée
+- **WHEN** le build du plugin est exécuté
+- **THEN** il échoue en nommant l'artefact
+
+#### Scenario: Métadonnées absentes alors que la vérification est retenue
+- **GIVEN** une copie du dépôt sans métadonnées de vérification
+- **WHEN** le gate du plugin est exécuté sur cette copie
+- **THEN** il échoue
+
+#### Scenario: Périmètre déclaré
+- **GIVEN** la documentation de la chaîne d'approvisionnement
+- **WHEN** elle est relue après ce changement
+- **THEN** elle nomme les artefacts vérifiés par somme et ceux qui ne le sont pas
+
+### Requirement: Les blocs communs du lanceur Job Object du plugin sont identiques à ceux du moteur
+Le lanceur Job Object embarqué par le plugin IntelliJ SHALL contenir à l'identique chaque fragment du moteur déclaré commun (imports Win32, structures de limites, vérification de la configuration du job, citation des arguments). Un gate statique SHALL assembler le script du moteur comme le runtime et SHALL échouer en nommant le fragment quand un bloc commun diffère. Un gabarit ou un fragment introuvable SHALL faire échouer le gate.
+
+#### Scenario: Fragment commun modifié d'un seul côté
+- **GIVEN** une copie du dépôt où une ligne du fragment des imports Win32 du moteur est modifiée sans toucher au plugin
+- **WHEN** `python scripts/quality/check-job-object-launcher-parity.py --root <copie>` est exécuté
+- **THEN** le gate échoue en nommant le fragment
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt
+- **WHEN** le gate est exécuté
+- **THEN** il réussit et affiche le nombre de fragments communs contrôlés
+
+#### Scenario: Fragment introuvable
+- **GIVEN** une copie du dépôt où un fragment inclus par le gabarit est supprimé
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant le fragment manquant et ne conclut pas à la parité
+
+### Requirement: Toute différence assumée entre les deux lanceurs est nommée et bornée
+Une différence entre le lanceur du plugin et le script assemblé du moteur SHALL figurer dans une liste fermée qui porte, pour chaque entrée, un nom, une justification et un maximum de lignes. Le gate SHALL échouer sur une différence hors liste, sur un maximum dépassé et sur une entrée qui ne correspond plus à aucune différence. Il SHALL afficher la liste à chaque exécution.
+
+#### Scenario: Différence hors liste
+- **GIVEN** une copie du dépôt où une ligne est ajoutée au lanceur du plugin hors de toute zone assumée
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en citant la ligne
+
+#### Scenario: Entrée sans objet
+- **GIVEN** une liste qui nomme une différence que les deux scripts ne présentent plus
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant l'entrée périmée
+
+#### Scenario: Différences affichées
+- **GIVEN** le dépôt, où la construction de la ligne de commande diffère entre plugin et moteur
+- **WHEN** le gate est exécuté
+- **THEN** il réussit et sa sortie nomme cette différence et sa justification
+
+### Requirement: Un changement de fragment du lanceur déclenche la CI du plugin
+La portée du gate du plugin SHALL inclure les fragments et le gabarit du lanceur Job Object du moteur ainsi que le gate de parité. Une pull request qui ne modifie que l'un de ces fichiers SHALL exécuter les jobs du plugin, dont les tests Windows du lanceur.
+
+#### Scenario: Fragment seul modifié
+- **GIVEN** une liste de fichiers modifiés réduite à un fragment du lanceur du moteur
+- **WHEN** la portée du plugin est calculée par `scripts/ci/plugin-gate.py`
+- **THEN** la portée est vraie
+
+#### Scenario: Fichier sans rapport
+- **GIVEN** une liste de fichiers modifiés réduite à `README.md`
+- **WHEN** la portée est calculée
+- **THEN** la portée est fausse
+
+### Requirement: La couverture des tests du plugin est mesurée et publiée
+Le build Gradle du plugin IntelliJ SHALL produire un rapport JaCoCo des tests unitaires limité aux classes `com.minos.intellij`. Le workflow du plugin SHALL produire ce rapport sur Linux et sur Windows et le publier en artefact. L'absence du rapport après les tests SHALL faire échouer le job.
+
+#### Scenario: Rapport produit localement
+- **GIVEN** le dossier `minos-intellij`
+- **WHEN** `./gradlew --no-daemon test jacocoTestReport` est exécuté
+- **THEN** un rapport XML de couverture existe sous `build/reports/jacoco/` et ne contient que des classes `com/minos/intellij/`
+
+#### Scenario: Rapport absent
+- **GIVEN** une copie du build où la tâche de rapport est retirée
+- **WHEN** la vérification de couverture est exécutée
+- **THEN** elle échoue au lieu de réussir sans mesure
+
+### Requirement: Une couverture du plugin sous son plancher est refusée
+Le build du plugin SHALL échouer quand la couverture de lignes ou de branches mesurée est sous le plancher déclaré dans `build.gradle.kts`, pour le plugin entier et pour le paquet `protocol`. Cet échec SHALL faire échouer le check exigé du plugin. Un plancher SHALL NOT être présenté comme tenu sur un système où il n'est pas évalué.
+
+#### Scenario: Test supprimé
+- **GIVEN** une copie du plugin où une classe de test de `protocol` est supprimée
+- **WHEN** `./gradlew --no-daemon test jacocoTestCoverageVerification` est exécuté
+- **THEN** le build échoue en nommant la règle violée, la mesure et le plancher
+
+#### Scenario: Dépôt réel
+- **GIVEN** le plugin au HEAD du changement
+- **WHEN** la même commande est exécutée sous Linux
+- **THEN** elle réussit
+
+### Requirement: La logique du plugin est testable sans la plateforme IntelliJ
+La logique du plugin qui ne manipule pas l'IDE (choix et score du symbole candidat, texte des notices, interprétation des réponses du CLI) SHALL vivre dans des classes sans type `com.intellij` et SHALL être testée en JUnit simple. Les tests du plugin SHALL NOT exiger une fixture de plateforme. Les classes d'interface laissées sans test unitaire SHALL être nommées dans la documentation du plugin.
+
+#### Scenario: Score du symbole candidat
+- **GIVEN** deux symboles renvoyés par le CLI, dont un seul dans le fichier et à la ligne du curseur
+- **WHEN** la logique extraite choisit le candidat
+- **THEN** elle retient ce symbole, sans instancier de projet ni d'éditeur
+
+#### Scenario: Aucun candidat
+- **GIVEN** une réponse du CLI sans symbole correspondant
+- **WHEN** la logique extraite choisit le candidat
+- **THEN** elle signale l'absence (résultat vide ou erreur de protocole explicite, selon le comportement relevé au HEAD) et ne choisit pas un symbole par défaut
+
+#### Scenario: Dépendance à la plateforme réintroduite
+- **GIVEN** une classe de logique extraite qui importe un type `com.intellij`
+- **WHEN** `./gradlew --no-daemon test` est exécuté
+- **THEN** le test de garde des classes sans plateforme échoue en nommant la classe
+
+### Requirement: Le superviseur de processus du plugin sonde à cadence bornée
+En régime établi, le superviseur de processus du plugin SHALL énumérer les descendants d'une commande MINOS au plus 15 fois par seconde, avec la même période que le suivi du runtime local, sans importer aucun artefact `com.minos:*`. Il SHALL continuer de terminer tout descendant observé, et un descendant encore vivant après l'arrêt forcé SHALL rester signalé comme un échec, jamais ignoré.
+
+#### Scenario: Cadence en régime établi dans le plugin
+- **GIVEN** un superviseur attaché à un processus factice vivant dont l'énumération des descendants compte ses appels
+- **WHEN** deux secondes s'écoulent après la phase initiale
+- **THEN** l'énumération a été appelée au moins une fois et au plus 30 fois
+
+#### Scenario: Orphelin observé puis nettoyé
+- **GIVEN** une commande dont le processus lance un enfant détaché puis sort
+- **WHEN** le superviseur est fermé
+- **THEN** l'enfant observé a été terminé
+
+#### Scenario: Survivant après l'arrêt forcé
+- **GIVEN** un descendant observé qui reste vivant après l'arrêt forcé
+- **WHEN** le superviseur est fermé
+- **THEN** la fermeture rapporte l'échec de nettoyage
+
+#### Scenario: Aucune dépendance au noyau
+- **GIVEN** le plugin après ce changement
+- **WHEN** la garde de dépendances du plugin est exécutée
+- **THEN** aucune dépendance ni import `com.minos:*` n'est trouvé
+
+### Requirement: Le lanceur du plugin ne réécrit jamais la DACL d'un dossier qui n'est pas à lui
+Sous Windows, le lanceur du plugin SHALL refuser, avant toute modification, un dossier MINOS qui est le profil de l'utilisateur, un ancêtre du profil ou une racine de volume. Il SHALL ne rendre privé un dossier préexistant que s'il appartient à l'utilisateur courant, et SHALL sinon échouer sans changer sa DACL.
+
+#### Scenario: Dossier MINOS configuré sur le profil
+- **GIVEN** des réglages dont le dossier MINOS est le profil de l'utilisateur
+- **WHEN** le plugin lance une commande MINOS
+- **THEN** le lancement échoue avec un message qui demande un dossier dédié, et la DACL du profil est inchangée
+
+#### Scenario: Dossier préexistant d'un autre propriétaire
+- **GIVEN** un dossier MINOS qui existe déjà et dont le propriétaire n'est pas l'utilisateur courant
+- **WHEN** le plugin lance une commande MINOS
+- **THEN** le lancement échoue en nommant le problème de propriété, et la DACL du dossier est inchangée
+
+#### Scenario: Dossier de l'utilisateur
+- **GIVEN** un dossier MINOS absent, ou présent et appartenant à l'utilisateur courant
+- **WHEN** le plugin lance une commande MINOS
+- **THEN** le dossier est réservé à son propriétaire et la commande démarre

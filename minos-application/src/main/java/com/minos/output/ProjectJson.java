@@ -1,8 +1,8 @@
 package com.minos.output;
 
 import com.minos.application.ProjectSummary;
-import com.minos.orchestration.ResumableRunSummary;
-import com.minos.registry.DegradedEntry;
+import com.minos.application.ResumableRunStatus;
+import com.minos.domain.registry.DegradedEntry;
 
 import java.time.Instant;
 import java.util.List;
@@ -52,7 +52,7 @@ public final class ProjectJson {
      * champs de reprise valent {@code null} quand rien n'est offert.
      */
     public static Map<String, Object> indexStatus(
-            ProjectSummary project, Optional<ResumableRunSummary> resumable, Instant now) {
+            ProjectSummary project, Optional<ResumableRunStatus> resumable, Instant now) {
         Objects.requireNonNull(project, "project");
         Objects.requireNonNull(resumable, "resumable");
         Objects.requireNonNull(now, "now");
@@ -65,9 +65,9 @@ public final class ProjectJson {
                 "providerId", project.providerId(),
                 "providerVersion", project.providerVersion(),
                 "resumableRunId", resumable.map(summary -> summary.runId().toString()).orElse(null),
-                "resumableRunPhase", resumable.map(summary -> summary.phase().name()).orElse(null),
+                "resumableRunPhase", resumable.map(ResumableRunStatus::phase).orElse(null),
                 "resumableCheckpointAgeSeconds",
                 resumable.map(summary -> summary.checkpointAgeSeconds(now)).orElse(null),
-                "resumableTargets", resumable.map(ResumableRunSummary::resumableTargets).orElse(null));
+                "resumableTargets", resumable.map(ResumableRunStatus::resumableTargets).orElse(null));
     }
 }

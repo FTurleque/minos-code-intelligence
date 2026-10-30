@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "docs" / "generated" / "product-facts.md"
+OUTPUT = ROOT / "docs" / "developer" / "generated" / "product-facts.md"
 
 
 def read(relative: str) -> str:
@@ -57,7 +57,7 @@ def enum_values(source: str, enum_name: str) -> list[str]:
 def qualified_descriptor_methods(source: str) -> list[str]:
     """Derive the current provider order from the authoritative qualified catalog methods."""
     methods: list[str] = []
-    for catalog in ("qualifiedM17Providers", "qualifiedM24Providers"):
+    for catalog in ("regressionReplayProviders", "qualifiedProviders"):
         body = require(
             rf"public static List<IndexerProvider> {catalog}\(\) \{{(.*?)\n    \}}",
             source,
@@ -68,7 +68,7 @@ def qualified_descriptor_methods(source: str) -> list[str]:
             if method not in methods:
                 methods.append(method)
     if len(methods) != 7:
-        raise RuntimeError(f"qualified M24 catalog must expose 7 providers, derived={methods}")
+        raise RuntimeError(f"qualified provider catalog must expose 7 providers, derived={methods}")
     return methods
 
 
@@ -107,8 +107,8 @@ def provider_facts(source: str) -> list[tuple[str, str, str, list[str], list[str
 
 def check_authoritative_documentation() -> None:
     """Reject stale mutable prose that contradicts authoritative release/security facts."""
-    status = read("docs/STATUS.md")
-    roadmap = read("docs/ROADMAP.md")
+    status = read("docs/project/governance/STATUS.md")
+    roadmap = read("docs/project/governance/ROADMAP.md")
     risk_register = read("docs/architecture/risks/register.md")
     readme = read("README.md")
     production = read("docs/user/production-installation.md")
@@ -131,14 +131,14 @@ def check_authoritative_documentation() -> None:
             or "qualification code non fiable **refusée**" not in status):
         raise RuntimeError("STATUS no longer exposes the authoritative #98 sandbox qualification fact")
     if "IMPLÉMENTÉE + QUALIFIÉE" in status:
-        raise RuntimeError("stale #98 qualification claim in docs/STATUS.md (audit 2026-09, A1)")
+        raise RuntimeError("stale #98 qualification claim in docs/project/governance/STATUS.md (audit 2026-09, A1)")
     if "ADR 0041" not in status:
         raise RuntimeError("STATUS must cite ADR 0041: the #98 refusal is a decision, not a pending defect")
     check_sandbox_claims_match_the_code()
 
     current_docs = {
-        "docs/STATUS.md": status,
-        "docs/ROADMAP.md": roadmap,
+        "docs/project/governance/STATUS.md": status,
+        "docs/project/governance/ROADMAP.md": roadmap,
         "docs/architecture/risks/register.md": risk_register,
     }
     for path, text in current_docs.items():
@@ -196,13 +196,13 @@ def check_sandbox_claims_match_the_code() -> None:
     (bytes and entries); the developer page once said "at least SUPERVISED_HARD_KILL", which was
     false. Both the code and the pages are checked, so neither can drift alone.
     """
-    containment = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerResourceContainment.java")
+    containment = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerResourceContainment.java")
     unmet = require(
         r"public List<String> unmetRequirements\(\) \{(.*?)\n    \}", containment, "unmetRequirements body", re.S)
     for dimension in ("FILESYSTEM_WRITE_BYTES", "FILESYSTEM_WRITE_ENTRIES"):
         if f'requireOsEnforced(unmet, "{dimension}"' not in unmet:
             raise RuntimeError(f"untrusted-code qualification no longer requires OS_ENFORCED on {dimension}")
-    qualification = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxQualification.java")
+    qualification = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerSandboxQualification.java")
     if '"WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"' not in qualification:
         raise RuntimeError("WorkerSandboxQualification must carry the ADR 0041 decision limitation")
 
@@ -265,7 +265,7 @@ def render() -> str:
     mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
     cli = read("minos-cli/src/main/java/com/minos/cli/MinosCli.java")
     symbol_formats_source = read("minos-application/src/main/java/com/minos/output/SymbolOutputFormat.java")
-    architecture_formats_source = read("minos-cli/src/main/java/com/minos/cli/ArchitectureOutputFormat.java")
+    architecture_formats_source = read("minos-cli/src/main/java/com/minos/cli/command/ArchitectureOutputFormat.java")
     providers = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java")
 
     version = require(r"<revision>([^<]+)</revision>", pom, "product version")

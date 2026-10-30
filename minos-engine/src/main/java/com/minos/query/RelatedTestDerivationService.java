@@ -45,6 +45,12 @@ public final class RelatedTestDerivationService {
     private static final double NAMING_CONVENTION_WEIGHT = 0.55;
     private static final double DIRECT_REFERENCE_WEIGHT = 0.65;
     private static final double DIRECT_CALL_WEIGHT = 0.80;
+    /**
+     * Nombre maximal de preuves avec emplacement conservées par type de preuve et par relation, dans l'ordre
+     * du parcours ; le reste est déclaré par une preuve de synthèse sans emplacement (AUD-PERF-09). Le poids
+     * d'un type étant un maximum, le plafond ne change ni la confiance ni la sélection.
+     */
+    static final int MAX_LOCATIONS_PER_EVIDENCE_TYPE = 5;
 
     private static final Set<SymbolKind> CONTAINER_KINDS = Set.of(
             SymbolKind.CLASS,
@@ -319,7 +325,7 @@ public final class RelatedTestDerivationService {
                 derived ? InformationNature.DERIVED : InformationNature.HEURISTIC,
                 confidence(candidate.signalWeights),
                 origin,
-                candidate.evidence.stream()
+                candidate.evidenceWithOmissions().stream()
                         .sorted(Comparator.comparing(Evidence::type)
                                 .thenComparing(Evidence::description)
                                 .thenComparing(evidence -> evidence.location() == null)
@@ -600,12 +606,30 @@ public final class RelatedTestDerivationService {
     ) {
     }
 
+    /** Emplacements omis d'un type de preuve : décrits par la première preuve omise. */
+    private static final class OmittedLocations {
+        private final String description;
+        private final CodeEntityRef source;
+        private final CodeEntityRef target;
+        private final double weight;
+        private int count;
+
+        private OmittedLocations(String description, CodeEntityRef source, CodeEntityRef target, double weight) {
+            this.description = description;
+            this.source = source;
+            this.target = target;
+            this.weight = weight;
+        }
+    }
+
     private static final class Candidate {
         private final Symbol test;
         private final Symbol production;
         private final List<Evidence> evidence = new ArrayList<>();
         private final Set<String> evidenceKeys = new LinkedHashSet<>();
         private final Map<EvidenceType, Double> signalWeights = new EnumMap<>(EvidenceType.class);
+        private final Map<EvidenceType, Integer> locatedCounts = new EnumMap<>(EvidenceType.class);
+        private final Map<EvidenceType, OmittedLocations> omitted = new EnumMap<>(EvidenceType.class);
 
         private Candidate(Symbol test, Symbol production) {
             this.test = test;
@@ -624,9 +648,25 @@ public final class RelatedTestDerivationService {
                     + location.startLine() + ":" + location.startColumn();
             String key = type + "\u001F" + description + "\u001F" + locationKey;
             if (evidenceKeys.add(key)) {
-                evidence.add(new Evidence(type, description, source, target, location, weight));
+                if (location != null && locatedCounts.merge(type, 1, Integer::sum) > MAX_LOCATIONS_PER_EVIDENCE_TYPE) {
+                    omitted.computeIfAbsent(type, ignored -> new OmittedLocations(description, source, target, weight))
+                            .count++;
+                } else {
+                    evidence.add(new Evidence(type, description, source, target, location, weight));
+                }
             }
             signalWeights.merge(type, weight, Math::max);
+        }
+
+        private List<Evidence> evidenceWithOmissions() {
+            if (omitted.isEmpty()) {
+                return evidence;
+            }
+            List<Evidence> all = new ArrayList<>(evidence);
+            omitted.forEach((type, omission) -> all.add(new Evidence(type,
+                    omission.description + ": " + omission.count + " additional locations omitted",
+                    omission.source, omission.target, null, omission.weight)));
+            return all;
         }
 
         private boolean has(EvidenceType type) {

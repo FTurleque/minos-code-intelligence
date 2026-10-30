@@ -86,7 +86,7 @@ try {
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Current documentation consistency failed'
     Invoke-PythonGate $Python 'scripts\quality\check-polyglot-provider-consistency.py' 'M24 regression gate failed'
 
-    Write-Host '[2/7] Full Java 24 Maven reactor...'
+    Write-Host '[2/7] Full Java 25 Maven reactor...'
     Invoke-SemanticDisabled {
         & .\mvnw.cmd clean verify
         if ($LASTEXITCODE -ne 0) { throw "M25 Maven reactor failed (exit=$LASTEXITCODE)" }

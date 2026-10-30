@@ -352,8 +352,8 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.ancestorDescriptors(Path, Path, ProjectIgnorePolicy, SourceBudgetPolicy$Tracker)</LongMessage>
     <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
-      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="357" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
-        <Message>At ProjectFingerprintService.java:[lines 32-357]</Message>
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="359" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-359]</Message>
       </SourceLine>
       <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
     </Class>
@@ -376,8 +376,8 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.isAncestorDescriptor(Path)</LongMessage>
     <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
-      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="357" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
-        <Message>At ProjectFingerprintService.java:[lines 32-357]</Message>
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="359" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-359]</Message>
       </SourceLine>
       <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
     </Class>
@@ -400,8 +400,8 @@
     <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
     <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.incremental.ProjectFingerprintService.isRootControlFile(Path)</LongMessage>
     <Class classname="com.minos.incremental.ProjectFingerprintService" primary="true">
-      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="357" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
-        <Message>At ProjectFingerprintService.java:[lines 32-357]</Message>
+      <SourceLine classname="com.minos.incremental.ProjectFingerprintService" start="32" end="359" sourcepath="com/minos/incremental/ProjectFingerprintService.java" sourcefile="ProjectFingerprintService.java">
+        <Message>At ProjectFingerprintService.java:[lines 32-359]</Message>
       </SourceLine>
       <Message>In class com.minos.incremental.ProjectFingerprintService</Message>
     </Class>
@@ -510,30 +510,6 @@
     </Type>
     <SourceLine endBytecode="173" classname="com.minos.io.BoundedFileDigest" start="37" end="37" sourcepath="com/minos/io/BoundedFileDigest.java" sourcefile="BoundedFileDigest.java" startBytecode="173" primary="true">
       <Message>At BoundedFileDigest.java:[line 37]</Message>
-    </SourceLine>
-  </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="8a61790d1e84372e0f394c6f6bad6185" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
-    <ShortMessage>Pointeur à null renvoyé par une méthode qui risque d'être déréférencé</ShortMessage>
-    <LongMessage>Un pointeur à null renvoyé par une méthode risque d'être déréférencé dans com.minos.io.PrivateLocalStorage.currentOwner(Path)</LongMessage>
-    <Class classname="com.minos.io.PrivateLocalStorage" primary="true">
-      <SourceLine classname="com.minos.io.PrivateLocalStorage" start="76" end="747" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java">
-        <Message>At PrivateLocalStorage.java:[lines 76-747]</Message>
-      </SourceLine>
-      <Message>In class com.minos.io.PrivateLocalStorage</Message>
-    </Class>
-    <Method isStatic="true" classname="com.minos.io.PrivateLocalStorage" signature="(Ljava/nio/file/Path;)Ljava/nio/file/attribute/UserPrincipal;" name="currentOwner" primary="true">
-      <SourceLine endBytecode="247" classname="com.minos.io.PrivateLocalStorage" start="275" end="286" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="0" />
-      <Message>In method com.minos.io.PrivateLocalStorage.currentOwner(Path)</Message>
-    </Method>
-    <Method isStatic="false" role="METHOD_CALLED" classname="java.nio.file.Path" signature="()Ljava/nio/file/Path;" name="getParent">
-      <SourceLine classname="java.nio.file.Path" sourcepath="java/nio/file/Path.java" sourcefile="Path.java" />
-      <Message>Called method java.nio.file.Path.getParent()</Message>
-    </Method>
-    <SourceLine role="SOURCE_LINE_INVOKED" endBytecode="39" classname="com.minos.io.PrivateLocalStorage" start="280" end="280" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="39" primary="true">
-      <Message>Method invoked at PrivateLocalStorage.java:[line 280]</Message>
-    </SourceLine>
-    <SourceLine role="SOURCE_LINE_KNOWN_NULL" endBytecode="20" classname="com.minos.io.PrivateLocalStorage" start="279" end="279" sourcepath="com/minos/io/PrivateLocalStorage.java" sourcefile="PrivateLocalStorage.java" startBytecode="20">
-      <Message>Known null at PrivateLocalStorage.java:[line 279]</Message>
     </SourceLine>
   </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="1da1ece657759afd4d86a4134096b778" cweid="476" rank="13" abbrev="NP" category="STYLE" priority="2" type="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE" instanceOccurrenceMax="0">
@@ -836,29 +812,6 @@
       <Message>At RegisteredWorkspace.java:[line 12]</Message>
     </SourceLine>
   </BugInstance>
-  <BugInstance instanceOccurrenceNum="0" instanceHash="bc1ab494771f0edbd0de32a94d884ade" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
-    <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
-    <LongMessage>La méthode com.minos.registry.UnreadableRegistryException.unreadable() risque d'exposer sa représentation interne en renvoyant com.minos.registry.UnreadableRegistryException.unreadable</LongMessage>
-    <Class classname="com.minos.registry.UnreadableRegistryException" primary="true">
-      <SourceLine classname="com.minos.registry.UnreadableRegistryException" start="22" end="54" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
-        <Message>At UnreadableRegistryException.java:[lines 22-54]</Message>
-      </SourceLine>
-      <Message>In class com.minos.registry.UnreadableRegistryException</Message>
-    </Class>
-    <Method isStatic="false" classname="com.minos.registry.UnreadableRegistryException" signature="()Ljava/util/List;" name="unreadable" primary="true">
-      <SourceLine endBytecode="46" classname="com.minos.registry.UnreadableRegistryException" start="49" end="49" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="0" />
-      <Message>In method com.minos.registry.UnreadableRegistryException.unreadable()</Message>
-    </Method>
-    <Field isStatic="false" classname="com.minos.registry.UnreadableRegistryException" signature="Ljava/util/List;" name="unreadable" primary="true">
-      <SourceLine classname="com.minos.registry.UnreadableRegistryException" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java">
-        <Message>In UnreadableRegistryException.java</Message>
-      </SourceLine>
-      <Message>Field com.minos.registry.UnreadableRegistryException.unreadable</Message>
-    </Field>
-    <SourceLine endBytecode="4" classname="com.minos.registry.UnreadableRegistryException" start="49" end="49" sourcepath="com/minos/registry/UnreadableRegistryException.java" sourcefile="UnreadableRegistryException.java" startBytecode="4" primary="true">
-      <Message>At UnreadableRegistryException.java:[line 49]</Message>
-    </SourceLine>
-  </BugInstance>
   <BugInstance instanceOccurrenceNum="0" instanceHash="52a94635b585ffb5607a4e348810bdc3" cweid="374" rank="18" abbrev="EI" category="MALICIOUS_CODE" priority="2" type="EI_EXPOSE_REP" instanceOccurrenceMax="0">
     <ShortMessage>Une méthode peut exposer sa représentation interne en renvoyant une référence à un objet modifiable</ShortMessage>
     <LongMessage>La méthode com.minos.store.SnapshotQueryView.queryStore() risque d'exposer sa représentation interne en renvoyant com.minos.store.SnapshotQueryView.queryStore</LongMessage>
@@ -906,6 +859,23 @@
     </LocalVariable>
     <SourceLine endBytecode="54" classname="com.minos.store.SnapshotQueryView" start="17" end="17" sourcepath="com/minos/store/SnapshotQueryView.java" sourcefile="SnapshotQueryView.java" startBytecode="54" primary="true">
       <Message>At SnapshotQueryView.java:[line 17]</Message>
+    </SourceLine>
+  </BugInstance>
+  <BugInstance instanceOccurrenceNum="0" instanceHash="60e2d9779d463ba1c63f3e6e292d012" cweid="459" rank="12" abbrev="UL" category="MT_CORRECTNESS" priority="1" type="UL_UNRELEASED_LOCK" instanceOccurrenceMax="0">
+    <ShortMessage>Method does not release lock on all paths</ShortMessage>
+    <LongMessage>com.minos.orchestration.InMemoryIndexStateStore.acquireProjectLease(UUID) does not release lock on all paths</LongMessage>
+    <Class classname="com.minos.orchestration.InMemoryIndexStateStore" primary="true">
+      <SourceLine classname="com.minos.orchestration.InMemoryIndexStateStore" start="16" end="79" sourcepath="com/minos/orchestration/InMemoryIndexStateStore.java" sourcefile="InMemoryIndexStateStore.java">
+        <Message>At InMemoryIndexStateStore.java:[lines 16-79]</Message>
+      </SourceLine>
+      <Message>In class com.minos.orchestration.InMemoryIndexStateStore</Message>
+    </Class>
+    <Method isStatic="false" classname="com.minos.orchestration.InMemoryIndexStateStore" signature="(Ljava/util/UUID;)Lcom/minos/orchestration/IndexStateStore$ProjectLease;" name="acquireProjectLease" primary="true">
+      <SourceLine endBytecode="48" classname="com.minos.orchestration.InMemoryIndexStateStore" start="56" end="66" sourcepath="com/minos/orchestration/InMemoryIndexStateStore.java" sourcefile="InMemoryIndexStateStore.java" startBytecode="0" />
+      <Message>In method com.minos.orchestration.InMemoryIndexStateStore.acquireProjectLease(UUID)</Message>
+    </Method>
+    <SourceLine endBytecode="65" classname="com.minos.orchestration.InMemoryIndexStateStore" start="62" end="62" sourcepath="com/minos/orchestration/InMemoryIndexStateStore.java" sourcefile="InMemoryIndexStateStore.java" startBytecode="65" primary="true">
+      <Message>At InMemoryIndexStateStore.java:[line 62]</Message>
     </SourceLine>
   </BugInstance>
 </BugCollection>

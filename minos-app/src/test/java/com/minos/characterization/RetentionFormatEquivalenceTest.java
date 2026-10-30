@@ -1,11 +1,11 @@
 package com.minos.characterization;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
-import com.minos.storage.local.store.KnowledgeSnapshotCodecs;
-import com.minos.storage.local.store.SnapshotCodecV2;
-import com.minos.storage.local.store.SnapshotIntegrityService;
+import com.minos.storage.codec.KnowledgeSnapshotCodecs;
+import com.minos.storage.codec.SnapshotCodecV2;
+import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

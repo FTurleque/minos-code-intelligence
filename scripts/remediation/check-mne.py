@@ -31,28 +31,28 @@ def forbid(relative: str, text: str, *needles: str) -> None:
 
 def main() -> int:
     try:
-        compaction = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotCompactionService.java")
-        retention = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
-        postgres_snapshot = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
-        snapshot_codec = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotBinaryCodecSupport.java")
-        file_snapshot = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
+        compaction = read("minos-storage/src/main/java/com/minos/storage/local/store/SnapshotCompactionService.java")
+        retention = read("minos-storage/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
+        postgres_snapshot = read("minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java")
+        snapshot_codec = read("minos-storage/src/main/java/com/minos/storage/codec/SnapshotBinaryCodecSupport.java")
+        file_snapshot = read("minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
         semantic_service = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexService.java")
-        semantic_store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java")
-        scip = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIngestionLimits.java")
+        semantic_store = read("minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java")
+        scip = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ingestion/ScipIngestionLimits.java")
         discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java")
         fingerprint = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         runtime_port = read("minos-engine/src/main/java/com/minos/dynamic/RuntimeObservationStore.java")
         runtime_service = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeIntelligenceService.java")
-        local_runtime = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
-        postgres_runtime = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresRuntimeObservationStore.java")
+        local_runtime = read("minos-storage/src/main/java/com/minos/storage/local/store/FileRuntimeObservationStore.java")
+        postgres_runtime = read("minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresRuntimeObservationStore.java")
         provider_api = read("minos-api/src/main/java/com/minos/api/LocalProviderPlatformApi.java")
         multi_api = read("minos-api/src/main/java/com/minos/api/LocalMinosMultiRepositoryApi.java")
-        nexus = read("minos-nexus/src/main/java/com/minos/nexus/NexusExportService.java")
+        nexus = read("minos-application/src/main/java/com/minos/application/export/KnowledgeExportUseCase.java")
         hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
         token = read("minos-application/src/main/java/com/minos/context/TokenEstimator.java")
-        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
-        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
+        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
+        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java")
 
         # MNE-01: read active pointer under the same project lease as retention deletion.
         require("SnapshotCompactionService.java", compaction,
@@ -68,7 +68,7 @@ def main() -> int:
                 "MAX_ACTIVE_QUERY_RETRIES", "for (int attempt = 1; attempt <= MAX_ACTIVE_QUERY_RETRIES; attempt++)",
                 "Files.deleteIfExists(value.payload())")
         forbid("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
-               "return loadActiveQueryView(projectId);")
+               "return loadActiveQueryView(projectId);", "return loadActiveReadView(projectId);")
 
         # MNE-03/04/06/07: real byte/working-set bounds and payload-aware cache weights.
         require("SemanticIndexBudget.java", semantic_budget,
@@ -83,7 +83,7 @@ def main() -> int:
         require("SnapshotBinaryCodecSupport.java", snapshot_codec,
                 "MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L", "requireSnapshotFileSize")
         require("FileSymbolSnapshotStore.java", file_snapshot,
-                "QUERY_VIEW_PERSISTED_AMPLIFICATION", "Files.size(snapshot)", "safeMultiply")
+                "QUERY_VIEW_PERSISTED_AMPLIFICATION", "saturatingMultiply(Files.size(snapshot)")
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
                 "QUERY_VIEW_PERSISTED_AMPLIFICATION", "estimateWeight(metadata, payloadBytes)")
 
@@ -117,7 +117,7 @@ def main() -> int:
                 "ownsApplication", "this(openApplication(home), true)", "application.close()")
 
         # MNE-12/13/14: weighted NEXUS selection, semantic generation identity, allocation-light tokenization.
-        require("NexusExportService.java", nexus,
+        require("KnowledgeExportUseCase.java", nexus,
                 "MAX_SYMBOL_SELECTION_WEIGHT_BYTES", "MAX_RELATION_SELECTION_WEIGHT_BYTES",
                 "ToLongFunction<T>", "relationshipWeight")
         require("HybridSearchService.java", hybrid,
@@ -133,7 +133,7 @@ def main() -> int:
                 "DOTNET_PACKAGE_ID", "downloadPinnedDotnetPackage", "pinned-nuget-source",
                 "MAX_DOTNET_PACKAGE_BYTES", "PinnedArtifactSource.forHost().acquire(",
                 "MAX_MANAGED_TRAVERSAL_ENTRIES", "MAX_MANAGED_FILES", "MAX_MANAGED_BYTES")
-        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/PinnedArtifactSource.java")
+        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java")
         require("PinnedArtifactSource.java", pinned, "artifact.sha256().equals(actual)")
         catalogue = json.loads(read("minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json"))
         nupkg = [a for a in catalogue["artifacts"] if a["id"] == "scip-dotnet-nupkg"]

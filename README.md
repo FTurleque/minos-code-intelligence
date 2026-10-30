@@ -33,9 +33,9 @@ Release : [MINOS v1.0.1](https://github.com/FTurleque/minos-code-intelligence/re
 
 La publication finale a été effectuée après validation utilisateur réelle du setup Windows. Le workflow transactionnel a reconstruit le candidat exact, rejoué le Plugin Verifier IntelliJ et les smokes Windows, publié **10 assets**, puis re-téléchargé et vérifié les **5 paires payload/SHA-256**.
 
-Les releases 1.1.0 et 1.2.0 sont publiées depuis ; leurs tags, SHA et assets sont consignés dans [`docs/STATUS.md`](docs/STATUS.md), qui fait foi pour l'état courant.
+Les releases 1.1.0 et 1.2.0 sont publiées depuis ; leurs tags, SHA et assets sont consignés dans [`docs/project/governance/STATUS.md`](docs/project/governance/STATUS.md), qui fait foi pour l'état courant.
 
-Voir [`docs/STATUS.md`](docs/STATUS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) et [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md).
+Voir [`docs/project/governance/STATUS.md`](docs/project/governance/STATUS.md), [`docs/project/governance/ROADMAP.md`](docs/project/governance/ROADMAP.md) et [`docs/user/release-notes/1.0.1.md`](docs/user/release-notes/1.0.1.md).
 
 ## Capacités principales
 
@@ -56,7 +56,7 @@ MINOS sait notamment :
 
 ## Architecture
 
-Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, dont la racine de composition est `minos-bootstrap` ([ADR-0042](docs/adr/0042-racine-de-composition.md)) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels). La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
+Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, dont la racine de composition est `minos-bootstrap` ([ADR-0042](docs/architecture/adr/ARCH-0042-racine-de-composition.md)) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels). La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
 
 ```mermaid
 flowchart TB
@@ -143,7 +143,7 @@ Le runtime 1.0.1 est calculé depuis le fat JAR final :
 
 ```text
 fat JAR
-→ jdeps JDK 24
+→ jdeps JDK 25
 → modules racines
 → jpackage
 → runtime/bin/java --list-modules
@@ -168,7 +168,7 @@ Le hardening post-audit impose notamment :
 
 ## Développement
 
-Pré-requis principaux : JDK 24 et Maven Wrapper du dépôt.
+Pré-requis principaux : JDK 25 et Maven Wrapper du dépôt.
 
 ```powershell
 .\mvnw.cmd clean verify
@@ -184,17 +184,17 @@ La qualification Linux exige en plus un Docker utilisable pour les tests Postgre
 
 ## Documentation
 
-- état : [`docs/STATUS.md`](docs/STATUS.md)
-- roadmap : [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- état : [`docs/project/governance/STATUS.md`](docs/project/governance/STATUS.md)
+- roadmap : [`docs/project/governance/ROADMAP.md`](docs/project/governance/ROADMAP.md)
 - architecture : [`docs/architecture/README.md`](docs/architecture/README.md)
-- ADR : [`docs/adr/README.md`](docs/adr/README.md)
+- ADR : [`docs/architecture/adr/README.md`](docs/architecture/adr/README.md)
 - installation Windows : [`docs/user/production-installation.md`](docs/user/production-installation.md)
 - Docker runtime : [`docs/user/docker-runtime.md`](docs/user/docker-runtime.md)
-- release 1.0.1 : [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md)
+- release 1.0.1 : [`docs/user/release-notes/1.0.1.md`](docs/user/release-notes/1.0.1.md)
 
 ## Sandbox worker OS
 
-L'issue **#98** est **fermée / completed** depuis le **9 août 2026** sur le plan des **primitives** : les backends `LinuxBubblewrapWorkerSandboxBackend` (`bubblewrap`/namespaces, job cgroup v2) et `WindowsAppContainerWorkerSandboxBackend` (AppContainer + Job Object) existent et sont testés. En revanche, la **qualification pour du code non fiable est refusée par décision** ([ADR 0041](docs/adr/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26) : le quota d'écriture disque (octets/entrées) reste supervisé par MINOS (`SUPERVISED_HARD_KILL`), pas appliqué par l'OS, et `WorkerSandboxQualification` rétrograde donc les deux backends en `UNTRUSTED_CODE_UNSUPPORTED` avec la limitation `WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041` (verrouillé par le test `currentOsBackendsStayFailClosedByDecisionAdr0041`). Conséquence : `remote index` n'exécute aucun provider distant, sur tous les OS, en `ALLOW` comme en `DENY` (fail-closed, sans option de contournement) ; il refuse **avant** toute matérialisation, le backend écarté et ses dimensions non OS-enforced sont journalisés en WARNING, et `minos doctor` (section `workerSandbox`) dit si l'indexation distante est disponible et sinon pourquoi — prérequis manquant ou décision. Seule l'indexation **locale** des providers gérés utilise ces sandbox, sous le contrat plus étroit `supportsManagedLocalProvider`. Voir le constat A1 de [`docs/audit/archive/2026-09/AUDIT-2026-09.md`](docs/audit/archive/2026-09/AUDIT-2026-09.md) et [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md).
+L'issue **#98** est **fermée / completed** depuis le **9 août 2026** sur le plan des **primitives** : les backends `LinuxBubblewrapWorkerSandboxBackend` (`bubblewrap`/namespaces, job cgroup v2) et `WindowsAppContainerWorkerSandboxBackend` (AppContainer + Job Object) existent et sont testés. En revanche, la **qualification pour du code non fiable est refusée par décision** ([ADR 0041](docs/architecture/adr/archive/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26) : le quota d'écriture disque (octets/entrées) reste supervisé par MINOS (`SUPERVISED_HARD_KILL`), pas appliqué par l'OS, et `WorkerSandboxQualification` rétrograde donc les deux backends en `UNTRUSTED_CODE_UNSUPPORTED` avec la limitation `WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041` (verrouillé par le test `currentOsBackendsStayFailClosedByDecisionAdr0041`). Conséquence : `remote index` n'exécute aucun provider distant, sur tous les OS, en `ALLOW` comme en `DENY` (fail-closed, sans option de contournement) ; il refuse **avant** toute matérialisation, le backend écarté et ses dimensions non OS-enforced sont journalisés en WARNING, et `minos doctor` (section `workerSandbox`) dit si l'indexation distante est disponible et sinon pourquoi — prérequis manquant ou décision. Seule l'indexation **locale** des providers gérés utilise ces sandbox, sous le contrat plus étroit `supportsManagedLocalProvider`. Voir le constat A1 de [`docs/project/audits/archive/2026-09/AUDIT-2026-09.md`](docs/project/audits/archive/2026-09/AUDIT-2026-09.md) et [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md).
 
 ## Licence
 
@@ -206,4 +206,4 @@ Voir [`LICENSE`](LICENSE) pour les conditions complètes et [`CONTRIBUTING.md`](
 
 ## Étude d'évolution — octobre 2026
 
-[Étude inspirée de Semble et Serena](docs/research/minos-evolution-2026-10/README.md), avec [roadmap détaillée](docs/research/minos-evolution-2026-10/ROADMAP.md), protocole d'évaluation et guide Claude. **Conception proposée ; aucune capacité nouvelle annoncée comme livrée.**
+[Étude inspirée de Semble et Serena](docs/project/research/minos-evolution-2026-10/README.md), avec [roadmap détaillée](docs/project/research/minos-evolution-2026-10/ROADMAP.md), protocole d'évaluation et guide Claude. **Conception proposée ; aucune capacité nouvelle annoncée comme livrée.**

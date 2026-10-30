@@ -1,12 +1,36 @@
 package com.minos.cli;
 
+import com.minos.cli.command.ArchitectureCommand;
+import com.minos.cli.command.DoctorCommand;
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.FindUsagesCommand;
+import com.minos.cli.command.GetSourceCommand;
+import com.minos.cli.command.GitActivityCommand;
+import com.minos.cli.command.IdeCommand;
+import com.minos.cli.command.IdeIntelligenceCommand;
+import com.minos.cli.command.ImpactCommand;
+import com.minos.cli.command.ImportScipCommand;
+import com.minos.cli.command.IndexCommand;
+import com.minos.cli.command.NexusExportCommand;
+import com.minos.cli.command.ProjectCommand;
+import com.minos.cli.command.ProviderCommand;
+import com.minos.cli.command.RelationshipCommand;
+import com.minos.cli.command.RemoteIndexCommand;
+import com.minos.cli.command.RuntimeCommand;
+import com.minos.cli.command.SearchCodeCommand;
+import com.minos.cli.command.TeamCommand;
+import com.minos.cli.command.ToolsCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.IndexResumeStatusSource;
+import com.minos.cli.operations.RemoteIndexOperations;
+import com.minos.cli.support.CliCommandSupport;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.application.dynamic.RuntimeIntelligenceService;
-import com.minos.git.GitIntelligence;
-import com.minos.hosted.HostedControlPlaneService;
+import com.minos.application.team.TeamControlPlane;
 import com.minos.impact.ProjectImpactQuery;
 
 import java.io.IOException;
@@ -109,10 +133,10 @@ public final class MinosCli {
         AutonomousIndexOperations autonomousOperations = builder.autonomousOperations;
         Path home = builder.home;
         Supplier<ProviderPlatformService> providerPlatformService = builder.providerPlatformService;
-        GitIntelligence gitIntelligenceService = builder.gitIntelligence;
+        ProjectGitQuery gitQuery = builder.gitQuery;
         RemoteIndexOperations remoteIndexOperations = builder.remoteIndexOperations;
         Supplier<RuntimeIntelligenceService> runtimeIntelligenceService = builder.runtimeIntelligenceService;
-        Supplier<HostedControlPlaneService> hostedControlPlaneService = builder.hostedControlPlaneService;
+        Supplier<TeamControlPlane> teamControlPlane = builder.teamControlPlane;
         IndexResumeStatusSource resumeStatus = builder.resumeStatus;
         IdeCommand ideCommand = new IdeCommand();
         ProjectCommand projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations,
@@ -128,14 +152,14 @@ public final class MinosCli {
         ArchitectureCommand architectureCommand = architectureQuery == null
                 ? null : new ArchitectureCommand(architectureQuery);
         ImpactCommand impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
-        GitActivityCommand gitActivityCommand = projectOperations == null || gitIntelligenceService == null
-                ? null : new GitActivityCommand(projectOperations, gitIntelligenceService);
+        GitActivityCommand gitActivityCommand = projectOperations == null || gitQuery == null
+                ? null : new GitActivityCommand(projectOperations, gitQuery);
         RemoteIndexCommand remoteIndexCommand = remoteIndexOperations == null
                 ? null : new RemoteIndexCommand(remoteIndexOperations);
         RuntimeCommand runtimeCommand = runtimeIntelligenceService == null
                 ? null : new RuntimeCommand(runtimeIntelligenceService);
-        TeamCommand teamCommand = hostedControlPlaneService == null ? null : new TeamCommand(
-                hostedControlPlaneService, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE));
+        TeamCommand teamCommand = teamControlPlane == null ? null : new TeamCommand(
+                teamControlPlane, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE));
         FindSymbolCommand findSymbolCommand = new FindSymbolCommand(symbolQuery);
         SearchCodeCommand searchCodeCommand = new SearchCodeCommand(symbolQuery);
         GetSourceCommand getSourceCommand = new GetSourceCommand(symbolQuery);
@@ -267,10 +291,10 @@ public final class MinosCli {
         private AutonomousIndexOperations autonomousOperations;
         private Path home;
         private Supplier<ProviderPlatformService> providerPlatformService;
-        private GitIntelligence gitIntelligence;
+        private ProjectGitQuery gitQuery;
         private RemoteIndexOperations remoteIndexOperations;
         private Supplier<RuntimeIntelligenceService> runtimeIntelligenceService;
-        private Supplier<HostedControlPlaneService> hostedControlPlaneService;
+        private Supplier<TeamControlPlane> teamControlPlane;
         private IndexResumeStatusSource resumeStatus;
 
         private Builder(ProjectSymbolQuery symbolQuery) {
@@ -318,8 +342,8 @@ public final class MinosCli {
             return this;
         }
 
-        Builder gitIntelligence(GitIntelligence value) {
-            this.gitIntelligence = Objects.requireNonNull(value);
+        Builder gitQuery(ProjectGitQuery value) {
+            this.gitQuery = Objects.requireNonNull(value);
             return this;
         }
 
@@ -339,17 +363,17 @@ public final class MinosCli {
             return this;
         }
 
-        Builder hostedControlPlaneService(HostedControlPlaneService value) {
+        Builder teamControlPlane(TeamControlPlane value) {
             Objects.requireNonNull(value);
-            return hostedControlPlaneServiceSupplier(() -> value);
+            return teamControlPlaneSupplier(() -> value);
         }
 
         /**
          * Service construit à son premier appel ; le fournisseur lève {@link ServiceNotConfigured} quand le mode
          * hébergé n'est pas activé, et la commande répond alors « not configured in this CLI bootstrap ».
          */
-        Builder hostedControlPlaneServiceSupplier(Supplier<HostedControlPlaneService> value) {
-            this.hostedControlPlaneService = Objects.requireNonNull(value);
+        Builder teamControlPlaneSupplier(Supplier<TeamControlPlane> value) {
+            this.teamControlPlane = Objects.requireNonNull(value);
             return this;
         }
 

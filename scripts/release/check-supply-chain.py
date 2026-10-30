@@ -44,6 +44,18 @@ def is_minos(component: dict) -> bool:
     return group == "com.minos" or purl.startswith("pkg:maven/com.minos/")
 
 
+def authenticode_problem(manifest: dict) -> str | None:
+    """Why the `authenticode` field of a release manifest is unusable (AUD-DEP-06), or None."""
+    field = manifest.get("authenticode")
+    if not isinstance(field, dict) or set(field) != {"required", "state"}:
+        return "release manifest does not record its Authenticode state (authenticode.required, authenticode.state)"
+    if not isinstance(field["required"], bool) or field["state"] not in ("unsigned", "signed"):
+        return f"release manifest Authenticode state is invalid: {field!r}"
+    if field["required"] != (field["state"] == "signed"):
+        return f"release manifest Authenticode state contradicts its requirement: {field!r}"
+    return None
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -96,6 +108,9 @@ def main() -> int:
             raise RuntimeError("release manifest SBOM pointer mismatch")
         if manifest.get("thirdPartyNotices") != "supply-chain/THIRD-PARTY-NOTICES.txt":
             raise RuntimeError("release manifest notices pointer mismatch")
+        problem = authenticode_problem(manifest)
+        if problem:
+            raise RuntimeError(problem)
 
         entries = manifest.get("files") or []
         if not isinstance(entries, list) or not entries:

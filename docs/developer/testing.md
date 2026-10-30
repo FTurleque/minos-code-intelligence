@@ -19,7 +19,7 @@ java -version
 .\mvnw.cmd -version
 ```
 
-Le build doit tourner réellement sous Java 24.
+Le build doit tourner réellement sous Java 25.
 
 ## Pipeline Maven
 
@@ -31,6 +31,7 @@ maven-compiler-plugin
 maven-surefire-plugin
 maven-failsafe-plugin
 maven-jar-plugin
+maven-dependency-plugin
 maven-shade-plugin
 ```
 
@@ -46,6 +47,24 @@ Ils verrouillent les invariants : symboles, relations, critères, normalisation,
 
 Ils vérifient la persistance, l’historique et la promotion des snapshots.
 
+Un test d'idempotence relit l'état après le second appel (nombre de lignes, contenu rechargé par une instance neuve du store, `schema_version`) : un test qui se contente de survivre à deux appels reste vert quand une ligne est dupliquée en silence.
+
+### Tests de concurrence : prouver une attente
+
+Un test qui affirme « le concurrent attend le verrou » ne s'appuie jamais sur un délai fixe (`Thread.sleep` puis assertion négative) : sur un runner chargé, un verrou retiré laisse ce test vert parce que le concurrent n'a pas encore tourné. Il observe un **signal positif** d'attente, avec une échéance qui fait échouer le test (jamais un passage par défaut), puis affirme l'absence d'effet. Trois moyens, selon le verrou :
+
+| Verrou | Signal | Aide |
+|---|---|---|
+| Verrou de la JVM (`ReentrantLock`, bail en mémoire) et verrou de fichier pris par `BoundedFileLease` (même JVM ou autre JVM : l'attente y est une pause bornée entre deux `tryLock`) | le fil du concurrent est `WAITING` ou `TIMED_WAITING` avec un cadre de la classe qui porte l'attente | `com.minos.testsupport.ParkedThreads.awaitParkedIn` (test-jar de `minos-engine`) |
+| Verrou consultatif PostgreSQL | `pg_locks` montre la demande **non accordée** sur la clé du projet, dans la base courante | `PostgresTestSupport.awaitAdvisoryLockWaiter` |
+| Verrou bloquant dans un appel natif, sans fil observable | loquet posé juste avant l'appel bloquant, puis attente bornée d'un signal positif « acquis », attendu absent (preuve indirecte, à compléter par la preuve de non-vacuité) | trois lignes de `CountDownLatch` dans le test |
+
+Le concurrent pose d'abord un loquet « démarré » et publie son `Thread` : avant ce loquet, un fil de pool attend dans la file de l'exécuteur, ce qui ne prouve rien.
+
+**Preuve de non-vacuité.** Un test de verrou nouveau ou réécrit est vu rouge une fois : le verrou est neutralisé **localement, sans commit** (acquisition remplacée par un passage direct), le test doit échouer, la sortie rouge est consignée dans le changement OpenSpec, puis la production est restaurée (`git status -- '*/src/main/*'` vide avant de commiter). Un test qui reste vert sans verrou n'est pas terminé.
+
+**Rejeu.** Un test de concurrence nouveau ou réécrit est rejoué 50 fois avant d'être déclaré stable : `@RepeatedTest(50)` temporaire (retiré avant commit) ou boucle sur `./mvnw -B -ntp -pl <module> -am test "-Dtest=Classe#methode"`. Un seul échec renvoie à la réécriture. Le décompte, et la plateforme qui n'a tourné qu'en CI, sont consignés.
+
 ### Tests de frontières
 
 Exemples :
@@ -58,6 +77,10 @@ MinosMultiRepositoryApiContractTest
 ```
 
 Ils empêchent notamment une fuite de types fournisseur ou de packages internes vers les contrats publics.
+
+### Variables d'environnement des tests
+
+Un test ne lit jamais l'environnement de l'hôte pour décider de son résultat. Un test de processus fils pose lui-même l'environnement de ce processus (modèle : `ChildJvm` de `minos-provider-scip`, qui vide l'environnement puis pose `PATH` et `JAVA_HOME`). Une moitié de test propre à un système s'écrit dans un test `@EnabledOnOs`, compté comme sauté ailleurs, jamais derrière un `if`. `minos-provider-scip` retire `JAVA_HOME` du JVM de ses tests (`excludedEnvironmentVariables` de surefire) : un test qui lirait le `JAVA_HOME` de l'hôte y échoue partout, CI comprise (AUD-TST-18).
 
 ### Fixtures réelles
 
@@ -208,7 +231,7 @@ Ne pas mélanger une refactorisation sans rapport avec un jalon fonctionnel. Pr�
 
 ## Audit de code à la demande
 
-SpotBugs (analyse statique) et PIT (tests de mutation) sont disponibles dans les profils Maven `audit-spotbugs` et `audit-mutation`. Ils ne font pas partie de `clean verify` ni de la CI de PR. Voir [Audit de code : SpotBugs et PIT](../quality/code-audit.md).
+SpotBugs (analyse statique) et PIT (tests de mutation) sont disponibles dans les profils Maven `audit-spotbugs` et `audit-mutation`. Ils ne font pas partie de `clean verify` ni de la CI de PR. Voir [Audit de code : SpotBugs et PIT](quality/code-audit.md).
 
 ## Documentation
 

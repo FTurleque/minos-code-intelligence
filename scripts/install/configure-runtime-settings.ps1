@@ -54,7 +54,7 @@ if ($env:OS -ne 'Windows_NT') {
 
 function Require-Identifier([string] $Value, [string] $Name) {
     if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,62}$') {
-        throw "$Name must be a safe identifier."
+        throw "$Name must be a safe identifier (letter/underscore first, then letters/digits/underscore)."
     }
 }
 
@@ -73,6 +73,56 @@ function Restrict-FileToCurrentUser([string] $Path) {
     $Sid = $Identity.User.Value
     & icacls.exe $Path /inheritance:r /grant:r "*${Sid}:F" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Unable to restrict file ACL: $Path" }
+}
+
+function Get-FileAccessSecurity([string] $Path) {
+    # FileInfo.GetAccessControl is an instance method under Windows PowerShell 5.1 (.NET Framework) and an
+    # extension method under pwsh (.NET); both return the same FileSecurity. Get-Acl is not used: it depends
+    # on a module that a foreign PSModulePath can hide.
+    $Info = New-Object System.IO.FileInfo $Path
+    $Sections = [System.Security.AccessControl.AccessControlSections]::Access
+    if ($Info | Get-Member -Name GetAccessControl -MemberType Method) {
+        return $Info.GetAccessControl($Sections)
+    }
+    return [System.IO.FileSystemAclExtensions]::GetAccessControl($Info, $Sections)
+}
+
+function Assert-FileRestrictedToCurrentUser([string] $Path) {
+    # Inheritance cut and exactly one rule: full control allowed to the current user. icacls.exe reporting
+    # success is not the proof; the ACL that is really on the file is. The rules are compared as security
+    # identifiers, not as SDDL text: SDDL abbreviates some accounts (the built-in administrator is "LA").
+    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $Security = Get-FileAccessSecurity $Path
+    $Rules = @($Security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+    $Restricted = $Security.AreAccessRulesProtected -and $Rules.Count -eq 1
+    if ($Restricted) {
+        $Rule = $Rules[0]
+        $Restricted = (-not $Rule.IsInherited) -and
+            $Rule.IdentityReference -eq $Sid -and
+            $Rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+            $Rule.FileSystemRights -eq [System.Security.AccessControl.FileSystemRights]::FullControl
+    }
+    if (-not $Restricted) {
+        # The access list found is named in the message (security identifiers, no secret): it tells an operator
+        # who else could read the file.
+        $Found = $Security.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)
+        throw "File ACL is not restricted to the current user: $Path (found $Found)"
+    }
+}
+
+function Write-PrivateSecretFile([string] $Path, [string] $Content) {
+    # The secret never exists on disk with an inherited ACL: the file is created empty, restricted, verified,
+    # and only then written. An existing file is removed first: its ACL is unknown. Any failure removes the file.
+    if (Test-Path -LiteralPath $Path) { Remove-Item -LiteralPath $Path -Force }
+    New-Item -ItemType File -Path $Path | Out-Null
+    try {
+        Restrict-FileToCurrentUser $Path
+        Assert-FileRestrictedToCurrentUser $Path
+        [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        throw
+    }
 }
 
 function Write-Json([string] $Path, [object] $Value) {
@@ -234,8 +284,7 @@ if ($StorageBackend -eq 'postgresql') {
         if ([string]::IsNullOrWhiteSpace($Secret)) { throw 'PostgreSQL password must not be blank.' }
         $SecretPath = Join-Path $DataRoot 'secrets\postgres.password'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SecretPath) | Out-Null
-        [System.IO.File]::WriteAllText($SecretPath, $Secret + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
-        Restrict-FileToCurrentUser $SecretPath
+        Write-PrivateSecretFile $SecretPath ($Secret + [Environment]::NewLine)
         $Configuration['minos.postgres.managed'] = 'false'
         $Configuration['minos.postgres.url'] = $PostgresUrl
         $Configuration['minos.postgres.user'] = $PostgresUser

@@ -24,7 +24,7 @@ def active_changes() -> str:
 
 
 def audit_progress() -> str:
-    suivi = project_root() / "docs" / "audit" / "2026-10-10" / "SUIVI.md"
+    suivi = project_root() / "docs" / "project" / "audits" / "2026-10-10" / "SUIVI.md"
     if not suivi.exists():
         return ""
     sprints = re.findall(r"^## (Sprint \d+[^\n]*)", suivi.read_text(encoding="utf-8", errors="ignore"), re.MULTILINE)
@@ -44,7 +44,7 @@ def main() -> None:
         parts.append(f"Changements OpenSpec actifs : {changes}.")
     audit = audit_progress()
     if audit:
-        parts.append(f"Audit en cours : docs/audit/2026-10-10/SUIVI.md (dernière section : {audit}).")
+        parts.append(f"Audit en cours : docs/project/audits/2026-10-10/SUIVI.md (dernière section : {audit}).")
     parts.append("Consignes : AGENTS.md et .claude/rules/ ; commandes /minos:* ; réponses en français.")
     add_context("SessionStart", " ".join(parts))
 

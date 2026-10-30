@@ -1,0 +1,46 @@
+{
+  "description": "Langue des commentaires et de la Javadoc du code de production, par module (CONTRIBUTING.md, section « Comment language »). Lu par scripts/quality/check-comment-language.py. Les deux maximums par module et la liste « mixed » sont des cliquets : ils ne font que baisser. Un module à zéro n'a pas d'entrée de maximum.",
+  "languages": {
+    "minos-api": "en",
+    "minos-app": "en",
+    "minos-application": "en",
+    "minos-bootstrap": "en",
+    "minos-cli": "en",
+    "minos-domain": "en",
+    "minos-engine": "en",
+    "minos-integration-git": "en",
+    "minos-intellij": "en",
+    "minos-mcp": "en",
+    "minos-nexus": "en",
+    "minos-provider-scip": "en",
+    "minos-runtime-local": "en",
+    "minos-storage": "en"
+  },
+  "outOfLanguageMaximum": {
+    "minos-app": 1,
+    "minos-application": 48,
+    "minos-bootstrap": 5,
+    "minos-cli": 13,
+    "minos-domain": 21,
+    "minos-engine": 53,
+    "minos-intellij": 1,
+    "minos-provider-scip": 10,
+    "minos-runtime-local": 3
+  },
+  "milestoneCommentMaximum": {
+    "minos-api": 10,
+    "minos-app": 2,
+    "minos-application": 29,
+    "minos-bootstrap": 1,
+    "minos-cli": 9,
+    "minos-domain": 3,
+    "minos-engine": 18,
+    "minos-integration-git": 1,
+    "minos-intellij": 2,
+    "minos-nexus": 2,
+    "minos-provider-scip": 3,
+    "minos-runtime-local": 1,
+    "minos-storage": 5
+  },
+  "mixed": {}
+}

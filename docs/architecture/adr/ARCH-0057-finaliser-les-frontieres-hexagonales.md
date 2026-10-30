@@ -1,0 +1,84 @@
+---
+id: ARCH-0057
+title: "Finaliser les frontières hexagonales sans refaire les corrections acquises"
+domain: architecture
+rules: true
+---
+
+# Finaliser les frontières hexagonales sans refaire les corrections acquises
+
+Date : 2026-10-05. Statut : **Accepted — direction validée ; travaux résiduels planifiés**.
+
+## Context
+
+Minos reste un monolithe modulaire local-first avec un plugin IntelliJ externe. `develop` a déjà une couche application sans dépendance Maven vers les adaptateurs, une racine `minos-bootstrap`, un package par module et des gardes de sources (ADR 0042/0044/0045). Cela n'interdit pas encore tout mélange de responsabilités à l'intérieur des modules.
+
+Restent notamment `LocalAutonomousIndexOperations` dans la CLI, `OllamaEmbeddingProvider` et son instanciation dans la configuration applicative, les I/O concrètes de `com.minos.io` dans engine, et le staging local concret dans `ScipProjectSnapshotLifecycle`.
+
+## Decision
+
+1. Préserver le monolithe modulaire, le bootstrap existant et le client IntelliJ externe. Aucun microservice, framework serveur ou migration JPMS n'est introduit par ce chantier.
+2. Déplacer la coordination d'indexation de la CLI vers un cas d'usage partagé, avec des ports et les garanties actuelles de reprise, verrouillage, empreinte et synchronisation.
+3. Garder SCIP comme adaptateur de normalisation/acquisition. Fournir son staging et sa publication par des ports injectés ; ne pas remplacer une dépendance de stockage par une dépendance vers bootstrap.
+4. Séparer le calcul sémantique des appels au fournisseur Ollama. Le port et les modèles restent côté cœur/cas d'usage ; l'adaptateur HTTP et sa construction relèvent d'une frontière technique et du bootstrap. Le module/package exact est un choix d'implémentation à justifier, pas un nouveau module imposé d'avance.
+5. Réduire progressivement le mélange des politiques et mécanismes I/O dans engine, avec une cartographie préalable. Ne pas multiplier mécaniquement les modules, casser les contrats existants ou disperser les primitives durcies. Une extraction physique nécessitant une nouvelle frontière doit expliciter son graphe et sa compatibilité avant code.
+6. Organiser les cas d'usage par capacité et faire consommer leurs résultats par API/CLI/MCP/NEXUS. Conserver les contrats publics. La scission de `minos-api` en deux artefacts demeure une option à évaluer ; elle n'est pas ratifiée par ce document.
+7. Protéger les frontières par les gardes existantes, complétées au niveau des packages/classes si nécessaire. ArchUnit est une option de réalisation, pas une dépendance de production imposée.
+
+## Do's and Don'ts
+
+### Do
+
+- Préserver le monolithe modulaire, le bootstrap existant et le client IntelliJ externe.
+- Fournir le staging et la publication SCIP par des ports injectés.
+- Séparer le calcul sémantique des appels au fournisseur Ollama ; l'adaptateur HTTP et sa construction relèvent d'une frontière technique et du bootstrap.
+- Faire consommer les cas d'usage par API/CLI/MCP/NEXUS en conservant les contrats publics.
+
+### Don't
+
+- Aucun microservice, framework serveur ni migration JPMS.
+- Ne pas remplacer une dépendance de stockage par une dépendance vers bootstrap.
+- Ne pas multiplier mécaniquement les modules ni disperser les primitives durcies.
+- Ne pas imposer ArchUnit comme dépendance de production.
+
+## Alternatives, conséquences et limites
+
+Une refonte globale augmenterait le risque de régression sur des garanties déjà qualifiées. Chaque lot sera comportementalement conservateur, réversible et validé avant le suivant. Le coût est une transition en plusieurs PR et des façades temporaires éventuelles pour les consommateurs publics.
+
+La consolidation storage relève de l'ADR 0055. La séparation lecture/écriture relève de l'ADR 0056. Les nouvelles fonctionnalités de l'étude Semble/Serena (#333, ADR proposés 0048–0054) ne sont ni acceptées ni implémentées par ce chantier ; coordonner les fichiers sémantiques communs avant d'y travailler.
+
+La fermeture de `remote index` non fiable (ADR 0041), MCP read-only, les limites de ressources, les contrôles privés I/O, les résultats partiels et l'isolation des secrets restent des invariants. Aucun benchmark n'a démontré de gain à ce stade.
+
+## Mise en œuvre
+
+[Backlog SH-05 à SH-12](../../project/roadmap/storage-hexagonal-2026-10/README.md). Ne pas rouvrir A2/A3/A4 comme travaux non faits ; les utiliser comme régressions à protéger. Les résidus A5 et le chargeur SPI signalé dans l'ADR 0042 sont suivis explicitement.
+
+Cycles de packages (point 7, mis en œuvre le 2026-10-10, audit AUD-ARC-06) : le garde `scripts/architecture/check-module-boundaries.py` (règle A8) refuse tout cycle de packages absent de la table `KNOWN_PACKAGE_CYCLES` et toute entrée de cette table qui ne décrit plus exactement un cycle, de sorte qu'elle ne puisse que rétrécir. Les quatre cycles existants (quinze packages, dont trois dans le plugin IntelliJ, hors reactor) y ont d'abord été gelés, puis **levés** par le changement `casser-les-cycles-de-packages` (13 classes déplacées dans leur module, sans nouvel ADR : ADR 0044 respecté) ; la table est vide et le garde refuse tout cycle futur.
+
+Cas d'usage d'indexation (point 2, mis en œuvre le 2026-10-21, audit AUD-ARC-02, changement `unifier-l-orchestration-d-indexation`, tâche SH-05) : la préparation, l'exécution sous bail, la reprise d'un run promu, la promotion de l'empreinte, la synchronisation sémantique et la rétention vivent dans `ProjectIndexingUseCase` (`minos-application`, package `com.minos.application.indexing`), invocable sans la CLI ; `LocalAutonomousIndexOperations` ne fait plus que projeter son résultat sur les vues de la commande. Le coordinateur sans appelant `IncrementalIndexingCoordinator` et `IncrementalIndexingResult` sont supprimés, leurs tests reportés sur le cas d'usage. Une baseline d'empreinte illisible est désormais déclarée par un diagnostic sans chemin ; l'échec de publication de l'empreinte reste une erreur de la commande (décision du propriétaire du 2026-10-21).
+
+Surfaces consommatrices des cas d'usage (point 6, lot 1, mis en œuvre le 2026-10-24, audit AUD-ARC-01, changement `faire-consommer-l-indexation-aux-surfaces`) : l'indexation distante est le cas d'usage `RemoteIndexingUseCase` (`minos-application`, package `com.minos.application.remote` : refus anticipé de l'ADR 0041, bail inter-JVM `RemoteIndexLease`, enregistrement, épinglage, exécution distribuée, preuves d'artefacts vérifiées, retour arrière), invocable sans la CLI ; la requête distante est validée par `RemoteSourceRequest.of` avant l'ouverture de l'application. `ProjectIndexingUseCase` rend des résumés en types JDK (`IndexPlanSummary`, `IndexExecutionSummary`, `ResumeTraceSummary`) et reçoit `IndexingResumeChoice` ; l'état de reprise est lu par `ProjectInspectionService.resumableRun` (`ResumableRunStatus`), sans écriture ni bail, par la CLI, l'API Java et le MCP ; liste et installation des runtimes passent par `ProviderPlatformService` (`ProviderRuntimeSummary`), que le MCP n'appelle pas (décision D7 du 2026-10-23). Sorties CLI, réponses MCP, valeurs de l'API Java et golden de caractérisation sont inchangés. Les lots suivants (diagnostic de l'hôte, contrôle hébergé, Git et résultats de requête, export NEXUS, noyau transverse) sont décrits dans le design du changement.
+
+Modèles de lecture publiés (point 6, mis en œuvre le 2026-10-26, audit AUD-ARC-01, lot 4, changement `faire-consommer-git-et-les-resultats-de-requete`, décision D4 = a du propriétaire) : un record de lecture que rend un port applicatif est un résultat de cas d'usage, même s'il est défini dans `minos-engine`. `SymbolResult`, `UsageResult` et `RelationshipResult` (`com.minos.query`), que rend `ProjectSymbolQuery`, sont ainsi publiés aux surfaces ; la CLI les rend, l'API Java les convertit en DTO de `com.minos.api`, et aucune signature publique ne les nomme. Leur usage par une surface est tenu par la règle A11 de l'ADR 0058, avec cette raison écrite ; tout autre type du moteur reste une dette. Un port du moteur, en revanche, n'est pas appelé par une surface : l'activité Git passe par la requête applicative `ProjectGitQuery` (`minos-application`). Les faits Git qu'elle rend, comme le port, sont des records sans E/S de `minos-domain` (`com.minos.domain.git`), partagés plutôt que copiés.
+
+Staging du cycle SCIP (point 3, mis en œuvre le 2026-10-28, audit AUD-ARC-08, changement `injecter-le-staging-du-cycle-scip`, tâche SH-06) : `ScipProjectSnapshotLifecycle` reçoit le magasin actif et ouvre ses magasins de travail par le port `com.minos.store.StagingSnapshotStores` du moteur, que `minos-bootstrap` implémente par `FileSymbolSnapshotStore::new` pour les deux backends. Le provider SCIP ne nomme pas `minos-storage` en production et ne le déclare qu'en portée `test` ; les magasins de travail vivent sous `staged-snapshots/<run>` de `MINOS_HOME`, nettoyés après la promotion, et une promotion reprise les relit.
+
+## Compliance and Enforcement
+
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — règle A2 (frontières hexagonales, POM et sources) et règle A8 (aucun cycle de packages, table `KNOWN_PACKAGE_CYCLES` vide, plugin compris) ; auto-test `test_check_module_boundaries.py`.
+- Test `ModuleArchitectureTest` (`minos-app`) — dépendances autorisées entre modules.
+- Règle Archgate `ARCH-0057-finaliser-les-frontieres-hexagonales.rules.ts` / `no-jpms-module-descriptor` : refuse tout `module-info.java` dans les sources d'un module du reactor (liste lue dans les `<modules>` du POM racine), premier pas d'une migration JPMS exclue par la décision 1 ; contrôle propre à Archgate, aucun gate Python ne le fait (lancée par `archgate check`, pas par la CI).
+- Revue : chaque lot reste comportementalement conservateur, réversible et validé avant le suivant.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Point 4 : `OllamaEmbeddingProvider` vit dans `minos-application` et y est instancié par la configuration applicative — preuve : `minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java:53`.
+
+## References
+
+- [Cockburn — Ports and Adapters](https://alistair.cockburn.us/hexagonal-architecture)
+- [ArchUnit — couches, packages et cycles](https://www.archunit.org/userguide/html/000_Index.html)
+- [JetBrains — services](https://plugins.jetbrains.com/docs/intellij/plugin-services.html) et [threading](https://plugins.jetbrains.com/docs/intellij/threading-model.html)
+- [MCP — transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)

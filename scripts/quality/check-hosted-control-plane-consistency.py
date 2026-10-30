@@ -53,8 +53,8 @@ def main() -> int:
         audit_chain = read("minos-engine/src/main/java/com/minos/hosted/HostedAuditChain.java")
         membership_service = read("minos-engine/src/main/java/com/minos/hosted/HostedMembershipService.java")
         workspace_service = read("minos-engine/src/main/java/com/minos/hosted/HostedWorkspaceService.java")
-        key_provider = read("minos-storage-local/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java")
-        store = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
+        key_provider = read("minos-storage/src/main/java/com/minos/storage/local/store/EnvironmentHostedTenantKeyProvider.java")
+        store = read("minos-storage/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         runtime_config = read(
             "minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java")
@@ -63,7 +63,7 @@ def main() -> int:
         # A2 / ADR 0042: concrete hosted adapters are wired by the composition root only.
         composer = read(
             "minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java")
-        command = read("minos-cli/src/main/java/com/minos/cli/TeamCommand.java")
+        command = read("minos-cli/src/main/java/com/minos/cli/command/TeamCommand.java")
         api = read("minos-api/src/main/java/com/minos/api/MinosTeamApi.java")
         api_impl = read("minos-api/src/main/java/com/minos/api/LocalMinosTeamApi.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
@@ -113,8 +113,10 @@ def main() -> int:
                 "key-rotate", "retention-plan", "retention-apply", "audit")
         require("MinosTeamApi.java", api, "interface MinosTeamApi", "BootstrapRequest", "RetentionApplyDto",
                 "rotateKey", "bindProject")
-        require("LocalMinosTeamApi.java", api_impl, "HostedControlPlaneService", "team mode is disabled",
+        # AUD-ARC-01, lot 3: the API reaches the control plane through the application facade only.
+        require("LocalMinosTeamApi.java", api_impl, "TeamControlPlane", "team mode is disabled",
                 "SECRET_OUTPUT_ONCE_DO_NOT_LOG")
+        forbid("LocalMinosTeamApi.java", api_impl, "com.minos.hosted")
 
         names = tool_names(mcp)
         declared = re.search(r"TOOL_COUNT\s*=\s*(\d+)", mcp)
@@ -133,7 +135,7 @@ def main() -> int:
 
         tests = {
             "HostedModelTest.java": read("minos-engine/src/test/java/com/minos/hosted/HostedModelTest.java"),
-            "FileHostedControlPlaneStoreTest.java": read("minos-storage-local/src/test/java/com/minos/storage/local/store/FileHostedControlPlaneStoreTest.java"),
+            "FileHostedControlPlaneStoreTest.java": read("minos-storage/src/test/java/com/minos/storage/local/store/FileHostedControlPlaneStoreTest.java"),
             "HostedControlPlaneServiceTest.java": read("minos-engine/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"),
             "TeamCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/TeamCommandTest.java"),
             "LocalMinosTeamApiTest.java": read("minos-api/src/test/java/com/minos/api/LocalMinosTeamApiTest.java"),
@@ -171,8 +173,8 @@ def main() -> int:
         forbid("run-final.sh", linux, "gh workflow", "gh run", "workflow_dispatch")
 
         documents = {
-            "docs/roadmap/M27_EXECUTION.md": read("docs/roadmap/M27_EXECUTION.md"),
-            "docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md": read("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md"),
+            "docs/project/roadmap/M27_EXECUTION.md": read("docs/project/roadmap/M27_EXECUTION.md"),
+            "docs/architecture/adr/archive/0035-opt-in-tenant-control-plane-with-external-keys.md": read("docs/architecture/adr/archive/0035-opt-in-tenant-control-plane-with-external-keys.md"),
             "docs/user/team-hosted-mode.md": read("docs/user/team-hosted-mode.md"),
             "docs/developer/team-hosted-mode.md": read("docs/developer/team-hosted-mode.md"),
         }
@@ -180,12 +182,12 @@ def main() -> int:
             require(relative, document, "opt-in", "tenant", "AES-256-GCM", "audit")
             if "rétention" not in document.casefold() and "retention" not in document.casefold():
                 raise RuntimeError(f"{relative}: missing retention contract")
-        execution = documents["docs/roadmap/M27_EXECUTION.md"]
+        execution = documents["docs/project/roadmap/M27_EXECUTION.md"]
         require("M27_EXECUTION.md", execution, "#90", "#91", BASE, QUALIFIED_HEAD, MERGE_DEVELOP,
                 "M27-S9", "QUALIFIED_WITH_CONSTRAINTS", "strictement en pause jusqu’en août 2026")
         forbid("M27_EXECUTION.md", execution, "CANDIDATE_FOR_QUALIFICATION",
                "Qualified HEAD : PENDING", "Merge develop  : PENDING")
-        adr = documents["docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md"]
+        adr = documents["docs/architecture/adr/archive/0035-opt-in-tenant-control-plane-with-external-keys.md"]
         require_pattern("ADR-0035", adr,
                         r"(?im)^\s*-\s*Status:\s*\*\*Accepted(?:\s+—[^*]+)?\*\*\s*$",
                         "accepted ADR status, with optional final-evidence qualifier")

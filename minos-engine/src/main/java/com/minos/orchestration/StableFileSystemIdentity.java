@@ -7,12 +7,17 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
+import java.util.stream.Collectors;
 
 /** Strong filesystem-object identity used by the pre-launch anti-TOCTOU authorization. */
 final class StableFileSystemIdentity {
+
+    private static final System.Logger LOGGER = System.getLogger(StableFileSystemIdentity.class.getName());
 
     private StableFileSystemIdentity() {
     }
@@ -43,13 +48,31 @@ final class StableFileSystemIdentity {
                     projectUnix.orElseThrow()));
         }
 
-        for (ExecutionPathIdentityProvider provider : ServiceLoader.load(ExecutionPathIdentityProvider.class)) {
-            Optional<IdentityPair> identity = provider.capture(registeredProjectRoot, projectRoot);
-            if (identity.isPresent()) {
-                return identity;
-            }
+        return providedIdentity(registeredProjectRoot, projectRoot,
+                ExecutionPathIdentityProvider.class.getClassLoader());
+    }
+
+    /**
+     * Identity from the single registered {@link ExecutionPathIdentityProvider}, discovered through the given
+     * class loader (MINOS' own loader in production, never the thread context loader). More than one registered
+     * provider makes the identity unavailable — the launch then fails closed — instead of letting discovery order
+     * pick one (AUD-ARC-04).
+     */
+    static Optional<IdentityPair> providedIdentity(Path registeredProjectRoot, Path projectRoot, ClassLoader loader)
+            throws IOException {
+        List<ExecutionPathIdentityProvider> providers = new ArrayList<>();
+        ServiceLoader.load(ExecutionPathIdentityProvider.class, loader).forEach(providers::add);
+        if (providers.size() > 1) {
+            LOGGER.log(System.Logger.Level.WARNING, "More than one execution path identity provider is registered ("
+                    + providers.stream().map(provider -> provider.getClass().getName()).sorted()
+                            .collect(Collectors.joining(", "))
+                    + "); path identity is unavailable and local launches are refused");
+            return Optional.empty();
         }
-        return Optional.empty();
+        if (providers.isEmpty()) {
+            return Optional.empty();
+        }
+        return providers.getFirst().capture(registeredProjectRoot, projectRoot);
     }
 
     private static Optional<String> basicFileKey(Path realPath) throws IOException {

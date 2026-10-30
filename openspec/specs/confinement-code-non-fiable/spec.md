@@ -193,3 +193,83 @@ Les hypothèses d'environnement sans rapport avec la disponibilité du confineme
 #### Scenario: Exemption de non-élévation sur un runner élevé
 - **WHEN** `WindowsNonElevatedIndexingTest` s'exécute sous un compte élevé avec la variable `CI` définie
 - **THEN** le test est sauté avec un message qui explique l'exemption, et il échoue sous un compte élevé sans la variable `CI`
+
+### Requirement: L'exécuteur de processus refuse de lancer un provider sans frontière
+L'exécuteur de processus des providers SHALL refuser toute exécution demandée sans transformateur de frontière (propriété forte ou bac à sable OS) : il SHALL lever une erreur au message fixe, sans chemin, et SHALL NOT démarrer de processus ni créer de répertoire de run. Il SHALL NOT se replier sur une exécution non confinée.
+
+#### Scenario: Exécution demandée sans frontière
+- **GIVEN** un exécuteur de processus construit avec un plan valide et un répertoire de données vide
+- **WHEN** son entrée d'exécution sans transformateur est appelée
+- **THEN** une erreur est levée, aucun processus n'a été démarré et le répertoire des runs n'existe pas
+
+#### Scenario: Backend natif devant un exécuteur de processus nu
+- **GIVEN** le backend natif sans confinement et un exécuteur de processus nu comme délégué
+- **WHEN** le backend exécute une requête avec une politique réseau autre que le refus
+- **THEN** l'exécution échoue par le refus de l'exécuteur et aucun processus n'a été démarré
+
+#### Scenario: Exécution sous frontière
+- **GIVEN** un exécuteur de propriété forte sur un hôte dont la frontière est qualifiée
+- **WHEN** une requête est exécutée
+- **THEN** le provider s'exécute sous la frontière et l'artefact est rendu
+
+### Requirement: Aucune entrée publique ne construit un exécuteur sans politique réseau
+Tout constructeur public de l'exécuteur de propriété forte de `minos-runtime-local` SHALL exiger une politique réseau explicite. La variante limitée à la frontière de propriété SHALL NOT être accessible aux autres modules du reactor. Un test de structure SHALL échouer si une entrée publique sans politique réseau réapparaît.
+
+#### Scenario: Constructeurs publics énumérés
+- **GIVEN** la classe de l'exécuteur de propriété forte chargée par un test de `minos-runtime-local`
+- **WHEN** ses constructeurs publics sont énumérés par réflexion
+- **THEN** chacun déclare un paramètre de politique réseau
+
+#### Scenario: Entrée publique réintroduite
+- **GIVEN** une copie de travail où le constructeur limité à la propriété redevient public
+- **WHEN** `./mvnw -B -ntp -pl minos-runtime-local -am test` est exécuté
+- **THEN** le test de structure échoue et nomme le constructeur
+
+#### Scenario: Tests de confinement toujours exécutés
+- **GIVEN** un job de CI en mode de confinement requis
+- **WHEN** les tests de propriété forte Linux et Windows sont exécutés sur leur système
+- **THEN** leurs rapports Surefire ne comptent aucun test sauté
+
+### Requirement: Le suivi de propriété par sondage est espacé sans rien céder au nettoyage
+En régime établi, le suivi de propriété d'un processus provider SHALL énumérer ses descendants au plus 15 fois par seconde. Il SHALL sonder dès sa création et à l'arrêt, et SHALL continuer de terminer tout descendant observé pendant que la racine vivait. Un descendant encore vivant après l'arrêt forcé, ou un suivi interrompu, SHALL faire échouer le nettoyage : l'espacement SHALL NOT masquer cet échec.
+
+#### Scenario: Cadence en régime établi
+- **GIVEN** un suivi attaché à un processus factice vivant dont l'énumération des descendants compte ses appels
+- **WHEN** deux secondes s'écoulent après la phase initiale
+- **THEN** l'énumération a été appelée au moins une fois et au plus 30 fois
+
+#### Scenario: Enfant détaché observé puis nettoyé
+- **GIVEN** un provider qui lance un enfant détaché puis sort normalement une seconde plus tard
+- **WHEN** l'exécution se termine
+- **THEN** l'enfant détaché a été terminé par le suivi
+
+#### Scenario: Survivant après l'arrêt forcé
+- **GIVEN** un descendant observé qui reste vivant après l'arrêt forcé
+- **WHEN** le suivi est fermé
+- **THEN** la fermeture échoue avec l'erreur de nettoyage incomplet
+
+### Requirement: Le lanceur de l'AppContainer est publié sans écraser une cible existante
+Le lanceur PowerShell du bac à sable Windows SHALL être publié de façon exclusive et durable. Une cible publiée entre-temps par un autre processus SHALL n'être acceptée que si la vérification du lanceur passe ; un système de fichiers sans lien dur SHALL faire échouer la publication, sans chemin absolu dans le message.
+
+#### Scenario: Lanceur publié par un autre processus
+- **GIVEN** un lanceur déjà publié au contenu attendu
+- **WHEN** `./mvnw -B -ntp -pl minos-runtime-local -am test` exécute le test de publication concurrente sous Windows
+- **THEN** le lanceur est accepté après vérification et n'est pas remplacé
+
+#### Scenario: Lanceur publié par un autre processus avec un contenu différent
+- **GIVEN** un fichier au nom du lanceur dont le contenu diffère
+- **WHEN** la publication s'exécute
+- **THEN** le lanceur est refusé et le fichier existant n'est pas écrasé
+
+### Requirement: La sortie de la sonde de l'AppContainer est bornée et privée
+La sonde de capacité de l'AppContainer SHALL lire la sortie du lanceur par un tube vidé en continu vers un fichier privé, borné par octets par flux. Une sortie supérieure au tampon d'un tube SHALL ne pas faire déclarer la sonde indisponible.
+
+#### Scenario: Sortie volumineuse
+- **GIVEN** un lanceur qui écrit plus que le tampon d'un tube puis réussit
+- **WHEN** `AppContainerProbeOutputTest` s'exécute sous Windows
+- **THEN** la sonde réussit et le fichier de sortie est borné et privé
+
+#### Scenario: Plus d'entrée de liste pour le bac à sable Windows
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée `Files.move` pour `SandboxLauncherScript.java` ni `ProcessBuilder.redirect(file)` pour `WindowsAppContainerWorkerSandboxBackend.java`

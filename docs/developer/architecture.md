@@ -17,6 +17,7 @@ classDiagram
     class MinosMultiRepositoryApi
     class MinosMcpServer
     class NexusExportService
+    class KnowledgeExportUseCase
 
     MinosLauncher --> MinosCli
     MinosLauncher --> LocalProjectRegistry
@@ -28,8 +29,9 @@ classDiagram
     LocalProjectArchitectureQuery --> FileSymbolSnapshotStore
     LocalProjectImpactQuery --> FileSymbolSnapshotStore
     MinosMultiRepositoryApi --|> MinosApi
-    NexusExportService --> LocalProjectRegistry
-    NexusExportService --> FileSymbolSnapshotStore
+    NexusExportService --> KnowledgeExportUseCase
+    KnowledgeExportUseCase --> LocalProjectRegistry
+    KnowledgeExportUseCase --> FileSymbolSnapshotStore
 ```
 
 Ce diagramme montre la direction des dépendances principales, pas chaque classe du dépôt.
@@ -83,6 +85,19 @@ Voir [domain-model.md](domain-model.md).
 ## Couche persistance
 
 Les stores persistent les snapshots et permettent de retrouver le snapshot actif. Une requête de haut niveau doit lire une vue cohérente et ne pas dépendre d’un artefact fournisseur brut.
+
+### Caches en mémoire bornés en poids
+
+Un cache LRU borné à la fois en nombre d'entrées et en poids s'écrit une seule fois : `WeightedLruCache` (`minos-engine`, package `com.minos.store.cache`, feuille sans dépendance hors JDK). Le propriétaire calcule le poids de chaque entrée avant l'appel ; le cache refuse un poids négatif et une borne hors plage (entrées ≥ 1, poids dans `[1, Long.MAX_VALUE / 2]`), ne garde pas une entrée plus lourde que le plafond, retranche le poids à chaque retrait, remplacement, invalidation (`removeIf`) ou éviction, et sérialise toutes ses opérations. Succès, échecs et verrous de construction (`buildLocks`) restent dans la classe propriétaire, qui garde ses statistiques publiques. Les sept caches pondérés l'utilisent (`ProgramGraphService`, `FingerprintConstrainedJavaProgramGraphProvider`, `SemanticSearchService`, `HybridSearchService`, `FileSemanticVectorStore`, `FileSymbolSnapshotStore`, `PostgresCodeKnowledgeSnapshotStore`) ; `check-bounded-helpers.py` refuse une carte à ordre d'accès écrite ailleurs, hors de sa liste fermée (`HostedDenialThrottle`, `SourceStateKeyMemo`, sans poids).
+
+### Contrat d'erreur du port d'état d'index
+
+Le port `IndexStateStore` (`minos-engine`, `com.minos.orchestration`) a un type d'échec unique, `IndexStateStoreException` (non vérifiée, cause toujours conservée), levé par ses quatre implémentations (`InMemoryIndexStateStore`, `FileIndexStateStore`, `PostgresIndexStateStore`, `ProjectMutationIndexStateStore`) :
+
+- **panne de stockage** (type du port) : échec d'E/S ou SQL, contenu d'état illisible ou incohérent (propriété manquante, identité ou nom de fichier inattendus, compteur invalide), bail de cycle de vie non obtenu (délai, interruption, connexion) ou non rendu ;
+- **violation d'invariant** (`IllegalStateException`, inchangée) : bail libéré par un autre thread, profondeur négative, second bail d'un autre projet sur le même thread, store sans bail qualifié.
+
+Les appelants (`ProjectIndexStateReconciler`, `IndexingRunExecutor`, `LocalProjectOperations`) n'attrapent que le type du port : un défaut de programmation remonte tel quel. Un message du port ne contient jamais de chemin absolu (au plus le nom du fichier d'état).
 
 ## Intelligence
 

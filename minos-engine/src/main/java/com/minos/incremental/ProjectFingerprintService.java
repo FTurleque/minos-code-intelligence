@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Captures and compares the observable visible fingerprint of a project. */
 public final class ProjectFingerprintService {
@@ -33,7 +34,7 @@ public final class ProjectFingerprintService {
             ".gitignore",
             ".minosignore"
     );
-    /** Descripteurs d'outillage d'un ancêtre pris en compte par l'empreinte de scope (V8). */
+    /** Tooling descriptors of an ancestor taken into account by the scope fingerprint (V8). */
     private static final Set<String> TOOLING_DESCRIPTOR_FILES = Set.of(".npmrc");
     private static final Set<String> TOOLING_DESCRIPTOR_DIRECTORIES = Set.of(".mvn");
 
@@ -41,7 +42,7 @@ public final class ProjectFingerprintService {
     private final SourceBudgetPolicy sourceBudgetPolicy;
 
     public ProjectFingerprintService() {
-        this(BuildDescriptorPolicy.m24Defaults(), SourceBudgetPolicy.DEFAULT);
+        this(BuildDescriptorPolicy.currentDefaults(), SourceBudgetPolicy.DEFAULT);
     }
 
     public ProjectFingerprintService(BuildDescriptorPolicy buildDescriptorPolicy) {
@@ -61,22 +62,22 @@ public final class ProjectFingerprintService {
     }
 
     /**
-     * Empreinte d'un scope d'exécution (ADR 0039 §1) : le sous-arbre {@code projectRelativeScope}
-     * plus, pour chaque répertoire ancêtre jusqu'à la racine, ses fichiers de contrôle racine et ses
-     * descripteurs de build. La politique d'ignore est celle de la racine projet, les chemins
-     * restent relatifs à cette racine : un scope vide est exactement {@link #capture(Path)}.
+     * Fingerprint of an execution scope (ADR 0039 §1): the subtree {@code projectRelativeScope}
+     * plus, for each ancestor directory up to the root, its root control files and its build
+     * descriptors. The ignore policy is the one of the project root, and the paths stay relative to
+     * that root: an empty scope is exactly {@link #capture(Path)}.
      *
-     * <p>Limite assumée : comme l'empreinte projet, celle-ci ne couvre ni les répertoires
-     * hard-ignorés ({@code target/}, {@code node_modules/}...), ni les dépendances externes, ni les
-     * fichiers pointés par un lien symbolique (non suivis). Un artefact dont le contenu dépendrait
-     * d'un tel état ne doit pas être déclaré {@code RESUMABLE_ARTIFACT} par son provider.</p>
+     * <p>Accepted limit: like the project fingerprint, this one covers neither the hard-ignored
+     * directories ({@code target/}, {@code node_modules/}...), nor external dependencies, nor the
+     * files a symbolic link points to (not followed). An artifact whose content would depend on such
+     * a state must not be declared {@code RESUMABLE_ARTIFACT} by its provider.</p>
      */
     public ProjectFingerprint captureScope(Path projectRoot, Path projectRelativeScope) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Objects.requireNonNull(projectRelativeScope, "projectRelativeScope");
         Path root = projectRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + leafName(projectRoot));
         }
         Path scope = projectRelativeScope.normalize();
         if (scope.isAbsolute() || scope.startsWith("..")) {
@@ -210,14 +211,14 @@ public final class ProjectFingerprintService {
     }
 
     /**
-     * Fichiers de contrôle racine, descripteurs de build et descripteurs d'outillage situés
-     * directement dans chaque ancêtre du scope, de la racine (exclue du sous-arbre) jusqu'au parent
-     * du scope. Ils conditionnent ce que le provider a vu (réacteur Maven, workspace npm, lockfiles,
-     * {@code tsconfig*.json}, {@code .npmrc}, {@code .mvn/**}) sans appartenir au sous-arbre.
+     * Root control files, build descriptors and tooling descriptors located directly in each
+     * ancestor of the scope, from the root (excluded from the subtree) up to the parent of the
+     * scope. They determine what the provider saw (Maven reactor, npm workspace, lockfiles,
+     * {@code tsconfig*.json}, {@code .npmrc}, {@code .mvn/**}) without belonging to the subtree.
      *
-     * <p>Les descripteurs d'outillage (V8) ne sont pris en compte que par l'empreinte de scope : les
-     * ajouter à {@link BuildDescriptorPolicy} changerait l'empreinte de build de tous les projets et
-     * forcerait une réindexation complète unique, hors du périmètre de la reprise.</p>
+     * <p>The tooling descriptors (V8) are taken into account only by the scope fingerprint: adding
+     * them to {@link BuildDescriptorPolicy} would change the build fingerprint of every project and
+     * force a single full reindexing, outside the scope of resumption.</p>
      */
     private List<FileFingerprint> ancestorDescriptors(
             Path root,

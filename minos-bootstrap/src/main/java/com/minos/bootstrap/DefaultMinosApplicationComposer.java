@@ -1,10 +1,10 @@
 package com.minos.bootstrap;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager;
-import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
-import com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager;
+import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
+import com.minos.adapter.scip.runtime.install.ManagedPolyglotScipRuntimeManager;
+import com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager;
+import com.minos.adapter.scip.runtime.install.ManagedScipPythonRuntimeManager;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.application.MinosApplicationComposer;
 import com.minos.git.GitIntelligence;
@@ -16,7 +16,7 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
-import com.minos.storage.local.registry.ProjectPathMappingStore;
+import com.minos.storage.home.ProjectPathMappingStore;
 import com.minos.registry.ProjectPathMappings;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.RemoteRepositoryMaterializer;
@@ -30,6 +30,7 @@ import com.minos.storage.StorageBackendConfiguration;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider;
 import com.minos.storage.local.store.FileHostedControlPlaneStore;
+import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -62,13 +63,13 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
 
     @Override
     public List<IndexerDescriptor> qualifiedIndexerDescriptors() {
-        return ScipIndexerCatalog.qualifiedM24Descriptors();
+        return ScipIndexerCatalog.qualifiedDescriptors();
     }
 
     /** Référence de méthode : le catalogue n'est lu qu'à la demande. */
     @Override
     public IndexerProviderCatalog providerCatalog() {
-        return ScipIndexerCatalog::qualifiedM24Providers;
+        return ScipIndexerCatalog::qualifiedProviders;
     }
 
     /** Gestionnaires dans l'ordre scip-java, python, polyglotte. */
@@ -86,7 +87,8 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
             CodeKnowledgeSnapshotStore snapshots,
             List<IndexerDescriptor> descriptors
     ) throws IOException {
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home, snapshots, descriptors);
+        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(
+                home, snapshots, FileSymbolSnapshotStore::new, descriptors);
         return new SnapshotLifecycle(lifecycle, lifecycle);
     }
 

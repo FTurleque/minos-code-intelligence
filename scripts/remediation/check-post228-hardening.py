@@ -27,7 +27,7 @@ def forbid(relative: str, text: str, token: str) -> None:
 
 
 def validate_runtime_contracts() -> None:
-    supervisor_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/ProviderWriteQuotaSupervisor.java"
+    supervisor_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWriteQuotaSupervisor.java"
     supervisor = read(supervisor_path)
     for token in (
         "provider write quota visibility lost",
@@ -39,7 +39,7 @@ def validate_runtime_contracts() -> None:
         require(supervisor_path, supervisor, token)
     forbid(supervisor_path, supervisor, "catch (IOException | RuntimeException ignored)")
 
-    windows_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java"
+    windows_path = "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java"
     windows = read(windows_path)
     for token in (
         "PRIVATE_STORAGE_MAX_BYTES",
@@ -81,7 +81,7 @@ def validate_runtime_contracts() -> None:
         require(storage_path, storage, token)
 
     composition_path = (
-        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/StrongOwnedProcessExecutors.java"
+        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors.java"
     )
     composition = read(composition_path)
     require(composition_path, composition, "return qualifySandbox(status, sandbox, isDockerRuntimeLocation());")
@@ -90,8 +90,8 @@ def validate_runtime_contracts() -> None:
 
 
 def validate_documentation() -> None:
-    status_path = "docs/STATUS.md"
-    roadmap_path = "docs/ROADMAP.md"
+    status_path = "docs/project/governance/STATUS.md"
+    roadmap_path = "docs/project/governance/ROADMAP.md"
     risks_path = "docs/architecture/risks/register.md"
     status = read(status_path)
     roadmap = read(roadmap_path)

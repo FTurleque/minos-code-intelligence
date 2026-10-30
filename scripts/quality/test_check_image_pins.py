@@ -2,11 +2,18 @@
 """Self-test of check-image-pins.py: one witness per way a container image can escape its pin."""
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import os
 import re
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _MODULE_PATH = Path(__file__).parent / "check-image-pins.py"
 _SPEC = importlib.util.spec_from_file_location("check_image_pins", _MODULE_PATH)
@@ -14,7 +21,7 @@ gate = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(gate)
 
 DIGEST = "sha256:" + "a" * 64
-PINNED_DOCKERFILE = f"FROM eclipse-temurin:24.0.2_12-jre@{DIGEST}\nUSER 10001\n"
+PINNED_DOCKERFILE = f"FROM eclipse-temurin:25.0.4.1_1-jre-noble@{DIGEST}\nUSER 10001\n"
 PINNED_COMPOSE = f"""services:
   app:
     image: "${{MINOS_IMAGE}}"
@@ -73,7 +80,7 @@ class CheckImagePinsTest(unittest.TestCase):
         self.assertIn("Dockerfile.mcp:1", failures[0])
 
     def test_tag_without_digest_is_refused(self):
-        failures = self.run_gate({"docker/Dockerfile.mcp": "FROM eclipse-temurin:24-jre\n"})
+        failures = self.run_gate({"docker/Dockerfile.mcp": "FROM eclipse-temurin:25-jre\n"})
         self.assertEqual(1, len(failures), failures)
 
     def test_a_short_or_malformed_digest_is_refused(self):
@@ -113,6 +120,13 @@ class CheckImagePinsTest(unittest.TestCase):
     def test_the_minos_image_variable_is_the_only_unpinned_reference_allowed(self):
         self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_IMAGE}"\n'}))
 
+    def test_the_query_image_variable_is_the_other_minos_image(self):
+        # AUD-DEP-15: the query plane has its own MINOS image, built locally like the administration one.
+        self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml":
+                                            'services:\n  s:\n    image: "${MINOS_QUERY_IMAGE:?MINOS_QUERY_IMAGE is required}"\n'}))
+        failures = self.run_gate({"docker/compose-mcp.prod.yaml": 'services:\n  s:\n    image: "${MINOS_QUERY_IMAGES}"\n'})
+        self.assertEqual(1, len(failures), failures)
+
     def test_a_required_variable_guard_keeps_the_same_rule(self):
         # MINOS-AUD-H20: ${VAR:?message} is still the launcher-provided variable, nothing more.
         self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml":
@@ -137,6 +151,56 @@ class CheckImagePinsTest(unittest.TestCase):
             "docker/compose-mcp.connected.yaml": PINNED_COMPOSE,
             "docs/user/docker-runtime.md": "Image pgvector/pgvector:0.8.2-pg17 is managed.\n",
         }))
+
+    # ---- only the files of this repository are examined, not the checkouts nested in it ----
+    PINNED_TREE = {"docker/Dockerfile.mcp": PINNED_DOCKERFILE, "docker/compose-mcp.connected.yaml": PINNED_COMPOSE}
+    SECOND_COPY = "[string] $PostgresImage = 'pgvector/pgvector:0.8.2-pg17',\n"
+
+    def test_a_git_worktree_under_claude_worktrees_is_not_examined(self):
+        # .claude/worktrees/ is git-ignored: a developer worktree there holds a copy of every file, this self-test
+        # included, and the exemption of scripts/quality/test_check_image_pins.py does not reach the copy.
+        self.assertEqual([], self.run_gate({
+            **self.PINNED_TREE,
+            ".claude/worktrees/x/scripts/quality/test_check_image_pins.py": self.SECOND_COPY,
+            ".claude/worktrees/x/docker/scripts/configure.ps1": self.SECOND_COPY,
+        }))
+
+    def test_a_checkout_nested_anywhere_else_is_not_examined(self):
+        for marker in ("elsewhere/wt/.git", "elsewhere/clone/.git/HEAD"):
+            with self.subTest(marker=marker):
+                nested = marker.split("/.git")[0]
+                self.assertEqual([], self.run_gate({
+                    **self.PINNED_TREE,
+                    marker: "gitdir: /somewhere/.git/worktrees/wt\n",
+                    f"{nested}/docker/scripts/configure.ps1": self.SECOND_COPY,
+                }))
+
+    def test_the_exclusion_of_nested_checkouts_does_not_hide_the_repository_itself(self):
+        # The root may itself be a worktree (a `.git` file), and .claude/ holds tracked scripts next to worktrees/.
+        failures = self.run_gate({
+            **self.PINNED_TREE,
+            ".git": "gitdir: /somewhere/.git/worktrees/root\n",
+            ".claude/scripts/launch.ps1": self.SECOND_COPY,
+            "docker/scripts/configure.ps1": self.SECOND_COPY,
+        })
+        self.assertEqual(2, len(failures), failures)
+        self.assertIn(".claude/scripts/launch.ps1:1", failures[0])
+        self.assertIn("docker/scripts/configure.ps1:1", failures[1])
+
+    def test_a_directory_that_cannot_be_listed_fails_instead_of_being_skipped(self):
+        # Fail-closed: a walk that silently drops an unreadable directory would report success on a partial tree.
+        real_scandir = os.scandir
+
+        def scandir(path):
+            if Path(path).name == "scripts":
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_scandir(path)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docker" / "scripts").mkdir(parents=True)
+            with mock.patch("os.scandir", scandir), self.assertRaises(PermissionError):
+                gate.gate_cli.repository_files(root, frozenset())
 
     def test_a_gate_that_pr_ci_does_not_run_is_refused(self):
         files = {"docker/Dockerfile.mcp": PINNED_DOCKERFILE}
@@ -215,8 +279,8 @@ class CheckImagePinsTest(unittest.TestCase):
         self.assertIsNotNone(literal, "verify-run-configurations.ps1 must pin eclipse-temurin by pattern")
         return [remediation.TEMURIN_JRE_FROM, re.compile(literal.group(1))]
 
-    def test_a_dependabot_bump_to_another_24_jre_with_a_new_digest_stays_green(self):
-        bumped = f"FROM eclipse-temurin:24.0.3_9-jre@{self.DIGEST_B}\nUSER 10001\n"
+    def test_a_dependabot_bump_to_another_25_jre_with_a_new_digest_stays_green(self):
+        bumped = f"FROM eclipse-temurin:25.0.5_7-jre-noble@{self.DIGEST_B}\nUSER 10001\n"
         self.assertEqual([], self.run_gate({"docker/Dockerfile.mcp": bumped}))
         for pattern in self.temurin_patterns():
             self.assertTrue(pattern.search(bumped), pattern.pattern)
@@ -224,12 +288,14 @@ class CheckImagePinsTest(unittest.TestCase):
 
     def test_what_a_dependabot_bump_must_never_produce_stays_red(self):
         red = {
-            "floating tag": "FROM eclipse-temurin:24-jre@" + DIGEST + "\n",
-            "major 25": f"FROM eclipse-temurin:25.0.1_8-jre@{self.DIGEST_B}\n",
-            "tag without digest": "FROM eclipse-temurin:24.0.3_9-jre\n",
+            "floating tag": "FROM eclipse-temurin:25-jre@" + DIGEST + "\n",
+            "major 24": f"FROM eclipse-temurin:24.0.2_12-jre-noble@{self.DIGEST_B}\n",
+            "major 26": f"FROM eclipse-temurin:26.0.1_8-jre-noble@{self.DIGEST_B}\n",
+            "another Ubuntu than noble": f"FROM eclipse-temurin:25.0.5_7-jre@{self.DIGEST_B}\n",
+            "tag without digest": "FROM eclipse-temurin:25.0.5_7-jre-noble\n",
             "digest without tag": f"FROM eclipse-temurin@{self.DIGEST_B}\n",
-            "jdk instead of jre": f"FROM eclipse-temurin:24.0.3_9-jdk@{self.DIGEST_B}\n",
-            "short digest": "FROM eclipse-temurin:24.0.3_9-jre@sha256:abc\n",
+            "jdk instead of jre": f"FROM eclipse-temurin:25.0.5_7-jdk-noble@{self.DIGEST_B}\n",
+            "short digest": "FROM eclipse-temurin:25.0.5_7-jre-noble@sha256:abc\n",
         }
         for label, dockerfile in red.items():
             for pattern in self.temurin_patterns():
@@ -240,10 +306,78 @@ class CheckImagePinsTest(unittest.TestCase):
             with self.subTest(generic=label):
                 self.assertNotEqual([], self.run_gate({"docker/Dockerfile.mcp": red[label]}))
 
+    def test_the_ci_wiring_check_is_the_one_of_gate_cli(self):
+        sys.path.insert(0, str(_MODULE_PATH.parent))
+        import gate_cli
+        self.assertFalse(hasattr(gate, "find_ci_wiring_violations"), "the gate must not carry its own copy")
+        self.assertIs(gate_cli, gate.gate_cli)
+        with mock.patch.object(gate_cli, "find_ci_wiring_violations", return_value=["WIRING SENTINEL"]) as shared:
+            failures = self.run_gate({"docker/Dockerfile.mcp": PINNED_DOCKERFILE, "docker/compose-mcp.prod.yaml": PINNED_COMPOSE})
+        self.assertEqual(["WIRING SENTINEL"], failures)
+        self.assertEqual(gate.CI_STEPS, shared.call_args.args[1])
+
+    def test_without_gate_cli_the_gate_fails_instead_of_falling_back(self):
+        with tempfile.TemporaryDirectory() as directory:
+            copy = Path(directory) / "check-image-pins.py"
+            shutil.copyfile(_MODULE_PATH, copy)
+            result = subprocess.run([sys.executable, "-I", str(copy), "--root", str(gate.DEFAULT_ROOT)],
+                                    capture_output=True, text=True, encoding="utf-8")
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertIn("gate_cli", result.stderr)
+
     def test_the_real_repository_is_pinned(self):
         failures, inspected = gate.check(gate.DEFAULT_ROOT)
         self.assertEqual([], failures)
         self.assertGreaterEqual(inspected, 4)
+
+    # ------------------------------------------------------------ the Testcontainers image list (AUD-DEP-13)
+
+    def images(self, compose: str | None) -> list[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            if compose is not None:
+                (root / "docker").mkdir()
+                (root / "docker" / "compose-mcp.connected.yaml").write_text(compose, encoding="utf-8")
+            return gate.testcontainers_images(root)
+
+    def test_the_testcontainers_list_is_the_pinned_compose_default(self):
+        self.assertEqual([f"pgvector/pgvector:0.8.2-pg17@{DIGEST}"], self.images(PINNED_COMPOSE))
+
+    def test_two_services_with_the_same_default_give_one_image(self):
+        twice = PINNED_COMPOSE + f'  db2:\n    image: "${{MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@{DIGEST}}}"\n'
+        self.assertEqual(1, len(self.images(twice)))
+
+    def test_a_missing_unpinned_or_ambiguous_default_is_refused(self):
+        other = "sha256:" + "b" * 64
+        refused = {
+            "no compose file": None,
+            "no such variable": 'services:\n  db:\n    image: "postgres:17@' + DIGEST + '"\n',
+            "a tag without a digest": 'services:\n  db:\n    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:pg17}"\n',
+            "two different defaults": PINNED_COMPOSE
+            + f'  db2:\n    image: "${{MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@{other}}}"\n',
+            "a commented line only": '# image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17@' + DIGEST + '}"\n',
+        }
+        for label, compose in refused.items():
+            with self.subTest(case=label):
+                with self.assertRaises(ValueError):
+                    self.images(compose)
+
+    def test_the_cli_prints_the_list_and_fails_without_a_pin(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(0, gate.main(["--root", str(gate.DEFAULT_ROOT), "--testcontainers-images"]))
+        self.assertEqual(gate.testcontainers_images(gate.DEFAULT_ROOT), output.getvalue().split())
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(1, gate.main(["--root", directory, "--testcontainers-images"]))
+
+    def test_the_real_list_is_the_image_the_postgresql_tests_read(self):
+        support = (gate.DEFAULT_ROOT / "minos-storage/src/test/java/com/minos/storage/postgresql"
+                   / "PostgresTestSupport.java").read_text(encoding="utf-8")
+        self.assertIn("MINOS_POSTGRES_IMAGE:-(", support,
+                      "PostgresTestSupport no longer reads the default of MINOS_POSTGRES_IMAGE: update the list")
+        compose = (gate.DEFAULT_ROOT / "docker" / "compose-mcp.connected.yaml").read_text(encoding="utf-8")
+        read_by_the_tests = re.search(r'MINOS_POSTGRES_IMAGE:-([^}"\s]+)', compose).group(1)
+        self.assertEqual([read_by_the_tests], gate.testcontainers_images(gate.DEFAULT_ROOT))
 
 
 if __name__ == "__main__":

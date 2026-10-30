@@ -190,6 +190,108 @@ class RelatedTestDerivationServiceTest {
         ).isEmpty());
     }
 
+    @Test
+    void keepsFirstLocationsUpToTheCapAndDeclaresTheOmittedCount() {
+        int cap = RelatedTestDerivationService.MAX_LOCATIONS_PER_EVIDENCE_TYPE;
+        Symbol test = symbol("cap-test", "UserServiceTest", "com.acme.UserServiceTest",
+                SymbolKind.CLASS, "src/test/java/com/acme/UserServiceTest.java");
+        Symbol production = symbol("cap-production", "UserService", "com.acme.UserService",
+                SymbolKind.CLASS, "src/main/java/com/acme/UserService.java");
+
+        Relationship related = service.derive(List.of(test, production),
+                references(production, test.fileId(), cap + 3, false), List.of()).getFirst();
+
+        List<Evidence> direct = related.evidence().stream()
+                .filter(evidence -> evidence.type() == EvidenceType.DIRECT_REFERENCE).toList();
+        List<Evidence> located = direct.stream().filter(evidence -> evidence.location() != null).toList();
+        assertEquals(cap, located.size());
+        assertEquals(java.util.stream.IntStream.range(10, 10 + cap).boxed().toList(),
+                located.stream().map(evidence -> evidence.location().startLine()).toList());
+        List<Evidence> summaries = direct.stream().filter(evidence -> evidence.location() == null).toList();
+        assertEquals(1, summaries.size());
+        assertEquals("Resolved reference from test file to UserService: 3 additional locations omitted",
+                summaries.getFirst().description());
+        assertEquals(ref(test), summaries.getFirst().source());
+        assertEquals(ref(production), summaries.getFirst().target());
+    }
+
+    @Test
+    void keepsExactlyCapLocationsWithoutSummary() {
+        int cap = RelatedTestDerivationService.MAX_LOCATIONS_PER_EVIDENCE_TYPE;
+        Symbol test = symbol("exact-test", "UserServiceTest", "com.acme.UserServiceTest",
+                SymbolKind.CLASS, "src/test/java/com/acme/UserServiceTest.java");
+        Symbol production = symbol("exact-production", "UserService", "com.acme.UserService",
+                SymbolKind.CLASS, "src/main/java/com/acme/UserService.java");
+
+        Relationship related = service.derive(List.of(test, production),
+                references(production, test.fileId(), cap, false), List.of()).getFirst();
+
+        List<Evidence> direct = related.evidence().stream()
+                .filter(evidence -> evidence.type() == EvidenceType.DIRECT_REFERENCE).toList();
+        assertEquals(cap, direct.size());
+        assertTrue(direct.stream().allMatch(evidence -> evidence.location() != null));
+    }
+
+    @Test
+    void keepsTheSameLocationsWhateverTheOccurrenceOrder() {
+        int cap = RelatedTestDerivationService.MAX_LOCATIONS_PER_EVIDENCE_TYPE;
+        Symbol test = symbol("order-test", "UserServiceTest", "com.acme.UserServiceTest",
+                SymbolKind.CLASS, "src/test/java/com/acme/UserServiceTest.java");
+        Symbol production = symbol("order-production", "UserService", "com.acme.UserService",
+                SymbolKind.CLASS, "src/main/java/com/acme/UserService.java");
+
+        Relationship sorted = service.derive(List.of(test, production),
+                references(production, test.fileId(), cap + 4, false), List.of()).getFirst();
+        Relationship reversed = service.derive(List.of(production, test),
+                references(production, test.fileId(), cap + 4, true), List.of()).getFirst();
+
+        assertEquals(sorted, reversed);
+    }
+
+    @Test
+    void capChangesNeitherPairsNorConfidencesNorOrder() {
+        int cap = RelatedTestDerivationService.MAX_LOCATIONS_PER_EVIDENCE_TYPE;
+        Symbol firstTest = symbol("pair-test-a", "AlphaTest", "com.acme.AlphaTest",
+                SymbolKind.CLASS, "src/test/java/com/acme/AlphaTest.java");
+        Symbol secondTest = symbol("pair-test-b", "BetaTest", "com.acme.BetaTest",
+                SymbolKind.CLASS, "src/test/java/com/acme/BetaTest.java");
+        Symbol alpha = symbol("pair-alpha", "Alpha", "com.acme.Alpha",
+                SymbolKind.CLASS, "src/main/java/com/acme/Alpha.java");
+        Symbol gamma = symbol("pair-gamma", "Gamma", "com.other.Gamma",
+                SymbolKind.CLASS, "src/main/java/com/other/Gamma.java");
+        List<Symbol> symbols = List.of(firstTest, secondTest, alpha, gamma);
+
+        List<SymbolOccurrence> many = new java.util.ArrayList<>();
+        many.addAll(references(alpha, firstTest.fileId(), cap + 7, false));
+        many.addAll(references(gamma, firstTest.fileId(), cap + 2, false));
+        many.addAll(references(gamma, secondTest.fileId(), cap + 1, false));
+        List<SymbolOccurrence> single = List.of(
+                reference("single-a", alpha, firstTest.fileId(), 10),
+                reference("single-g1", gamma, firstTest.fileId(), 10),
+                reference("single-g2", gamma, secondTest.fileId(), 10));
+
+        assertEquals(pairsAndConfidences(service.derive(symbols, single, List.of())),
+                pairsAndConfidences(service.derive(symbols, many, List.of())));
+    }
+
+    private static List<String> pairsAndConfidences(List<Relationship> relationships) {
+        return relationships.stream()
+                .map(relationship -> relationship.source().id() + "->" + relationship.target().id()
+                        + "@" + relationship.confidence())
+                .toList();
+    }
+
+    private static List<SymbolOccurrence> references(Symbol target, String fileId, int count, boolean reversed) {
+        List<SymbolOccurrence> occurrences = new java.util.ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            occurrences.add(reference(target.id() + "-" + fileId + "-ref-" + index, target, fileId, 10 + index));
+        }
+        if (reversed) {
+            java.util.Collections.reverse(occurrences);
+        }
+        return occurrences;
+    }
+
     private static Set<EvidenceType> evidenceTypes(Relationship relationship) {
         return relationship.evidence().stream()
                 .map(Evidence::type)

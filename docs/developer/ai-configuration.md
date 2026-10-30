@@ -10,12 +10,14 @@ Le dépôt embarque la configuration qui permet à un assistant de code (Claude 
 | `CLAUDE.md` | Importe `AGENTS.md` ; consignes propres à Claude Code (langue, méthode, pièges d'outillage) |
 | `.claude/settings.json` | Permissions partagées (lecture seule et gates autorisés, opérations destructives refusées ou confirmées) et branchement des hooks |
 | `.claude/rules/*.md` | Règles chargées selon les fichiers touchés (`paths:`) : Java de production, tests, gates Python, scripts Windows, workflows, documentation, OpenSpec, plugin IntelliJ ; `securite.md` est transversale |
+| `.claude/rules/code-review.md`, `.claude/supervisor.config.json` | Couche MINOS du superviseur de code installé sur le poste : `code-review.md` liste les points de revue propres au dépôt (lu en premier par le relecteur avec `java-production.md` et `securite.md`), la configuration fixe ces trois fichiers de conventions et les chemins de données datées ou générées que le superviseur ne relit pas (`quiet_paths`) |
 | `.claude/skills/minos-*` | Savoir-faire invoqués par le modèle ou l'utilisateur : `minos-verify-local`, `minos-literal-gates`, `minos-pr-flow`, `minos-doc-sync`, `minos-security-checklist`, `minos-release-promotion`, `minos-dependency-update`, `minos-incident-triage` |
 | `.claude/skills/openspec-*`, `.claude/commands/opsx/` | Skills et commandes OpenSpec (générés par `openspec init` / `openspec update`) |
 | `.claude/agents/` | Sous-agents : `minos-architecture-reviewer`, `minos-security-reviewer`, `minos-gate-runner`, `minos-spec-verifier`, `minos-test-author`, `minos-ci-triage` |
 | `.claude/commands/minos/` | Commandes `/minos:gates`, `verify`, `pr`, `merge`, `sprint` (de l'audit aux changements OpenSpec, après le skill général `audit-application`), `adr`, `docs-sync`, `status`, `audit-archive`, `deps` |
 | `.claude/hooks/` | Garde-fous automatiques (ci-dessous) |
 | `.claude/scripts/run_gates.py` | Rejoue les gates du job `invariants` en lisant la liste dans `pr-ci.yml` (jamais recopiée) |
+| `.claude/agent-memory/<agent>/` | Mémoire persistante partagée d'un agent (aujourd'hui `archgate-developer`, l'agent du plugin Archgate) : `MEMORY.md` est l'index chargé à chaque session de l'agent, un fichier par leçon. N'y écrire que des règles durables et vraies pour tout poste, jamais de donnée personnelle ni d'état de chantier |
 
 Ne sont **pas** versionnés : `.claude/settings.local.json` (réglages personnels), `.claude/worktrees/`.
 
@@ -26,7 +28,7 @@ Python 3, bibliothèque standard seule ; ils n'échouent jamais par accident (en
 | Hook | Événement | Effet |
 |---|---|---|
 | `guard_bash.py` | PreToolUse (Bash) | **Refuse** : push forcé, push direct vers `main` ou `develop`, `--no-verify`, signature désactivée, `gh pr merge --admin`, suppression ou déplacement d'un tag `vX.Y.Z`, modification d'une release. **Demande confirmation** : `git reset --hard`, `git clean -f`, restauration de tout l'arbre, `--force-with-lease` |
-| `guard_paths.py` | PreToolUse (Edit, Write) | **Refuse** : fichiers générés (`target/`, `build/`, `.intellijPlatform/`, `docs/generated/`), secret apparent dans le contenu. **Demande confirmation** : archives OpenSpec, audits archivés, `docs/history/`, `openspec/specs/`, goldens de caractérisation, workflows, `required-checks.json`, liste de tolérance de `check-private-io`, ADR existants, `LICENSE`/`SECURITY.md`/`CONTRIBUTING.md`/`.gitleaks.toml` |
+| `guard_paths.py` | PreToolUse (Edit, Write) | **Refuse** : fichiers générés (`target/`, `build/`, `.intellijPlatform/`, `docs/developer/generated/`), secret apparent dans le contenu. **Demande confirmation** : archives OpenSpec, audits archivés, `docs/project/history/`, `openspec/specs/`, goldens de caractérisation, workflows, `required-checks.json`, liste de tolérance de `check-private-io`, ADR existants, `LICENSE`/`SECURITY.md`/`CONTRIBUTING.md`/`.gitleaks.toml` |
 | `post_edit.py` | PostToolUse (Edit, Write) | Rappelle les gates qui citent le fichier modifié, valide le YAML d'un workflow, signale un `.ps1` en LF, rappelle le câblage d'un nouveau gate |
 | `session_start.py` | SessionStart | Branche, état local, changements OpenSpec actifs, avancement de l'audit |
 

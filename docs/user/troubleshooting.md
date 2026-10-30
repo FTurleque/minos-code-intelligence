@@ -2,6 +2,14 @@
 
 Ce guide couvre l’installation native M14, les providers, l’indexation autonome, les snapshots, MCP et NEXUS.
 
+## Échec d'indexation : lire la cause d'un run
+
+La ligne `error: index failed: …` (code de sortie 1) nomme le run, sa phase et, quand elle est sûre, la cause. Quand la cause cite un chemin local ou un secret, la ligne renvoie à `MINOS_HOME/index-state/runs` : la cause complète est la clé `message` du fichier `<projet>/<run>.properties`, et les journaux du provider sont sous `MINOS_HOME/runs/<run>` (`provider.stderr.log`). Aucun chemin absolu n'apparaît dans la ligne publique.
+
+## Windows : « scip-java execution under the Windows AppContainer sandbox is not qualified »
+
+scip-java est `BLOCKED` sous Windows (`minos doctor`, `minos tools verify`, `minos providers scip-java`), `minos tools install scip-java` échoue et l'indexation d'un projet Java est refusée avant tout lancement : la chaîne scip-java Windows n'a pas été exécutée de bout en bout sous le bac à sable AppContainer, et MINOS ne déclare pas prêt ce qui n'est pas qualifié ([ADR 0060](../architecture/adr/SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md)). Les autres providers (TypeScript) ne sont pas touchés. Remède : indexer les projets Java par le [runtime Docker](docker-runtime.md). Sous Windows, le runner scip-java n'utilise que le Windows PowerShell 5.1 du répertoire système (`System32\WindowsPowerShell\v1.0`), jamais un PowerShell du `PATH`.
+
 ## Commencer par `doctor`
 
 Pour une installation utilisateur :
@@ -27,7 +35,7 @@ java -version
 .\mvnw.cmd -version
 ```
 
-Le développement de MINOS exige Java 24 et Maven 3.9.x via le wrapper.
+Le développement de MINOS exige Java 25 et Maven 3.9.x via le wrapper.
 
 Une distribution installée embarque son propre runtime et n’exige pas un JDK système pour exécuter la CLI/MCP.
 
@@ -119,6 +127,15 @@ aujourd'hui échouer **même les commandes de lecture** (`project list`, `doctor
 `icacls "<MINOS_HOME>" /remove:d <compte> /T` (un refus hérité d'un parent est devenu explicite sur les objets que MINOS a durcis,
 d'où `/T`).
 
+## Windows : « a conditional deny entry on private storage prevents MINOS from making it private »
+
+Une règle d'accès **conditionnelle** de refus (type `XD` dans le SDDL, posée par stratégie de groupe ou par un administrateur) figure sur
+`MINOS_HOME` ou sur un de ses sous-répertoires. MINOS ne sait ni la lire ni la réécrire : plutôt que de la supprimer sans le dire, il
+**refuse**, sans rien modifier, et le message ne contient pas de chemin. Deux issues : demandez à l'administrateur de retirer la
+restriction (`icacls "<MINOS_HOME>" /save acl.txt` puis lisez la ligne `D:` pour la repérer), ou choisissez un `MINOS_HOME` qui n'en
+hérite pas. Le message « cannot read the access rules of private storage » signifie que MINOS n'a pas pu lire la DACL (`icacls` absent,
+délai dépassé, accès refusé) : il échoue de la même façon, par prudence.
+
 ## Windows : « MINOS AppContainer recovery journal … has no provable owner »
 
 Le lanceur AppContainer note, dans `MINOS_HOME\sandbox\appcontainer-recovery-v2\`, le profil et les droits temporaires de chaque
@@ -141,6 +158,12 @@ lanceur : un ancien lanceur encore actif sur le même `MINOS_HOME` détruirait s
 AppContainer et les droits qu'ils auraient laissés restent en place jusqu'à suppression manuelle : `icacls "<racine>" /remove:g
 "*<SID>"` pour chaque chemin du journal, puis suppression du journal. Ils sont peu nombreux : l'ancien lanceur nettoyait tout à
 chaque démarrage.
+
+## Windows : « MINOS refuses to make private … not dedicated to MINOS » ou « … belongs to another account »
+
+MINOS réserve à son propriétaire chaque dossier privé qu'il utilise, à commencer par `MINOS_HOME`. Sous Windows, il refuse désormais, **sans rien modifier**, un dossier qui existait déjà et qui est le profil de l'utilisateur, un de ses parents, une racine de volume, ou un dossier appartenant à un autre compte : rendre un tel dossier privé donnerait l'accès exclusif à son propriétaire (pour le profil, Système), et le poste ne démarrerait plus aucune JVM (incident MINOS-AUD-H23).
+
+Remède : choisir un `MINOS_HOME` dédié (par défaut `%USERPROFILE%\.minos`) ; pour un dossier créé par une exécution en administrateur, en reprendre la propriété (`takeown /F <dossier>` puis `icacls <dossier> /setowner <compte>`) ou le recréer. Le plugin IntelliJ applique la même règle à son dossier MINOS.
 
 ## Espace disque dans `MINOS_HOME`
 
@@ -181,6 +204,12 @@ Un `.gitignore` ou un `.minosignore` enregistré avec un BOM UTF-8 (Windows Powe
 ## Windows : `minos.properties` ou un fichier de secret enregistré avec un BOM
 
 Windows PowerShell 5.1 (`Out-File -Encoding utf8`) et d'anciens éditeurs enregistrent un fichier UTF-8 avec un BOM (octets `EF BB BF`) en tête. MINOS le retire, **une seule fois**, à la lecture de `config/minos.properties`, des autres fichiers de propriétés que MINOS lit (registre, état d'index…) et des fichiers de secret lus par `MinosRuntimeSettings` (par exemple le fichier de mot de passe PostgreSQL désigné par `minos.postgres.passwordFile`) : la première propriété est lue sous son vrai nom et le secret ne contient pas le BOM. Un fichier qui commence par **deux** BOM est refusé avec le message `starts with a repeated UTF-8 byte order mark` : réenregistrez-le en UTF-8 sans BOM. Un BOM ailleurs qu'en tête reste une donnée. Un fichier UTF-16 (autre encodage proposé par ces outils) n'est pas du UTF-8 valide et reste refusé.
+
+## `MINOS runtime configuration must be a regular non-symlink file: minos.properties`
+
+`config/minos.properties` existe dans `MINOS_HOME`, mais ce n'est pas un fichier régulier : c'est un répertoire, un lien symbolique ou un lien cassé. MINOS refuse de démarrer plutôt que d'ignorer la configuration et d'appliquer les valeurs par défaut (stockage compris). Le message ne contient pas le chemin absolu.
+
+Remplacez l'entrée par un vrai fichier de propriétés, ou supprimez-la : l'absence de `config/minos.properties` reste valide et donne une configuration vide.
 
 ## Windows : le bac à sable est indisponible, `minos-launchers` refusé
 
@@ -295,11 +324,23 @@ MINOS compare un fingerprint avant/après le run.
 
 Si le workspace change pendant l’exécution, le fingerprint baseline n’est pas promu. Le prochain `index` replanifiera conservativement le projet.
 
+## `active fingerprint baseline unreadable`
+
+La baseline d'empreinte active du projet n'a pas pu être lue (fichier endommagé, droits, base indisponible). MINOS ne la traite pas comme absente en silence : il indexe le projet en entier et le dit par ce diagnostic, qui ne cite ni chemin ni cause. Si l'empreinte du run est ensuite publiée, l'exécution suivante redevient incrémentale ; sinon, vérifier les droits de `MINOS_HOME` ou l'accès au stockage.
+
 ## Pas de résultat dans `find-callers` / `find-callees`
 
 Une liste vide signifie qu’aucune relation `CALLS` correspondante n’est présente dans le snapshot observé. Cela ne prouve pas une absence runtime.
 
 Limites possibles : dispatch dynamique, réflexion, configuration runtime ou capacités incomplètes du provider.
+
+## La recherche sémantique refuse `minos-ollama` hors de Docker
+
+Symptôme : `Ollama configuration error: the semantic endpoint (minos.semantic.endpoint) designates the managed Docker service minos-ollama` et, dans le statut sémantique, la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`.
+
+Cause : le `MINOS_HOME` a été configuré pour le backend Docker (l'installation y écrit `http://minos-ollama:11434/api/embed`) et il est ouvert par un lanceur natif. Ce nom n'est joignable que sur le réseau Docker géré ; MINOS ne l'essaie jamais depuis le poste, car il pourrait être résolu par une autre machine du réseau.
+
+Remède : utiliser la recherche sémantique par le backend Docker, ou, pour un usage natif, fixer `minos.semantic.endpoint` (ou `MINOS_SEMANTIC_ENDPOINT`) sur un endpoint de bouclage, par exemple `http://127.0.0.1:11434/api/embed`. Les autres commandes ne sont pas concernées. Détail : `docs/user/docker-runtime.md`, « `minos-ollama` : réservé au runtime Docker ».
 
 ## `impact` retourne des limitations
 

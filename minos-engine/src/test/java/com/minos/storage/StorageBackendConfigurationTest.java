@@ -190,6 +190,8 @@ class StorageBackendConfigurationTest {
         IOException failure = assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
 
         assertTrue(failure.getMessage().contains("must stay inside MINOS_HOME"));
+        assertTrue(failure.getMessage().endsWith(": outside.password"), failure.getMessage());
+        assertFalse(failure.getMessage().contains(parent.toString()), failure.getMessage());
     }
 
     @Test
@@ -212,6 +214,8 @@ class StorageBackendConfigurationTest {
         IOException failure = assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
 
         assertTrue(failure.getMessage().contains("escapes MINOS_HOME through a symbolic link"));
+        assertTrue(failure.getMessage().endsWith(": postgres.password"), failure.getMessage());
+        assertFalse(failure.getMessage().contains(home.toString()), failure.getMessage());
     }
 
     @Test

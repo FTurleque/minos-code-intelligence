@@ -75,17 +75,17 @@ function Assert-FinalShape {
         'SnapshotRetentionService.java','SnapshotCodec.java','SnapshotCodecV1.java','SnapshotCodecV2.java',
         'SnapshotQueryView.java'
     )) {
-        if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot "minos-storage-local\src\main\java\com\minos\store\$file") -PathType Leaf)) {
+        if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot "minos-storage\src\main\java\com\minos\store\$file") -PathType Leaf)) {
             throw "Missing M15 persistence/cache component: $file"
         }
     }
 
-    $snapshotStore = Read-RepoText 'minos-storage-local\src\main\java\com\minos\store\FileSymbolSnapshotStore.java'
+    $snapshotStore = Read-RepoText 'minos-storage\src\main\java\com\minos\store\FileSymbolSnapshotStore.java'
     foreach ($value in @('DEFAULT_MAX_QUERY_CACHE_ENTRIES = 32','loadActiveQueryView','CacheStats','fullSnapshotLoads','queryViewBuilds')) {
         Assert-Contains $snapshotStore $value 'FileSymbolSnapshotStore'
     }
 
-    $queryStore = Read-RepoText 'minos-storage-local\src\main\java\com\minos\store\InMemoryCodeKnowledgeStore.java'
+    $queryStore = Read-RepoText 'minos-storage\src\main\java\com\minos\store\InMemoryCodeKnowledgeStore.java'
     foreach ($value in @('byNormalizedName','byQualifiedName','byFileId','byResolvedSymbolId','bySourceEntity','byTargetEntity','byKind','IndexMetrics')) {
         Assert-Contains $queryStore $value 'InMemoryCodeKnowledgeStore'
     }
@@ -103,7 +103,7 @@ function Assert-FinalShape {
         '.github\workflows\pr-ci.yml',
         'scripts\quality\check-jacoco.py',
         'scripts\docs\product-facts.py',
-        'docs\generated\product-facts.md',
+        'docs\developer\generated\product-facts.md',
         'docs\developer\quality-gates.md'
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $required) -PathType Leaf)) { throw "Missing M15 quality/CI/docs artifact: $required" }

@@ -2,6 +2,7 @@ package com.minos.orchestration;
 
 import com.minos.discovery.ModuleAssignmentRule;
 import com.minos.discovery.ProjectDiscovery;
+import com.minos.incremental.ProjectFingerprintService;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
@@ -20,20 +21,19 @@ import java.util.UUID;
 public final class IndexingLifecycleService {
     private static final String PROJECT_ID = "projectId";
 
-    private final Map<String, IndexerExecutor> executors;
-    private final SnapshotStager stager;
     private final SnapshotPromoter promoter;
     private final IndexStateStore stateStore;
     private final ResumableRunMarkers markers;
-    private final ResumableArtifactPolicy artifactPolicy;
     private final Clock clock;
+    private final ProjectFingerprintService fingerprints;
+    private final IndexingRunExecutor.Collaborators collaborators;
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
     /**
-     * Cycle de vie sans port de marqueurs ni répertoire de run : réservé aux tests et aux stores
-     * en mémoire. Un run interrompu y est finalisé sans marqueur et aucune reprise n'est jamais
-     * possible (le port inerte ne connaît aucun répertoire de run). La racine de composition
-     * doit utiliser {@link #IndexingLifecycleService(Collection, SnapshotStager, SnapshotPromoter,
+     * Lifecycle without a marker port or run directory: reserved for tests and in-memory stores.
+     * An interrupted run is finalized there without a marker and no resumption is ever possible
+     * (the inert port knows no run directory). The composition root must use
+     * {@link #IndexingLifecycleService(Collection, SnapshotStager, SnapshotPromoter,
      * IndexStateStore, ResumableRunMarkers)}.
      */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
@@ -41,14 +41,26 @@ public final class IndexingLifecycleService {
         this(executors, stager, promoter, stateStore, ResumableRunMarkers.none(), Clock.systemUTC());
     }
 
-    /** Câblage complet : le port des marqueurs protège les runs interrompus de la rétention (ADR 0039 §5). */
+    /** Full wiring: the marker port protects interrupted runs from retention (ADR 0039 §5). */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore,
                                     ResumableRunMarkers markers) {
         this(executors, stager, promoter, stateStore, markers, ResumableArtifactPolicy.DEFAULT, Clock.systemUTC());
     }
 
-    /** Câblage complet avec une politique explicite des indexeurs dont l'artefact est réutilisable. */
+    /**
+     * Orchestration wiring (AUD-PERF-04, D2): {@code fingerprints} is the fingerprint service of the
+     * orchestration; it captures the scope fingerprint of the checkpoints and computes it again when a resumption
+     * is verified. The other constructors use a default {@link ProjectFingerprintService}.
+     */
+    public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                                    SnapshotPromoter promoter, IndexStateStore stateStore,
+                                    ResumableRunMarkers markers, ProjectFingerprintService fingerprints) {
+        this(executors, stager, promoter, stateStore, markers, ResumableArtifactPolicy.DEFAULT, Clock.systemUTC(),
+                fingerprints);
+    }
+
+    /** Full wiring with an explicit policy of the indexers whose artifact is reusable. */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore,
                                     ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy) {
@@ -69,11 +81,19 @@ public final class IndexingLifecycleService {
     IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                              SnapshotPromoter promoter, IndexStateStore stateStore,
                              ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy, Clock clock) {
-        this.stager = Objects.requireNonNull(stager, "stager");
+        this(executors, stager, promoter, stateStore, markers, artifactPolicy, clock, new ProjectFingerprintService());
+    }
+
+    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                             SnapshotPromoter promoter, IndexStateStore stateStore,
+                             ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy, Clock clock,
+                             ProjectFingerprintService fingerprints) {
+        this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
+        Objects.requireNonNull(stager, "stager");
         this.promoter = Objects.requireNonNull(promoter, "promoter");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
         this.markers = Objects.requireNonNull(markers, "markers");
-        this.artifactPolicy = Objects.requireNonNull(artifactPolicy, "artifactPolicy");
+        Objects.requireNonNull(artifactPolicy, "artifactPolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
         Map<String, IndexerExecutor> byId = new LinkedHashMap<>();
         for (IndexerExecutor executor : Objects.requireNonNull(executors, "executors")) {
@@ -81,7 +101,9 @@ public final class IndexingLifecycleService {
             if (id == null || id.isBlank()) throw new IllegalStateException("executor.indexerId must not be blank");
             if (byId.putIfAbsent(id, executor) != null) throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
         }
-        this.executors = Map.copyOf(byId);
+        // The collaborators of a run, checked above, are grouped once and for all.
+        this.collaborators = new IndexingRunExecutor.Collaborators(Map.copyOf(byId), stager, promoter, stateStore,
+                markers, artifactPolicy, clock, fingerprints);
     }
 
     /**
@@ -101,11 +123,11 @@ public final class IndexingLifecycleService {
         return execute(id, root, negotiation, IndexingResumePolicy.RESUME);
     }
 
-    /** Run complet sur les cibles racine ; reprise selon {@code policy} (ADR 0039 §6, reprise par défaut). */
+    /** Full run on the root targets; resumption according to {@code policy} (ADR 0039 §6, resume by default). */
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
         return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null, policy,
-                ModuleAssignmentRule.none());
+                ModuleAssignmentRule.none(), null);
     }
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
@@ -115,9 +137,16 @@ public final class IndexingLifecycleService {
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
                                IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
+        return execute(id, root, discovery, negotiation, policy, null);
+    }
+
+    /** Like the scoped run, reusing {@code reference} for the root scope when allowed (AUD-PERF-04). */
+    public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
+                               IndexerNegotiationResult negotiation, IndexingResumePolicy policy,
+                               ReferenceFingerprint reference) {
         plans.validate(id, root, negotiation);
         return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of(),
-                null, policy, ModuleAssignmentRule.of(id.toString(), discovery));
+                null, policy, ModuleAssignmentRule.of(id.toString(), discovery), reference);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
@@ -128,7 +157,7 @@ public final class IndexingLifecycleService {
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
                                                 IncrementalIndexingPlan plan, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan, policy, ModuleAssignmentRule.none());
+        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan, policy, ModuleAssignmentRule.none(), null);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
@@ -139,14 +168,22 @@ public final class IndexingLifecycleService {
     public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
                                                 IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan,
                                                 IndexingResumePolicy policy) {
+        return executePlanned(id, root, discovery, negotiation, plan, policy, null);
+    }
+
+    /** Like the scoped planned run, reusing {@code reference} for the root scope when allowed (AUD-PERF-04). */
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
+                                                IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan,
+                                                IndexingResumePolicy policy, ReferenceFingerprint reference) {
         plans.validate(id, root, negotiation);
         return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan, policy,
-                ModuleAssignmentRule.of(id.toString(), discovery));
+                ModuleAssignmentRule.of(id.toString(), discovery), reference);
     }
 
     private Optional<IndexingRun> planned(UUID id, Path root, IndexerNegotiationResult negotiation,
                                           List<IndexingExecutionTarget> targets, IncrementalIndexingPlan plan,
-                                          IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment) {
+                                          IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment,
+                                          ReferenceFingerprint reference) {
         Objects.requireNonNull(plan, "plan");
         if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
         plans.validatePlan(plan, negotiation);
@@ -158,18 +195,21 @@ public final class IndexingLifecycleService {
         }
         return Optional.of(run(id, root, targets, plan.mode(),
                 plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan, policy,
-                moduleAssignment));
+                moduleAssignment, reference));
     }
 
     private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
                             IndexingMode mode, List<String> changedFiles, IncrementalIndexingPlan plan,
-                            IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment) {
+                            IndexingResumePolicy policy, ModuleAssignmentRule moduleAssignment,
+                            ReferenceFingerprint reference) {
         if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
         Objects.requireNonNull(policy, "policy");
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             if (plan != null) validatePlanStillCurrent(id, plan);
-            return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                    executors, stager, promoter, stateStore, markers, artifactPolicy, policy, moduleAssignment, clock);
+            return IndexingRunExecutor.execute(new IndexingRunExecutor.RunRequest(id, root, targets, mode, changedFiles,
+                    policy, moduleAssignment,
+                    reference == null ? Optional.empty() : reference.reusableRootScopeFingerprint(fingerprints)),
+                    collaborators);
         }
     }
 
@@ -193,11 +233,11 @@ public final class IndexingLifecycleService {
     }
 
     /**
-     * Récupère l'état du projet sous le bail exclusif de cycle de vie. C'est une <em>mutation</em>, pas une
-     * lecture : elle finalise chaque run laissé RUNNING par un propriétaire mort, réécrit l'état, et attend
-     * le bail (de façon bornée) si une indexation est en cours. Une lecture de statut ne doit pas l'appeler :
-     * elle passe par {@code ProjectIndexStateReconciler.observeStatus}, qui ne prend aucun bail et n'écrit rien
-     * (lot 2, P1). Son seul appelant est le coordinateur incrémental, qui tient déjà le bail.
+     * Recovers the project state under the exclusive lifecycle lease. It is a <em>mutation</em>, not a
+     * read: it finalizes every run left RUNNING by a dead owner, rewrites the state, and waits for the
+     * lease (bounded) if an indexing is in progress. A status read must not call it: it goes through
+     * {@code ProjectIndexStateReconciler.observeStatus}, which takes no lease and writes nothing
+     * (batch 2, P1). Its only caller is the incremental coordinator, which already holds the lease.
      */
     public ProjectIndexState recoverProjectState(UUID id) {
         UUID projectId = Objects.requireNonNull(id, PROJECT_ID);

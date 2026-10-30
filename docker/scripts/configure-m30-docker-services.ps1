@@ -109,8 +109,73 @@ function Write-MinosProperties([string] $Path, [System.Collections.IDictionary] 
     [System.IO.File]::WriteAllLines($Path, $Lines, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Restrict-FileToCurrentUser([string] $Path) {
+    $Identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $Sid = $Identity.User.Value
+    & icacls.exe $Path /inheritance:r /grant:r "*${Sid}:F" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to restrict file ACL: $Path" }
+}
+
+function Get-FileAccessSecurity([string] $Path) {
+    # FileInfo.GetAccessControl is an instance method under Windows PowerShell 5.1 (.NET Framework) and an
+    # extension method under pwsh (.NET); both return the same FileSecurity. Get-Acl is not used: it depends
+    # on a module that a foreign PSModulePath can hide.
+    $Info = New-Object System.IO.FileInfo $Path
+    $Sections = [System.Security.AccessControl.AccessControlSections]::Access
+    if ($Info | Get-Member -Name GetAccessControl -MemberType Method) {
+        return $Info.GetAccessControl($Sections)
+    }
+    return [System.IO.FileSystemAclExtensions]::GetAccessControl($Info, $Sections)
+}
+
+function Assert-FileRestrictedToCurrentUser([string] $Path) {
+    # Inheritance cut and exactly one rule: full control allowed to the current user. icacls.exe reporting
+    # success is not the proof; the ACL that is really on the file is. The rules are compared as security
+    # identifiers, not as SDDL text: SDDL abbreviates some accounts (the built-in administrator is "LA").
+    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $Security = Get-FileAccessSecurity $Path
+    $Rules = @($Security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+    $Restricted = $Security.AreAccessRulesProtected -and $Rules.Count -eq 1
+    if ($Restricted) {
+        $Rule = $Rules[0]
+        $Restricted = (-not $Rule.IsInherited) -and
+            $Rule.IdentityReference -eq $Sid -and
+            $Rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+            $Rule.FileSystemRights -eq [System.Security.AccessControl.FileSystemRights]::FullControl
+    }
+    if (-not $Restricted) {
+        # The access list found is named in the message (security identifiers, no secret): it tells an operator
+        # who else could read the file.
+        $Found = $Security.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)
+        throw "File ACL is not restricted to the current user: $Path (found $Found)"
+    }
+}
+
+function Write-PrivateSecretFile([string] $Path, [string] $Content) {
+    # The secret never exists on disk with an inherited ACL: the file is created empty, restricted, verified,
+    # and only then written. An existing file is removed first: its ACL is unknown. Any failure removes the file.
+    if (Test-Path -LiteralPath $Path) { Remove-Item -LiteralPath $Path -Force }
+    New-Item -ItemType File -Path $Path | Out-Null
+    try {
+        Restrict-FileToCurrentUser $Path
+        Assert-FileRestrictedToCurrentUser $Path
+        [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
 function New-ManagedPassword([string] $Path) {
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        # An existing password is kept, but never trusted as it is: it is restricted again and verified before
+        # it is read. A file found with a wider ACL may have been read by another local user.
+        try {
+            Restrict-FileToCurrentUser $Path
+            Assert-FileRestrictedToCurrentUser $Path
+        } catch {
+            throw "Managed PostgreSQL secret could not be restricted to the current user; the password may have been exposed and should be changed: $Path"
+        }
         $Existing = (Read-BoundedUtf8 -Path $Path -MaximumBytes 65536 -Label 'Managed PostgreSQL secret').Trim()
         if ([string]::IsNullOrWhiteSpace($Existing)) { throw "Managed PostgreSQL secret is empty: $Path" }
         return
@@ -124,10 +189,7 @@ function New-ManagedPassword([string] $Path) {
     $Rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try { $Rng.GetBytes($Bytes) } finally { $Rng.Dispose() }
     $Password = [Convert]::ToBase64String($Bytes).TrimEnd('=')
-    [System.IO.File]::WriteAllText($Path, $Password + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
-    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    & icacls.exe $Path /inheritance:r /grant:r "*${Sid}:F" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Unable to restrict PostgreSQL secret ACL: $Path" }
+    Write-PrivateSecretFile $Path ($Password + [Environment]::NewLine)
 }
 
 function Test-DockerVolumeExists([string] $Name) {
@@ -266,6 +328,18 @@ $NeedsConnectedRuntime = $StorageBackend -eq 'postgresql' -or $SemanticProvider 
 if (-not $NeedsConnectedRuntime) {
     Write-Host 'M30 managed Docker services are not required for the selected local configuration.' -ForegroundColor Green
     return
+}
+
+# AUD-DEP-15: the connected profile copied below runs the MCP query plane on its own image, MINOS_QUERY_IMAGE.
+# A runtime .env without it was installed by a release that had a single image and has not been reinstalled since:
+# copying the profile over it would produce a runtime no action can start. Refused here, before anything is
+# written or started; the query plane never falls back to the administration image (same rule and same repair as
+# Assert-QueryImageConfigured in mcp-lifecycle.ps1).
+if ([string]::IsNullOrWhiteSpace([string]$Environment['MINOS_QUERY_IMAGE'])) {
+    throw ('This MINOS Docker installation is not migrated to the separate query image: MINOS_QUERY_IMAGE is missing or empty ' +
+        'in the runtime .env, and the MCP query plane never falls back to the administration image. Nothing was changed. ' +
+        'Repair: run the MINOS installer again, or prod-mcp-release.ps1 -Action Install -Jar <minos.jar> -Version <version>, ' +
+        'then configure the managed services again.')
 }
 
 # This script commits three pieces of durable state (the connected compose file, the runtime

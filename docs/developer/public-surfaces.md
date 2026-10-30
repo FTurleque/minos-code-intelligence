@@ -2,7 +2,7 @@
 
 MINOS expose un même cœur métier par plusieurs adapters. Une capacité n’est jamais réimplémentée différemment pour chaque transport.
 
-Les facts mécaniquement calculables — version, catalogue MCP, commandes CLI, formats et providers — sont générés depuis le code dans [`../generated/product-facts.md`](../generated/product-facts.md). Cette page décrit les responsabilités et invariants.
+Les facts mécaniquement calculables — version, catalogue MCP, commandes CLI, formats et providers — sont générés depuis le code dans [`generated/product-facts.md`](generated/product-facts.md). Cette page décrit les responsabilités et invariants.
 
 ## Composition partagée
 
@@ -22,9 +22,8 @@ classDiagram
       hybridContextBuilder()
       workspaceIntelligence()
       runtimeIntelligenceService()
-      hostedControlPlaneService()
+      teamControlPlane()
       providerRuntimeManager()
-      gitIntelligence()
     }
     class MinosCli { <<adapter>> }
     class MinosIdeProtocolV1 { <<external JSON protocol>> }
@@ -120,14 +119,14 @@ Les mutations restent explicites : une recherche ou une lecture ne déclenche ni
 
 ## IntelliJ — protocole `minos-ide` v1
 
-Le plugin `minos-intellij/` reste un client Java 21 externe du runtime MINOS Java 24. Il n’embarque aucune classe métier `com.minos:*`.
+Le plugin `minos-intellij/` reste un client Java 21 externe du runtime MINOS Java 25. Il n’embarque aucune classe métier `com.minos:*`.
 
 ```text
 IntelliJ plugin Java 21
    ↓ processus local JSON
 minos-ide v1
    ↓
-MinosApplication Java 24
+MinosApplication Java 25
 ```
 
 Le PSI sert uniquement à identifier le contexte sous le caret ; les facts finaux viennent du snapshot et des services MINOS. Les positions suivent le contrat ligne base 1, colonne base 0 et encodage explicite UTF-8/16/32/UNKNOWN.
@@ -217,6 +216,10 @@ renderer JSON déterministe
 ```
 
 Catalogue courant : **31 tools**.
+
+### Journalisation du serveur MCP
+
+stdout est réservé au protocole ; tout journal part sur **stderr**. MINOS journalise par `System.Logger` ; le SDK MCP et JGit journalisent par SLF4J, dont le seul fournisseur du jar ombré est `slf4j-jdk14` (`org.slf4j.jul.JULServiceProvider`). Les deux passent donc par `java.util.logging` et sa console (stderr, niveau `INFO` par défaut). Le réglage est celui du JDK : `-Djava.util.logging.config.file=<fichier>` ou `JAVA_TOOL_OPTIONS`. Limite : MINOS ne fournit pas de commande de réglage du niveau ; sans configuration, le niveau est celui par défaut de `java.util.logging`.
 
 ### M19 — intelligence avancée
 
@@ -317,4 +320,4 @@ Un backend remplaçant `FileSemanticVectorStore` doit implémenter `SemanticVect
 - architecture : `scripts/architecture/check-module-boundaries.py` ;
 - qualité : `scripts/quality/check-jacoco.py`.
 
-Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md), [Plugin IntelliJ](../user/intellij-plugin.md), [Team / Hosted](team-hosted-mode.md) et [ADR-0029](../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).
+Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md), [Plugin IntelliJ](../user/intellij-plugin.md), [Team / Hosted](team-hosted-mode.md) et [ADR-0029](../architecture/adr/BE-0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).

@@ -3,7 +3,7 @@
 > Preuves : ADR-0001, ADR-0006, ADR-0008, ADR-0010, ADR-0014, ADR-0015, ADR-0017,
 > ADR-0023, ADR-0024, ADR-0029, ADR-0035, ADR-0037,
 > `minos-domain/src/main/java/com/minos/domain/Evidence.java`,
-> `minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotIntegrityService.java`,
+> `minos-storage/src/main/java/com/minos/storage/codec/SnapshotIntegrityService.java`,
 > `minos-application/src/main/java/com/minos/application/semantic/EmbeddingProvider.java`.
 
 ---
@@ -64,7 +64,7 @@
 ## 8.6 Résilience
 
 - **Promotion atomique** des snapshots : un snapshot est visible seulement après promotion complète (ADR-0006).
-- **Snapshot actif en mémoire** (`SnapshotQueryView`) : requêtes rapides sans I/O pour chaque appel (ADR-0024).
+- **Snapshot actif en mémoire** (`SnapshotReadView`) : requêtes rapides sans I/O pour chaque appel, par le port de lecture `CodeKnowledgeReader` (ADR-0024, ADR-0056).
 - **Indexation incrémentale** : planifiée uniquement sous preuve explicite de capacité provider (ADR-0014).
 - **Compaction et rétention** : `SnapshotCompactionService`, `SnapshotRetentionService` maintiennent la taille sous contrôle.
 - **Fail-closed** sur les configurations inconnues (ADR-0037).
@@ -99,19 +99,19 @@
 
 | Store | Technologie | Module |
 |-------|------------|--------|
-| Snapshots | Fichiers binaires codec v2 | `minos-storage-local` |
-| Vector store | Fichiers locaux | `minos-storage-local` |
-| Runtime observations | Fichiers locaux | `minos-storage-local` |
-| Control plane tenant | Fichier chiffré AES-256-GCM | `minos-storage-local` |
+| Snapshots | Fichiers binaires codec v2 | `minos-storage` |
+| Vector store | Fichiers locaux | `minos-storage` |
+| Runtime observations | Fichiers locaux | `minos-storage` |
+| Control plane tenant | Fichier chiffré AES-256-GCM | `minos-storage` |
 | Fingerprints | Fichiers locaux | `minos-application` |
 | State d'index | Mémoire + fichier | `minos-application` |
-| Backend avancé (opt-in) | PostgreSQL / pgvector | `minos-storage-postgresql` |
+| Backend avancé (opt-in) | PostgreSQL / pgvector | `minos-storage` |
 
 ---
 
 ## 8.10 Performance et concurrence
 
-- La `SnapshotQueryView` est construite en mémoire à la promotion du snapshot et partagée en lecture seule.
+- La `SnapshotReadView` du snapshot actif est construite au premier besoin, mise en cache par le store et partagée en lecture seule : les cas d'usage n'y voient que les lectures de `CodeKnowledgeReader`, jamais l'index mémoire ni ses écritures (ADR-0056). L'ancienne `SnapshotQueryView`, dépréciée, partage la même vue et le même index.
 - Les index en mémoire (symboles, relations) sont reconstruits depuis les facts persistés.
 - **Baseline M15** (repeated query, in-memory) : first = 22,6 ms, p50 = 3,88 ms, p95 = 5,34 ms.
 - La recherche sémantique linéaire est volontaire ; une structure ANN n'est introduite que sous mesures (ADR-0031).
@@ -123,7 +123,7 @@
 
 - **Surefire** : tests unitaires par module.
 - **Failsafe** : tests d'intégration dans `minos-app` (cross-boundary, replay M14).
-- **Testcontainers** : PostgreSQL dans `minos-storage-postgresql`.
+- **Testcontainers** : PostgreSQL dans `minos-storage`.
 - JaCoCo produit un rapport de couverture agrégé dans `target/site/jacoco-aggregate`.
 - Qualification de chaque jalon : tests + replay providers + handshake MCP + distribution.
 

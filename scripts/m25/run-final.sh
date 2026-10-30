@@ -44,7 +44,7 @@ require_command git
 require_command go
 JAVA_VERSION="$(java -version 2>&1 | head -n 1)"
 GO_VERSION="$(go version 2>&1)"
-[[ "$JAVA_VERSION" =~ \"24([\.\"]|$) ]] || fail "Java 24 is required; got $JAVA_VERSION"
+[[ "$JAVA_VERSION" =~ \"25([\.\"]|$) ]] || fail "Java 25 is required; got $JAVA_VERSION"
 [[ -x ./mvnw ]] || fail "./mvnw is required and must be executable"
 echo "HEAD: $HEAD_SHA"
 echo "Java: $JAVA_VERSION"
@@ -55,7 +55,7 @@ echo '[1/7] M25 static, documentation and M24 regression contracts...'
 "$PYTHON" scripts/docs/check-current-docs.py
 "$PYTHON" scripts/quality/check-polyglot-provider-consistency.py
 
-echo '[2/7] Full Java 24 Maven reactor...'
+echo '[2/7] Full Java 25 Maven reactor...'
 run_semantic_disabled ./mvnw clean verify
 
 echo '[3/7] JaCoCo including M25 scope...'

@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DuplicationGuardTest {
 
     private static final List<String> MODULES = List.of(
-            "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local", "minos-storage-postgresql",
+            "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
             "minos-provider-scip", "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus",
             "minos-cli", "minos-api", "minos-mcp", "minos-app");
 
@@ -135,7 +135,7 @@ class DuplicationGuardTest {
                 "l'encodeur lui-meme");
         JSON_EXCEPTIONS.put("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java",
                 "gabarits de schemas d'outils : constantes, aucune donnee externe (declare depuis le lot 1)");
-        JSON_EXCEPTIONS.put("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/LockedNpmPackage.java",
+        JSON_EXCEPTIONS.put("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/LockedNpmPackage.java",
                 "ecrit un package.json npm de constantes du catalogue ; minos-provider-scip est un adaptateur, il ne "
                         + "peut pas dependre de minos-application ou vit DeterministicJson (A2, ADR 0042)");
     }

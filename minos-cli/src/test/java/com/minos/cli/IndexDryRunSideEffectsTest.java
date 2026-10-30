@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.MinosApplication;
 import com.minos.registry.RegisteredProject;
 import org.junit.jupiter.api.Test;

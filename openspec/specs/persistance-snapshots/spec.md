@@ -5,7 +5,9 @@ Garantit qu'un snapshot de connaissance, une empreinte de projet et le schéma P
 valide après un arrêt brutal ou une migration : le snapshot actif est toujours l'ancien ou le nouveau, entier ;
 un pointeur actif illisible fait échouer l'ouverture de façon explicite au lieu de basculer en silence ; une
 migration qui échoue n'est jamais appliquée à moitié ; les fichiers temporaires laissés par un arrêt sont
-récupérés sans toucher une écriture en cours.
+récupérés sans toucher une écriture en cours. Elle borne aussi la lecture d'un snapshot persisté : le cache des vues
+de requête pèse chaque vue sans sous-évaluer le tas qu'elle retient, y admet un snapshot de la taille de ce dépôt, ne
+publie ni ne met en cache un snapshot altéré, et le décodage partage une instance par chaîne distincte.
 
 ## Requirements
 
@@ -52,3 +54,460 @@ Si la récupération est décidée, un fichier `.active-*.tmp` plus ancien que l
 #### Scenario: Écriture en cours
 - **WHEN** un `.active-*.tmp` a moins de 24 heures
 - **THEN** il est conservé
+
+### Requirement: La validation réseau des connexions du pool PostgreSQL est bornée
+Le pool SHALL NOT valider une connexion par un aller-retour réseau à sa restitution. À l'emprunt, il SHALL ne la valider que si elle est restée au repos au-delà du seuil d'inactivité ; une connexion invalide SHALL être fermée et remplacée.
+
+#### Scenario: Emprunt puis restitution immédiats
+- **GIVEN** un pool dont la connexion compte ses appels de validation
+- **WHEN** une connexion est empruntée, utilisée et restituée deux fois de suite sans attente
+- **THEN** le compteur de validations réseau vaut 0
+
+#### Scenario: Emprunt après inactivité
+- **GIVEN** une connexion au repos depuis plus longtemps que le seuil, selon l'horloge injectée
+- **WHEN** elle est empruntée
+- **THEN** elle est validée une fois avant d'être remise à l'appelant
+
+#### Scenario: Connexion invalide après inactivité
+- **GIVEN** une connexion au repos au-delà du seuil dont la validation échoue
+- **WHEN** elle est empruntée
+- **THEN** elle est fermée et l'appelant reçoit une connexion neuve
+
+### Requirement: Une connexion rendue dans un état incertain n'est pas réutilisée
+Une connexion restituée fermée, hors de son mode d'auto-commit attendu ou après une exception de l'appelant SHALL être fermée et retirée du pool. Une rupture de connexion constatée à la première instruction d'un appel SHALL produire le comportement défini par la décision du design, sans jamais rejouer une écriture.
+
+#### Scenario: Restitution après une exception
+- **GIVEN** un appel qui se termine par une exception SQL
+- **WHEN** sa connexion est restituée
+- **THEN** elle est fermée et l'emprunt suivant obtient une autre connexion
+
+#### Scenario: Transaction laissée ouverte
+- **GIVEN** une connexion restituée avec l'auto-commit désactivé
+- **WHEN** le pool la reçoit
+- **THEN** il la ferme et ne la remet pas au repos
+
+#### Scenario: Connexion rompue sous le seuil
+- **GIVEN** une connexion au repos depuis moins que le seuil, rompue côté serveur
+- **WHEN** la première instruction d'un appel en lecture échoue par une erreur de connexion
+- **THEN** la connexion est écartée et l'appel suit la décision retenue (nouvel essai unique ou erreur), avec une erreur publique sans URL ni chemin
+
+#### Scenario: Aucune écriture rejouée
+- **GIVEN** un appel qui a déjà exécuté une écriture puis subit une erreur de connexion
+- **WHEN** l'erreur survient
+- **THEN** l'appel échoue et aucune instruction n'est rejouée
+
+### Requirement: Une recherche de symbole par identifiant utilise l'index de la vue
+Un service de requête qui cherche un symbole par son identifiant SHALL utiliser l'index de la vue de requête active et SHALL NOT parcourir la liste des symboles du snapshot. Un identifiant inconnu SHALL produire la même réponse qu'auparavant.
+
+#### Scenario: Rapport runtime d'un symbole
+- **GIVEN** un store dont le chargement du snapshot brut échoue et dont la vue de requête est disponible
+- **WHEN** le rapport runtime d'un symbole existant est demandé
+- **THEN** le rapport est rendu
+
+#### Scenario: Identifiant inconnu
+- **GIVEN** une vue de requête active
+- **WHEN** le rapport runtime d'un identifiant absent est demandé
+- **THEN** la réponse est celle d'avant ce changement
+
+### Requirement: Le poids d'une vue en cache compte ses index dérivés
+Le poids d'une vue de requête et celui d'une entrée du cache de graphe de programme SHALL inclure les index dérivés qu'elles retiennent. Le poids estimé SHALL rester supérieur ou égal au tas retenu une fois ces index construits.
+
+#### Scenario: Vue avec index d'arêtes construit
+- **GIVEN** une vue de requête dont l'index des arêtes entrantes a été construit
+- **WHEN** le test de poids compare l'estimation au tas retenu
+- **THEN** l'estimation est supérieure ou égale à la mesure
+
+### Requirement: Un snapshot de la taille de ce dépôt est admis au cache de vues
+Les deux stores de snapshots SHALL estimer le poids d'une vue de requête d'après une amplification mesurée de la taille persistée. Un snapshot au format courant dont la vue tient sous le plafond du cache SHALL être mis en cache : deux lectures consécutives de la vue active SHALL ne provoquer qu'un seul chargement complet.
+
+#### Scenario: Snapshot de plus de 64 Mio persistés
+- **GIVEN** un snapshot actif au format courant de plus de 64 Mio persistés, dont la vue pèse moins que le plafond du cache
+- **WHEN** la vue active est lue deux fois de suite
+- **THEN** le compteur de chargements complets vaut 1
+
+#### Scenario: Vue plus lourde que le plafond
+- **GIVEN** un snapshot dont la vue estimée dépasse le plafond du cache
+- **WHEN** la vue active est lue deux fois de suite
+- **THEN** elle n'est pas mise en cache et le compteur de chargements complets vaut 2
+
+### Requirement: Le poids estimé d'une vue ne sous-évalue pas le tas qu'elle retient
+Pour chaque format de snapshot lisible, le poids estimé d'une vue SHALL être supérieur ou égal au tas qu'elle retient, mesuré par un test. Un format dont l'amplification n'a pas été mesurée SHALL conserver l'amplification prudente d'origine.
+
+#### Scenario: Estimation comparée au tas retenu
+- **GIVEN** une vue construite depuis un snapshot réel au format courant
+- **WHEN** le test de poids mesure le tas retenu et le compare à l'estimation
+- **THEN** l'estimation est supérieure ou égale à la mesure
+
+#### Scenario: Format non mesuré
+- **GIVEN** un snapshot d'un format antérieur sans mesure d'amplification
+- **WHEN** son poids est estimé
+- **THEN** l'estimation utilise l'amplification prudente d'origine
+
+### Requirement: Un snapshot altéré n'est ni publié ni mis en cache
+Quel que soit le nombre de parcours du fichier, une vue SHALL NOT être rendue à l'appelant, mise en cache ni comptée comme chargée avant que l'empreinte du contenu lu ait été comparée à l'empreinte attendue. Un contenu altéré, tronqué ou prolongé SHALL produire l'erreur d'intégrité.
+
+#### Scenario: Contenu altéré
+- **GIVEN** un snapshot actif dont un octet a été modifié après publication
+- **WHEN** la vue active est lue
+- **THEN** la lecture échoue avec l'erreur d'intégrité, le cache est vide et le compteur de chargements complets n'a pas augmenté
+
+#### Scenario: Contenu tronqué
+- **GIVEN** un snapshot actif tronqué
+- **WHEN** la vue active est lue
+- **THEN** la lecture échoue avec l'erreur d'intégrité et non avec une erreur de décodage
+
+#### Scenario: Seconde lecture après un échec
+- **GIVEN** une lecture qui vient d'échouer sur un contenu altéré
+- **WHEN** la vue active est lue de nouveau
+- **THEN** elle échoue de la même façon
+
+### Requirement: Un snapshot décodé partage une instance par chaîne distincte
+Le décodage d'un snapshot SHALL rendre une seule instance par chaîne distincte lue dans une même passe, pour chaque format lisible. Le modèle décodé SHALL rester égal au modèle écrit. La table de partage SHALL NOT survivre à la passe de décodage.
+
+#### Scenario: Chaînes répétées sur plusieurs entités
+- **GIVEN** un snapshot écrit dont deux symboles, une occurrence et une relation portent le même identifiant de projet
+- **WHEN** il est décodé au format courant puis au format précédent
+- **THEN** ces champs désignent la même instance et le modèle décodé est égal au modèle écrit
+
+#### Scenario: Deux décodages successifs
+- **GIVEN** un même fichier décodé deux fois
+- **WHEN** les deux modèles sont comparés
+- **THEN** ils sont égaux et ne partagent pas leurs instances de chaînes
+
+### Requirement: Une seconde publication identique ne change pas l'état persisté
+Publier deux fois le même snapshot, ou la même empreinte, sous le même identifiant SHALL laisser le même nombre de lignes persistées et le même contenu rechargé qu'après la première publication. Le test d'idempotence de chaque store PostgreSQL SHALL relire l'état après le second appel et SHALL échouer si une ligne est dupliquée ou si le contenu rechargé diffère.
+
+#### Scenario: Snapshot publié deux fois
+- **GIVEN** un snapshot publié une fois dans le store PostgreSQL
+- **WHEN** il est publié une seconde fois avec le même contenu
+- **THEN** le nombre de lignes du projet est inchangé et le snapshot rechargé est égal au snapshot publié
+
+#### Scenario: Empreinte publiée deux fois
+- **GIVEN** une empreinte de projet publiée une fois
+- **WHEN** elle est publiée une seconde fois
+- **THEN** une seule empreinte active est relue et elle est égale à l'empreinte publiée
+
+#### Scenario: Duplication détectée
+- **GIVEN** une publication modifiée localement pour insérer sans contrôle d'existence
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am verify` est exécuté avec PostgreSQL disponible
+- **THEN** le test d'idempotence échoue
+
+### Requirement: Une migration rejouée laisse le schéma à la version courante
+Exécuter deux fois la migration du schéma PostgreSQL SHALL laisser dans `schema_version` chaque version de 1 à la version courante exactement une fois. Une base dont la version est supérieure à la version courante SHALL être refusée sans modification.
+
+#### Scenario: Migration rejouée
+- **GIVEN** une base migrée à la version courante
+- **WHEN** la migration est exécutée de nouveau
+- **THEN** `schema_version` contient les mêmes versions, une fois chacune
+
+#### Scenario: Schéma plus récent que le runtime
+- **GIVEN** une base dont `schema_version` porte une version supérieure à la version courante
+- **WHEN** la migration est exécutée
+- **THEN** elle échoue en nommant la version trouvée et `schema_version` est inchangée
+
+### Requirement: L'attente d'un verrou de mutation est prouvée par un signal observé
+Un écrivain concurrent d'un même projet SHALL attendre la libération du verrou de mutation ou du bail du projet. Le test qui le prouve SHALL observer l'entrée du concurrent dans l'attente (verrou PostgreSQL non accordé dans `pg_locks`, file d'attente d'un verrou de la JVM, ou signal positif borné pour un verrou de fichier) avant d'affirmer l'absence d'effet, et SHALL NOT s'appuyer sur un délai fixe.
+
+#### Scenario: Concurrent en attente d'un verrou consultatif
+- **GIVEN** un détenteur du verrou de mutation d'un projet et un concurrent dont le verrou figure comme non accordé dans `pg_locks`
+- **WHEN** l'état du projet est relu avant la libération
+- **THEN** il est inchangé, puis le concurrent aboutit après la libération
+
+#### Scenario: Verrou retiré
+- **GIVEN** une copie locale où l'acquisition du verrou est neutralisée
+- **WHEN** le test de verrou correspondant est exécuté
+- **THEN** il échoue
+
+#### Scenario: Signal d'attente jamais observé
+- **GIVEN** un concurrent qui n'entre pas en attente avant l'échéance du test
+- **WHEN** l'échéance est atteinte
+- **THEN** le test échoue avec un message et ne passe pas par défaut
+
+### Requirement: Une panne du stockage de l'état d'index a un type unique
+Toute implémentation de production du port d'état d'index SHALL signaler une panne de stockage (E/S, SQL, contenu illisible, bail non obtenu ou non rendu) par le type d'échec unique déclaré par le port, cause conservée. Elle SHALL NOT la signaler par `UncheckedIOException` ni par `IllegalStateException`, réservée aux violations d'invariant.
+
+#### Scenario: Fichier d'état illisible
+- **GIVEN** un store fichier dont le fichier d'état d'un projet est corrompu
+- **WHEN** l'état du projet est lu
+- **THEN** l'échec est du type du port et sa cause est l'erreur d'origine
+
+#### Scenario: Erreur SQL
+- **GIVEN** un store PostgreSQL dont la connexion échoue
+- **WHEN** un run est enregistré
+- **THEN** l'échec est du type du port, pour le store simple comme pour le store à mutation de projet
+
+#### Scenario: Violation d'invariant
+- **GIVEN** un bail de cycle de vie acquis par un thread
+- **WHEN** un autre thread le libère
+- **THEN** l'échec est une `IllegalStateException` et non le type du port
+
+#### Scenario: Interruption pendant une écriture
+- **GIVEN** une écriture d'état interrompue par l'interruption du thread
+- **WHEN** l'exécuteur de run traite l'échec
+- **THEN** le run est marqué interrompu et proposé à la reprise, comme avant
+
+### Requirement: Un défaut de programmation n'est pas requalifié en panne d'E/S
+Les appelants du port d'état d'index SHALL n'attraper que le type d'échec du port. Une exception d'un autre type levée par un store SHALL remonter telle quelle et SHALL NOT être convertie en erreur de lecture ou d'écriture de l'état d'index.
+
+#### Scenario: Store qui lève NullPointerException
+- **GIVEN** un store dont la lecture de l'état du projet lève `NullPointerException`
+- **WHEN** la réconciliation de l'état du projet est exécutée
+- **THEN** l'exception remonte et aucune erreur « failed to read project index state » n'est produite
+
+#### Scenario: Panne de stockage
+- **GIVEN** un store dont la lecture lève le type d'échec du port
+- **WHEN** la réconciliation est exécutée
+- **THEN** elle échoue avec l'erreur d'E/S existante, qui nomme le projet
+
+### Requirement: Les messages du port d'état d'index ne contiennent aucun chemin absolu
+Le message d'un échec levé par une implémentation du port SHALL NOT contenir le chemin absolu d'un fichier d'état ni la racine de stockage. Il SHALL nommer la nature de l'état et son identifiant quand il est connu ; la cause technique SHALL rester chaînée.
+
+#### Scenario: Lecture d'un fichier d'état en échec
+- **GIVEN** un store fichier placé sous une racine temporaire, dont un fichier d'état est illisible
+- **WHEN** l'état est lu et l'échec capturé
+- **THEN** le message ne contient pas le chemin de la racine temporaire
+
+#### Scenario: Propriété manquante
+- **GIVEN** un fichier d'état auquel il manque une propriété obligatoire
+- **WHEN** il est lu
+- **THEN** le message nomme la propriété et ne contient aucun chemin absolu
+
+### Requirement: Les requêtes du snapshot actif sont servies par un port de lecture neutre
+Les cas d'usage de lecture (symboles, usages, relations, recherche de code, impact, rapport runtime d'un symbole) SHALL lire le snapshot actif par une vue neutre dont le lecteur est le port de lecture du cœur, sans recevoir la classe d'index mémoire ni ses écritures. Une implémentation de lecture qui n'est pas l'index mémoire SHALL suffire à les servir. Sans snapshot actif, ils SHALL échouer comme avant ce changement.
+
+#### Scenario: Double de lecture non mémoire
+- **GIVEN** un store de snapshots dont la vue neutre porte un lecteur de test qui n'est pas l'index mémoire
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test` interroge symboles, usages, relations, impact et rapport runtime
+- **THEN** les réponses sont celles obtenues avec l'index mémoire sur le même snapshot
+
+#### Scenario: Aucun snapshot actif
+- **GIVEN** un store de snapshots sans snapshot actif pour le projet
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test` demande une recherche de symboles puis une analyse d'impact
+- **THEN** chaque appel échoue avec la même exception et le même message qu'avant ce changement (`IllegalStateException`, « project has no active symbol snapshot » pour la recherche, « project has no active code knowledge snapshot » pour l'impact)
+
+### Requirement: Les résultats des requêtes sont inchangés
+Les réponses des requêtes de lecture, leur ordre, leurs limites et leurs budgets SHALL rester identiques à ceux d'avant ce changement, sous le store fichier et sous PostgreSQL. Les goldens existants SHALL NOT être régénérés pour ce changement.
+
+#### Scenario: Goldens de caractérisation
+- **GIVEN** les goldens de `minos-app/src/test/resources/characterization/` et les rapports d'impact de référence
+- **WHEN** `./mvnw -B -ntp verify` est exécuté
+- **THEN** les tests de caractérisation et d'impact passent sans fichier de référence modifié
+
+#### Scenario: Store PostgreSQL, sous Linux seulement
+- **GIVEN** un poste Linux avec Docker
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test "-Dminos.postgresql.tests.required=true"` est exécuté
+- **THEN** les tests du cache de vues PostgreSQL passent avec les mêmes décomptes que le store fichier ; sans Docker les tests sont sautés, ce qui n'est pas une preuve
+
+### Requirement: L'ancien contrat de vue reste disponible sans seconde construction d'index
+`SnapshotQueryView`, son accesseur de la classe mémoire, ses métriques et la lecture `loadActiveQueryView` SHALL rester disponibles, dépréciés, avec les mêmes résultats. Sous un store du dépôt, l'ancien et le nouveau contrat SHALL partager le même index : lire les deux pour un même snapshot actif SHALL construire une seule vue et au plus un index des arêtes entrantes.
+
+#### Scenario: Les deux contrats sur un même snapshot
+- **GIVEN** un store fichier à compteurs avec un snapshot actif
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test` lit la vue neutre puis l'ancienne vue et calcule l'impact par chacune
+- **THEN** le compteur de constructions de vue vaut 1, celui de l'index des arêtes vaut au plus 1, et les deux rapports d'impact sont égaux
+
+#### Scenario: Descripteurs binaires de la version publiée
+- **GIVEN** les méthodes publiques de l'ancien contrat telles que publiées en 1.2.0 (lectures appelées par le port d'écriture, accesseur de la classe mémoire, métriques, ancienne lecture du port de snapshot)
+- **WHEN** `./mvnw -B -ntp -pl minos-engine -am test` les résout par leur nom et leur descripteur exacts, sans recompiler d'appelant
+- **THEN** chacune est trouvée ; une seule absente fait échouer le test
+
+### Requirement: Une implémentation existante du port de snapshot reste valide
+Une implémentation du port de snapshot qui ne redéfinit que `loadActiveQueryView` SHALL servir la nouvelle lecture par dérivation de l'ancienne. Une implémentation qui ne redéfinit que la nouvelle lecture SHALL obtenir l'ancienne vue par une fabrique dépréciée, sans boucle d'appels.
+
+#### Scenario: Faux store écrit pour l'ancien contrat
+- **GIVEN** un faux store de test du cœur qui ne redéfinit que `loadActiveQueryView`
+- **WHEN** `./mvnw -B -ntp -pl minos-engine -am test` lit la vue neutre
+- **THEN** elle porte le snapshot, le descripteur et l'index de l'ancienne vue
+
+#### Scenario: Store qui ne sert que la vue neutre
+- **GIVEN** un faux store dont la vue neutre porte un lecteur non mémoire
+- **WHEN** `./mvnw -B -ntp -pl minos-engine -am test` obtient l'ancienne vue par la fabrique dépréciée
+- **THEN** elle porte un index mémoire construit depuis le snapshot et l'appel se termine
+
+### Requirement: La vue neutre garde la cohérence pendant une promotion concurrente
+La vue neutre SHALL être publiée et mise en cache sous les mêmes règles que la vue actuelle : identité `(projectId, snapshotId)`, descripteur comparé avant un succès de cache, pointeur actif relu après construction. Une vue construite pour un snapshot qui n'est plus actif SHALL NOT être publiée.
+
+#### Scenario: Promotion pendant la construction
+- **GIVEN** un store fichier dont le snapshot actif est promu par une autre instance pendant la construction de la vue
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test` lit la vue neutre
+- **THEN** la vue rendue est celle du nouveau snapshot actif et aucune vue de l'ancien n'est en cache
+
+### Requirement: Le rang de correspondance d'un symbole est calculé une fois par candidat
+La recherche de symboles par texte de la vue en mémoire SHALL calculer le rang de correspondance au plus une fois par candidat resté après les filtres de projet, de nature, de module et de nom qualifié, et SHALL réutiliser ce rang pour le filtre et pour le tri. Une recherche sans texte SHALL NOT calculer de rang. Un critère absent SHALL être refusé avant tout calcul.
+
+#### Scenario: Recherche par texte sur tout un projet
+- **GIVEN** une vue de N symboles d'un même projet, une fonction de rang qui compte ses appels, et un texte dont les correspondances exactes n'atteignent pas la limite
+- **WHEN** le test de comptage de `minos-engine` est exécuté par `./mvnw -B -ntp -pl minos-engine -am test`
+- **THEN** la fonction de rang a été appelée au plus N fois
+
+#### Scenario: Recherche sans texte
+- **GIVEN** la même vue et le même compteur, et un critère par nature seule
+- **WHEN** la recherche est exécutée par le même test
+- **THEN** la fonction de rang n'a pas été appelée
+
+#### Scenario: Critère absent
+- **GIVEN** une vue quelconque et le même compteur
+- **WHEN** la recherche est appelée avec un critère nul
+- **THEN** elle échoue par une `IllegalArgumentException` et la fonction de rang n'a pas été appelée
+
+### Requirement: Le calcul unique du rang ne change ni le contenu ni l'ordre des résultats
+Calculer le rang une seule fois SHALL NOT modifier le contenu ni l'ordre des résultats d'une recherche de symboles. Les sept rangs de correspondance, dont la correspondance sur la clé de symbole classée après toutes les autres, et le départage des ex æquo SHALL rester ceux d'avant la modification. Un symbole sans correspondance SHALL rester absent.
+
+#### Scenario: Caractérisation de l'ordre
+- **GIVEN** un jeu de symboles qui couvre chaque rang de correspondance et plusieurs ex æquo, et la liste de résultats capturée avant la modification
+- **WHEN** la même recherche est exécutée après la modification par `./mvnw -B -ntp -pl minos-engine -am test`
+- **THEN** la liste obtenue est identique à la liste capturée, élément par élément
+
+#### Scenario: Correspondance sur la seule clé de symbole
+- **GIVEN** un symbole dont seule la clé contient le texte cherché
+- **WHEN** la recherche est exécutée
+- **THEN** ce symbole est rendu, après tous les symboles qui correspondent par leur nom ou leur nom qualifié
+
+#### Scenario: Symbole sans correspondance
+- **GIVEN** un symbole dont ni le nom, ni le nom qualifié, ni la clé ne contiennent le texte cherché
+- **WHEN** la recherche est exécutée
+- **THEN** ce symbole n'est pas rendu
+
+#### Scenario: Sorties des surfaces inchangées
+- **GIVEN** les goldens de `minos-app/src/test/resources/characterization/` du HEAD
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify` est exécuté après la modification
+- **THEN** `A2SurfaceCharacterizationTest` passe sans qu'aucun fichier de référence ait été modifié
+
+### Requirement: L'état d'indexation conserve l'offre de reprise quel que soit le backend
+Tout `IndexStateStore` SHALL relire `resumableRunId` tel qu'il a été enregistré, par la même instance et par une instance neuve, et SHALL relire une offre retirée comme absente. Le backend PostgreSQL SHALL stocker l'offre dans la colonne `resumable_run_id` de `project_index_state`, ajoutée par la migration de schéma v5. Une base v5 SHALL être refusée par un runtime de version de schéma inférieure.
+
+#### Scenario: Aller-retour d'une offre
+- **GIVEN** un état `FAILED` qui offre le run `R` à la reprise
+- **WHEN** le contrat commun l'enregistre puis le relit avec `FileIndexStateStore` et avec `PostgresIndexStateStore`, chacun rouvert
+- **THEN** les deux backends relisent `resumableRunId = R`
+
+#### Scenario: Offre retirée
+- **GIVEN** un état qui offrait `R`, remplacé par un état sans offre
+- **WHEN** l'état est relu
+- **THEN** `resumableRunId` est vide sur les deux backends
+
+#### Scenario: Base v4 existante
+- **GIVEN** une base au schéma v4 dont `project_index_state` contient un projet
+- **WHEN** le stockage s'ouvre
+- **THEN** `schema_version` contient 1 à 5, le projet se relit sans offre, et une nouvelle offre est ensuite conservée
+
+#### Scenario: Base plus récente que le runtime
+- **GIVEN** une base dont `schema_version` contient 6
+- **WHEN** le stockage s'ouvre
+- **THEN** l'ouverture échoue, avec un message qui dit que le schéma est plus récent que le runtime, sans rien modifier
+
+### Requirement: La rétention protège le run offert à la reprise
+La compaction des runs SHALL conserver le run désigné par `resumableRunId` de l'état du projet, comme celui désigné par `latestRunId`, quel que soit le plafond de runs non réussis et quel que soit le backend.
+
+#### Scenario: Plafond à zéro
+- **GIVEN** un run `INTERRUPTED` offert à la reprise et une politique `maxNonSucceededRuns = 0`
+- **WHEN** la rétention compacte le projet sur le backend local puis sur PostgreSQL
+- **THEN** le run existe encore sur les deux backends
+
+#### Scenario: Run non offert
+- **GIVEN** un second run `INTERRUPTED` qui n'est ni le dernier ni celui qui est offert
+- **WHEN** la même compaction s'exécute
+- **THEN** ce run est supprimé
+
+### Requirement: Les deux backends lisent et écrivent les snapshots par le même codec
+Les backends local et PostgreSQL SHALL encoder et décoder les snapshots de connaissance par le codec de `com.minos.storage.codec` seul. Chaque fixture V2 publiée SHALL se lire par chacun des deux backends, et la fixture V1 par le backend local, avec le contenu attendu. Une fixture SHALL se réencoder à l'identique, même empreinte SHA-256. Un format inconnu SHALL être refusé.
+
+#### Scenario: Fixture V2 lue par chaque backend
+- **GIVEN** `v2-well-formed.knowledge` et `v2-lone-surrogate.knowledge` de `src/test/resources/snapshot-formats/base-d9ae1005/`
+- **WHEN** un test du magasin fichier et un test du magasin PostgreSQL les lisent, chacun de son côté
+- **THEN** chacun obtient un snapshot égal à `LegacySnapshotContent`, substitut isolé compris
+
+#### Scenario: Fixture V1 lue par le backend local
+- **GIVEN** la fixture `v1-symbols`
+- **WHEN** le magasin fichier l'ouvre
+- **THEN** il obtient les symboles attendus par `LegacySnapshotContent`
+
+#### Scenario: Réencodage identique
+- **GIVEN** le snapshot lu depuis `v2-well-formed.knowledge`
+- **WHEN** le codec V2 le réencode
+- **THEN** les octets écrits ont la même empreinte SHA-256 que la fixture
+
+#### Scenario: Version de format inconnue
+- **GIVEN** une charge utile dont l'en-tête déclare la version 9
+- **WHEN** le codec la lit
+- **THEN** la lecture échoue par `unsupported knowledge snapshot format version: 9`, et aucun snapshot n'est renvoyé
+
+### Requirement: Le pointeur actif garde son format à l'octet près
+Le pointeur actif du backend local SHALL écrire et lire ses champs par les primitives publiques du codec (`SnapshotBinaryPrimitives`), sans dépendre d'un membre de paquet du codec. Chaque `active.pointer` des fixtures historiques SHALL se relire puis se réécrire à l'identique. Un pointeur suivi d'octets en trop SHALL être refusé.
+
+#### Scenario: Pointeur historique réécrit
+- **GIVEN** chaque fichier `active.pointer` des fixtures historiques
+- **WHEN** le pointeur actif le lit, puis le réécrit dans un dossier temporaire
+- **THEN** le fichier réécrit est identique, octet pour octet, au fichier d'origine
+
+#### Scenario: Octets en trop
+- **GIVEN** un `active.pointer` historique suivi d'un octet supplémentaire
+- **WHEN** le pointeur actif le lit
+- **THEN** la lecture échoue par `unexpected trailing data in active snapshot pointer`
+
+### Requirement: La mise en place SCIP passe par des magasins de travail injectés
+Le cycle de snapshot SCIP SHALL ouvrir ses magasins de normalisation et de mise en place par le port `StagingSnapshotStores` reçu à la construction, sous `MINOS_HOME/staged-snapshots/<exécution>` seulement. Le snapshot mis en place SHALL rester lisible par une promotion reprise dans un autre processus, et l'arbre écrit SHALL rester celui d'avant le port. Une promotion sans snapshot mis en place SHALL échouer sans toucher au magasin actif.
+
+#### Scenario: Répertoires ouverts par le cycle
+- **GIVEN** un cycle construit avec un `StagingSnapshotStores` qui enregistre les répertoires ouverts, et une exécution à deux fournisseurs
+- **WHEN** `stage` puis `promote` s'exécutent
+- **THEN** chaque répertoire ouvert est sous `staged-snapshots/<exécution>`, et aucun magasin n'est créé autrement
+
+#### Scenario: Promotion reprise par un autre processus
+- **GIVEN** un snapshot mis en place par un premier cycle, et un second cycle construit sur le même `MINOS_HOME`
+- **WHEN** le second cycle promeut l'exécution
+- **THEN** le magasin actif publie le snapshot mis en place, et `staged-snapshots/<exécution>` est supprimé
+
+#### Scenario: Promotion sans snapshot mis en place
+- **GIVEN** une exécution dont `staged-snapshots/<exécution>` n'existe pas
+- **WHEN** `promote` s'exécute
+- **THEN** il échoue par `staged project snapshot is missing for run`, et le magasin actif est inchangé
+
+### Requirement: Une lecture de statut ou une réconciliation ne charge pas le snapshot actif
+La réconciliation de l'état d'index avec le snapshot actif SHALL lire l'identité du snapshot actif par la lecture légère du port, et SHALL NOT charger ni décoder le snapshot, en lecture de statut comme en réparation. Les refus existants SHALL être conservés : un état qui référence un snapshot absent du store, ou une lecture du store en échec, échoue en `IOException`.
+
+#### Scenario: Statut cohérent
+- **GIVEN** un store à compteurs dont le snapshot actif est celui de l'état persistant
+- **WHEN** le statut du projet est lu
+- **THEN** le compteur de chargements complets vaut 0 et l'identifiant rendu est celui du snapshot actif
+
+#### Scenario: Réparation d'un état en retard
+- **GIVEN** un état persistant qui référence un snapshot antérieur au snapshot actif
+- **WHEN** la réconciliation répare l'état
+- **THEN** l'état réparé référence le snapshot actif et le compteur de chargements complets vaut 0
+
+#### Scenario: État qui référence un snapshot absent
+- **GIVEN** un état persistant qui référence un snapshot et un store sans snapshot actif
+- **WHEN** le statut du projet est lu
+- **THEN** la lecture échoue en `IOException` sans rien écrire
+
+#### Scenario: Corps de snapshot endommagé
+- **GIVEN** un store fichier dont le pointeur actif est lisible et dont le corps du snapshot est altéré
+- **WHEN** le statut du projet est lu, puis le snapshot est chargé
+- **THEN** le statut rend l'identifiant pointé et le chargement échoue fermé sur la somme de contrôle
+
+### Requirement: L'ancien contrat de réconciliation reste disponible et cohérent
+Le record `Reconciliation` et les méthodes qui le rendent SHALL rester disponibles, dépréciés, avec la même sémantique : le snapshot rendu SHALL avoir l'identifiant de l'état réconcilié. Ils SHALL charger le snapshot au plus une fois par appel sans promotion concurrente.
+
+#### Scenario: Lecture par l'ancien contrat
+- **GIVEN** un store à compteurs avec un snapshot actif
+- **WHEN** le statut est lu par la méthode dépréciée
+- **THEN** le snapshot rendu porte l'identifiant actif et le compteur de chargements complets vaut au plus 1
+
+### Requirement: Les contrôles d'identité du snapshot actif ne le chargent pas
+La liaison d'un projet hébergé à un snapshot et la reprise d'un run dont le snapshot a été promu SHALL comparer l'identifiant attendu à la lecture légère de l'identité active, sans charger le snapshot. Une liaison SHALL être refusée en `IOException` si aucun snapshot n'est actif ou si l'identifiant diffère.
+
+#### Scenario: Liaison au snapshot actif
+- **GIVEN** un store à compteurs dont le snapshot actif est `s1`
+- **WHEN** un projet hébergé est lié à `s1`
+- **THEN** la liaison est acceptée et le compteur de chargements complets vaut 0
+
+#### Scenario: Liaison refusée
+- **GIVEN** un store dont le snapshot actif est `s1`, puis un store sans snapshot actif
+- **WHEN** un projet hébergé est lié à `s2`
+- **THEN** la liaison échoue en `IOException` dans les deux cas
+
+#### Scenario: Reprise d'un run promu
+- **GIVEN** un run non réussi dont le snapshot préparé est le snapshot actif
+- **WHEN** la reprise est évaluée
+- **THEN** le run est reconnu comme promu sans chargement du snapshot, et un run dont le snapshot préparé n'est pas actif ne l'est pas

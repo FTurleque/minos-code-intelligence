@@ -1,6 +1,6 @@
 # Section 6 — Vue d'exécution
 
-> Preuves : `MinosCliRunner`, `LocalAutonomousIndexOperations`, `IndexingLifecycleService`, `DoctorCommand`,
+> Preuves : `MinosCliRunner`, `LocalAutonomousIndexOperations`, `ProjectIndexingUseCase`, `RemoteIndexingUseCase`, `ProviderPlatformService`, `IndexingLifecycleService`, `DoctorCommand`,
 > `McpBackendRouter`, `DockerMcpTransport`, `MinosMcpServer`, ADR-0006, ADR-0014, ADR-0037, ADR-0039.
 
 Relu contre le code le 2026-10-07 : les noms exacts des classes sont dans les tableaux sous chaque diagramme, et les mêmes diagrammes sont dans [`diagrams/`](../diagrams/README.md), qui fait foi en cas d'écart.
@@ -49,10 +49,10 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `MinosLauncher`, `MinosCliRunner`, `IndexCommand` (`minos-cli`) ; l'application est ouverte par `MinosApplication.open(home)` |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations` (`minos-cli`) |
+| Orchestration de l'indexation | `ProjectIndexingUseCase` (`minos-application`), appelé par `LocalAutonomousIndexOperations` (`minos-cli`) |
 | Moteur | `ProjectFingerprintService`, `ProjectDiscoveryService`, `ProjectInvalidationService`, `IndexerRegistry`, `IncrementalIndexingPlanner`, `IndexingLifecycleService` / `IndexingRunExecutor` (`minos-engine`) |
 | Provider SCIP | `ProviderRuntimeManager` (port) et `IndexerExecutor` (`IndexingRuntimePorts`), réalisés par `minos-provider-scip` |
-| Stockage | `IndexStateStore`, `SnapshotStager`, `SnapshotPromoter`, `ProjectFingerprintSnapshotStore` (ports d'`minos-engine`, réalisés par `minos-storage-local`) |
+| Stockage | `IndexStateStore`, `SnapshotStager`, `SnapshotPromoter`, `ProjectFingerprintSnapshotStore` (ports d'`minos-engine`, réalisés par `minos-storage`) |
 
 Points à retenir : l'empreinte est prise **avant** la découverte (MINOS-AUD-D06) ; la promotion du snapshot est
 atomique (ADR-0006) ; la baseline d'empreinte n'est promue que si l'espace de travail n'a pas changé pendant le run
@@ -117,7 +117,7 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `IndexCommand`, `CliCommandSupport.run` : message `error: …`, code `FindSymbolCommand.EXECUTION_ERROR` (= 1) |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations.prepare` / `executeLocked` (`minos-cli`) |
+| Orchestration de l'indexation | `ProjectIndexingUseCase.prepare` / `executeLocked` (`minos-application`) |
 | Registre d'indexeurs | `IndexerRegistry.negotiate` (`minos-engine`) |
 | Provider SCIP | `ManagedScipProviderRuntimeManager.inspect` (`minos-provider-scip`) : états `READY`, `BLOCKED`, `NOT_INSTALLED` |
 
@@ -147,11 +147,13 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `DoctorCommand`, `ToolsCommand` (`minos-cli`) |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` |
+| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` (`minos-cli`), sur `ProviderPlatformService.runtimes` et `installRuntime` (`minos-application`) |
 | Provider SCIP | `ManagedScipProviderRuntimeManager.inspect` et `install` |
 
 Le rapport de `doctor` contient aussi les commandes trouvées, le stockage privé et l'état du sandbox des workers
-(`workerSandbox`, ADR-0041).
+(`workerSandbox`, ADR-0041). La CLI les obtient par `HostDiagnosticsService` (`minos-application`), qui interroge
+la sonde des sandboxes et le localisateur de commandes de la racine de composition, et lit la confidentialité des
+emplacements de `MINOS_HOME` sans rien écrire.
 
 ---
 
@@ -195,7 +197,7 @@ sequenceDiagram
 | Routeur | `McpBackendRouter` (`minos-app`) : valide `MINOS_HOME`, lit la configuration par `McpBackendConfigurationStore.loadOrMigrate` |
 | Application | `MinosApplication.open(home)` (composée par `minos-bootstrap`) ; `ProjectQueryService.findSymbols` |
 | Serveur MCP | `MinosMcpServer.run(application)`, `MinosMcpTools`, `MinosApplicationMcpBackend` (`minos-mcp`) |
-| Stockage | `CodeKnowledgeSnapshotStore.loadActiveQueryView` (`minos-storage-local`) |
+| Stockage | `CodeKnowledgeSnapshotStore.loadActiveQueryView` (`minos-storage`) |
 
 L'application reste ouverte pendant toute la session et n'est fermée qu'une fois, au retour du serveur.
 

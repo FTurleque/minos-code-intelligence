@@ -2,9 +2,9 @@
 
 Ce guide décrit le parcours utilisateur de MINOS sous Windows.
 
-Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java, **et les indexeurs de MINOS** (voir §2 bis) : après l'installation, aucune commande `tools install` n'est à lancer, y compris sur un poste neuf sans réseau. Ce que la distribution ne contient pas, c'est la toolchain du **projet analysé** (JDK, Git Bash, Go, SDK .NET…) : elle appartient au poste de développement, MINOS la détecte et la nomme (`minos.cmd doctor`) sans l'installer. Voir l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md).
+Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java, **et les indexeurs de MINOS** (voir §2 bis) : après l'installation, aucune commande `tools install` n'est à lancer, y compris sur un poste neuf sans réseau. Ce que la distribution ne contient pas, c'est la toolchain du **projet analysé** (JDK, Git Bash, Go, SDK .NET…) : elle appartient au poste de développement, MINOS la détecte et la nomme (`minos.cmd doctor`) sans l'installer. Voir l'[ADR 0040](../architecture/adr/archive/0040-distribution-auto-portante-indexeurs-embarques.md).
 
-> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 (sandbox worker OS réelle) est fermée sur le plan des primitives Linux/Windows, mais la qualification pour du code non fiable reste refusée : `remote index` est fail-closed sur tous les OS (voir le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/archive/2026-09/AUDIT-2026-09.md)).
+> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 (sandbox worker OS réelle) est fermée sur le plan des primitives Linux/Windows, mais la qualification pour du code non fiable reste refusée : `remote index` est fail-closed sur tous les OS (voir le constat A1 de [`../project/audits/archive/2026-09/AUDIT-2026-09.md`](../project/audits/archive/2026-09/AUDIT-2026-09.md)).
 
 ## 1. Parcours recommandé
 
@@ -70,6 +70,14 @@ Get-Content ".\MINOS-$Version-windows-x64-setup.exe.sha256"
 ```
 
 Les empreintes doivent être identiques. Ne pas exécuter un setup dont le hash ne correspond pas.
+
+Depuis la release qui suit le changement `attester-et-signer-la-release-windows`, chaque fichier d'une release porte aussi une **attestation de provenance** GitHub, vérifiable avec la CLI `gh` :
+
+```powershell
+gh attestation verify ".\MINOS-$Version-windows-x64-setup.exe" --repo FTurleque/minos-code-intelligence
+```
+
+Elle prouve que le fichier a été produit par le workflow de release de ce dépôt, au commit de la release. **Les installateurs et exécutables ne sont pas signés Authenticode** : Windows SmartScreen peut avertir au premier lancement ; l'empreinte et l'attestation sont les preuves d'origine disponibles.
 
 La release publie en plus la variante **lite** du ZIP (voir §2 bis) :
 
@@ -221,6 +229,8 @@ Le backend PostgreSQL est réel et utilise pgvector pour le stockage/retrieval v
 Pour une base PostgreSQL **externe non-loopback**, l'URL JDBC doit utiliser `sslmode=verify-full`. Le **nom** du paramètre doit être `sslmode`, exactement, en minuscules et sans encodage : le pilote JDBC ne reconnaît que cette clé et ignorerait `SSLMODE` ou `ssl%6Dode`, retombant sur un TLS opportuniste sans vérification de certificat ; MINOS refuse donc ces URL (`PostgresUrl contains unsupported parameter`) au lieu de les accepter. La **valeur** est insensible à la casse (`VERIFY-FULL`). Le bouclage IPv6 `[::1]` (ou `[0:0:0:0:0:0:0:1]`) est reconnu comme bouclage ; toute autre forme IPv6 (adresse mappée IPv4 comme `[::ffff:127.0.0.1]`, forme abrégée comme `[0::1]`) est traitée comme externe et exige `sslmode=verify-full`. Les credentials et secrets sont refusés dans l'URL JDBC et restent fournis séparément ; le secret peut être importé depuis un fichier dédié dont la lecture est bornée. Le PostgreSQL Docker géré par MINOS est explicitement identifié comme interne au runtime et n'est pas soumis à cette règle TLS externe.
 
 Il n'existe pas de fallback silencieux PostgreSQL→local.
+
+MINOS migre le schéma de la base à l'ouverture, en une transaction. Une base migrée par une version de MINOS est refusée par une version plus ancienne (`PostgreSQL schema is newer than this MINOS runtime`) : revenir à une version antérieure demande la sauvegarde de la base prise avant la mise à jour. Le schéma 5 conserve l'offre de reprise d'une indexation interrompue, comme le stockage local.
 
 Une base PostgreSQL externe n'est jamais supprimée par l'uninstaller MINOS.
 
@@ -481,4 +491,4 @@ v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
 
 La publication finale a publié 10 assets et revérifié les 5 paires payload/SHA-256. Les changements postérieurs sur `develop` ne déplacent jamais ce tag.
 
-Voir [`../releases/1.0.1.md`](../releases/1.0.1.md).
+Voir [`release-notes/1.0.1.md`](release-notes/1.0.1.md).

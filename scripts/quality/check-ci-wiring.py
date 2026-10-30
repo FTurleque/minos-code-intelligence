@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Fail when the CI wiring that makes MINOS' controls binding has come undone (AUD-DEP-09, AUD-TST-07).
+"""Fail when the CI wiring that makes MINOS' controls binding has come undone (AUD-DEP-09, AUD-TST-07, AUD-DEP-03).
 
-Three rules, all anchored on the structure of the workflows and never on a sentence (ADR 0043 section 3):
+Four rules, all anchored on the structure of the workflows and never on a sentence (ADR 0043 section 3):
 
 1. Every status check listed in .github/required-checks.json resolves to exactly one job, in the workflow the list
    names, and that job can report on a pull request: its workflow starts on ``pull_request`` for every branch the
@@ -12,9 +12,19 @@ Three rules, all anchored on the structure of the workflows and never on a sente
    excluded) and each script that declares ``--self-test`` (called with that option).
 3. No workflow calls scripts/quality/verify-ruleset.py without ``--from-json``: reading a ruleset needs an
    administration token that a pull request must never receive.
+4. Every npm lockfile shipped with the product (a ``*package-lock.json`` under a ``src/main/resources`` directory)
+   is passed to the vulnerability scan of pr-ci.yml by a ``--lockfile=package-lock.json:<path>`` line of its
+   ``scan-args``. The scanner recognises an npm lockfile by its file name, and the shipped ones are prefixed with
+   the name of their tool: without that line they are not scanned. The list is computed from the tree, so a
+   lockfile added later cannot be forgotten; an argument that names a file that does not exist is refused too.
+5. A workflow that publishes a GitHub Release (``publish-windows-release.ps1`` without ``-ValidateOnly``, or
+   ``gh release create``) calls ``intellij-plugin-release.yml`` from one of its jobs (AUD-DEP-07): a release created
+   with the workflow token triggers no ``release:`` event, so nothing else would attach the plugin. That workflow
+   starts on ``workflow_call`` and has no ``release:`` trigger, which would publish the plugin a second time.
 
 What this does not prove: that the ruleset configured on GitHub contains these checks (that is
-scripts/quality/verify-ruleset.py, run by hand), nor that a step runs on every event.
+scripts/quality/verify-ruleset.py, run by hand), nor that a step runs on every event, nor that the scanner
+accepts the arguments, nor that a release really carries the plugin (that is the run of the job itself).
 
 Self-test: scripts/quality/test_check_ci_wiring.py.
 """
@@ -44,6 +54,16 @@ MATRIX_ENTRY = re.compile(r"^\s+([\w-]+):\s*\[(.*)\]\s*$")
 MATRIX_REFERENCE = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
 SELF_TEST_OPTION = re.compile(r"""add_argument\(\s*["']--self-test["']""")
 VERIFY_RULESET = "scripts/quality/verify-ruleset.py"
+SHIPPED_RESOURCES = "/src/main/resources/"
+NPM_LOCKFILE_SUFFIX = "package-lock.json"
+# Build output, installed packages and the fixtures (analysed projects, excluded from the scan) ship nothing.
+NOT_SHIPPED_DIRECTORIES = frozenset({".git", "target", "build", "node_modules", "fixtures", "__pycache__"})
+SCAN_ARGUMENTS = re.compile(r"^(\s+)scan-args\s*:")
+LOCKFILE_ARGUMENT = re.compile(r"^\s*--lockfile=package-lock\.json:(?:\./)?(\S+)\s*$")
+PLUGIN_RELEASE = "intellij-plugin-release.yml"
+# A step that creates the release: the publication script outside its validation-only mode, or the CLI itself.
+RELEASE_PUBLICATION = re.compile(r"publish-windows-release\.ps1(?!.*-ValidateOnly)|\bgh\s+release\s+create\b")
+PLUGIN_RELEASE_CALL = re.compile(rf"^    uses:\s*['\"]?\./{re.escape(WORKFLOWS)}/{re.escape(PLUGIN_RELEASE)}['\"]?\s*$")
 
 
 def code_lines(text: str) -> list[tuple[int, str]]:
@@ -289,20 +309,111 @@ def check_no_ruleset_reading_in_ci(root: Path) -> list[str]:
     return failures
 
 
-def check(root: Path) -> tuple[list[str], int, int]:
+def shipped_npm_lockfiles(root: Path) -> list[str]:
+    """Repository-relative paths of the npm lockfiles under a production resources directory, sorted."""
+    found: list[str] = []
+    for path in gate_cli.repository_files(root, NOT_SHIPPED_DIRECTORIES):
+        relative = path.relative_to(root).as_posix()
+        if path.name.endswith(NPM_LOCKFILE_SUFFIX) and SHIPPED_RESOURCES in f"/{relative}":
+            found.append(relative)
+    return found
+
+
+def scanned_lockfiles(root: Path) -> list[str]:
+    """The paths that the ``scan-args`` of the jobs of pr-ci.yml pass as ``--lockfile=package-lock.json:<path>``."""
+    path = root / WORKFLOWS / PR_CI
+    if not path.is_file():
+        return []
+    declared: list[str] = []
+    for job in jobs_of(path.read_text(encoding="utf-8")).values():
+        indentation: int | None = None
+        for _, line in job["lines"]:
+            header = SCAN_ARGUMENTS.match(line)
+            if header:
+                indentation = len(header.group(1))
+                continue
+            if indentation is None:
+                continue
+            if len(line) - len(line.lstrip()) <= indentation:
+                indentation = None
+                continue
+            argument = LOCKFILE_ARGUMENT.match(line)
+            if argument:
+                declared.append(argument.group(1))
+    return declared
+
+
+def check_shipped_lockfiles_are_scanned(root: Path) -> tuple[list[str], int]:
+    shipped = shipped_npm_lockfiles(root)
+    declared = scanned_lockfiles(root)
+    failures = [f"{WORKFLOWS}/{PR_CI}: the shipped npm lockfile '{relative}' is not passed to the vulnerability "
+                f"scan, add the scan-args line '--lockfile=package-lock.json:{relative}'"
+                for relative in shipped if relative not in declared]
+    failures += [f"{WORKFLOWS}/{PR_CI}: the scan-args pass the lockfile '{relative}', which is not a file of the "
+                 f"repository"
+                 for relative in declared if not (root / relative).is_file()]
+    return failures, len(shipped)
+
+
+def workflow_triggers(text: str) -> list[str]:
+    """The events of the ``on:`` block (inline form or one key per event)."""
+    block = top_level_block(code_lines(text), "on")
+    if not block:
+        return []
+    head = block[0][1].split(":", 1)[1].strip()
+    if head:
+        return [item.strip() for item in re.sub(r"[\[\]]", "", head).split(",") if item.strip()]
+    return list(event_sections(block))
+
+
+def check_releases_publish_the_plugin(root: Path) -> list[str]:
+    """Rule 5: the plugin is published by the workflow that publishes the release, and only by it."""
+    failures: list[str] = []
+    workflows = root / WORKFLOWS
+    publishing = 0
+    for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
+        if workflow.name == PLUGIN_RELEASE:
+            continue
+        text = workflow.read_text(encoding="utf-8")
+        if not any(RELEASE_PUBLICATION.search(line) for _, line in code_lines(text)):
+            continue
+        publishing += 1
+        if not any(PLUGIN_RELEASE_CALL.match(line) for job in jobs_of(text).values() for _, line in job["lines"]):
+            failures.append(f"{WORKFLOWS}/{workflow.name}: publishes a GitHub Release but no job calls "
+                            f"./{WORKFLOWS}/{PLUGIN_RELEASE}: the release would ship without the IntelliJ plugin")
+    plugin = workflows / PLUGIN_RELEASE
+    if not plugin.is_file():
+        if publishing:
+            failures.append(f"{WORKFLOWS}/{PLUGIN_RELEASE}: missing, no workflow can attach the IntelliJ plugin to a "
+                            f"release")
+        return failures
+    triggers = workflow_triggers(plugin.read_text(encoding="utf-8"))
+    if "workflow_call" not in triggers:
+        failures.append(f"{WORKFLOWS}/{PLUGIN_RELEASE}: does not start on workflow_call, the release workflow cannot "
+                        f"call it")
+    if "release" in triggers:
+        failures.append(f"{WORKFLOWS}/{PLUGIN_RELEASE}: still starts on a release: event, which would publish the "
+                        f"plugin a second time beside the call of the release workflow")
+    return failures
+
+
+def check(root: Path) -> tuple[list[str], int, int, int]:
     failures, resolved = check_required_checks(root)
     wiring_failures, wired = check_self_tests_are_wired(root)
     failures += wiring_failures
     failures += check_no_ruleset_reading_in_ci(root)
-    return failures, resolved, wired
+    lockfile_failures, lockfiles = check_shipped_lockfiles_are_scanned(root)
+    failures += lockfile_failures
+    failures += check_releases_publish_the_plugin(root)
+    return failures, resolved, wired, lockfiles
 
 
 def main() -> int:
     return gate_cli.run(
         __doc__, DEFAULT_ROOT, check, "CI WIRING GATE",
-        lambda resolved, wired: (
+        lambda resolved, wired, lockfiles: (
             f"CI WIRING GATE SUCCESS (required checks resolved={resolved}, gate self-tests wired in "
-            f"'{INVARIANTS_JOB}'={wired})"))
+            f"'{INVARIANTS_JOB}'={wired}, shipped npm lockfiles passed to the vulnerability scan={lockfiles})"))
 
 
 if __name__ == "__main__":

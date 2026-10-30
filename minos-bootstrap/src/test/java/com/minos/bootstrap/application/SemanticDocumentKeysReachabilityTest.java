@@ -1,5 +1,6 @@
 package com.minos.bootstrap.application;
 
+import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.application.semantic.SemanticDocumentFactory;
 import com.minos.discovery.ProjectDiscovery.Language;
@@ -60,10 +61,12 @@ class SemanticDocumentKeysReachabilityTest {
         RegisteredProject project = registry.registerProject(Files.createDirectories(temp.resolve("project")), "q9");
         projectId = project.id();
         UUID runId = UUID.randomUUID();
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home);
+        FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
+        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home, active,
+                FileSymbolSnapshotStore::new, ScipIndexerCatalog.javaTypeScriptDescriptors());
         String staged = lifecycle.stage(new IndexSnapshotStageRequest(runId, projectId, artifacts));
         lifecycle.promote(projectId, runId, staged);
-        return new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")).loadActiveKnowledge(projectId).orElseThrow();
+        return active.loadActiveKnowledge(projectId).orElseThrow();
     }
 
     private List<SemanticDocument> semanticDocumentsOf(CodeKnowledgeSnapshot snapshot) throws IOException {

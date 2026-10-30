@@ -38,7 +38,7 @@ Le `Path` fourni est le home MINOS, pas la racine du projet analysé.
 
 Les constructeurs qui ouvrent un home (`new LocalMinosApi(Path)`, `new LocalMinosMultiRepositoryApi(Path)`,
 `new LocalProviderPlatformApi(Path)`) passent par `MinosApplication.open(home)`, qui découvre la racine de
-composition de MINOS par `ServiceLoader` ([ADR 0042](../adr/0042-racine-de-composition.md)). Le module
+composition de MINOS par `ServiceLoader` ([ADR 0042](../architecture/adr/ARCH-0042-racine-de-composition.md)). Le module
 **`com.minos:minos-bootstrap` doit donc être présent au classpath d'exécution** :
 
 - le JAR distribué `minos-code-intelligence-*-all.jar` le contient déjà ;
@@ -236,6 +236,19 @@ analyzeGitActivity
 analyzeWorkspace
 ```
 
+### Adresses e-mail des auteurs Git
+
+`analyzeGitActivity` ne rend plus l'adresse e-mail d'un auteur par défaut : `GitCommitDto.authorEmail()` vaut le masque fixe `[masked]` (le composant reste présent, `authorName` est inchangé, le décompte `uniqueAuthorCount` s'appuie toujours sur l'adresse réelle). L'adresse n'est rendue que sur demande explicite, par le cinquième composant de la requête :
+
+```java
+// Défaut : authorEmail() == "[masked]" (la signature à quatre composants est conservée)
+new MinosMultiRepositoryApi.GitActivityQuery(since, 100, 100, 2);
+// Demande explicite : authorEmail() rend l'adresse du commit
+new MinosMultiRepositoryApi.GitActivityQuery(since, 100, 100, 2, true);
+```
+
+Un appelant qui lisait l'adresse sans le demander doit passer `true`. Dans `GitRepositoryDto`, `workTree` est le chemin absolu du dépôt ; `originRemote` n'est rendu que pour un remote réseau (URL à hôte, ou forme SCP `utilisateur@hôte:chemin`), sans identifiants, requête ni fragment ; un remote local (chemin POSIX ou Windows, partage UNC, `file://`) ou une URL illisible est rendu `null`, avec la limitation `ORIGIN_REMOTE_NOT_DISCLOSED`.
+
 ### Registre abîmé : lister et résoudre un espace de travail sans rien taire
 
 `listWorkspaces` et `getWorkspace` sont **stricts** : une seule entrée de registre illisible les fait échouer, comme avant. Leur
@@ -316,7 +329,67 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
-### Packages internes renommés : un package, un module ([ADR 0044](../adr/0044-un-package-un-module.md))
+### Adaptateurs de stockage dans un seul artefact, version 1.3.0
+
+Les backends de stockage local et PostgreSQL sont livrés dans un seul artefact Maven, `com.minos:minos-storage`, à la place de `com.minos:minos-storage-local` et `com.minos:minos-storage-postgresql` ([ADR 0068](../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 4). Le nom des classes ne change pas, ni les packages `com.minos.storage.local.*` et `com.minos.storage.postgresql.*`, à l'exception des classes partagées par les deux backends (section suivante). Le service `StorageBackendProvider` du backend PostgreSQL est déclaré par l'assemblage `minos-app` : le JAR distribué `minos-code-intelligence-*-all.jar` le contient, et un hôte qui dépend de `com.minos:minos-api` n'a que le backend local, comme avant. Un projet qui déclarait l'un des deux anciens artefacts déclare `minos-storage` ; il reçoit alors le pilote PostgreSQL et Jackson dans son graphe de dépendances, que le backend local ne charge pas. Aucun artefact de relocation n'est publié : MINOS ne publie pas ses modules dans un dépôt Maven.
+
+### Codec des snapshots et correspondance des chemins, version 1.3.0
+
+Les classes que les deux backends de stockage partagent quittent `com.minos.storage.local` pour deux packages de `com.minos:minos-storage` ([ADR 0068](../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 4). Seul le package change ; le nom des classes, leur comportement, les formats V1, V2 et V3, le pointeur actif et le fichier de correspondance restent identiques à l'octet près. Un code qui importait l'une de ces classes met à jour son import.
+
+| Ancien package | Nouveau package | Classes |
+|---|---|---|
+| `com.minos.storage.local.store` | `com.minos.storage.codec` | `CodeKnowledgeSnapshotBinaryCodec`, `KnowledgeSnapshotCodecs`, `SnapshotCodec`, `SnapshotCodecV1`, `SnapshotCodecV2`, `SnapshotCodecV3`, `SnapshotIntegrityService` ; nouvelle classe `SnapshotBinaryPrimitives` (en-tête versionné, chaîne et compte des formats binaires) |
+| `com.minos.storage.local.registry` | `com.minos.storage.home` | `ProjectPathMappingStore` |
+
+### Export NEXUS par un cas d'usage applicatif, version 1.3.0
+
+Aucune signature de `com.minos.api` ne change, et le contrat JSON de l'export NEXUS ([ADR 0020](../architecture/adr/ARCH-0020-minos-nexus-json-boundary.md)) ni la commande `minos nexus-export` non plus. Le constructeur de `com.minos.nexus.NexusExportService` prend l'application ouverte ; `export(Path)` et les constantes `MAX_*` sont inchangés. Un code qui construisait le service lui-même doit être modifié et recompilé (rupture de source et binaire) :
+
+| Signature 1.2.0 | Signature 1.3.0 |
+|---|---|
+| `new NexusExportService(ProjectRegistry, CodeKnowledgeSnapshotStore)` | `new NexusExportService(MinosApplication)` |
+
+La sélection de l'export est faite par `com.minos.application.export.KnowledgeExportUseCase`, que le service obtient par `KnowledgeExportUseCase.of(MinosApplication)`.
+
+### Accesseurs de `MinosApplication` réservés à l'application, version 1.3.0
+
+Aucune signature de `com.minos.api` ne change, ni aucune sortie de la CLI, du serveur MCP ou du plan Docker. Quatre accesseurs de la classe interne `com.minos.application.MinosApplication`, qui rendaient un port de `minos-engine`, ne sont plus publics : seules les classes de `com.minos.application` les appellent. Un code qui les appelait directement doit passer par la façade indiquée et être recompilé (rupture de source et binaire) :
+
+| Accesseur retiré | Remplaçant |
+|---|---|
+| `gitIntelligence()` | `new LocalProjectGitQuery(application)` (`ProjectGitQuery`) |
+| `hostedControlPlaneService()` | `teamControlPlane()` (`TeamControlPlane`) |
+| `providerCatalog()` | `ProviderPlatformService.defaults(application)` |
+| `scipArtifactImporter()` | `new LocalProjectOperations(application)` (`import-scip`) |
+
+La correspondance des chemins du plan Docker se configure par `com.minos.application.ProjectPathMappingService.forHome(home).configure(mapping)`.
+
+### Staging injecté du cycle SCIP, version 1.3.0
+
+Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change, et `MinosApplicationComposer.snapshotLifecycle` garde la sienne. La classe interne `com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle` n'a plus qu'un constructeur, qui reçoit le magasin actif et le port `com.minos.store.StagingSnapshotStores` par lequel elle ouvre ses magasins de travail ([ADR 0068](../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md), « Mise en œuvre »). Un code qui la construisait lui-même doit être modifié et recompilé (rupture de source et binaire) :
+
+| Signature 1.2.0 | Signature 1.3.0 |
+|---|---|
+| `new ScipProjectSnapshotLifecycle(Path)` | `new ScipProjectSnapshotLifecycle(home, new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")), FileSymbolSnapshotStore::new, ScipIndexerCatalog.javaTypeScriptDescriptors())` |
+| `new ScipProjectSnapshotLifecycle(Path, CodeKnowledgeSnapshotStore, List<IndexerDescriptor>)` | `new ScipProjectSnapshotLifecycle(Path, CodeKnowledgeSnapshotStore, StagingSnapshotStores, List<IndexerDescriptor>)` |
+
+`com.minos:minos-provider-scip` ne dépend plus de `com.minos:minos-storage` qu'en portée `test` : un projet qui recevait le stockage par cette dépendance le déclare lui-même.
+
+### Port de lecture des snapshots ([ADR 0056](../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md)), version 1.3.0
+
+Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change. Les types publics de `com.minos.store` publiés depuis la 1.2.0 sont conservés : `SnapshotQueryView`, ses accesseurs `queryStore()` et `indexMetrics()`, `CodeKnowledgeSnapshotStore.loadActiveQueryView` et `ImpactAnalysisService.analyze(SnapshotQueryView, ImpactAnalysisRequest)` sont dépréciés (`@Deprecated(since = "1.3.0")`, sans retrait programmé) et rendent le même résultat ; leur remplaçant est `SnapshotReadView`, obtenue par `CodeKnowledgeSnapshotStore.loadActiveReadView`. Les lectures de `CodeKnowledgeStore` sont déclarées par sa super-interface `CodeKnowledgeReader` : un appelant compilé contre la 1.2.0 les résout toujours.
+
+Quatre signatures de classes publiques internes prennent le port de lecture au lieu du port complet. Un appel compile sans changement (un `CodeKnowledgeStore` est un `CodeKnowledgeReader`), mais un code précompilé qui appelait l'une d'elles doit être recompilé (rupture binaire) :
+
+| Signature 1.2.0 | Signature 1.3.0 |
+|---|---|
+| `new SymbolQueryService(CodeKnowledgeStore)` | `new SymbolQueryService(CodeKnowledgeReader)` |
+| `new RelationshipQueryService(CodeKnowledgeStore)` | `new RelationshipQueryService(CodeKnowledgeReader)` |
+| `new CodeSearchService(CodeKnowledgeStore, SourceReader)` | `new CodeSearchService(CodeKnowledgeReader, SourceReader)` |
+| `ModuleFilterGuard.require(CodeKnowledgeStore, String, SymbolSearchCriteria)` | `ModuleFilterGuard.require(CodeKnowledgeReader, String, SymbolSearchCriteria)` |
+
+### Packages internes renommés : un package, un module ([ADR 0044](../architecture/adr/archive/0044-un-package-un-module.md))
 
 Aucune signature de `com.minos.api` ne change : les contrats publics ne nomment que `com.minos.api.*` et
 `com.minos.application.MinosApplication`. Les points d'entrée de processus gardent leur nom
@@ -331,13 +404,13 @@ Seuls changent des packages internes : un code qui importait directement l'une d
 | `com.minos.adapter.scip` (`minos-engine`) | `com.minos.orchestration` | `ScipSymbolSnapshotRequest`, `ScipSymbolSnapshotReport` |
 | `com.minos.git` (`minos-integration-git`) | `com.minos.integration.git` | `GitIntelligenceService`, `JGitCloneDeadline`, `JGitRemoteGitClient`, `JGitRemoteRepositoryMaterializer`, `RemoteCloneBudget`, `RemoteRepositoryCachePolicy` (le port `com.minos.git.GitIntelligence` ne bouge pas) |
 | `com.minos.runtime` (`minos-runtime-local`) | `com.minos.runtime.local` | les 34 classes d'exécution locale (`CommandLocator`, `ProcessIndexerExecutor`, `WorkerSandboxBackends`, `LocalIsolatedIndexWorker`…) ; les ports d'engine (`ProviderRuntimeManager`, `ProviderRuntimeStatus`, `WorkerSandboxProbe`, `HostCommandLocator`) restent dans `com.minos.runtime` |
-| `com.minos.store` (`minos-storage-local`) | `com.minos.storage.local.store` | `ActiveSnapshotRepository`, `CodeKnowledgeSnapshotBinaryCodec`, `EnvironmentHostedTenantKeyProvider`, `FileHostedControlPlaneStore`, `FileRuntimeObservationStore`, `FileSemanticVectorStore`, `FileSymbolSnapshotStore`, `ProjectMutationSemanticVectorStore`, `SnapshotBinaryCodecSupport`, `SnapshotCodec`, `SnapshotCodecV1`, `SnapshotCodecV2`, `SnapshotCompactionService`, `SnapshotIntegrityService`, `SnapshotProjectLease`, `SnapshotRepository`, `SnapshotRetentionPolicy`, `SnapshotRetentionService` ; les ports et modèles d'engine (`CodeKnowledgeSnapshot`, `CodeKnowledgeSnapshotStore`, `InMemoryCodeKnowledgeStore`…) restent dans `com.minos.store` |
-| `com.minos.registry` (`minos-storage-local`) | `com.minos.storage.local.registry` | `LocalProjectRegistry`, `InterProcessLocalProjectRegistry`, `ProjectPathMappingStore` ; les ports d'engine (`ProjectRegistry`, `RegisteredProject`, `ProjectPathMappings`…) restent dans `com.minos.registry` |
+| `com.minos.store` (`minos-storage-local`) | `com.minos.storage.local.store` | `ActiveSnapshotRepository`, `EnvironmentHostedTenantKeyProvider`, `FileHostedControlPlaneStore`, `FileRuntimeObservationStore`, `FileSemanticVectorStore`, `FileSymbolSnapshotStore`, `ProjectMutationSemanticVectorStore`, `SnapshotCompactionService`, `SnapshotProjectLease`, `SnapshotRepository`, `SnapshotRetentionPolicy`, `SnapshotRetentionService` ; les codecs sont dans `com.minos.storage.codec` (section « Codec des snapshots et correspondance des chemins ») ; les ports et modèles d'engine (`CodeKnowledgeSnapshot`, `CodeKnowledgeSnapshotStore`, `InMemoryCodeKnowledgeStore`…) restent dans `com.minos.store` |
+| `com.minos.registry` (`minos-storage-local`) | `com.minos.storage.local.registry` | `LocalProjectRegistry`, `InterProcessLocalProjectRegistry` ; `ProjectPathMappingStore` est dans `com.minos.storage.home` ; les ports d'engine (`ProjectRegistry`, `RegisteredProject`, `ProjectPathMappings`…) restent dans `com.minos.registry` |
 | `com.minos.storage` (`minos-storage-local`) | `com.minos.storage.local` | `LocalStorageBackend`, `LocalStorageRetentionService`, `SerializedRuntimeObservationStore` ; les ports d'engine (`StorageBackend`, `StorageBackendConfiguration`, `StorageBackendProvider`, `MinosRuntimeSettings`…) restent dans `com.minos.storage` |
 | `com.minos.orchestration` (`minos-storage-local`) | `com.minos.storage.local.orchestration` | `FileIndexStateStore`, `IndexRunRetentionPolicy`, `IndexRunRetentionService`, `ProjectIndexLease` ; les ports et modèles d'engine (`IndexStateStore`, `IndexingRun`, `ProjectIndexState`…) restent dans `com.minos.orchestration` |
 | `com.minos.incremental` (`minos-storage-local`) | `com.minos.storage.local.incremental` | `FileProjectFingerprintSnapshotStore` ; les ports, modèles et services d'engine (`ProjectFingerprintSnapshotStore`, `FileFingerprint`, `ProjectFingerprintService`…) restent dans `com.minos.incremental` |
 | `com.minos.dynamic` (`minos-application`) | `com.minos.application.dynamic` | `RuntimeIntelligenceService`, `RuntimeObservationEnvelopeCodec` ; le modèle et le port des observations runtime (`RuntimeObservationSession`, `RuntimeObservationStore`…) restent dans `com.minos.dynamic`, désormais dans `minos-engine` |
-| `com.minos.semantic` (`minos-application`) | `com.minos.application.semantic` | `EmbeddingProvider`, `HybridContextBuilder`, `HybridSearchService`, `LocalHashEmbeddingProvider`, `OllamaEmbeddingProvider`, `SemanticDocumentFactory`, `SemanticIndexBudget`, `SemanticIndexService`, `SemanticSearchEvaluator`, `SemanticSearchService` ; les types de domaine (`SemanticDocument`, `SemanticVector`, `SemanticVectorStore`…) restent dans `com.minos.semantic` |
+| `com.minos.semantic` (`minos-application`) | `com.minos.application.semantic` | `EmbeddingProvider`, `HybridContextBuilder`, `HybridSearchService`, `LocalHashEmbeddingProvider`, `OllamaEmbeddingProvider`, `SemanticDocumentFactory`, `SemanticIndexBudget`, `SemanticIndexService`, `SemanticSearchService` ; les types de domaine (`SemanticDocument`, `SemanticVector`, `SemanticVectorStore`…) restent dans `com.minos.semantic` |
 | `com.minos.storage` (`minos-application`) | `com.minos.application` | `StorageBackends` (façade `open(StorageBackendConfiguration)`, signature inchangée) ; les ports d'engine (`StorageBackend`, `StorageBackendConfiguration`…) restent dans `com.minos.storage` |
 | `com.minos.cli` (`minos-app`) | `com.minos.app` | `McpBackend`, `McpBackendConfiguration`, `McpBackendConfigurationStore`, `McpBackendRouter`, `DockerMcpTransport` ; `MinosLauncher` et `DockerRuntimeBootstrap` gardent `com.minos.cli` et passent dans le jar de `minos-cli`, qui déclare le SPI `com.minos.cli.McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`) |
 | `com.minos.integration.nexus` (`minos-nexus`) | `com.minos.nexus` | `NexusExportContract`, `NexusExportService`, `NexusSemanticSignalContract`, `NexusSemanticSignalService` ; le contrat JSON versionné (ADR 0020) ne change pas, et `NexusExportBridgeMain` garde `com.minos.integration.nexus` |
@@ -346,7 +419,7 @@ Seuls changent des packages internes : un code qui importait directement l'une d
 
 **Alias supprimés.** Les quatre alias dépréciés de `minos-cli` — `com.minos.cli.ProjectOperations`, `com.minos.cli.ProjectSymbolQuery`, `com.minos.cli.LocalProjectOperations`, `com.minos.cli.LocalProjectSymbolQuery` — n'existent plus : ils ne faisaient que déléguer aux types de `com.minos.application` du même nom, à utiliser directement.
 
-### Constructeurs télescopiques retirés ([ADR 0045](../adr/0045-constructeur-unique-et-point-d-entree-nomme.md))
+### Constructeurs télescopiques retirés ([ADR 0045](../architecture/adr/archive/0045-constructeur-unique-et-point-d-entree-nomme.md))
 
 Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change : `MinosApplication` est regroupée par domaine en interne, et ses accesseurs gardent nom, type et instance retournée.
 
@@ -361,3 +434,20 @@ Deux classes publiques internes n'ont plus qu'un constructeur, privé, et un poi
 | `new MinosCli(ProjectSymbolQuery, ProjectOperations, ProjectArchitectureQuery, ProjectImpactQuery)` | `MinosCli.builder(symbolQuery).projectOperations(...).architectureQuery(...).impactQuery(...).build()` |
 
 Un collaborateur de `MinosCli` que l'on ne fournit pas laisse sa commande « not configured in this CLI bootstrap », comme l'ancien `null` ; les mutateurs du `Builder` refusent `null`. Le contrat de la ligne de commande (`MinosCli.run`) ne change pas.
+
+### Identifiants internes sans numéro de jalon ([ADR 0043](../architecture/adr/GEN-0043-retrait-des-artefacts-de-jalon.md)), version 1.3.0
+
+Aucune signature de `com.minos.api` ni de `com.minos.application.MinosApplication` ne change, et aucune sortie de la CLI, du serveur MCP ni du plugin IntelliJ (les identifiants d'action `Minos.*` sont conservés). Des méthodes et constantes publiques de classes internes perdent leur numéro de jalon, sans alias déprécié : un code qui les appelait directement doit être modifié et recompilé (rupture de source et binaire). Les listes et ensembles rendus sont identiques, dans le même ordre.
+
+| Signature retirée | Remplaçant |
+|---|---|
+| `ScipIndexerCatalog.qualifiedM24Providers()` | `ScipIndexerCatalog.qualifiedProviders()` |
+| `ScipIndexerCatalog.qualifiedM24Descriptors()` | `ScipIndexerCatalog.qualifiedDescriptors()` |
+| `ScipIndexerCatalog.qualifiedM17Providers()` | `ScipIndexerCatalog.regressionReplayProviders()` |
+| `ScipIndexerCatalog.qualifiedM17Descriptors()` | aucun (méthode sans appelant) : `regressionReplayProviders().stream().map(IndexerProvider::descriptor).toList()` |
+| `ScipIndexerCatalog.qualifiedM1Descriptors()` | `ScipIndexerCatalog.javaTypeScriptDescriptors()` |
+| `ScipIndexerCatalog.registerQualifiedM1(IndexerRegistry)` | `ScipIndexerCatalog.registerJavaTypeScript(IndexerRegistry)` |
+| `BuildDescriptorPolicy.m24Defaults()` | `BuildDescriptorPolicy.currentDefaults()` |
+| `BuildDescriptorPolicy.m17Defaults()` | `BuildDescriptorPolicy.legacyDefaults()` |
+
+`ScipIndexerCatalog` est dans `com.minos.adapter.scip` (`minos-provider-scip`), `BuildDescriptorPolicy` dans `com.minos.incremental` (`minos-engine`). Le gate `scripts/quality/check-milestone-identifiers.py` refuse désormais un numéro de jalon dans un nom de production.

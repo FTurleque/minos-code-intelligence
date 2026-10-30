@@ -4,7 +4,7 @@ import com.minos.application.MinosApplication;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.json.DeterministicJson;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
@@ -14,11 +14,13 @@ import io.modelcontextprotocol.spec.McpSchema.Tool;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.minos.mcp.McpToolSchemas.architectureGraphSchema;
 import static com.minos.mcp.McpToolSchemas.emptySchema;
@@ -52,6 +54,7 @@ public final class MinosMcpTools implements AutoCloseable {
     private static final String ARG_LIMIT = "limit";
     private static final String ARG_MODULE = "module";
     private static final int MAX_CLIENT_ERROR_CHARS = 240;
+    private static final int MAX_ARGUMENT_NAME_CHARS = 64;
     private static final int MAX_CAUSE_DEPTH = 16;
     private static final System.Logger LOGGER = System.getLogger(MinosMcpTools.class.getName());
 
@@ -150,14 +153,27 @@ public final class MinosMcpTools implements AutoCloseable {
     }
 
     private SyncToolSpecification tool(String name, String description, String schema, ToolInvocation invocation) {
+        Tool tool = Tool.builder(name, McpJsonDefaults.getMapper(), schema).description(description).build();
+        // The accepted keys are the published schema's own properties: no second list to keep in step.
+        Set<String> schemaProperties = schemaProperties(tool);
         return SyncToolSpecification.builder()
-                .tool(Tool.builder(name, McpJsonDefaults.getMapper(), schema).description(description).build())
-                .callHandler((exchange, request) -> execute(name, invocation, arguments(request.arguments())))
+                .tool(tool)
+                .callHandler((exchange, request) ->
+                        execute(name, invocation, schemaProperties, arguments(request.arguments())))
                 .build();
     }
 
-    private CallToolResult execute(String toolName, ToolInvocation invocation, Map<String, Object> arguments) {
+    private static Set<String> schemaProperties(Tool tool) {
+        return tool.inputSchema().get("properties") instanceof Map<?, ?> properties
+                ? properties.keySet().stream().map(String::valueOf).collect(Collectors.toUnmodifiableSet())
+                : Set.of();
+    }
+
+    private CallToolResult execute(
+            String toolName, ToolInvocation invocation, Set<String> schemaProperties, Map<String, Object> arguments
+    ) {
         try {
+            rejectUnknownArguments(schemaProperties, arguments);
             String text = invocation.execute(arguments);
             String result = text == null ? "" : text.stripTrailing();
             if (exceedsUtf8Budget(result.isEmpty() ? "{}" : result, maxResultBytes)) {
@@ -430,6 +446,22 @@ public final class MinosMcpTools implements AutoCloseable {
             throw new IllegalArgumentException("MCP argument " + key + " must be a non-blank string");
         }
         return bounded(key, text, maxUtf8Bytes);
+    }
+
+    /**
+     * Enforces the published {@code additionalProperties:false}: an argument that is not a schema property is refused
+     * before the operation runs, so a misspelled option can never be served with its default. Only the first unknown
+     * name (in natural order) is reported, bounded; a value is never read, rendered or logged.
+     */
+    private static void rejectUnknownArguments(Set<String> schemaProperties, Map<String, Object> arguments) {
+        arguments.keySet().stream()
+                .filter(key -> !schemaProperties.contains(key))
+                .min(Comparator.naturalOrder())
+                .ifPresent(key -> {
+                    String shown = key.length() > MAX_ARGUMENT_NAME_CHARS
+                            ? key.substring(0, MAX_ARGUMENT_NAME_CHARS) + "..." : key;
+                    throw new IllegalArgumentException("unknown MCP argument: " + shown);
+                });
     }
 
     private static Map<String, Object> arguments(Map<String, Object> arguments) {

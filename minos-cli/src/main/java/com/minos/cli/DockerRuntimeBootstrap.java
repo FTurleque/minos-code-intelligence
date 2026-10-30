@@ -1,15 +1,14 @@
 package com.minos.cli;
 
-import com.minos.application.MinosApplicationComposers;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.application.MinosHome;
+import com.minos.application.ProjectPathMappingService;
 import com.minos.diagnostics.PublicErrorMessages;
-import com.minos.registry.ProjectPathMapping;
-import com.minos.registry.ProjectPathMappings;
+import com.minos.domain.registry.ProjectPathMapping;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Narrow bootstrap entry point used by the packaged Docker administration plane before MINOS opens
@@ -29,7 +28,7 @@ public final class DockerRuntimeBootstrap {
             exitCode = run(MinosHome.resolve(System.getenv(), System.getProperties()), arguments, System.out, System.err);
         } catch (Exception exception) {
             System.err.println("error: Docker runtime bootstrap failed: " + failureMessage(exception));
-            exitCode = FindSymbolCommand.EXECUTION_ERROR;
+            exitCode = CliExitCodes.EXECUTION_ERROR;
         }
         System.exit(exitCode);
     }
@@ -42,7 +41,7 @@ public final class DockerRuntimeBootstrap {
 
         if (arguments.length != 3 || !CONFIGURE_PROJECT_PATHS.equals(arguments[0])) {
             error.append("error: expected configure-project-paths <host-root> <container-root>\n");
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
 
         final ProjectPathMapping desired;
@@ -52,18 +51,16 @@ public final class DockerRuntimeBootstrap {
             error.append("error: invalid project path mapping: ")
                     .append(exception.getMessage())
                     .append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
 
-        // ADR 0042 : magasin fourni par la racine de composition, créé au même moment qu'avant.
-        ProjectPathMappings store = MinosApplicationComposers.resolve().projectPathMappings(home);
-        Optional<ProjectPathMapping> existing = store.loadOptional();
-        if (existing.isPresent() && !existing.orElseThrow().equals(desired)) {
+        // ADR 0042: the store comes from the composition root, only once the arguments are valid.
+        ProjectPathMappingService.Outcome outcome = ProjectPathMappingService.forHome(home).configure(desired);
+        if (outcome == ProjectPathMappingService.Outcome.CONFLICT) {
             error.append("error: refusing to replace an existing project path mapping implicitly\n");
-            return FindSymbolCommand.EXECUTION_ERROR;
+            return CliExitCodes.EXECUTION_ERROR;
         }
-        if (existing.isEmpty()) {
-            store.save(desired);
+        if (outcome == ProjectPathMappingService.Outcome.CREATED) {
             output.append("MINOS Docker project path mapping created: ")
                     .append(desired.hostRoot())
                     .append(" <-> ")
@@ -72,7 +69,7 @@ public final class DockerRuntimeBootstrap {
         } else {
             output.append("MINOS Docker project path mapping already matches requested roots.\n");
         }
-        return FindSymbolCommand.SUCCESS;
+        return CliExitCodes.SUCCESS;
     }
 
     static String failureMessage(Exception exception) {

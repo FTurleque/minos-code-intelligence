@@ -2,6 +2,7 @@ package com.minos.storage;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.domain.registry.ProjectPathMapping;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
  * Durable MINOS runtime configuration resolved with explicit precedence:
@@ -61,16 +63,16 @@ public final class MinosRuntimeSettings {
         Path normalized = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         Properties file = new Properties();
         Path configuration = normalized.resolve(CONFIG_DIRECTORY).resolve(CONFIG_FILE);
-        if (Files.isRegularFile(configuration)) {
-            file.putAll(BoundedProperties.load(
-                    configuration,
-                    MAX_CONFIGURATION_BYTES,
-                    MAX_CONFIGURATION_ENTRIES,
-                    MAX_CONFIGURATION_KEY_CHARS,
-                    MAX_CONFIGURATION_VALUE_CHARS,
-                    "MINOS runtime configuration"
-            ));
-        }
+        // Absent => empty configuration. Present without being a regular non-symlink file (directory, link,
+        // dangling link) => refused: ignoring it would silently start on the default values (fail-open).
+        BoundedProperties.loadIfPresent(
+                configuration,
+                MAX_CONFIGURATION_BYTES,
+                MAX_CONFIGURATION_ENTRIES,
+                MAX_CONFIGURATION_KEY_CHARS,
+                MAX_CONFIGURATION_VALUE_CHARS,
+                "MINOS runtime configuration"
+        ).ifPresent(file::putAll);
         Properties systemSnapshot = new Properties();
         systemSnapshot.putAll(System.getProperties());
         return new MinosRuntimeSettings(normalized, file, Map.copyOf(System.getenv()), systemSnapshot);
@@ -94,6 +96,18 @@ public final class MinosRuntimeSettings {
         if (blank(value)) value = environment.get(environmentVariable);
         if (blank(value)) value = fileProperties.getProperty(property);
         return blank(value) ? null : value.trim();
+    }
+
+    /**
+     * Where this process runs: {@code minos.runtime.location} system property, then {@code MINOS_RUNTIME_LOCATION},
+     * as {@link ProjectPathMapping#resolveRuntimeLocation} reads them for the registries. The configuration file
+     * is deliberately <em>not</em> consulted: it is shared by every launcher of one MINOS home, and the location
+     * of a launcher is a fact about that process, not a setting a Docker installation could write for a native one.
+     *
+     * @throws IllegalArgumentException when the configured value is not a known location
+     */
+    public ProjectPathMapping.RuntimeLocation runtimeLocation() {
+        return ProjectPathMapping.resolveRuntimeLocation(environment, systemProperties);
     }
 
     public String secret(
@@ -148,7 +162,7 @@ public final class MinosRuntimeSettings {
     private String readConfinedRelativeSecret(Path configuredSecretPath) throws IOException {
         Path candidate = home.resolve(configuredSecretPath).normalize();
         if (!candidate.startsWith(home)) {
-            throw new IOException("relative MINOS secret file must stay inside MINOS_HOME: " + configuredSecretPath);
+            throw new IOException("relative MINOS secret file must stay inside MINOS_HOME: " + leafName(configuredSecretPath));
         }
         if (!Files.isRegularFile(candidate)) {
             throw new IOException(SECRET_DOES_NOT_EXIST);
@@ -161,7 +175,7 @@ public final class MinosRuntimeSettings {
         Path physicalSecret = candidate.toRealPath();
         if (!physicalSecret.startsWith(physicalHome)) {
             throw new IOException("relative MINOS secret file escapes MINOS_HOME through a symbolic link: "
-                    + configuredSecretPath);
+                    + leafName(configuredSecretPath));
         }
 
         Path relative = home.relativize(candidate);
@@ -170,7 +184,7 @@ public final class MinosRuntimeSettings {
             return BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES, "MINOS secret file");
         } catch (ConfinedFileOpener.ConfinementException exception) {
             throw new IOException("relative MINOS secret file failed physical confinement: "
-                    + configuredSecretPath, exception);
+                    + leafName(configuredSecretPath), exception);
         }
     }
 

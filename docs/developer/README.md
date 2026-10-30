@@ -63,25 +63,25 @@ flowchart TB
 |---|---|
 | `com.minos.discovery` | découverte de projet, langages, builds, modules |
 | `com.minos.registry` | ports et modèles du registre de projets et workspaces (moteur) |
-| `com.minos.storage.local.registry` | registre local persisté des projets, workspaces et correspondances de chemins (adaptateur `minos-storage-local`) |
+| `com.minos.storage.local.registry` | registre local persisté des projets, workspaces et correspondances de chemins (adaptateur `minos-storage`) |
 | `com.minos.orchestration` | négociation, lifecycle et promotion |
-| `com.minos.storage.local.orchestration` | état d'indexation persisté, bail projet inter-JVM et rétention des runs (adaptateur `minos-storage-local`) |
+| `com.minos.storage.local.orchestration` | état d'indexation persisté, bail projet inter-JVM et rétention des runs (adaptateur `minos-storage`) |
 | `com.minos.incremental` | fingerprints, invalidation, plans NONE/FULL/INCREMENTAL |
-| `com.minos.storage.local.incremental` | snapshots d'empreintes persistés (adaptateur `minos-storage-local`) |
+| `com.minos.storage.local.incremental` | snapshots d'empreintes persistés (adaptateur `minos-storage`) |
 | `com.minos.adapter.scip` | lecture et normalisation SCIP |
 | `com.minos.domain` | symboles, relations, origine, preuves et critères |
 | `com.minos.program` | modèle provider-independent des graphes de programme M19 |
 | `com.minos.semantic` | modèle sémantique : documents, vecteurs et port de stockage vectoriel (domaine) |
 | `com.minos.application.semantic` | embeddings, indexation et recherche sémantique/hybride, provider learned local et budgets M20/M23 (services applicatifs) |
 | `com.minos.store` | ports et modèles de snapshots, index reconstruisibles (moteur) |
-| `com.minos.storage.local.store` | persistance locale des snapshots, vecteurs, observations runtime et plan de contrôle (adaptateur `minos-storage-local`) |
-| `com.minos.storage.local` | backend de stockage local, rétention persistante et observations runtime sérialisées (adaptateur `minos-storage-local`) |
+| `com.minos.storage.local.store` | persistance locale des snapshots, vecteurs, observations runtime et plan de contrôle (adaptateur `minos-storage`) |
+| `com.minos.storage.local` | backend de stockage local, rétention persistante et observations runtime sérialisées (adaptateur `minos-storage`) |
 | `com.minos.query` | requêtes symboles/relations/tests |
 | `com.minos.context` | recherche compacte, extraits et budgets |
 | `com.minos.architecture` | topologie, dépendances, centralité, technologies |
 | `com.minos.impact` | propagation d’impact potentielle |
 | `com.minos.api` | contrats Java publics versionnés |
-| `com.minos.cli` | exposition CLI stable, points d'entrée `MinosLauncher` et `DockerRuntimeBootstrap` |
+| `com.minos.cli` | exposition CLI stable, points d'entrée `MinosLauncher` et `DockerRuntimeBootstrap` ; sous-packages `command`, `operations`, `support` |
 | `com.minos.app` | route `minos mcp` de l'assemblage final : router backend natif/Docker (`minos-app`) |
 | `com.minos.mcp` | exposition MCP STDIO read-only |
 | `com.minos.git` | port Git du moteur (`GitIntelligence`) |
@@ -92,7 +92,7 @@ flowchart TB
 | `com.minos.output` | rendus texte/JSON |
 | `com.minos.hosted` | identité, RBAC, espaces partagés, audit, rétention et frontières opérateur M27/M28 |
 | `com.minos.runtime` | ports d'exécution des providers (`ProviderRuntimeManager`, `WorkerSandboxProbe`, `HostCommandLocator`) |
-| `com.minos.runtime.local` | worker local, bundles distribués et disposition d’isolation remote M25/M28 (adaptateur `minos-runtime-local`) |
+| `com.minos.runtime.local` | worker local, bundles distribués et disposition d’isolation remote M25/M28 (adaptateur `minos-runtime-local`) ; sous-packages `process`, `sandbox`, `workspace`, `distributed` |
 
 ## Parcours de lecture conseillé
 
@@ -114,8 +114,9 @@ flowchart TB
 16. [Multi-dépôts et Git](multi-repo-git.md)
 17. [Supply-chain et provenance de release](supply-chain.md)
 18. [Tests et contribution](testing.md)
-19. [Audit de code : SpotBugs et PIT](../quality/code-audit.md)
+19. [Audit de code : SpotBugs et PIT](quality/code-audit.md)
 20. [Configuration des assistants IA](ai-configuration.md)
+21. [Archgate : règles rattachées aux ADR](archgate.md)
 
 ## Build développeur
 
@@ -123,7 +124,7 @@ flowchart TB
 .\mvnw.cmd clean verify
 ```
 
-La toolchain est contractualisée par Maven Enforcer : Java 24 et Maven 3.9.x.
+La toolchain est contractualisée par Maven Enforcer : Java 25 et Maven 3.9.x.
 
 Le build du module final produit également le SBOM de distribution dans `target/sbom/minos-cyclonedx.json`.
 

@@ -33,7 +33,7 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `IndexCommand`, `CliCommandSupport.run` : message `error: …`, code `FindSymbolCommand.EXECUTION_ERROR` (= 1) |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations.prepare` / `executeLocked` (`minos-cli`) |
+| Orchestration de l'indexation | `ProjectIndexingUseCase.prepare` / `executeLocked` (`minos-application`) |
 | Registre d'indexeurs | `IndexerRegistry.negotiate` (`minos-engine`) |
 | Provider SCIP | `ManagedScipProviderRuntimeManager.inspect` (`minos-provider-scip`) : états `READY`, `BLOCKED`, `NOT_INSTALLED` |
 
@@ -63,7 +63,7 @@ sequenceDiagram
 | Participant | Classes (module) |
 |---|---|
 | CLI | `DoctorCommand`, `ToolsCommand` (`minos-cli`) |
-| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` |
+| Orchestration de l'indexation | `LocalAutonomousIndexOperations.providers` et `installProvider` (`minos-cli`), sur `ProviderPlatformService.runtimes` et `installRuntime` (`minos-application`) |
 | Provider SCIP | `ManagedScipProviderRuntimeManager.inspect` et `install` |
 
 Le rapport de `doctor` contient aussi les commandes trouvées, le stockage privé et l'état du sandbox des workers

@@ -18,7 +18,9 @@ import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.SymbolSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -118,6 +120,26 @@ class RuntimeIntelligenceServiceTest {
         IllegalArgumentException stale = assertThrows(IllegalArgumentException.class,
                 () -> fixture.service().report("runtime-fixture", "run-1", 20));
         assertTrue(stale.getMessage().contains("non-active snapshot"));
+    }
+
+    /** AUD-PERF-13 : le rapport d'un symbole le cherche dans l'index de la vue active, jamais dans le snapshot brut. */
+    @Test
+    void symbolReportReadsTheActiveQueryViewAndNeverTheRawSnapshot(@TempDir Path root) throws Exception {
+        Fixture fixture = fixture(root);
+        Path envelope = writeEnvelope(root.resolve("runtime.tsv"), fixture.project().id(), "snapshot-1", "run-1");
+        fixture.service().importSession("runtime-fixture", new RuntimeObservationEnvelopeCodec().read(envelope));
+        fixture.snapshots().failRawKnowledgeLoads();
+
+        RuntimeIntelligenceService.SymbolRuntimeReport symbol = fixture.service()
+                .symbolReport("runtime-fixture", "service", "run-1", 20);
+        IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class,
+                () -> fixture.service().symbolReport("runtime-fixture", "absent", "run-1", 20));
+
+        assertEquals("snapshot-1", symbol.snapshotId());
+        assertEquals("service", symbol.symbolId());
+        assertEquals("com.acme.Service", symbol.qualifiedName());
+        assertEquals(5, symbol.executionHits());
+        assertEquals("unknown symbol in active snapshot: absent", unknown.getMessage());
     }
 
     @Test
@@ -257,9 +279,18 @@ class RuntimeIntelligenceServiceTest {
         }
     }
 
-    /** Snapshots en mémoire : le dernier publié devient actif, symboles triés par identifiant. */
+    /**
+     * Snapshots en mémoire : le dernier publié devient actif, symboles triés par identifiant. La vue de requête
+     * est construite sur le snapshot actif ; {@link #failRawKnowledgeLoads()} fait échouer toute lecture du
+     * snapshot brut, pour prouver qu'un chemin n'emprunte que la vue.
+     */
     private static final class InMemorySnapshotStore implements CodeKnowledgeSnapshotStore {
         private final Map<UUID, CodeKnowledgeSnapshot> active = new HashMap<>();
+        private boolean rawKnowledgeFails;
+
+        void failRawKnowledgeLoads() {
+            rawKnowledgeFails = true;
+        }
 
         @Override
         public SymbolSnapshot publish(UUID projectId, String snapshotId, Collection<Symbol> symbols) {
@@ -283,12 +314,24 @@ class RuntimeIntelligenceServiceTest {
 
         @Override
         public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) {
+            if (rawKnowledgeFails) throw new IllegalStateException("raw snapshot load is forbidden in this test");
             return Optional.ofNullable(active.get(projectId));
         }
 
+        /** Ancien contrat, servi par la vue de lecture. */
+        @Deprecated(since = "1.3.0")
         @Override
         public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
-            throw new UnsupportedOperationException("query views are not used by this test");
+            return loadActiveReadView(projectId).map(SnapshotQueryView::of);
+        }
+
+        @Override
+        public Optional<SnapshotReadView> loadActiveReadView(UUID projectId) {
+            return Optional.ofNullable(active.get(projectId)).map(snapshot -> SnapshotReadView.indexed(
+                    new SnapshotDescriptor(3, snapshot.snapshotId(), snapshot.snapshotId() + ".bin", "0".repeat(64),
+                            snapshot.symbols().size(), snapshot.occurrences().size(),
+                            snapshot.relationships().size()),
+                    snapshot));
         }
     }
 

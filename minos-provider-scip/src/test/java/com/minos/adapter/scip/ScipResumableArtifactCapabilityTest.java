@@ -32,7 +32,7 @@ class ScipResumableArtifactCapabilityTest {
 
     @Test
     void everyOtherCatalogProviderLeavesResumableArtifactUnsupported() {
-        List<IndexerProvider> providers = ScipIndexerCatalog.qualifiedM24Providers();
+        List<IndexerProvider> providers = ScipIndexerCatalog.qualifiedProviders();
         assertTrue(providers.size() >= 7, "the M24 catalog covers Java, TypeScript, Python and the polyglot providers");
 
         for (IndexerProvider provider : providers) {

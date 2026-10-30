@@ -8,8 +8,8 @@ context: |
   Langue : rédiger tous les artefacts OpenSpec en français (comme docs/, les ADR et
   les PR du dépôt).
 
-  Toolchain (docs/TOOLCHAIN_POLICY.md) :
-  - Noyau, CLI, MCP, stockage, providers : Java 24 et Maven 3.9.x, via le wrapper
+  Toolchain (docs/developer/TOOLCHAIN_POLICY.md) :
+  - Noyau, CLI, MCP, stockage, providers : Java 25 et Maven 3.9.x, via le wrapper
     mvnw / mvnw.cmd, qui fait foi (pas un Maven local).
   - minos-intellij : Gradle et Java 21, hors du reactor Maven. C'est un client
     externe du protocole CLI versionné et il ne doit dépendre d'aucun artefact
@@ -23,7 +23,7 @@ context: |
     à la direction domain -> engine -> runtime/storage -> adapters -> application ->
     surfaces. minos-app est le composition root.
   - Une décision d'architecture structurante donne lieu à un ADR numéroté dans
-    docs/adr/ (Contexte, Décision, Conséquences) et non à une simple note de design.
+    docs/architecture/adr/ (Contexte, Décision, Conséquences) et non à une simple note de design.
   - MCP en STDIO est en lecture seule (ADR-0017). Les surfaces publiques (CLI, API
     Java, MCP) sont versionnées et additives : pas de rupture de contrat.
   - Fail-closed : le code non fiable est refusé par le sandbox OS, jamais exécuté

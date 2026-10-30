@@ -3,7 +3,10 @@ package com.minos.semantic;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
@@ -47,6 +50,24 @@ public interface SemanticVectorStore {
      */
     default Optional<IndexMetadata> metadata(String projectId) throws IOException {
         return load(projectId).map(IndexMetadata::from);
+    }
+
+    /**
+     * Documents of the index without their vectors, with the metadata of the index they were read from.
+     * The default derives both from the full snapshot; a backend that stores vectors apart from the
+     * documents reads the documents only.
+     */
+    default Optional<IndexDocuments> documents(String projectId) throws IOException {
+        return load(projectId).map(IndexDocuments::from);
+    }
+
+    /**
+     * Stable key and checksum of every document of the index, with the metadata of that index: enough to
+     * decide which documents can keep their stored vector. The default derives them from the full snapshot;
+     * a backend that stores vectors apart from the documents reads neither the vectors nor the contents.
+     */
+    default Optional<IndexChecksums> checksums(String projectId) throws IOException {
+        return load(projectId).map(IndexChecksums::from);
     }
 
     /** Stable diagnostic identifier for the vector ranking engine. */
@@ -128,6 +149,35 @@ public interface SemanticVectorStore {
         }
     }
 
+    /** The documents of one index, in stable-key order, and the metadata of that same index. */
+    record IndexDocuments(IndexMetadata metadata, List<SemanticDocument> documents) {
+        public IndexDocuments {
+            Objects.requireNonNull(metadata, "metadata");
+            documents = List.copyOf(Objects.requireNonNull(documents, "documents"));
+        }
+
+        static IndexDocuments from(IndexSnapshot snapshot) {
+            return new IndexDocuments(IndexMetadata.from(snapshot),
+                    snapshot.documents().stream().map(IndexedDocument::document).toList());
+        }
+    }
+
+    /** The checksum of each document of one index, by stable key, and the metadata of that same index. */
+    record IndexChecksums(IndexMetadata metadata, Map<String, String> checksumsByStableKey) {
+        public IndexChecksums {
+            Objects.requireNonNull(metadata, "metadata");
+            checksumsByStableKey = Map.copyOf(Objects.requireNonNull(checksumsByStableKey, "checksumsByStableKey"));
+        }
+
+        static IndexChecksums from(IndexSnapshot snapshot) {
+            Map<String, String> checksums = new LinkedHashMap<>();
+            for (IndexedDocument value : snapshot.documents()) {
+                checksums.put(value.document().stableKey(), value.document().checksum());
+            }
+            return new IndexChecksums(IndexMetadata.from(snapshot), checksums);
+        }
+    }
+
     record VectorHit(SemanticDocument document, double score) {
         public VectorHit {
             Objects.requireNonNull(document, "document");
@@ -135,10 +185,31 @@ public interface SemanticVectorStore {
         }
     }
 
-    record IndexedDocument(SemanticDocument document, SemanticVector vector) {
+    /**
+     * One document of an index to write and its vector. A document whose content did not change may be
+     * written {@linkplain #reusingStoredVector(SemanticDocument) without its vector}: the store then keeps the
+     * vector it holds for the same stable key and checksum, and fails if it holds none. A document without a
+     * vector that is not marked so is refused: no row is ever written with a missing vector.
+     */
+    record IndexedDocument(SemanticDocument document, SemanticVector vector, boolean reusesStoredVector) {
         public IndexedDocument {
-            Objects.requireNonNull(document, "document"); Objects.requireNonNull(vector, "vector");
-            if (!document.stableKey().equals(vector.stableKey())) throw new IllegalArgumentException("document/vector stableKey mismatch");
+            Objects.requireNonNull(document, "document");
+            if (reusesStoredVector) {
+                if (vector != null) throw new IllegalArgumentException("a document reusing its stored vector carries no vector");
+            } else {
+                Objects.requireNonNull(vector, "vector");
+                if (!document.stableKey().equals(vector.stableKey())) throw new IllegalArgumentException("document/vector stableKey mismatch");
+            }
+        }
+
+        /** A document written with its vector. */
+        public IndexedDocument(SemanticDocument document, SemanticVector vector) {
+            this(document, vector, false);
+        }
+
+        /** A document whose stored vector, for the same stable key and checksum, is kept by the store. */
+        public static IndexedDocument reusingStoredVector(SemanticDocument document) {
+            return new IndexedDocument(document, null, true);
         }
     }
 
@@ -153,8 +224,50 @@ public interface SemanticVectorStore {
             for (IndexedDocument value : documents) {
                 if (!projectId.equals(value.document().projectId())) throw new IllegalArgumentException("semantic document belongs to another project");
                 if (!snapshotId.equals(value.document().snapshotId())) throw new IllegalArgumentException("semantic document belongs to another snapshot");
-                if (value.vector().dimensions() != dimensions) throw new IllegalArgumentException("semantic vector dimensions mismatch");
+                if (!value.reusesStoredVector() && value.vector().dimensions() != dimensions) {
+                    throw new IllegalArgumentException("semantic vector dimensions mismatch");
+                }
             }
+        }
+
+        /** Whether at least one document keeps the vector the store holds for it. */
+        public boolean reusesStoredVectors() {
+            for (IndexedDocument value : documents) {
+                if (value.reusesStoredVector()) return true;
+            }
+            return false;
+        }
+
+        /**
+         * This index with the vector of every reused document taken from {@code stored}, the index the store
+         * holds. Fails, without returning a partial index, when a reused document has no stored counterpart
+         * with the same stable key and checksum, or when {@code stored} was built by another provider, model
+         * or number of dimensions.
+         */
+        public IndexSnapshot withStoredVectors(Optional<IndexSnapshot> stored) throws IOException {
+            if (!reusesStoredVectors()) return this;
+            IndexSnapshot previous = stored.orElseThrow(() -> new IOException(
+                    "semantic documents reuse stored vectors but the index holds none"));
+            if (!providerId.equals(previous.providerId()) || !modelId.equals(previous.modelId())
+                    || dimensions != previous.dimensions()) {
+                throw new IOException("semantic documents reuse vectors of another embedding model");
+            }
+            Map<String, IndexedDocument> byStableKey = new HashMap<>();
+            for (IndexedDocument value : previous.documents()) byStableKey.put(value.document().stableKey(), value);
+            List<IndexedDocument> resolved = new ArrayList<>(documents.size());
+            for (IndexedDocument value : documents) {
+                if (!value.reusesStoredVector()) {
+                    resolved.add(value);
+                    continue;
+                }
+                IndexedDocument kept = byStableKey.get(value.document().stableKey());
+                if (kept == null || !kept.document().checksum().equals(value.document().checksum())) {
+                    throw new IOException("semantic document reuses a stored vector that does not exist: "
+                            + value.document().stableKey());
+                }
+                resolved.add(new IndexedDocument(value.document(), kept.vector()));
+            }
+            return new IndexSnapshot(projectId, snapshotId, providerId, modelId, dimensions, builtAtEpochMilli, resolved);
         }
     }
 }

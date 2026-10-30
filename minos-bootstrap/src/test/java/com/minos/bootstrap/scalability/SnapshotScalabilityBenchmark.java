@@ -1,7 +1,7 @@
 package com.minos.bootstrap.scalability;
 
-import com.minos.adapter.scip.ScipIndexReader;
-import com.minos.adapter.scip.ScipIngestionLimits;
+import com.minos.adapter.scip.ingestion.ScipIndexReader;
+import com.minos.adapter.scip.ingestion.ScipIngestionLimits;
 import com.minos.application.MinosApplication;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.HybridSearchService;
@@ -28,14 +28,15 @@ import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.RegisteredProject;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
-import com.minos.storage.local.store.SnapshotCodec;
-import com.minos.storage.local.store.SnapshotCodecV2;
-import com.minos.storage.local.store.SnapshotCodecV3;
+import com.minos.storage.codec.SnapshotCodec;
+import com.minos.storage.codec.SnapshotCodecV2;
+import com.minos.storage.codec.SnapshotCodecV3;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.SymbolSnapshot;
 import jdk.jfr.Recording;
 import jdk.jfr.consumer.RecordedEvent;
@@ -254,7 +255,7 @@ public final class SnapshotScalabilityBenchmark {
             InMemorySnapshotStore capture = new InMemorySnapshotStore();
             snapshot = null;
             long started = System.nanoTime();
-            application.scipArtifactImporter().importSnapshot(input.path(),
+            application.compositionRoot().scipArtifactImporter().importSnapshot(input.path(),
                     importRequest(project, dataset, "capture-" + index, input), capture);
             captureNanos[index] = System.nanoTime() - started;
             snapshot = capture.loadActiveKnowledge(project.id()).orElseThrow();
@@ -287,7 +288,7 @@ public final class SnapshotScalabilityBenchmark {
         for (int index = 0; index < importNanos.length; index++) {
             long started = System.nanoTime();
             try {
-                application.scipArtifactImporter().importSnapshot(input.path(),
+                application.compositionRoot().scipArtifactImporter().importSnapshot(input.path(),
                         importRequest(project, dataset, "import-" + index, input), application.snapshotStore());
             } catch (IOException refused) {
                 outcome = "REFUSED " + refused.getClass().getSimpleName() + ": " + refused.getMessage();
@@ -391,7 +392,7 @@ public final class SnapshotScalabilityBenchmark {
         for (int index = 0; index < loadNanos.length; index++) {
             FileSymbolSnapshotStore cold = new FileSymbolSnapshotStore(storeRoot);
             long started = System.nanoTime();
-            SnapshotQueryView view = cold.loadActiveQueryView(project.id()).orElseThrow();
+            SnapshotReadView view = cold.loadActiveReadView(project.id()).orElseThrow();
             loadNanos[index] = System.nanoTime() - started;
             buildNanos[index] = view.buildNanos();
             stats = cold.cacheStats();
@@ -404,7 +405,7 @@ public final class SnapshotScalabilityBenchmark {
 
         long before = settledHeap();
         FileSymbolSnapshotStore cold = new FileSymbolSnapshotStore(storeRoot);
-        SnapshotQueryView view = cold.loadActiveQueryView(project.id()).orElseThrow();
+        SnapshotReadView view = cold.loadActiveReadView(project.id()).orElseThrow();
         long withView = settledHeap();
         CodeKnowledgeSnapshot snapshotOnly = view.snapshot();
         Reference.reachabilityFence(view);
@@ -1212,15 +1213,19 @@ public final class SnapshotScalabilityBenchmark {
             return Optional.ofNullable(active.get(projectId));
         }
 
+        /** Ancien contrat, servi par la vue de lecture. */
+        @Deprecated(since = "1.3.0")
         @Override
         public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
-            return loadActiveKnowledge(projectId).map(snapshot -> {
-                long started = System.nanoTime();
-                InMemoryCodeKnowledgeStore indexes = new InMemoryCodeKnowledgeStore(snapshot);
-                return new SnapshotQueryView(new SnapshotDescriptor(2, snapshot.snapshotId(), "in-memory",
-                        NO_FILE_SHA256, snapshot.symbols().size(), snapshot.occurrences().size(),
-                        snapshot.relationships().size()), snapshot, indexes, System.nanoTime() - started);
-            });
+            return loadActiveReadView(projectId).map(SnapshotQueryView::of);
+        }
+
+        @Override
+        public Optional<SnapshotReadView> loadActiveReadView(UUID projectId) {
+            return loadActiveKnowledge(projectId).map(snapshot -> SnapshotReadView.indexed(
+                    new SnapshotDescriptor(2, snapshot.snapshotId(), "in-memory", NO_FILE_SHA256,
+                            snapshot.symbols().size(), snapshot.occurrences().size(), snapshot.relationships().size()),
+                    snapshot));
         }
     }
 }

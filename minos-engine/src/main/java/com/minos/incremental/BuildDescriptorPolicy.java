@@ -12,7 +12,7 @@ import java.util.Set;
  * Additional provider/discovery extensions can supply a different policy without changing the service.</p>
  */
 public final class BuildDescriptorPolicy {
-    private static final Set<String> M17_DEFAULT_FILE_NAMES = Set.of(
+    private static final Set<String> LEGACY_FILE_NAMES = Set.of(
             "pom.xml",
             "build.gradle",
             "build.gradle.kts",
@@ -26,7 +26,7 @@ public final class BuildDescriptorPolicy {
             "pyproject.toml",
             "setup.py"
     );
-    private static final Set<String> M24_ADDITIONAL_FILE_NAMES = Set.of(
+    private static final Set<String> POLYGLOT_ADDITIONAL_FILE_NAMES = Set.of(
             "CMakeLists.txt",
             "compile_commands.json",
             "go.mod",
@@ -51,14 +51,14 @@ public final class BuildDescriptorPolicy {
     }
 
     /** Historical M17 policy retained for regression fixtures that explicitly request it. */
-    public static BuildDescriptorPolicy m17Defaults() {
-        return new BuildDescriptorPolicy(M17_DEFAULT_FILE_NAMES);
+    public static BuildDescriptorPolicy legacyDefaults() {
+        return new BuildDescriptorPolicy(LEGACY_FILE_NAMES);
     }
 
     /** Current default policy through M24. */
-    public static BuildDescriptorPolicy m24Defaults() {
-        LinkedHashSet<String> values = new LinkedHashSet<>(M17_DEFAULT_FILE_NAMES);
-        values.addAll(M24_ADDITIONAL_FILE_NAMES);
+    public static BuildDescriptorPolicy currentDefaults() {
+        LinkedHashSet<String> values = new LinkedHashSet<>(LEGACY_FILE_NAMES);
+        values.addAll(POLYGLOT_ADDITIONAL_FILE_NAMES);
         return new BuildDescriptorPolicy(values);
     }
 

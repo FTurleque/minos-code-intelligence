@@ -7,7 +7,9 @@ import com.minos.application.ProviderPlatformService;
 import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticSearchService;
+import com.minos.application.team.TeamControlPlane;
 import com.minos.architecture.ArchitectureIntelligenceView;
+import com.minos.architecture.ArchitectureModuleSelection;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
@@ -16,7 +18,6 @@ import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.impact.ImpactAnalysisRequest;
-import com.minos.orchestration.ResumableRunSummary;
 import com.minos.output.AdvancedAnalysisResultRenderer;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.CodeIntelligenceResultRenderer;
@@ -64,6 +65,8 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS = 800;
     private static final int DEFAULT_RUNTIME_LIMIT = 20;
 
+    static final String FILESYSTEM_ROOT_NAME = "(filesystem root)";
+
     private final MinosApplication application;
     private final ProjectInspectionService projects;
     private final ProjectQueryService queries;
@@ -86,8 +89,28 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     public String projectStructure(String project) throws Exception {
         ProjectInspectionService.ProjectView view = projects.inspectProject(project);
         Map<String, Object> map = ProjectJson.project(view);
+        // AUD-SEC-10: the key stays (additive surface); only the root directory name leaves, never the absolute path.
+        map.put("rootPath", rootDirectoryName(view.rootPath()));
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
+    }
+
+    /**
+     * The last segment of a project root, whatever separator style it uses (a Windows or UNC path may be registered
+     * from a Linux container): the one form of the root that leaves the machine through MCP (AUD-SEC-10). A
+     * filesystem root has no segment and renders {@link #FILESYSTEM_ROOT_NAME}.
+     */
+    static String rootDirectoryName(String rootPath) {
+        int end = rootPath.length();
+        while (end > 0 && isSeparator(rootPath.charAt(end - 1))) end--;
+        String trimmed = rootPath.substring(0, end);
+        int cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+        String name = trimmed.substring(cut + 1);
+        return name.isEmpty() || name.endsWith(":") ? FILESYSTEM_ROOT_NAME : name;
+    }
+
+    private static boolean isSeparator(char character) {
+        return character == '/' || character == '\\';
     }
 
     @Override
@@ -96,7 +119,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         ProjectInspectionService.ProjectView view = projects.inspectStatus(project);
         // ADR 0039 §6: the run offered for resume, without any artifact location.
         Map<String, Object> map = ProjectJson.indexStatus(
-                view, ResumableRunSummary.of(application.indexStateStore(), UUID.fromString(view.id())), Instant.now());
+                view, projects.resumableRun(view.id()), Instant.now());
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
     }
@@ -173,9 +196,13 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         if ("json".equals(format)) {
             return request.module() == null ? architecture(request.project()) : moduleContext(request.project(), request.module());
         }
-        ArchitectureIntelligenceView view = application.architectureQuery().getArchitectureIntelligence(request.project());
-        String moduleId = request.module() == null ? null : application.architectureQuery()
-                .getModuleContext(request.project(), request.module()).module().id();
+        // One project context load per graph, with or without a module (AUD-PERF-05).
+        ArchitectureModuleSelection selection = request.module() == null ? null : application.architectureQuery()
+                .getArchitectureIntelligenceForModule(request.project(), request.module());
+        ArchitectureIntelligenceView view = selection == null
+                ? application.architectureQuery().getArchitectureIntelligence(request.project())
+                : selection.view();
+        String moduleId = selection == null ? null : selection.moduleId();
         ArchitectureResultRenderer.GraphFormat graphFormat = switch (format) {
             case "mermaid" -> ArchitectureResultRenderer.GraphFormat.MERMAID;
             case "dot" -> ArchitectureResultRenderer.GraphFormat.DOT;
@@ -285,8 +312,8 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         return HostedControlPlaneRenderer.renderAudit(hosted().audit(hostedToken(), limit));
     }
 
-    private com.minos.hosted.HostedControlPlaneService hosted() {
-        return application.hostedControlPlaneService()
+    private TeamControlPlane hosted() {
+        return application.teamControlPlane()
                 .orElseThrow(() -> new McpClientFailure.TeamModeDisabled("MINOS team mode is disabled"));
     }
 

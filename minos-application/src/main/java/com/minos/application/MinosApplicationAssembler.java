@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /** Resolves builder overrides and production defaults into one immutable application composition. */
 final class MinosApplicationAssembler {
@@ -37,8 +38,8 @@ final class MinosApplicationAssembler {
     }
 
     static MinosApplication build(MinosApplication.Builder builder) throws IOException {
-        // ADR 0042 : adaptateurs par défaut fournis par la racine de composition (minos-bootstrap),
-        // résolue avant tout effet de bord ; chaque défaut reste créé au même point qu'auparavant.
+        // ADR 0042: default adapters supplied by the composition root (minos-bootstrap), resolved before
+        // any side effect; each default is still created at the same point as before.
         MinosApplicationComposer composer = builder.resolvedComposer();
         Path home = builder.home;
         // Builder is a direct public entry point, so it independently enforces private MINOS_HOME
@@ -85,10 +86,10 @@ final class MinosApplicationAssembler {
                     ? builder.incrementalIndexingPlanner : new IncrementalIndexingPlanner();
             List<IndexerDescriptor> effectiveDescriptors = builder.indexerDescriptors != null
                     ? builder.indexerDescriptors : List.copyOf(composer.qualifiedIndexerDescriptors());
-            // Le catalogue n'est lu qu'à la demande (ProviderPlatformService.defaults).
+            // The catalog is read only on demand (ProviderPlatformService.defaults).
             IndexerProviderCatalog effectiveProviderCatalog = builder.providerCatalog != null
                     ? builder.providerCatalog : composer.providerCatalog();
-            // Un importeur neuf par import (voir le composer).
+            // A new importer for each import (see the composer).
             ScipArtifactImporter effectiveScipImporter = builder.scipArtifactImporter != null
                     ? builder.scipArtifactImporter : composer.scipArtifactImporter();
             ProviderRuntimeManager effectiveProviderRuntime = builder.providerRuntimeManager != null
@@ -160,16 +161,21 @@ final class MinosApplicationAssembler {
                 hostedStore,
                 hostedIdentities,
                 builder.hostedTenantKeyProvider,
-                (projectId, snapshotId) -> {
-                    var active = snapshots.loadActiveKnowledge(projectId)
-                            .orElseThrow(() -> new IOException(
-                                    "hosted project has no active snapshot: " + projectId));
-                    if (!snapshotId.equals(active.snapshotId())) {
-                        throw new IOException(
-                                "hosted binding requires the exact active snapshot: " + snapshotId);
-                    }
-                },
+                (projectId, snapshotId) -> requireExactActiveSnapshot(snapshots, projectId, snapshotId),
                 builder.hostedClock));
+    }
+
+    /**
+     * A hosted binding names the exact active snapshot. Only its identity is compared: the snapshot is not loaded
+     * here, and the queries that follow load and verify it.
+     */
+    static void requireExactActiveSnapshot(CodeKnowledgeSnapshotStore snapshots, UUID projectId, String snapshotId)
+            throws IOException {
+        String active = snapshots.activeSnapshotId(projectId)
+                .orElseThrow(() -> new IOException("hosted project has no active snapshot: " + projectId));
+        if (!snapshotId.equals(active)) {
+            throw new IOException("hosted binding requires the exact active snapshot: " + snapshotId);
+        }
     }
 
     private static void closeBackendOnFailure(StorageBackend backend, Exception original) {

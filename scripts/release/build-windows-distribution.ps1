@@ -67,7 +67,7 @@ function Resolve-JdkModules {
     $Previous = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $Output = @(& $Jdeps '--multi-release' '24' '--ignore-missing-deps' '--print-module-deps' $Jar 2>&1 |
+        $Output = @(& $Jdeps '--multi-release' '25' '--ignore-missing-deps' '--print-module-deps' $Jar 2>&1 |
             ForEach-Object { $_.ToString().Trim() })
         $Exit = $LASTEXITCODE
     }
@@ -150,14 +150,14 @@ foreach ($Verifier in @(
 
 $JavaHome = $env:JAVA_HOME
 if ([string]::IsNullOrWhiteSpace($JavaHome)) {
-    throw 'JAVA_HOME must point to a JDK 24 installation.'
+    throw 'JAVA_HOME must point to a JDK 25 installation.'
 }
 $Java = Join-Path $JavaHome 'bin\java.exe'
 $Jpackage = Join-Path $JavaHome 'bin\jpackage.exe'
 $Jdeps = Join-Path $JavaHome 'bin\jdeps.exe'
 foreach ($RequiredJdkTool in @($Java, $Jpackage, $Jdeps)) {
     if (-not (Test-Path -LiteralPath $RequiredJdkTool -PathType Leaf)) {
-        throw "JAVA_HOME does not expose the required JDK 24 tool: $RequiredJdkTool"
+        throw "JAVA_HOME does not expose the required JDK 25 tool: $RequiredJdkTool"
     }
 }
 
@@ -177,8 +177,8 @@ if ($JavaVersionExitCode -ne 0) {
     throw "Unable to execute JAVA_HOME java.exe -version (exit=$JavaVersionExitCode): $JavaVersionOutput"
 }
 $JavaVersion = ($JavaVersionOutput -split "`r?`n" | Select-Object -First 1).Trim()
-if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
-    throw "MINOS distribution requires JDK 24; found: $JavaVersion"
+if ($JavaVersion -notmatch '"25(?:\.|"|-)') {
+    throw "MINOS distribution requires JDK 25; found: $JavaVersion"
 }
 
 # M15-S2 makes the repository POM a real multi-module reactor. Release versions
@@ -187,7 +187,10 @@ if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
 if (-not $ReuseBuild) {
     Push-Location $RepoRoot
     try {
-        $MavenArgs = @("-Drevision=$Version")
+        # AUD-DEP-11: the JAR entries and the SBOM carry the date of the commit, so a rebuild of it gives the same JAR.
+        $CommitTimestamp = ((& git -C $RepoRoot show -s --format=%cI HEAD) | Select-Object -First 1).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($CommitTimestamp)) { throw 'Unable to read the date of the commit.' }
+        $MavenArgs = @("-Drevision=$Version", "-Dproject.build.outputTimestamp=$CommitTimestamp")
         if ($SkipVerify) {
             $MavenArgs += '-DskipTests'
         }
@@ -209,6 +212,7 @@ if (-not $ReuseBuild) {
 
         $CycloneDxArgs = @(
             "-Drevision=$Version",
+            "-Dproject.build.outputTimestamp=$CommitTimestamp",
             '-DschemaVersion=1.6',
             '-DoutputFormat=json',
             '-DoutputName=minos-cyclonedx',
@@ -484,12 +488,21 @@ Invoke-NativeChecked -File $Python -Arguments @(
     '--output', (Join-Path $SupplyChainDirectory 'THIRD-PARTY-NOTICES.txt'),
     '--strict'
 ) -Failure 'Third-party notice generation failed'
+# AUD-DEP-06: the Authenticode state of the executables is decided after any signature and before the manifest and
+# the sums are computed (signature, then sums, then qualification). No signing mode exists yet: a required signature
+# fails here, and an unrequired one is recorded as "unsigned", never presumed.
+. (Join-Path $RepoRoot 'scripts\release\release-signature.ps1')
+$SignatureRequired = Get-ReleaseSignatureRequirement $env:MINOS_REQUIRE_SIGNED_RELEASE
+$Executables = @(Get-ChildItem -LiteralPath $Distribution -Recurse -File | Where-Object { $_.Extension -ieq '.exe' } | ForEach-Object { $_.FullName })
+$SignatureState = Get-ReleaseSignatureState -Required $SignatureRequired -Mode $env:MINOS_SIGNING_MODE -Executable $Executables
 Invoke-NativeChecked -File $Python -Arguments @(
     'scripts/release/create-release-manifest.py',
     '--distribution', $Distribution,
     '--version', $Version,
     '--commit', $Commit,
-    '--output', (Join-Path $Distribution 'RELEASE-MANIFEST.json')
+    '--output', (Join-Path $Distribution 'RELEASE-MANIFEST.json'),
+    '--authenticode-required', $(if ($SignatureRequired) { '1' } else { '0' }),
+    '--authenticode-state', $SignatureState
 ) -Failure 'Release manifest generation failed'
 Invoke-NativeChecked -File $Python -Arguments @(
     'scripts/release/check-supply-chain.py',

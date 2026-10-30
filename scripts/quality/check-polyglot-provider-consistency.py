@@ -98,13 +98,13 @@ def main() -> int:
         discovery_plugins_path = "minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java"
         discovery_service_path = "minos-engine/src/main/java/com/minos/discovery/ProjectDiscoveryService.java"
         catalog_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java"
-        runtime_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"
+        runtime_path = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java"
         conformance_path = "minos-engine/src/main/java/com/minos/orchestration/ProviderConformanceKit.java"
         operational_path = "minos-engine/src/main/java/com/minos/orchestration/ProviderOperationalProfile.java"
-        indexing_path = "minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java"
+        indexing_path = "minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java"
         quality_path = "scripts/quality/check-jacoco.py"
-        roadmap_path = "docs/roadmap/M24_EXECUTION.md"
-        adr_path = "docs/adr/0032-evidence-gated-polyglot-scip-providers.md"
+        roadmap_path = "docs/project/roadmap/M24_EXECUTION.md"
+        adr_path = "docs/architecture/adr/archive/0032-evidence-gated-polyglot-scip-providers.md"
         bootstrap_path = "scripts/m24/bootstrap-windows-toolchains.ps1"
         windows_prereq_path = "scripts/m24/check-windows-prerequisites.ps1"
         windows_final_path = "scripts/m24/run-final.ps1"
@@ -258,9 +258,9 @@ def main() -> int:
         for test in (
             "minos-engine/src/test/java/com/minos/discovery/M24PolyglotDiscoveryTest.java",
             "minos-app/src/test/java/com/minos/app/adapter/scip/M24PolyglotProviderTest.java",
-            "minos-provider-scip/src/test/java/com/minos/adapter/scip/M24PolyglotIdentityProvenanceTest.java",
-            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/M24PolyglotProcessPlanFactoryTest.java",
-            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManagerTest.java",
+            "minos-provider-scip/src/test/java/com/minos/adapter/scip/ingestion/M24PolyglotIdentityProvenanceTest.java",
+            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/M24PolyglotProcessPlanFactoryTest.java",
+            "minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManagerTest.java",
         ):
             read(test)
 

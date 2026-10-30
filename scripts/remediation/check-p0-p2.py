@@ -54,13 +54,13 @@ def forbid_production_sonar_suppressions() -> None:
 
 
 def forbid_postgres_connection_escape() -> None:
-    source_root = ROOT / "minos-storage-postgresql" / "src" / "main" / "java"
+    source_root = ROOT / "minos-storage" / "src" / "main" / "java" / "com" / "minos" / "storage" / "postgresql"
     for source in source_root.rglob("*.java"):
         text = source.read_text(encoding="utf-8")
         if "connections.open()" in text:
             raise RuntimeError(f"{source.relative_to(ROOT)}: raw PostgreSQL connection ownership is forbidden")
     factory = read(
-        "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
+        "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
     )
     if re.search(r"\bConnection\s+open\s*\(", factory):
         raise RuntimeError("PostgresConnectionFactory.java: Connection must not escape the factory lifecycle")
@@ -103,15 +103,15 @@ def forbid_root_cgroup_procs_delegation() -> None:
 
 
 def require_contained_cgroup_delegation() -> None:
-    """The provisioning helpers must implement the contained delegation model."""
-    for relative in (
-        "scripts/ci/delegate-linux-cgroup.sh",
-        "scripts/deploy/provision-linux-sandbox-cgroup.sh",
-    ):
-        text = read(relative)
-        require(relative, text, "--attach-pid")
-        require(relative, text, "minos-controller")
-        require(relative, text, "DELEGATION CONTAINMENT")
+    """The provisioning helper must implement the contained delegation model."""
+    provision = "scripts/deploy/provision-linux-sandbox-cgroup.sh"
+    text = read(provision)
+    require(provision, text, "--attach-pid")
+    require(provision, text, "minos-controller")
+    require(provision, text, "DELEGATION CONTAINMENT")
+    # The CI helper only wraps it, so CI qualifies the very delegation operators run.
+    ci_helper = "scripts/ci/delegate-linux-cgroup.sh"
+    require(ci_helper, read(ci_helper), provision)
     # The workloads that actually exercise the qualified Linux sandbox must place their own shell
     # inside the delegated subtree, otherwise the cgroup path silently degrades to SKIPPED tests.
     for relative in (
@@ -124,9 +124,9 @@ def require_contained_cgroup_delegation() -> None:
 def require_post226_trust_boundaries() -> None:
     """Regression barriers for the complete audit performed after PR #226."""
     strong_owned = read(
-        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/StrongOwnedProcessExecutors.java"
+        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors.java"
     )
-    command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/CommandLocator.java")
+    command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/local/process/CommandLocator.java")
     private_storage = read("minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java")
     confined_opener = read("minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java")
 
@@ -159,11 +159,11 @@ def main() -> int:
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
         )
         product_facts = read("scripts/docs/product-facts.py")
-        generated_facts = read("docs/generated/product-facts.md")
+        generated_facts = read("docs/developer/generated/product-facts.md")
         architecture = read("scripts/architecture/check-module-boundaries.py")
         public_surfaces = read("docs/developer/public-surfaces.md")
         worker = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java")
-        sandbox = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java")
+        sandbox = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerSandboxBackend.java")
         worker_test = read(
             "minos-runtime-local/src/test/java/com/minos/runtime/local/LocalIsolatedIndexWorkerTest.java"
         )
@@ -173,24 +173,24 @@ def main() -> int:
         hosted_test = read(
             "minos-engine/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"
         )
-        c0_research = read("docs/research/code-intelligence-architecture-analysis.md")
+        c0_research = read("docs/project/research/code-intelligence-architecture-analysis.md")
 
         docker_transport = read("minos-app/src/main/java/com/minos/app/DockerMcpTransport.java")
         pg_connections = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
+            "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java"
         )
         pg_migrator = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresSchemaMigrator.java"
+            "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSchemaMigrator.java"
         )
         pg_registry = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresProjectRegistry.java"
+            "minos-storage/src/main/java/com/minos/storage/postgresql/project/PostgresProjectRegistry.java"
         )
         location = read("minos-domain/src/main/java/com/minos/domain/SymbolLocation.java")
         intellij_location = read(
             "minos-intellij/src/main/java/com/minos/intellij/navigation/MinosLocation.java"
         )
         file_snapshots = read(
-            "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java"
+            "minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java"
         )
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
@@ -207,10 +207,10 @@ def main() -> int:
             "minos-intellij/src/main/java/com/minos/intellij/protocol/MinosStrongProcessLauncher.java"
         )
         provider_probe = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java"
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe.java"
         )
         scip_java = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java"
         )
         jacoco_gate = read("scripts/quality/check-jacoco.py")
 
@@ -239,7 +239,7 @@ def main() -> int:
 
         require("product-facts.py", product_facts, "qualified_descriptor_methods")
         require("product-facts.py", product_facts,
-                'qualified M24 catalog must expose 7 providers')
+                'qualified provider catalog must expose 7 providers')
         forbid("product-facts.py", product_facts,
                '("scipJava", "scipTypeScript", "scipPython")')
         provider_headings = re.findall(r"^### `([^`]+)`", generated_facts, re.MULTILINE)
@@ -287,7 +287,7 @@ def main() -> int:
         # production implementation, wired by minos-bootstrap, is still CommandLocator itself.
         require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().find(\"docker\")")
         require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().invocation(")
-        forbid("DockerMcpTransport.java", docker_transport, "import com.minos.runtime.local.CommandLocator;")
+        forbid("DockerMcpTransport.java", docker_transport, "import com.minos.runtime.local.process.CommandLocator;")
         host_commands = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalHostCommandLocator.java")
         require("LocalHostCommandLocator.java", host_commands, "CommandLocator.find(command)")
         require("LocalHostCommandLocator.java", host_commands, "CommandLocator.invocation(executable, arguments)")
@@ -336,9 +336,9 @@ def main() -> int:
         require("ScipJavaProcessPlanFactory.java", scip_java,
                 "FileTreeOperations.deleteRecursively(workspace)")
         require("check-jacoco.py", jacoco_gate,
-                '"com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15}')
+                '"com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15}')
         require("check-jacoco.py", jacoco_gate,
-                '"com/minos/adapter/scip/runtime/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35}')
+                '"com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35}')
 
         print("P0-P2 AUDIT REMEDIATION CONSISTENCY SUCCESS")
         return 0

@@ -57,6 +57,9 @@ public final class MinosMcpServer {
                 .serverInfo(SERVER_NAME, SERVER_VERSION)
                 .instructions("MINOS exposes read-only local code intelligence. Tool results are bounded JSON produced by the validated MINOS core.")
                 .capabilities(ServerCapabilities.builder().tools(false).build())
+                // The SDK's own input validator echoes every unknown property name unbounded, in the client response
+                // and in its WARN log; MinosMcpTools enforces the published schema itself and bounds that name.
+                .validateToolInputs(false)
                 .tools(MinosMcpApplicationTools.specifications(app))
                 .build();
         try {

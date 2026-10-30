@@ -6,6 +6,7 @@ import com.minos.application.MinosApplication;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSummary;
 import com.minos.application.ProjectSymbolQuery;
+import com.minos.application.ResumableRunStatus;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModule;
 import com.minos.architecture.ArchitectureModuleContext;
@@ -29,7 +30,6 @@ import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ImpactPathStep;
 import com.minos.impact.ImpactedSymbol;
 import com.minos.impact.ProjectImpactQuery;
-import com.minos.orchestration.ResumableRunSummary;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
@@ -44,7 +44,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -94,7 +93,7 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
         this.application = app;
         this.ownsApplication = ownsApplication;
         this.projectOperations = projectOperations != null ? projectOperations : new LocalProjectOperations(app);
-        this.symbolQuery = new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore());
+        this.symbolQuery = new LocalProjectSymbolQuery(app);
         this.architectureQuery = app.architectureQuery();
         this.impactQuery = app.impactQuery();
         this.teamApi = new LocalMinosTeamApi(app);
@@ -252,9 +251,9 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
 
     private ProjectDto project(ProjectOperations.ProjectView view) {
         // A row the inventory could not read (Q8) offers nothing: its state store may be the damaged part.
-        Optional<ResumableRunSummary> resumable = ProjectSummary.UNREADABLE_STATE.equals(view.indexState())
+        Optional<ResumableRunStatus> resumable = ProjectSummary.UNREADABLE_STATE.equals(view.indexState())
                 ? Optional.empty()
-                : resumableRun(view.id());
+                : application.projectInspectionService().resumableRun(view.id());
         Instant now = Instant.now();
         return new ProjectDto(
                 view.id(), view.name(), view.rootPath(), view.rootAvailable(),
@@ -262,17 +261,8 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
                 view.activeSnapshotId(), view.lastSuccessfulIndexAt(), view.providerId(), view.providerVersion(),
                 resumable.map(summary -> summary.runId().toString()).orElse(null),
                 resumable.map(summary -> summary.checkpointAgeSeconds(now)).orElse(null),
-                resumable.map(ResumableRunSummary::resumableTargets).orElse(null)
+                resumable.map(ResumableRunStatus::resumableTargets).orElse(null)
         );
-    }
-
-    /** ADR 0039 §6: the run offered for resume; an unparseable view id simply offers nothing. */
-    private Optional<ResumableRunSummary> resumableRun(String projectId) {
-        try {
-            return ResumableRunSummary.of(application.indexStateStore(), UUID.fromString(projectId));
-        } catch (IllegalArgumentException notAProjectId) {
-            return Optional.empty();
-        }
     }
 
     private static IndexImportDto indexImport(ProjectOperations.IndexImportResult result) {

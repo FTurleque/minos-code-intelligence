@@ -1,7 +1,7 @@
 # Documentation d'architecture MINOS Code Intelligence
 
 > Structure arc42 v8 — diagrammes C4 (Mermaid) — ADR Markdown  
-> Version : 1.3.0-SNAPSHOT · Java 24 · Maven multi-module reactor  
+> Version : 1.3.0-SNAPSHOT · Java 25 · Maven multi-module reactor  
 > Dernière mise à jour : 2026-10-07
 
 ---
@@ -26,7 +26,7 @@
 ## ADR
 
 - [Index des ADR](adr/README.md)
-- [Template ADR](adr/template.md)
+- [Gabarit d'ADR](adr/gabarit/template.md)
 
 ## Scénarios qualité
 
@@ -55,10 +55,10 @@ Tous les diagrammes sont en Mermaid. Aucun diagramme ASCII ni image binaire n'es
 
 ## Évolution proposée — octobre 2026
 
-[Étude arc42 et vue C4 Component](../research/minos-evolution-2026-10/README.md) · [Roadmap](../research/minos-evolution-2026-10/ROADMAP.md) · [ADR 0048–0054](../adr/README.md).
+[Étude arc42 et vue C4 Component](../project/research/minos-evolution-2026-10/README.md) · [Roadmap](../project/research/minos-evolution-2026-10/ROADMAP.md) · [ADR 0048–0054](adr/README.md).
 
 Ces vues sont une cible proposée, distincte de l'architecture actuellement livrée. La base de conception est develop au 4 octobre 2026, notamment l'ADR-0042 (composition minos-bootstrap).
 
 ## Évolution acceptée — stockage et frontières
 
-[ADR 0055–0057 et backlog](../roadmap/storage-hexagonal-2026-10/README.md). La cible est séparée des diagrammes générés décrivant les POMs actuels.
+[ADR 0055–0057 et backlog](../project/roadmap/storage-hexagonal-2026-10/README.md). La cible est séparée des diagrammes générés décrivant les POMs actuels.

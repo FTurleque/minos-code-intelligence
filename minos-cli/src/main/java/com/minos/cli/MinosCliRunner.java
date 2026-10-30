@@ -1,14 +1,28 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.IdeCommand;
+import com.minos.cli.command.IdeIntelligenceCommand;
+import com.minos.cli.command.NexusExportCommand;
+import com.minos.cli.command.ProjectCommand;
+import com.minos.cli.command.RetrievalStatusCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.LocalAutonomousIndexOperations;
+import com.minos.cli.operations.LocalRemoteIndexOperations;
+import com.minos.cli.operations.RemoteIndexOperations;
+import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.LazyApplication;
+import com.minos.application.LocalProjectGitQuery;
 import com.minos.application.LocalProjectOperations;
 import com.minos.application.LocalProjectSymbolQuery;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosHome;
+import com.minos.application.ProjectInspectionService;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
-import com.minos.git.GitIntelligence;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.nexus.NexusExportService;
 
@@ -99,21 +113,20 @@ public final class MinosCliRunner {
                         application.deferred(MinosApplication::architectureQuery)))
                 .impactQuery(LazyApplication.lazy(ProjectImpactQuery.class,
                         application.deferred(MinosApplication::impactQuery)))
-                .nexusExportCommand(new NexusExportCommand(projectRoot -> {
-                    MinosApplication opened = application.get();
-                    return new NexusExportService(opened.projectRegistry(), opened.snapshotStore()).export(projectRoot);
-                }))
+                .nexusExportCommand(new NexusExportCommand(
+                        projectRoot -> new NexusExportService(application.get()).export(projectRoot)))
                 .autonomousOperations(LazyApplication.lazy(AutonomousIndexOperations.class, autonomousIndex))
                 .home(application.home())
                 .providerPlatformServiceSupplier(application.deferred(ProviderPlatformService::defaults))
-                .gitIntelligence(LazyApplication.lazy(GitIntelligence.class,
-                        application.deferred(MinosApplication::gitIntelligence)))
+                .gitQuery(LazyApplication.lazy(ProjectGitQuery.class, application.deferred(LocalProjectGitQuery::new)))
                 .remoteIndexOperations(LazyApplication.lazy(RemoteIndexOperations.class,
                         application.deferred(LocalRemoteIndexOperations::new)))
                 .runtimeIntelligenceServiceSupplier(application.deferred(MinosApplication::runtimeIntelligenceService))
-                .hostedControlPlaneServiceSupplier(application.deferred(opened -> opened.hostedControlPlaneService()
+                .teamControlPlaneSupplier(application.deferred(opened -> opened.teamControlPlane()
                         .orElseThrow(MinosCli.ServiceNotConfigured::new)));
-        return cli.resumeStatus(projectId -> autonomousIndex.get().resumableRun(projectId)).build();
+        LazyApplication.Deferred<ProjectInspectionService> inspection =
+                application.deferred(MinosApplication::projectInspectionService);
+        return cli.resumeStatus(projectId -> inspection.get().resumableRun(projectId)).build();
     }
 
     /**

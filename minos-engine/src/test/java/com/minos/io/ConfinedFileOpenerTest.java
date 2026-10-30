@@ -1,6 +1,5 @@
 package com.minos.io;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -24,18 +23,14 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Adversarial coverage for the confinement guarantee itself.
  *
- * <p>The replacement scenarios do not race a timer. {@link ConfinedFileOpener#beforeOpenForTests}
- * fires at the exact instant between the last validation and the open, so the substitution a real
- * attacker would have to win by luck happens here with certainty, on every run and every platform.
+ * <p>The replacement scenarios do not race a timer. The {@code beforeOpen} step each test passes to the
+ * package-private overload fires at the exact instant between the last validation and the open, so the
+ * substitution a real attacker would have to win by luck happens here with certainty, on every run and
+ * every platform.
  * A test built on {@code Thread.sleep} would prove nothing about the instants it happened to
  * miss.</p>
  */
 class ConfinedFileOpenerTest {
-
-    @AfterEach
-    void clearSeam() {
-        ConfinedFileOpener.beforeOpenForTests = () -> { };
-    }
 
     @Test
     void readsARegularFileInsideTheRoot(@TempDir Path root) throws Exception {
@@ -56,7 +51,7 @@ class ConfinedFileOpenerTest {
             Files.writeString(file, "class Main {}", StandardCharsets.UTF_8);
             assumeTrue(canCreateSymbolicLinks(root), "this platform/account cannot create symbolic links");
 
-            ConfinedFileOpener.beforeOpenForTests = () -> {
+            Runnable beforeOpen = () -> {
                 try {
                     Files.delete(file);
                     Files.createSymbolicLink(file, outside);
@@ -66,7 +61,7 @@ class ConfinedFileOpenerTest {
             };
 
             assertThrows(ConfinedFileOpener.ConfinementException.class,
-                    () -> read(root, Path.of("src", "Main.java")),
+                    () -> read(root, Path.of("src", "Main.java"), beforeOpen),
                     "a substituted link must be refused, not followed");
         } finally {
             Files.deleteIfExists(outside);
@@ -83,7 +78,7 @@ class ConfinedFileOpenerTest {
         Files.writeString(inside, "class Other {}", StandardCharsets.UTF_8);
         assumeTrue(canCreateSymbolicLinks(root), "this platform/account cannot create symbolic links");
 
-        ConfinedFileOpener.beforeOpenForTests = () -> {
+        Runnable beforeOpen = () -> {
             try {
                 Files.delete(file);
                 Files.createSymbolicLink(file, inside);
@@ -92,7 +87,7 @@ class ConfinedFileOpenerTest {
             }
         };
 
-        assertThrows(IOException.class, () -> read(root, Path.of("src", "Main.java")),
+        assertThrows(IOException.class, () -> read(root, Path.of("src", "Main.java"), beforeOpen),
                 "even a link that stays inside the root is refused: containment must not be re-decided "
                         + "from a resolved pathname");
     }
@@ -106,7 +101,7 @@ class ConfinedFileOpenerTest {
         Path replacement = root.resolve("src/replacement.tmp");
         Files.writeString(replacement, "version two", StandardCharsets.UTF_8);
 
-        ConfinedFileOpener.beforeOpenForTests = () -> {
+        Runnable beforeOpen = () -> {
             try {
                 Files.move(replacement, file, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException failure) {
@@ -116,7 +111,7 @@ class ConfinedFileOpenerTest {
 
         // A plain replacement inside the project is a legitimate edit, not an escape: the read must
         // succeed and must return bytes that came from inside the root.
-        assertEquals("version two", read(root, Path.of("src", "Main.java")));
+        assertEquals("version two", read(root, Path.of("src", "Main.java"), beforeOpen));
     }
 
     @Test
@@ -125,7 +120,7 @@ class ConfinedFileOpenerTest {
         Files.createDirectories(file.getParent());
         Files.writeString(file, "class Main {}", StandardCharsets.UTF_8);
 
-        ConfinedFileOpener.beforeOpenForTests = () -> {
+        Runnable beforeOpen = () -> {
             try {
                 Files.delete(file);
             } catch (IOException failure) {
@@ -133,7 +128,7 @@ class ConfinedFileOpenerTest {
             }
         };
 
-        assertThrows(NoSuchFileException.class, () -> read(root, Path.of("src", "Main.java")));
+        assertThrows(NoSuchFileException.class, () -> read(root, Path.of("src", "Main.java"), beforeOpen));
     }
 
     @Test
@@ -232,7 +227,7 @@ class ConfinedFileOpenerTest {
             }, "confined-open-substitution");
             attacker.start();
 
-            ConfinedFileOpener.beforeOpenForTests = () -> {
+            Runnable beforeOpen = () -> {
                 atSeam.countDown();
                 try {
                     assertTrue(replaced.await(30, TimeUnit.SECONDS), "substitution never completed");
@@ -242,7 +237,7 @@ class ConfinedFileOpenerTest {
                 }
             };
 
-            assertThrows(IOException.class, () -> read(root, Path.of("src", "Main.java")));
+            assertThrows(IOException.class, () -> read(root, Path.of("src", "Main.java"), beforeOpen));
             attacker.join();
             assertEquals(null, attackerFailure.get(), () -> String.valueOf(attackerFailure.get()));
         } finally {
@@ -251,7 +246,11 @@ class ConfinedFileOpenerTest {
     }
 
     private static String read(Path root, Path relative) throws IOException {
-        try (SeekableByteChannel channel = ConfinedFileOpener.openConfinedRegularFile(root, relative)) {
+        return read(root, relative, () -> { });
+    }
+
+    private static String read(Path root, Path relative, Runnable beforeOpen) throws IOException {
+        try (SeekableByteChannel channel = ConfinedFileOpener.openConfinedRegularFile(root, relative, beforeOpen)) {
             ByteBuffer buffer = ByteBuffer.allocate(4096);
             int read = channel.read(buffer);
             return read <= 0 ? "" : new String(buffer.array(), 0, read, StandardCharsets.UTF_8);

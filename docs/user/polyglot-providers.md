@@ -64,6 +64,16 @@ Un profil de capability est exhaustif. L'absence d'une capacité ne signifie jam
 
 ## Installation et readiness
 
+### Environnement des commandes d'installation
+
+Les commandes lancées par `minos tools install` et par les sondes de version (`coursier`, `npm`, `dotnet`, `go`) ne reçoivent pas l'environnement de MINOS en entier : seuls `PATH`, les variables de la toolchain, `HOME` (hors Windows), les proxys (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `ALL_PROXY`, en minuscules aussi), `SSL_CERT_FILE`/`SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` et les caches de paquets sont transmis. Toute variable dont le nom évoque un secret (`MINOS_*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*KEY*`, `*CREDENTIAL*`, `GITHUB_*`, `NPM_*`) est retirée, même si une liste la mentionne. Pour un miroir ou des identifiants de dépôt, utiliser le **fichier** de configuration de l'outil (Coursier, npm, NuGet, Go), pas l'environnement.
+
+### Java (scip-java)
+
+Hors paquet Windows, `minos tools install scip-java` résout le classpath avec `coursier fetch --classpath org.scip-code:scip-java:0.13.2` (scip-java n'est pas lancé à l'installation) puis compare chacun des jars à un verrou livré avec MINOS : nom, taille et SHA-256. Un jar remplacé, ajouté ou manquant, y compris par un miroir de dépôt, fait échouer l'installation avec un message qui nomme le fichier. Les jars vérifiés sont ensuite **copiés** dans `MINOS_HOME/tools/scip-java/0.13.2/classpath/`, les copies vérifiées à leur tour, puis MINOS écrit un lanceur (`scip-java-launcher.jar`, un manifeste qui nomme les jars) et, en dernier, `classpath.txt` (noms de fichiers relatifs, la disposition du paquet Windows).
+
+À chaque indexation, sous Windows comme sous Linux, MINOS compare de nouveau chaque jar copié au verrou (et, sous Linux, le lanceur à la liste) avant de lancer quoi que ce soit ; rien n'est résolu par coordonnée et le cache Coursier n'est plus lu. Sous Linux, le plan est `java -jar <lanceur> index` ; un `scip-java` du `PATH` (celui de l'image Docker, ou un outil installé par l'opérateur) n'est utilisé que si aucun classpath n'est installé, et n'est pas vérifié par MINOS. L'état affiché par `minos tools` ne regarde que la présence des fichiers : la vérification des octets a lieu à l'indexation. Un classpath absent ou modifié refuse l'indexation avec « run `minos tools install scip-java` » ; une installation faite par une version antérieure de MINOS doit être refaite par cette commande. Limite : un jar remplacé par le même compte entre la vérification et son ouverture par la JVM n'est pas détecté. L'image Docker garde son lanceur autonome, construit sans ce verrou.
+
 ### C / C++
 
 MINOS M24 ne télécharge pas `scip-clang` automatiquement. Le runtime vérifie un binaire `scip-clang` 0.4.0 fourni par l'opérateur sur Linux x86_64.

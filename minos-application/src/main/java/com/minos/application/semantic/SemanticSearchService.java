@@ -4,14 +4,12 @@ import com.minos.domain.InformationNature;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
+import com.minos.store.cache.WeightedLruCache;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 /** Bounded semantic retrieval over the active, snapshot-aligned vector index. */
@@ -24,8 +22,8 @@ public final class SemanticSearchService {
     private static final String SEMANTIC_MODE = "SEMANTIC";
 
     private final SemanticIndexService indexService;
-    private final Map<QueryCacheKey, SemanticVector> queryCache = new LinkedHashMap<>(32, 0.75f, true);
-    private long queryCacheWeightBytes;
+    private final WeightedLruCache<QueryCacheKey, SemanticVector> queryCache =
+            new WeightedLruCache<>(MAX_QUERY_CACHE_ENTRIES, MAX_QUERY_CACHE_WEIGHT_BYTES);
 
     public SemanticSearchService(SemanticIndexService indexService) {
         this.indexService = Objects.requireNonNull(indexService, "indexService");
@@ -38,7 +36,7 @@ public final class SemanticSearchService {
         SemanticVector queryVector = null;
         SemanticIndexService.Status latest = null;
         for (int attempt = 1; attempt <= MAX_SNAPSHOT_READ_ATTEMPTS; attempt++) {
-            SemanticIndexService.Status before = indexService.status(projectReference);
+            SemanticIndexService.Status before = indexService.statusWithoutSize(projectReference);
             latest = before;
             if (before.state() != SemanticIndexService.State.READY) {
                 return unavailable(before, request, started, "SEMANTIC_SEARCH_REQUIRES_READY_INDEX");
@@ -50,7 +48,7 @@ public final class SemanticSearchService {
                     before.projectId(), queryVector, request.limit(), request.minimumScore());
             boolean hitsAligned = raw.stream().allMatch(hit ->
                     Objects.equals(before.activeSnapshotId(), hit.document().snapshotId()));
-            SemanticIndexService.Status after = indexService.status(projectReference);
+            SemanticIndexService.Status after = indexService.statusWithoutSize(projectReference);
             latest = after;
             boolean statusAligned = after.state() == SemanticIndexService.State.READY
                     && Objects.equals(before.activeSnapshotId(), after.activeSnapshotId())
@@ -91,10 +89,8 @@ public final class SemanticSearchService {
 
     private SemanticVector queryVector(EmbeddingProvider provider, String query) throws IOException {
         QueryCacheKey key = new QueryCacheKey(provider.id(), provider.modelId(), provider.dimensions(), query);
-        synchronized (queryCache) {
-            SemanticVector cached = queryCache.get(key);
-            if (cached != null) return cached;
-        }
+        SemanticVector cached = queryCache.get(key);
+        if (cached != null) return cached;
         SemanticVector embedded = provider.embed("query", query);
         if (embedded.dimensions() != provider.dimensions()) {
             throw new IllegalStateException("embedding provider returned unexpected query dimensions");
@@ -102,21 +98,9 @@ public final class SemanticSearchService {
         synchronized (queryCache) {
             SemanticVector existing = queryCache.get(key);
             if (existing != null) return existing;
-            queryCache.put(key, embedded);
-            queryCacheWeightBytes = checkedAdd(queryCacheWeightBytes, cacheWeight(key, embedded));
-            evictQueryCache();
+            queryCache.put(key, embedded, cacheWeight(key, embedded));
         }
         return embedded;
-    }
-
-    private void evictQueryCache() {
-        Iterator<Map.Entry<QueryCacheKey, SemanticVector>> entries = queryCache.entrySet().iterator();
-        while ((queryCache.size() > MAX_QUERY_CACHE_ENTRIES
-                || queryCacheWeightBytes > MAX_QUERY_CACHE_WEIGHT_BYTES) && entries.hasNext()) {
-            Map.Entry<QueryCacheKey, SemanticVector> eldest = entries.next();
-            queryCacheWeightBytes -= cacheWeight(eldest.getKey(), eldest.getValue());
-            entries.remove();
-        }
     }
 
     private static long cacheWeight(QueryCacheKey key, SemanticVector vector) {
@@ -126,28 +110,16 @@ public final class SemanticSearchService {
                 + (long) vector.dimensions() * Double.BYTES;
     }
 
-    private static long checkedAdd(long left, long right) {
-        try {
-            return Math.addExact(left, right);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
-    }
-
     private static long elapsedMillis(long started) {
         return (System.nanoTime() - started) / 1_000_000L;
     }
 
     int queryCacheSize() {
-        synchronized (queryCache) {
-            return queryCache.size();
-        }
+        return queryCache.size();
     }
 
     long queryCacheWeightBytes() {
-        synchronized (queryCache) {
-            return queryCacheWeightBytes;
-        }
+        return queryCache.weight();
     }
 
     private record QueryCacheKey(String providerId, String modelId, int dimensions, String query) {

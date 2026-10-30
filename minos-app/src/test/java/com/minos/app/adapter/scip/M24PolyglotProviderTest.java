@@ -33,7 +33,7 @@ class M24PolyglotProviderTest {
 
     @Test
     void exposesSevenProvidersWithExhaustiveCapabilityAndOperationalProfiles() {
-        List<IndexerProvider> providers = ScipIndexerCatalog.qualifiedM24Providers();
+        List<IndexerProvider> providers = ScipIndexerCatalog.qualifiedProviders();
         assertEquals(7, providers.size());
         assertTrue(providers.stream().map(provider -> provider.descriptor().id()).collect(Collectors.toSet())
                 .containsAll(NEW_PROVIDER_IDS));
@@ -54,7 +54,7 @@ class M24PolyglotProviderTest {
 
     @Test
     void exposesFinalConstrainedQualificationsAndOnlyMeasuredPlatforms() {
-        Map<String, IndexerProvider> providers = ScipIndexerCatalog.qualifiedM24Providers().stream()
+        Map<String, IndexerProvider> providers = ScipIndexerCatalog.qualifiedProviders().stream()
                 .collect(Collectors.toMap(provider -> provider.descriptor().id(), Function.identity()));
         for (String id : NEW_PROVIDER_IDS) {
             IndexerProvider provider = providers.get(id);
@@ -83,7 +83,7 @@ class M24PolyglotProviderTest {
 
     @Test
     void onlyDotnetAndGoClaimManagedInstallationAmongNewProviders() {
-        Map<String, IndexerProvider> providers = ScipIndexerCatalog.qualifiedM24Providers().stream()
+        Map<String, IndexerProvider> providers = ScipIndexerCatalog.qualifiedProviders().stream()
                 .collect(Collectors.toMap(provider -> provider.descriptor().id(), Function.identity()));
         assertEquals(CapabilitySupportLevel.UNSUPPORTED,
                 providers.get(ScipIndexerCatalog.SCIP_CLANG_ID).capabilityProfile()

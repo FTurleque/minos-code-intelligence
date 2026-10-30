@@ -1,8 +1,10 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
-import com.minos.git.GitIntelligence;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -49,7 +51,7 @@ class MinosCliBuilderTest {
     }
 
     @Test
-    void gitActivityNeedsBothProjectOperationsAndGitIntelligence() throws IOException {
+    void gitActivityNeedsBothProjectOperationsAndTheGitQuery() throws IOException {
         ProjectOperations projects = unused(ProjectOperations.class);
 
         MinosCli withoutGit = MinosCli.builder(unused(ProjectSymbolQuery.class)).projectOperations(projects).build();
@@ -58,7 +60,7 @@ class MinosCliBuilderTest {
         assertWired(withoutGit, "index-status");
 
         MinosCli withGit = MinosCli.builder(unused(ProjectSymbolQuery.class))
-                .projectOperations(projects).gitIntelligence(unused(GitIntelligence.class)).build();
+                .projectOperations(projects).gitQuery(unused(ProjectGitQuery.class)).build();
         assertWired(withGit, "git-activity");
     }
 
@@ -75,10 +77,10 @@ class MinosCliBuilderTest {
         assertThrows(NullPointerException.class, () -> builder.autonomousOperations(null));
         assertThrows(NullPointerException.class, () -> builder.home(null));
         assertThrows(NullPointerException.class, () -> builder.providerPlatformService(null));
-        assertThrows(NullPointerException.class, () -> builder.gitIntelligence(null));
+        assertThrows(NullPointerException.class, () -> builder.gitQuery(null));
         assertThrows(NullPointerException.class, () -> builder.remoteIndexOperations(null));
         assertThrows(NullPointerException.class, () -> builder.runtimeIntelligenceService(null));
-        assertThrows(NullPointerException.class, () -> builder.hostedControlPlaneService(null));
+        assertThrows(NullPointerException.class, () -> builder.teamControlPlane(null));
         assertThrows(NullPointerException.class, () -> builder.resumeStatus(null));
     }
 

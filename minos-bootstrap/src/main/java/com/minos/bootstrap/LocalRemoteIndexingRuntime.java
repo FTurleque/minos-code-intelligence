@@ -7,12 +7,12 @@ import com.minos.remote.DistributedIndexing.Worker;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
-import com.minos.runtime.local.DistributedArtifactBundleStore;
-import com.minos.runtime.local.DistributedIndexerExecutor;
+import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
+import com.minos.runtime.local.distributed.DistributedIndexerExecutor;
 import com.minos.runtime.local.LocalIsolatedIndexWorker;
-import com.minos.runtime.local.WorkerSandboxBackends;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
 import com.minos.runtime.WorkerSandboxProbe;
-import com.minos.runtime.local.WorkerSandboxSelection;
+import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 
 import java.io.IOException;
 import java.nio.file.Path;

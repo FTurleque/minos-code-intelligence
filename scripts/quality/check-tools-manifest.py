@@ -9,7 +9,8 @@ embeds it. Three consumers read it and one gate checks all of them:
 * the Java runtime managers (they read it at run time; no 64-hex SHA-256 or 40-hex commit may be
   written in ``minos-provider-scip/src/main/java``);
 * ``docker/Dockerfile.mcp.release`` (its ``ARG`` lines must carry exactly the catalogue values;
-  ``scripts/release/sync-tools-manifest.py --write`` rewrites them; no other SHA-256 may appear);
+  ``scripts/release/sync-tools-manifest.py --write`` rewrites them; no other SHA-256 may appear; the
+  toolchain versions of its provider inventory are read from the installed binaries, never typed);
 * the Windows distribution build (``scripts/release/build-embedded-tools.py``, called by
   ``build-windows-distribution.ps1``; neither may carry a list or a hash of its own).
 
@@ -35,17 +36,24 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 CATALOG = Path("minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json")
 DOCKERFILE = Path("docker/Dockerfile.mcp.release")
 PROVIDER_CATALOG = Path("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java")
-MANAGER = Path("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
+MANAGER = Path("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
 JAVA_SOURCES = Path("minos-provider-scip/src/main/java")
 BUILD_SCRIPT = Path("scripts/release/build-windows-distribution.ps1")
 PAYLOAD_BUILDER = Path("scripts/release/build-embedded-tools.py")
 SYNC_SCRIPT = Path("scripts/release/sync-tools-manifest.py")
 MANIFEST_NAME = "TOOLS-MANIFEST.json"
 
+NODE_RUNTIME = "nodejs"
+
 PLATFORMS = frozenset({"windows-x64", "linux-x64", "any"})
 SHA256 = re.compile(r"\b[0-9a-f]{64}\b")
 COMMIT = re.compile(r"\b[0-9a-f]{40}\b")
 ARG_LINE = re.compile(r"^\s*ARG\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>\S*)\s*$")
+# The provider inventory of the image: the fields that carry the version of a toolchain copied from a base
+# image, as they are written (JSON quotes escaped or not) in the RUN instruction that produces the file.
+INVENTORY_FILE = "provider-inventory.json"
+INVENTORY_VERSION_FIELD = re.compile(r'\\?"(?P<field>sdk|toolchain|runtime)\\?"\s*:\s*\\?"(?P<value>[^"\\]*)\\?"')
+SHELL_VARIABLE = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*")
 
 # Provider id -> the constant or literal of ScipIndexerCatalog that carries its version.
 PROVIDER_VERSION_CONSTANTS = {
@@ -129,6 +137,57 @@ def check_catalog_shape(catalog: dict, failures: list[str]) -> None:
         for component in provider.get("components", []):
             if component not in ids:
                 failures.append(f"{CATALOG}: provider {provider.get('id')} needs the undescribed component {component}")
+
+
+def check_node_runtime(catalog: dict, failures: list[str]) -> None:
+    """Every platform MINOS ships runs its Node providers on the same major line: a platform left on an older
+    major is the drift this guards (one of them stops receiving fixes while the other proves the provider runs
+    on the newer line)."""
+    described = sorted((str(artifact.get("platform")), str(artifact.get("version")))
+                       for artifact in catalog.get("artifacts", []) if artifact.get("id") == NODE_RUNTIME)
+    if len({version.split(".")[0] for _, version in described}) > 1:
+        failures.append(f"{CATALOG}: the Node runtime must be of the same major version on every platform ("
+                        + ", ".join(f"{platform} is {version}" for platform, version in described) + ")")
+
+
+def check_classpath_locks(root: Path, catalog: dict, failures: list[str]) -> None:
+    """A coursier-fetch component names its lock; the lock pins the same coordinate and version, every jar of the
+    resolved classpath by name, size and SHA-256, and the artifact itself. A version changed without a regenerated
+    lock is the drift this guards (the installation on a user's machine verifies against this file)."""
+    for component in catalog.get("assembled", []):
+        if component.get("recipe") != "coursier-fetch":
+            continue
+        name = f"assembled {component.get('id')}@{component.get('platform')}"
+        lock_name = component.get("lock")
+        if not isinstance(lock_name, str) or not lock_name.strip():
+            failures.append(f"{CATALOG}: {name} must name its lock file")
+            continue
+        path = root / CATALOG.parent / lock_name
+        try:
+            lock = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            failures.append(f"{CATALOG.parent / lock_name}: the lock of {name} is missing or unreadable")
+            continue
+        coordinate = str(component.get("coordinate", ""))
+        if lock.get("coordinate") != coordinate or lock.get("version") != component.get("version"):
+            failures.append(f"{CATALOG.parent / lock_name}: coordinate and version must be those of {name} "
+                            f"({coordinate}); regenerate the lock")
+        jars = lock.get("jars")
+        if not isinstance(jars, list) or not jars:
+            failures.append(f"{CATALOG.parent / lock_name}: the lock lists no jar")
+            continue
+        names: set[str] = set()
+        for jar in jars:
+            jar_name = jar.get("name") if isinstance(jar, dict) else None
+            if (not isinstance(jar_name, str) or not jar_name.endswith(".jar") or jar_name in names
+                    or not re.fullmatch(r"[0-9a-f]{64}", str(jar.get("sha256", "")))
+                    or not isinstance(jar.get("size"), int) or jar["size"] <= 0):
+                failures.append(f"{CATALOG.parent / lock_name}: malformed or duplicated jar entry {jar_name!r}")
+                continue
+            names.add(jar_name)
+        artifact = coordinate.split(":")[1] if coordinate.count(":") == 2 else ""
+        if f"{artifact}-{component.get('version')}.jar" not in names:
+            failures.append(f"{CATALOG.parent / lock_name}: the lock does not pin the {coordinate} jar itself")
 
 
 def java_constant(source: str, name: str) -> str | None:
@@ -229,6 +288,44 @@ def check_dockerfile(root: Path, catalog: dict, failures: list[str]) -> None:
         for found in SHA256.findall(line):
             if found not in mapped_hashes:
                 failures.append(f"{DOCKERFILE}:{number}: a SHA-256 is written here instead of coming from an ARG of the catalogue")
+
+
+def dockerfile_instructions(lines: list[str]) -> list[list[tuple[int, str]]]:
+    """The instructions of a Dockerfile, each as its numbered physical lines (a trailing backslash continues one)."""
+    instructions: list[list[tuple[int, str]]] = []
+    current: list[tuple[int, str]] = []
+    for number, line in enumerate(lines, start=1):
+        current.append((number, line))
+        if not line.rstrip().endswith("\\"):
+            instructions.append(current)
+            current = []
+    if current:
+        instructions.append(current)
+    return instructions
+
+
+def check_provider_inventory(root: Path, failures: list[str]) -> None:
+    """The provider inventory written into the image is provenance evidence: the version of a toolchain copied
+    from a base image (``sdk``, ``toolchain``, ``runtime``) is read from the installed binary into a shell
+    variable. A version typed in the Dockerfile stays behind at the next bump of the ``FROM`` line."""
+    path = root / DOCKERFILE
+    if not path.is_file():
+        return  # check_dockerfile reports the missing file
+    blocks = [instruction for instruction in dockerfile_instructions(path.read_text(encoding="utf-8").splitlines())
+              if instruction[0][1].lstrip().upper().startswith("RUN ")
+              and any(INVENTORY_FILE in line for _, line in instruction)]
+    if not blocks:
+        failures.append(f"{DOCKERFILE}: no RUN instruction writes {INVENTORY_FILE}")
+    for instruction in blocks:
+        for number, line in instruction:
+            for match in INVENTORY_VERSION_FIELD.finditer(line):
+                field, value = match.group("field"), match.group("value")
+                if re.search(r"\d", SHELL_VARIABLE.sub("", value)):
+                    failures.append(f"{DOCKERFILE}:{number}: the provider inventory field {field} carries the "
+                                    f"literal version {value!r}; read it from the installed binary")
+                elif not SHELL_VARIABLE.search(value):
+                    failures.append(f"{DOCKERFILE}:{number}: the provider inventory field {field} ({value!r}) "
+                                    f"does not come from a shell variable read from the installed binary")
 
 
 def check_java_sources(root: Path, failures: list[str]) -> None:
@@ -368,8 +465,11 @@ def check(root: Path, distribution: Path | None = None, variant: str = "full") -
     if catalog is None:
         return failures, 0
     check_catalog_shape(catalog, failures)
+    check_node_runtime(catalog, failures)
+    check_classpath_locks(root, catalog, failures)
     check_provider_versions(root, catalog, failures)
     check_dockerfile(root, catalog, failures)
+    check_provider_inventory(root, failures)
     check_java_sources(root, failures)
     check_consumers(root, failures)
     if distribution is not None:

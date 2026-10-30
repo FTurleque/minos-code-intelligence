@@ -11,13 +11,13 @@ Mise à jour partielle le 2026-10-07 : décompte des modules, racine de composit
 ## Ce que le dépôt révèle avec certitude
 
 **MINOS Code Intelligence** est un moteur local-first de Code Intelligence multi-langages,
-distribué en Java 24, structuré en reactor Maven multi-module de 15 projets (14 enfants + parent).
+distribué en Java 25, structuré en reactor Maven multi-module de 15 projets (14 enfants + parent).
 
 Son architecture est **hexagonale, capabilist et fail-closed** :
 
 - `minos-domain` est le cœur sans dépendance externe.
 - `minos-engine` définit les ports (interfaces) provider-indépendants.
-- Les adapters (`minos-provider-scip`, `minos-integration-git`, `minos-storage-local`, `minos-storage-postgresql`) implémentent ces ports.
+- Les adapters (`minos-provider-scip`, `minos-integration-git`, `minos-storage`) implémentent ces ports.
 - Les surfaces (`minos-cli`, `minos-mcp`, `minos-api`, `minos-nexus`) consomment les services applicatifs via `minos-application`.
 - `minos-bootstrap` est la racine de composition (ADR-0042) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels).
 
@@ -51,7 +51,7 @@ La direction de dépendances est imposée par Maven comme garde-fou de compilati
 
 ## ADR à créer (manquants)
 
-Les ADR suivants couvrent des comportements observés dans le code mais ne possèdent pas encore d'ADR dans `docs/adr/` :
+Les ADR suivants couvrent des comportements observés dans le code mais ne possèdent pas encore d'ADR dans `docs/architecture/adr/` :
 
 | Proposition | Justification | Priorité |
 |------------|--------------|---------|

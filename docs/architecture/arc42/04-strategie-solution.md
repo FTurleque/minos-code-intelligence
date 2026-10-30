@@ -30,11 +30,10 @@ MINOS applique une architecture **hexagonale (ports & adapters)** organisée en 
 minos-domain          ← modèle de domaine pur, zéro dépendance externe
 minos-engine          ← ports (interfaces) et services de requête provider-indépendants
 minos-runtime-local   ← infrastructure d'exécution locale de processus providers
-minos-storage-local   ← implémentations de persistance locale (fichiers, mémoire)
+minos-storage         ← adaptateurs de stockage : local (fichiers, mémoire) et PostgreSQL / pgvector (optionnel)
 minos-provider-scip   ← adapter SCIP : ingestion et lifecycle providers Java/TS/polyglot
 minos-integration-git ← adapter Git (JGit)
 minos-application     ← services applicatifs partagés (architecture, impact, recherche…)
-minos-storage-postgresql ← backend PostgreSQL / pgvector (optionnel)
 minos-bootstrap       ← racine de composition : câble les adaptateurs derrière les ports (ADR-0042)
 minos-nexus           ← adapter NEXUS (contrat JSON export)
 minos-cli             ← surface CLI stable
@@ -51,15 +50,15 @@ La direction des dépendances est strictement ascendante : les couches basses ig
 
 | Technologie | Rôle | Module |
 |------------|------|--------|
-| Java 24 | Langage et runtime | Tous |
+| Java 25 | Langage et runtime | Tous |
 | Maven 3.9 | Build, frontières et releases CI-friendly | `pom.xml` racine |
 | SCIP (protobuf) | Protocole d'indexation sémantique | `minos-provider-scip` |
 | SDK Java MCP 2.0 | Transport MCP STDIO | `minos-mcp` |
 | JGit 7.6 | Intégration Git locale | `minos-integration-git` |
-| PostgreSQL / pgvector | Stockage avancé optionnel | `minos-storage-postgresql` |
-| Jackson | Sérialisation JSON (NEXUS, MCP, output) | `minos-storage-postgresql`, `minos-application` |
+| PostgreSQL / pgvector | Stockage avancé optionnel | `minos-storage` |
+| Jackson | Sérialisation JSON (NEXUS, MCP, output) | `minos-storage`, `minos-application` |
 | JUnit 5 / JaCoCo | Tests et couverture | Tous |
-| Testcontainers | Tests d'intégration PostgreSQL | `minos-storage-postgresql` |
+| Testcontainers | Tests d'intégration PostgreSQL | `minos-storage` |
 | Advanced Installer / JPackage | Distribution Windows | `minos-app` build |
 
 ---
@@ -80,9 +79,9 @@ La direction des dépendances est strictement ascendante : les couches basses ig
 
 ## 4.5 Liens vers les ADR principaux
 
-- [ADR-0001](../../adr/0001-language-and-indexer-agnostic-core.md) — Agnosticisme du langage et de l'indexeur
-- [ADR-0008](../../adr/0008-negocier-indexeurs-par-capacites-explicites.md) — Négociation par capacités
-- [ADR-0017](../../adr/0017-mcp-stdio-read-only.md) — MCP STDIO read-only
-- [ADR-0022](../../adr/0022-maven-reactor-and-module-boundaries.md) — Reactor Maven et frontières
-- [ADR-0029](../../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) — Couche sémantique optionnelle
-- [ADR-0037](../../adr/0037-first-class-native-and-docker-runtime-backends.md) — Backends natif et Docker
+- [ADR-0001](../adr/archive/0001-language-and-indexer-agnostic-core.md) — Agnosticisme du langage et de l'indexeur
+- [ADR-0008](../adr/ARCH-0008-negocier-indexeurs-par-capacites-explicites.md) — Négociation par capacités
+- [ADR-0017](../adr/ARCH-0017-mcp-stdio-read-only.md) — MCP STDIO read-only
+- [ADR-0022](../adr/archive/0022-maven-reactor-and-module-boundaries.md) — Reactor Maven et frontières
+- [ADR-0029](../adr/BE-0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) — Couche sémantique optionnelle
+- [ADR-0037](../adr/archive/0037-first-class-native-and-docker-runtime-backends.md) — Backends natif et Docker

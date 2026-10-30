@@ -5,11 +5,11 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
-import com.minos.runtime.local.WorkerResourceContainment;
-import com.minos.runtime.local.WorkerResourceContainment.Disposition;
-import com.minos.runtime.local.WorkerSandboxBackend;
-import com.minos.runtime.local.WorkerSandboxQualification;
-import com.minos.runtime.local.WorkerSandboxSelection;
+import com.minos.runtime.local.sandbox.WorkerResourceContainment;
+import com.minos.runtime.local.sandbox.WorkerResourceContainment.Disposition;
+import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
+import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
+import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 
 import java.util.List;
 import java.util.Map;
@@ -21,16 +21,16 @@ import java.util.function.Supplier;
  * by {@link WorkerSandboxQualification}. It never executes anything. No production code can build
  * it, since no integrated backend has such a containment (ADR 0041).
  */
-final class QualifiedSandboxForTests {
+public final class QualifiedSandboxForTests {
 
     private QualifiedSandboxForTests() {
     }
 
-    static Supplier<WorkerSandboxSelection> selection() {
+    public static Supplier<WorkerSandboxSelection> selection() {
         return () -> WorkerSandboxSelection.of(backend());
     }
 
-    static WorkerSandboxBackend backend() {
+    public static WorkerSandboxBackend backend() {
         return new WorkerSandboxBackend() {
             @Override public String id() { return "fake-hard-backend"; }
             @Override public WorkerIsolation isolation() { return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE; }

@@ -1,8 +1,8 @@
 package com.minos.bootstrap;
 
 import com.minos.remote.RemoteIndexingRuntime;
-import com.minos.runtime.local.DistributedArtifactBundleStore;
-import com.minos.runtime.local.WorkerSandboxSelection;
+import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
+import com.minos.runtime.local.sandbox.WorkerSandboxSelection;
 
 import java.util.function.Supplier;
 

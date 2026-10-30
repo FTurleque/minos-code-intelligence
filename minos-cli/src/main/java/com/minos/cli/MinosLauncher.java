@@ -1,5 +1,8 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.LazyApplication;
 import com.minos.application.MinosApplication;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.runtime.MinosVersion;
@@ -10,7 +13,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
 
-/** Point d'entrée système de MINOS. */
+/** System entry point of MINOS. */
 public final class MinosLauncher {
 
     public static final String VERSION = MinosVersion.current();
@@ -20,16 +23,16 @@ public final class MinosLauncher {
     private MinosLauncher() {
     }
 
-    /** Ouvre l'application d'un MINOS_HOME ; en production {@link MinosApplication#open}. */
+    /** Opens the application of a MINOS_HOME; in production {@link MinosApplication#open}. */
     @FunctionalInterface
     interface ApplicationOpener {
         MinosApplication open(Path home) throws IOException;
     }
 
     /**
-     * Exécute une ligne de commande sur une application ouverte à la demande ; en production {@link #run}. La
-     * commande analyse ses arguments avant d'avoir besoin de l'application : une erreur d'usage, une aide ou une
-     * commande sans état n'ouvrent jamais {@code MINOS_HOME}.
+     * Runs a command line on an application opened on demand; in production {@link #run}. The command parses
+     * its arguments before it needs the application: a usage error, a help request or a stateless command never
+     * opens {@code MINOS_HOME}.
      */
     @FunctionalInterface
     interface CommandRunner {
@@ -43,9 +46,9 @@ public final class MinosLauncher {
     }
 
     /**
-     * Le processus, sans {@code System.exit} : rend le code de sortie. L'application qu'une commande ouvre
-     * appartient à ce lanceur, qui la ferme sur tous les chemins de sortie (succès, code d'erreur, exception) ;
-     * une commande qui n'en a pas besoin n'en ouvre aucune.
+     * The process, without {@code System.exit}: returns the exit code. The application that a command opens
+     * belongs to this launcher, which closes it on every exit path (success, error code, exception); a command
+     * that does not need one opens none.
      */
     static int launch(
             String[] arguments,

@@ -26,8 +26,9 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
+            <artifactId>minos-storage</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
@@ -44,4 +45,20 @@
             <version>${scip.java.bindings.version}</version>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!--
+                      AUD-TST-18: the providers read JAVA_HOME (the project JDK of scip-java). No test of this module may
+                      depend on the JAVA_HOME of the host: it is removed from the test JVM, so a test that reads it fails
+                      everywhere, CI included. A test of a child process sets the environment of that child itself (ChildJvm).
+                    -->
+                    <excludedEnvironmentVariables>JAVA_HOME</excludedEnvironmentVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

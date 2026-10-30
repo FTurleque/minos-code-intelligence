@@ -18,3 +18,11 @@ ces fichiers font foi. Le diagramme de déploiement Docker d'arc42 § 7.3 n'a pa
 | [seq-erreur-provider.md](seq-erreur-provider.md) | sequenceDiagram | Provider SCIP absent |
 | [seq-mcp-startup.md](seq-mcp-startup.md) | sequenceDiagram | Démarrage MCP STDIO |
 | [deployment-native.md](deployment-native.md) | Déploiement (flowchart) | Backend natif |
+
+## Vue d'ensemble UML (`application/`)
+
+| Fichier | Type | Question |
+|---------|------|----------|
+| [component-modules-et-dependances.md](application/component-modules-et-dependances.md) | Composants (flowchart) | Quels modules, quelles dépendances Maven ? |
+| [deployment-docker-connecte.md](application/deployment-docker-connecte.md) | Déploiement (flowchart) | Conteneurs, réseaux et volumes de la pile Docker connectée |
+| [usecase-acteurs-et-surfaces.md](application/usecase-acteurs-et-surfaces.md) | Cas d'utilisation (flowchart) | Qui utilise MINOS, par quelle surface ? |

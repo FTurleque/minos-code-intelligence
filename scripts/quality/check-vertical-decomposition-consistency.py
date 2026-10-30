@@ -74,13 +74,13 @@ def main() -> int:
         jacoco = read("scripts/quality/check-jacoco.py")
 
         sandbox = read(
-            "minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java"
+            "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerSandboxBackend.java"
         )
         sandbox_qualification = read(
-            "minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxQualification.java"
+            "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerSandboxQualification.java"
         )
         sandbox_test = read(
-            "minos-runtime-local/src/test/java/com/minos/runtime/local/WorkerSandboxQualificationTest.java"
+            "minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WorkerSandboxQualificationTest.java"
         )
         worker = read(
             "minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java"
@@ -208,7 +208,7 @@ def main() -> int:
         require("HostedProductionBoundaryTest.java", hosted_test,
                 "facadeStaysThinAndCohesiveServicesAreRealSourceFiles")
 
-        if not (RUNTIME / "WorkerSandboxQualification.java").is_file():
+        if not (RUNTIME / "sandbox/WorkerSandboxQualification.java").is_file():
             raise RuntimeError("missing worker sandbox qualification model")
 
         print("M28 CONVERGENCE, VERTICAL SURFACE, BOUNDARY AND DECOMPOSITION CONSISTENCY SUCCESS")

@@ -1,10 +1,16 @@
 package com.minos.cli;
 
+import com.minos.cli.command.NexusExportCommand;
+import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
-import com.minos.git.GitIntelligence;
+import com.minos.domain.git.ActivityQuery;
+import com.minos.domain.git.ActivityReport;
+import com.minos.domain.git.RepositoryView;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ProjectImpactQuery;
 import org.junit.jupiter.api.Test;
@@ -96,8 +102,9 @@ class CliValidInvocationsTest {
         assertReaches("architecture p", "getArchitectureIntelligence[p]");
         assertReaches("architecture p --module core", "getModuleContext[p, core]");
         assertReaches("architecture p --format JSON", "getArchitectureIntelligence[p]");
-        assertReaches("architecture p --format mermaid --module core", "getArchitectureIntelligence[p]");
-        assertReaches("architecture p --module core --format dot", "getArchitectureIntelligence[p]");
+        assertReaches("architecture p --format mermaid --module core", "getArchitectureIntelligenceForModule[p, core]");
+        assertReaches("architecture p --module core --format dot", "getArchitectureIntelligenceForModule[p, core]");
+        assertReaches("architecture p --format dot", "getArchitectureIntelligence[p]");
     }
 
     @Test
@@ -179,7 +186,7 @@ class CliValidInvocationsTest {
 
     @Test
     void gitActivityTransmitsItsBoundsToTheService() throws Exception {
-        List<GitIntelligence.ActivityQuery> queries = new ArrayList<>();
+        List<ActivityQuery> queries = new ArrayList<>();
         ProjectOperations projects = new ProjectOperations() {
             @Override public ProjectView addProject(Path rootPath, String displayName) { throw new UnsupportedOperationException(); }
             @Override public List<ProjectView> listProjects() { throw new UnsupportedOperationException(); }
@@ -192,7 +199,7 @@ class CliValidInvocationsTest {
                 throw new UnsupportedOperationException();
             }
         };
-        GitIntelligence git = new GitIntelligence() {
+        ProjectGitQuery git = new ProjectGitQuery() {
             @Override public RepositoryView inspect(Path projectRoot) { throw new UnsupportedOperationException(); }
             @Override public ActivityReport analyze(Path projectRoot, ActivityQuery query) {
                 queries.add(query);
@@ -200,7 +207,7 @@ class CliValidInvocationsTest {
             }
         };
         MinosCli cli = MinosCli.builder(recorder(ProjectSymbolQuery.class))
-                .projectOperations(projects).gitIntelligence(git).build();
+                .projectOperations(projects).gitQuery(git).build();
 
         assertEquals(1, cli.run(("git-activity p --days 5 --max-commits 10 --max-files 20 --zone-depth 3 --format json")
                 .split(" "), new StringBuilder(), new StringBuilder()));
@@ -208,7 +215,13 @@ class CliValidInvocationsTest {
         assertEquals(1, cli.run("git-activity p --days 3650 --max-commits 10000 --max-files 10000 --zone-depth 8"
                 .split(" "), new StringBuilder(), new StringBuilder()));
 
-        assertEquals(3, queries.size());
+        assertEquals(1, cli.run("git-activity p --include-author-emails".split(" "),
+                new StringBuilder(), new StringBuilder()));
+
+        assertEquals(4, queries.size());
+        assertFalse(queries.get(0).includeAuthorEmails());
+        assertFalse(queries.get(1).includeAuthorEmails());
+        assertTrue(queries.get(3).includeAuthorEmails());
         assertEquals(10, queries.get(0).maxCommits());
         assertEquals(20, queries.get(0).maxFiles());
         assertEquals(3, queries.get(0).zoneDepth());

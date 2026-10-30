@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Exclusions SpotBugs de MINOS (profil audit-spotbugs, docs/quality/code-audit.md).
+  Exclusions SpotBugs de MINOS (profil audit-spotbugs, docs/developer/quality/code-audit.md).
 
   Regle : aucune exclusion globale par motif. Chaque exclusion cible UNE classe (et, si possible, UNE methode)
   pour UN motif, et porte au-dessus un commentaire qui dit pourquoi l'alerte est un faux positif, qui l'a

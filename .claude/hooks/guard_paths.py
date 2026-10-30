@@ -1,9 +1,9 @@
 """PreToolUse (Edit, Write, MultiEdit, NotebookEdit) : protège ce qui ne se modifie pas à la main.
 
-- refuse les fichiers générés (`target/`, `build/`, `.intellijPlatform/`, `docs/generated/`) : on régénère ;
+- refuse les fichiers générés (`target/`, `build/`, `.intellijPlatform/`, `docs/developer/generated/`) : on régénère ;
 - refuse l'écriture d'un secret apparent (clé privée, jeton GitHub, clé AWS, clé MINOS_TEAM_KEY_*) ;
 - demande confirmation pour les surfaces de gouvernance : historique figé (archives OpenSpec, audits
-  archivés, docs/history), spécifications OpenSpec courantes (elles se modifient par archivage),
+  archivés, docs/project/history), spécifications OpenSpec courantes (elles se modifient par archivage),
   goldens de caractérisation, workflows, liste des checks exigés, listes de tolérance des gardes,
   licence et sécurité.
 
@@ -18,7 +18,7 @@ from _common import permission, project_root, read_event, relative_posix
 DENY_PREFIXES = (
     ("target/", "fichier généré par Maven : le régénérer par le build"),
     (".intellijPlatform/", "répertoire généré par Gradle"),
-    ("docs/generated/", "document généré : le régénérer par son script (voir docs/developer/quality-gates.md)"),
+    ("docs/developer/generated/", "document généré : le régénérer par son script (voir docs/developer/quality-gates.md)"),
 )
 DENY_CONTAINS = (
     ("/target/", "fichier généré par Maven : le régénérer par le build"),
@@ -28,9 +28,9 @@ DENY_CONTAINS = (
 ASK_RULES = (
     (re.compile(r"^openspec/changes/archive/"),
      "Historique OpenSpec figé : les changements archivés ne se réécrivent pas (ses références à d'anciens chemins sont de l'historique)."),
-    (re.compile(r"^docs/audit/archive/|^docs/audit/[^/]+/archive/"),
+    (re.compile(r"^docs/project/audits/archive/|^docs/project/audits/[^/]+/archive/"),
      "Audit archivé : état du moment, à ne corriger que pour un lien ou une erreur factuelle."),
-    (re.compile(r"^docs/history/"),
+    (re.compile(r"^docs/project/history/"),
      "Documentation historique (ADR 0043) : conservée comme état d'époque."),
     (re.compile(r"^openspec/specs/"),
      "Les spécifications courantes se modifient par `openspec archive` d'un changement (deltas ADDED/MODIFIED), pas à la main."),
@@ -42,7 +42,9 @@ ASK_RULES = (
      "Liste déclarée des checks exigés par le ruleset : un changement doit être suivi de scripts/quality/verify-ruleset.py et d'une action manuelle sur GitHub."),
     (re.compile(r"^scripts/architecture/private-io-allowlist\.json$"),
      "Liste de tolérance en cliquet : elle ne fait que se resserrer ; chaque entrée porte une justification nominative."),
-    (re.compile(r"^docs/adr/\d{4}-"),
+    (re.compile(r"^docs/architecture/adr/archive/"),
+     "ADR archivé : relevé historique, conservé tel quel (seuls les liens se recalculent)."),
+    (re.compile(r"^docs/architecture/adr/[A-Z]+-\d{4}-"),
      "ADR : une décision Accepted ne se réécrit pas ; compléter la section « Mise en œuvre » ou écrire un ADR qui la remplace."),
     (re.compile(r"^(LICENSE|SECURITY\.md|CONTRIBUTING\.md|\.gitleaks\.toml)$"),
      "Document juridique ou de sécurité du dépôt : modification à confirmer par le propriétaire."),
@@ -84,7 +86,7 @@ def main() -> None:
                                "ne jamais versionner de secret (Gitleaks est un check exigé).")
     for pattern, reason in ASK_RULES:
         if pattern.search(relative):
-            if relative.startswith("docs/adr/") and not (project_root() / relative).exists():
+            if relative.startswith("docs/architecture/adr/") and not (project_root() / relative).exists():
                 continue  # un nouvel ADR se crée librement (commande /minos:adr)
             permission("ask", f"{relative} : {reason}")
 

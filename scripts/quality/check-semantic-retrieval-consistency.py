@@ -87,7 +87,7 @@ def main() -> int:
             '"disabled".equals(provider)',
         )
 
-        store_path = "minos-storage-local/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java"
+        store_path = "minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java"
         store = read(store_path)
         require(
             store_path,
@@ -105,7 +105,7 @@ def main() -> int:
         )
         forbid(store_path, store, "output.writeDouble(indexed.vector()")
 
-        store_test_path = "minos-storage-local/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreTest.java"
+        store_test_path = "minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreTest.java"
         store_test = read(store_test_path)
         require(
             store_test_path,
@@ -186,7 +186,7 @@ def main() -> int:
             '"semantic-hybrid-retrieval"',
         )
 
-        roadmap_path = "docs/roadmap/M23_EXECUTION.md"
+        roadmap_path = "docs/project/roadmap/M23_EXECUTION.md"
         roadmap = read(roadmap_path)
         require_pattern(roadmap_path, roadmap, r"(?im)^\s*Statut\b[^\n]*9\s*/\s*9\b", "M23 9/9 completion")
         require_pattern(roadmap_path, roadmap, r"(?im)^\s*Issue\b[^\n#]*#\s*78\b[^\n]*\bCLOSED\b[^\n]*\bcompleted\b", "issue #78 closed/completed")
@@ -207,7 +207,7 @@ def main() -> int:
             "M21-S2/CI reste en pause jusqu’en août 2026",
         )
 
-        adr_path = "docs/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md"
+        adr_path = "docs/architecture/adr/BE-0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md"
         adr = read(adr_path)
         require(
             adr_path,

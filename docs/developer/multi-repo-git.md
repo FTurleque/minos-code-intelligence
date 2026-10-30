@@ -98,7 +98,7 @@ Informations de repository :
 ```text
 repositoryId
 workTree
-originRemote (sanitisé)
+originRemote (remote réseau sans identifiants ; null et ORIGIN_REMOTE_NOT_DISCLOSED pour un remote local ou illisible)
 branch
 headCommit
 detachedHead
@@ -106,6 +106,14 @@ shallow
 clean
 limitations
 ```
+
+### Dépôt trouvé : remontée, propriétaire, filtres
+
+Un dépôt Git analysé n'est pas de confiance (cf. `.claude/rules/securite.md`, point 5).
+
+- **Remontée.** Depuis la racine du projet, JGit remonte jusqu'au premier `.git` (monorepo, worktree, sous-module). `GIT_DIR`, `GIT_WORK_TREE` et `GIT_CEILING_DIRECTORIES` restent ignorés. Si la racine du dépôt n'est pas celle du projet, la limitation `REPOSITORY_ABOVE_PROJECT_ROOT` le dit.
+- **Propriétaire.** Le propriétaire du répertoire Git trouvé (chemin résolu, et répertoire commun d'un worktree lié) doit être celui que le système attribue aux fichiers créés par le processus MINOS (comparé à un fichier-sonde créé dans le répertoire privé de MINOS (`minos.home`, `MINOS_HOME`, sinon `~/.minos`), jamais dans le dépôt ni dans le répertoire temporaire partagé, et non à `user.name`). Sinon l'appel échoue avant toute lecture de l'index, avec un message actionnable ; un propriétaire illisible échoue aussi (fail-closed), par un message distinct. Limite : sous Windows, un dépôt créé par un compte élevé puis analysé par un processus non élevé (ou l'inverse) est refusé, comme le fait git (« dubious ownership »). Aucun contournement n'est proposé.
+- **Filtres.** Aucune commande déclarée par le dépôt ne s'exécute : les pilotes `filter.*` de sa configuration (celle du répertoire commun pour un worktree lié, fichiers inclus compris) sont redirigés en mémoire vers un filtre intégré transparent ; `.git/config` n'est jamais modifié. Les filtres de la configuration de l'utilisateur et du système restent appliqués. Un dépôt qui déclare lui-même un filtre (`git lfs install --local`) porte `REPOSITORY_FILTERS_NOT_APPLIED` : `clean` est alors calculé sur le contenu brut et peut être `false` à tort.
 
 ## Historique borné
 
@@ -183,6 +191,8 @@ UNBORN_HEAD
 HISTORY_TRUNCATED
 HISTORY_SCAN_LIMIT
 FILES_TRUNCATED
+REPOSITORY_ABOVE_PROJECT_ROOT
+REPOSITORY_FILTERS_NOT_APPLIED
 ```
 
 Exemples workspace :

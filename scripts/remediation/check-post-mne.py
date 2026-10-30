@@ -77,48 +77,53 @@ def run_active_milestone_gates() -> None:
 
 def main() -> int:
     try:
-        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java")
-        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
+        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
+        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java")
         windows_launcher = read(
             "minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1")
         worker = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LocalIsolatedIndexWorker.java")
-        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/local/ProviderWorkspaceFiles.java")
-        worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WorkerSandboxBackend.java")
+        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWorkspaceFiles.java")
+        worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WorkerSandboxBackend.java")
         clone_policy = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteRepositoryCachePolicy.java")
         clone = read("minos-integration-git/src/main/java/com/minos/integration/git/JGitRemoteRepositoryMaterializer.java")
         clone_budget = read("minos-integration-git/src/main/java/com/minos/integration/git/RemoteCloneBudget.java")
-        java_plan = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java")
-        source_probe = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java")
+        java_plan = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory.java")
+        source_probe = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         runtime_settings = read("minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java")
         backend_store = read("minos-app/src/main/java/com/minos/app/McpBackendConfigurationStore.java")
-        path_store = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/ProjectPathMappingStore.java")
-        registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java")
+        path_store = read("minos-storage/src/main/java/com/minos/storage/home/ProjectPathMappingStore.java")
+        registry = read("minos-storage/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java")
         storage_config = read("minos-engine/src/main/java/com/minos/storage/StorageBackendConfiguration.java")
-        postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java")
+        postgres = read("minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java")
         postgres_policy = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresJdbcUrlPolicy.java")
+            "minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresJdbcUrlPolicy.java")
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         json = read("minos-application/src/main/java/com/minos/output/json/DeterministicJson.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
+        local_storage = read("minos-storage/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         postgres_storage = read(
-            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
+            "minos-storage/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
         retention_policy = read("minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
-        indexing = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
-        distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/local/DistributedArtifactBundleStore.java")
+        # AUD-ARC-02: the indexing orchestration moved from the CLI to the application use case.
+        indexing = read("minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java")
+        distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java")
         shared_cache_leases = read("minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java")
         file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")
         managed_java = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
+        managed_steps = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedToolInstallation.java")
+        scip_java_classpath = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallation.java")
         managed_python = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipPythonRuntimeManager.java")
         managed_polyglot = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
         locked_npm = read(
-            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/LockedNpmPackage.java")
-        run_retention = read("minos-runtime-local/src/main/java/com/minos/runtime/local/RunDirectoryRetention.java")
-        executor = read("minos-runtime-local/src/main/java/com/minos/runtime/local/ProcessIndexerExecutor.java")
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/LockedNpmPackage.java")
+        run_retention = read("minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/RunDirectoryRetention.java")
+        executor = read("minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessIndexerExecutor.java")
         lifecycle = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java")
         installer = read("scripts/install/configure-runtime-settings.ps1")
         docker_services = read("docker/scripts/configure-m30-docker-services.ps1")
@@ -221,8 +226,8 @@ def main() -> int:
         require("DistributedArtifactBundleStore.java", distributed,
                 "FileTreeOperations.deleteRecursively", "MAX_CACHE_ROOT_ENTRIES",
                 "MAX_CACHE_ENTRY_TREE_ENTRIES", "attributes.isRegularFile()")
-        require("ManagedScipProviderRuntimeManager.java", managed_java,
-                "BoundedInputStream", "BoundedLineReader", "FileTreeOperations.deleteRecursively")
+        require("ScipJavaClasspathInstallation.java", scip_java_classpath, "BoundedInputStream", "BoundedLineReader")
+        require("ManagedToolInstallation.java", managed_steps, "FileTreeOperations.deleteRecursively")
         require("ManagedScipPythonRuntimeManager.java", managed_python,
                 "FileTreeOperations.deleteRecursively")
         require("ManagedPolyglotScipRuntimeManager.java", managed_polyglot,
@@ -232,6 +237,8 @@ def main() -> int:
         for relative, text in (
             ("DistributedArtifactBundleStore.java", distributed),
             ("ManagedScipProviderRuntimeManager.java", managed_java),
+            ("ManagedToolInstallation.java", managed_steps),
+            ("ScipJavaClasspathInstallation.java", scip_java_classpath),
             ("ManagedScipPythonRuntimeManager.java", managed_python),
             ("ManagedPolyglotScipRuntimeManager.java", managed_polyglot),
         ):
@@ -261,19 +268,21 @@ def main() -> int:
         require("LocalStorageBackend.java", local_storage,
                 "new LocalStorageRetentionService", "retentionService()")
         local_retention = read(
-            "minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageRetentionService.java")
+            "minos-storage/src/main/java/com/minos/storage/local/LocalStorageRetentionService.java")
         require("LocalStorageRetentionService.java", local_retention,
                 "compactWithActiveSnapshot", "CompactionResult::activeSnapshotId")
         require("PostgresStorageBackend.java", postgres_storage,
                 "new PostgresStorageRetentionService", "retentionService()")
-        require("LocalAutonomousIndexOperations.java", indexing,
-                "application.retentionService().compact(prepared.project().id())",
-                "application.retentionService().compact(projectId)")
-        # Two failure paths compact directly; the two success paths go through compactAfterSuccess, whose
-        # timeout must not turn a successful index into a failure (S6).
-        if (indexing.count("application.retentionService().compact(prepared.project().id())")
-                + indexing.count("compactAfterSuccess(prepared.project().id())")) < 4:
-            raise RuntimeError("LocalAutonomousIndexOperations.java: retention is not applied on every terminal path")
+        require("ProjectIndexingUseCase.java", indexing,
+                "retentionService.compact(projectId)")
+        # Two failure paths compact through compactAfterFailure (the failed run and the fingerprint publication);
+        # the two success paths go through compactAfterSuccess, whose timeout must not turn a successful index
+        # into a failure (S6).
+        # compactAfterFailure( appears once in its definition and once at each of the two failure paths.
+        if (indexing.count("void compactAfterFailure(UUID projectId, Exception failure)") != 1
+                or indexing.count("compactAfterFailure(") - 1
+                + indexing.count("compactAfterSuccess(prepared.project().id())") < 4):
+            raise RuntimeError("ProjectIndexingUseCase.java: retention is not applied on every terminal path")
 
         # MINOS-07: no production metadata parser may bypass the bounded primitive.
         forbid_unbounded_production_properties_loads()

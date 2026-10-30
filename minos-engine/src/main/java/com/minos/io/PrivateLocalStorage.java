@@ -21,11 +21,9 @@ import java.nio.file.attribute.UserPrincipal;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Single owner-only policy for every local location that can hold user code or its derivatives.
@@ -60,16 +58,24 @@ import java.util.concurrent.TimeUnit;
  *
  * <h2>What hardening writes, and how often</h2>
  * <p>The first time a JVM touches an object, its DACL is rewritten (the owner entry and the DENY entries
- * kept) and then protected against inheritance with {@code icacls /inheritance:d}: one short process per
- * object and per JVM. Java cannot read the protected bit, and its {@code getAcl()} does not show conditional
+ * kept) and then protected against inheritance by the {@link PlatformAccessControl} port (on Windows, the local
+ * runtime runs {@code icacls /inheritance:d}: one short process per object and per JVM). This class launches no
+ * process itself. Java cannot read the protected bit, and its {@code getAcl()} does not show conditional
  * (XA) entries, so neither can be assumed already right. After that, in the same JVM, a call rewrites the
  * entries only if they are no longer the expected ones. Both writes need WRITE_DAC, which an owner always
  * holds. The memory of what was protected is forgotten when this class creates an object again at the same
  * path, and emptied when it reaches 8192 entries; an object deleted and recreated by anything else is
  * touched afresh only after one of those two events.</p>
  *
- * <p>Known limit: a conditional DENY (XD) is invisible to Java as well, so the rewrite drops it. MINOS
- * cannot keep a restriction it cannot see.</p>
+ * <p>Conditional entries. Java sees no conditional entry and cannot write one back. A conditional ALLOW (XA)
+ * is a right granted to someone else: it is dropped. A conditional DENY (XD) is a restriction an
+ * administrator put there: it is never dropped. Before its first rewrite of an object's DACL, this class
+ * reads the whole DACL through the same port ({@code icacls /save} on Windows, one more short process per
+ * object and per JVM) and, if an XD
+ * entry is present or the DACL cannot be read, <b>refuses</b> without writing: the error says that a
+ * conditional restriction on the data location prevents MINOS from making it private, without naming the
+ * path, and the administrator removes the restriction or moves {@code MINOS_HOME}. Residual limit: a
+ * conditional DENY added between that read and the rewrite is still dropped.</p>
  */
 public final class PrivateLocalStorage {
 
@@ -118,11 +124,56 @@ public final class PrivateLocalStorage {
      *         including when the filesystem cannot enforce or verify ownership at all
      */
     public static Path ensurePrivateDirectory(Path directory) throws IOException {
+        return ensurePrivateDirectory(directory, null, null, true);
+    }
+
+    /**
+     * MINOS-AUD-H23: on an ACL filesystem, hardening rewrites the DACL for the owner of the directory. A directory that
+     * already existed is therefore hardened only if it is dedicated to MINOS (not the user profile, one of its parents
+     * or a volume root) and belongs to {@code currentUser} (the current user when null); otherwise nothing is changed.
+     * POSIX needs no such guard: a non-owner cannot change the mode of a directory, and the read-only data root of the
+     * container must not be written to.
+     */
+    static Path ensurePrivateDirectory(Path directory, UserPrincipal currentUser, Path userHome) throws IOException {
+        return ensurePrivateDirectory(directory, currentUser, userHome, false);
+    }
+
+    private static Path ensurePrivateDirectory(Path directory, UserPrincipal currentUser, Path userHome,
+                                               boolean readUserHome) throws IOException {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && !supportsPosix(target)) {
+            refuseSharedLocation(target, readUserHome ? userHome(System.getProperty("user.home")) : userHome);
+            UserPrincipal expected = currentUser != null ? currentUser : ProcessOwner.current(target);
+            if (!Files.getOwner(target, LinkOption.NOFOLLOW_LINKS).equals(expected)) {
+                throw new IOException("MINOS refuses to make private an existing directory that belongs to another "
+                        + "account; its permissions are unchanged. Take ownership of it, or choose another MINOS_HOME");
+            }
+        }
         createPrivateDirectories(target);
         hardenDirectory(target);
         verifyPrivateDirectory(target);
         return target;
+    }
+
+    static void refuseSharedLocation(Path target, Path userHome) throws IOException {
+        Path home = userHome == null ? null : userHome.toAbsolutePath().normalize();
+        if (target.getParent() == null || (home != null && home.startsWith(target))) {
+            throw new IOException("MINOS refuses to make private a directory that is not dedicated to MINOS (the user "
+                    + "profile, one of its parents or a volume root); its permissions are unchanged. Choose another "
+                    + "MINOS_HOME");
+        }
+    }
+
+    /** {@code user.home} when it names an existing absolute directory; an unknown home ("?") guards nothing. */
+    static Path userHome(String property) {
+        String value = property == null ? "" : property.trim();
+        if (value.isEmpty()) return null;
+        try {
+            Path home = Path.of(value);
+            return home.isAbsolute() && Files.isDirectory(home, LinkOption.NOFOLLOW_LINKS) ? home : null;
+        } catch (java.nio.file.InvalidPathException _) {
+            return null;
+        }
     }
 
     /**
@@ -133,14 +184,29 @@ public final class PrivateLocalStorage {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         Path parent = target.getParent();
         if (parent != null) ensurePrivateDirectory(parent);
+        createFileExclusively(target, parent);
+        forgetProtected(target);
+        hardenOrDeleteAndThrow(target);
+        return target;
+    }
+
+    /** The one creation of a new file by this class: owner-only at creation where the platform allows it. */
+    private static void createFileExclusively(Path target, Path parent) throws IOException {
         try {
             Files.createFile(target, privateFileAttributes(target));
         } catch (AccessDeniedException denied) {
             throw explainDenied(denied, parent);
         }
-        forgetProtected(target);
-        hardenOrDeleteAndThrow(target);
-        return target;
+    }
+
+    /** The one opening of a stream by this class: never through a link, whatever the name became meanwhile. */
+    private static OutputStream openStreamWithoutFollowingLinks(Path target) throws IOException {
+        try {
+            return Files.newOutputStream(target,
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS);
+        } catch (AccessDeniedException denied) {
+            throw explainDenied(denied, target, target.getParent());
+        }
     }
 
     /**
@@ -195,6 +261,22 @@ public final class PrivateLocalStorage {
     public static Path writePrivateFile(Path file, byte[] content) throws IOException {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         Objects.requireNonNull(content, "content");
+        try (OutputStream output = openPrivateOutputStream(target)) {
+            output.write(content);
+        }
+        return target;
+    }
+
+    /**
+     * Opens {@code file} for writing, as the whole content of an owner-only file: created private when absent,
+     * hardened in place when it already exists, then truncated; never through a link (a symbolic link, a directory or
+     * a special object in its place is refused, and the stream itself is opened with {@link
+     * LinkOption#NOFOLLOW_LINKS}). This is the stream form of {@link #writePrivateFile}, for content too large to hold
+     * in memory (a snapshot, a vector index). The caller closes the stream; a failure while writing leaves the file as
+     * far as it got.
+     */
+    public static OutputStream openPrivateOutputStream(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             hardenExistingFile(target);
         } else {
@@ -209,13 +291,93 @@ public final class PrivateLocalStorage {
                 }
             }
         }
-        try (OutputStream output = Files.newOutputStream(target,
-                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS)) {
-            output.write(content);
+        return openStreamWithoutFollowingLinks(target);
+    }
+
+    /**
+     * Creates {@code file} exclusively and opens it for writing: the name must be free, whatever could take it (a file,
+     * a directory, a link), and the file is owner-only and verified before the stream is handed out, as {@link
+     * #createPrivateFile} guarantees. For the files MINOS writes and reads back in a folder the provider can also write
+     * into (process logs, a kept copy of an artifact): the file can neither pre-exist nor be adopted, and a name that
+     * reappeared between a deletion and this creation fails the call. A file whose opening fails is deleted. The
+     * refusal for a taken name carries no path.
+     *
+     * @throws FileAlreadyExistsException if the name is taken; the message names no path
+     */
+    public static OutputStream createPrivateOutputStream(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        createNameOrRefuse(target, () -> createPrivateFile(target), "private storage file already exists");
+        return openOrDelete(target, PrivateLocalStorage::openStreamWithoutFollowingLinks);
+    }
+
+    /** Something that creates a file; the refusal for a name that is taken is decided around it. */
+    @FunctionalInterface
+    interface Creation {
+        void run() throws IOException;
+    }
+
+    /** Opens the stream of a file this call just created, and deletes that file if it cannot be opened. */
+    @FunctionalInterface
+    interface Opener {
+        OutputStream open(Path target) throws IOException;
+    }
+
+    /**
+     * Runs {@code creation}; a name that is taken is refused with {@code message}, which carries no path. Windows
+     * answers "access denied", not "exists", for a file created where a directory is: when the name is there, that
+     * is the same refusal.
+     */
+    static void createNameOrRefuse(Path target, Creation creation, String message) throws IOException {
+        try {
+            creation.run();
+        } catch (FileAlreadyExistsException _) {
+            throw new FileAlreadyExistsException(null, null, message);
         } catch (AccessDeniedException denied) {
-            throw explainDenied(denied, target, target.getParent());
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                throw new FileAlreadyExistsException(null, null, message);
+            }
+            throw denied;
         }
-        return target;
+    }
+
+    static OutputStream openOrDelete(Path target, Opener opener) throws IOException {
+        try {
+            return opener.open(target);
+        } catch (IOException failure) {
+            try {
+                Files.deleteIfExists(target);
+            } catch (IOException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
+    }
+
+    /**
+     * Creates a new file in a tree that is private because of its root, and opens it for writing. The file is requested
+     * owner-only at creation where the platform allows it (POSIX {@code 0600}); on Windows it takes the ACL its folder
+     * passes down. <b>No DACL is rewritten and the privacy of the file is not checked again</b>: it is the
+     * confidentiality of the root, made private by {@link #ensurePrivateDirectory} or, for a tree a provider reads,
+     * acquired by inheritance. This is the partial level on purpose, for the extraction of an archive or the copy of
+     * thousands of files, where hardening each file would rewrite thousands of DACLs and, on Windows, take away the
+     * access the sandbox identity gets by inheritance. The name must be free and is never followed; the immediate parent
+     * must be a real directory (neither a link nor a special object), its ancestors are not checked. An existing name
+     * is refused with a message that carries no path.
+     *
+     * @throws FileAlreadyExistsException if the name is taken
+     * @throws IOException if the parent is absent, is a link or is not a directory
+     */
+    public static OutputStream openNewTreeFile(Path file) throws IOException {
+        Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if (parent == null) throw new IOException("private storage tree file has no parent directory");
+        BasicFileAttributes parentAttributes = readAttributesNoFollow(parent);
+        if (parentAttributes.isSymbolicLink() || parentAttributes.isOther() || !parentAttributes.isDirectory()) {
+            throw new IOException("private storage tree parent must be a real directory");
+        }
+        createNameOrRefuse(target, () -> createFileExclusively(target, parent),
+                "private storage tree file already exists");
+        return openOrDelete(target, PrivateLocalStorage::openStreamWithoutFollowingLinks);
     }
 
     /**
@@ -264,25 +426,8 @@ public final class PrivateLocalStorage {
     public static void verifyOwnedByCurrentUser(Path path) throws IOException {
         Path target = Objects.requireNonNull(path, "path").toAbsolutePath().normalize();
         UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
-        if (!owner.equals(currentOwner(target))) {
+        if (!owner.equals(ProcessOwner.current(target))) {
             throw new IOException("private storage location is owned by another principal");
-        }
-    }
-
-    private static volatile UserPrincipal currentOwner;
-
-    private static UserPrincipal currentOwner(Path near) throws IOException {
-        UserPrincipal known = currentOwner;
-        if (known != null) return known;
-        // The probe lives next to the object being checked, never in the shared temporary directory: the
-        // owner the system gives a new file does not depend on the directory it is created in.
-        Path directory = near.getParent() != null ? near.getParent() : near;
-        Path probe = Files.createTempFile(directory, "minos-owner-", ".probe");
-        try {
-            currentOwner = Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
-            return currentOwner;
-        } finally {
-            Files.deleteIfExists(probe);
         }
     }
 
@@ -386,10 +531,11 @@ public final class PrivateLocalStorage {
         // inherits one would otherwise keep it (made explicit, and permanent, by the protection below).
         boolean firstTouch = !PROTECTED_LOCATIONS.contains(key);
         if (firstTouch || !current.equals(desired)) {
+            CAPABILITY_PROBE.get().requireNoConditionalDeny(target);
             try {
                 acl.setAcl(desired);
             } catch (AccessDeniedException denied) {
-                throw explainDenied(denied, current, owner);
+                throw WriteDenyDiagnosis.explainDenied(denied, current, owner);
             }
             PROTECTED_LOCATIONS.remove(key);
         }
@@ -423,83 +569,9 @@ public final class PrivateLocalStorage {
         return List.copyOf(desired);
     }
 
-    // ------------------------------------------------------------ explicit deny entries (Windows)
-
-    private static final String WRITE_PROTECTED_MESSAGE =
-            "private storage is write-protected by an explicit deny entry; MINOS does not remove it";
-
-    private static final Set<AclEntryPermission> WRITE_RIGHTS = EnumSet.of(
-            AclEntryPermission.WRITE_DATA,
-            AclEntryPermission.APPEND_DATA,
-            AclEntryPermission.DELETE,
-            AclEntryPermission.DELETE_CHILD,
-            AclEntryPermission.WRITE_ATTRIBUTES,
-            AclEntryPermission.WRITE_NAMED_ATTRS,
-            AclEntryPermission.WRITE_ACL);
-
-    /**
-     * The failure for an access-denied error on a location whose DACL carries a write DENY that applies to
-     * the owner: MINOS says why it cannot write, and the message does not name the path. The original
-     * error names it, so what is chained is an access-denied cause without its path.
-     */
-    private static IOException explainDenied(AccessDeniedException denied, List<AclEntry> aclOfTheLocation,
-                                             UserPrincipal owner) {
-        return carriesWriteDenyForOwner(aclOfTheLocation, owner) ? writeProtected() : denied;
-    }
-
-    private static IOException writeProtected() {
-        return new IOException(WRITE_PROTECTED_MESSAGE, new AccessDeniedException(null));
-    }
-
-    /**
-     * Whether a DENY entry that applies to the object itself takes a write right from the owner. An entry
-     * counts when it is not inherit-only and names the owner, or a group: Java cannot say which groups the
-     * process belongs to, so a DENY on a group is assumed to apply. That is wrong only when the owner is
-     * not a member, and then the refusal had another cause that the message would mislabel.
-     */
-    static boolean carriesWriteDenyForOwner(List<AclEntry> acl, UserPrincipal owner) {
-        for (AclEntry entry : acl) {
-            if (entry.type() != AclEntryType.DENY) continue;
-            if (entry.flags().contains(AclEntryFlag.INHERIT_ONLY)) continue;
-            boolean applies = entry.principal().equals(owner)
-                    || entry.principal() instanceof java.nio.file.attribute.GroupPrincipal
-                    || namesTheProcessUser(entry.principal());
-            if (!applies) continue;
-            for (AclEntryPermission right : entry.permissions()) {
-                if (WRITE_RIGHTS.contains(right)) return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Whether {@code principal} is the account this process runs as. An elevated token owns what it creates
-     * as the Administrators group, not as the user, so a DENY placed on the user never equals the owner.
-     * Used only to word a diagnostic, never to decide access: the name is compared case-insensitively
-     * after its domain part.
-     */
-    private static boolean namesTheProcessUser(java.nio.file.attribute.UserPrincipal principal) {
-        String user = System.getProperty("user.name");
-        if (user == null || user.isBlank()) return false;
-        String name = principal.getName();
-        int separator = name.lastIndexOf('\\');
-        String account = separator >= 0 ? name.substring(separator + 1) : name;
-        return account.equalsIgnoreCase(user);
-    }
-
-    /** Rethrows {@code denied} as the write-protected failure when one of {@code locations} carries a write DENY. */
+    /** Words {@code denied} as the write-protected failure when one of {@code locations} carries a write DENY. */
     private static IOException explainDenied(AccessDeniedException denied, Path... locations) {
-        for (Path location : locations) {
-            if (location == null) continue;
-            AclFileAttributeView view = aclView(location);
-            if (view == null) continue;
-            try {
-                if (carriesWriteDenyForOwner(view.getAcl(), view.getOwner())) return writeProtected();
-            } catch (IOException unreadable) {
-                // Nothing more precise than the original refusal can be said.
-            }
-        }
-        return denied;
+        return WriteDenyDiagnosis.explainDenied(denied, PrivateLocalStorage::aclView, locations);
     }
 
     // ------------------------------------------------------------ protected DACLs (Windows)
@@ -605,102 +677,7 @@ public final class PrivateLocalStorage {
         return CAPABILITY_PROBE.get().supportsPosix(target);
     }
 
-    /**
-     * Switches inheritance off on a Windows DACL. Java writes a DACL ({@link AclFileAttributeView#setAcl})
-     * but cannot mark it protected, so an inheritable grant added later to a parent would flow back
-     * into the location (measured: {@code icacls <parent> /grant Everyone:(OI)(CI)R} reached every
-     * hardened child). {@code icacls /inheritance:d} is the smallest reliable way to set that bit; it runs
-     * without a shell, by absolute path, on a path checked beforehand. It is {@code :d}, not {@code :r}:
-     * a file just created in a private directory holds nothing but an inherited owner entry, which Java
-     * reads back as equal to the expected one; {@code :r} would drop it and leave an empty DACL (measured),
-     * {@code :d} turns it into an explicit entry.
-     */
-    private static final class WindowsDacl {
-        private static final long TIMEOUT_SECONDS = 10L;
-
-        private WindowsDacl() {
-        }
-
-        static void protect(Path target) throws IOException {
-            if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) return;
-            String path = target.toString();
-            if (!target.isAbsolute() || path.chars().anyMatch(c -> c < 0x20 || "*?\"<>|".indexOf(c) >= 0)) {
-                throw new IOException("cannot protect private storage from inheritance: unsupported path");
-            }
-            String systemRoot = System.getenv("SystemRoot");
-            if (systemRoot == null || systemRoot.isBlank()) {
-                throw new IOException("cannot protect private storage from inheritance: Windows directory unknown");
-            }
-            Process process = new ProcessBuilder(
-                    Path.of(systemRoot, "System32", "icacls.exe").toString(), path, "/inheritance:d", "/L", "/q")
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD)
-                    .start();
-            try {
-                if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    throw new IOException("cannot protect private storage from inheritance: timed out");
-                }
-            } catch (InterruptedException interrupted) {
-                process.destroyForcibly();
-                Thread.currentThread().interrupt();
-                throw new IOException("cannot protect private storage from inheritance: interrupted");
-            }
-            if (process.exitValue() != 0) {
-                throw new IOException("cannot protect private storage from inheritance (exit "
-                        + process.exitValue() + ")");
-            }
-        }
-    }
-
     // ---------------------------------------------------------------- fault-injection seam (tests)
-
-    /**
-     * What a given path's filesystem actually exposes for privacy enforcement. Production code
-     * always uses {@link #real()}; tests may substitute a fake via
-     * {@link #useForTesting(CapabilityProbe)} to deterministically exercise the POSIX, ACL and
-     * unsupported-filesystem branches without depending on the real OS/filesystem under CI.
-     *
-     * <p>Public so that tests in other modules that build on {@code PrivateLocalStorage} (e.g.
-     * {@code MinosApplication.open}) can inject the same deterministic fault without depending on
-     * minos-engine's test sources or duplicating this seam. It is a fault-injection hook, not part
-     * of the storage policy itself -- production code never references it, and {@link
-     * #useForTesting} refuses to install one outside a test runtime (see there for why that is, and
-     * is not, a security boundary).</p>
-     */
-    public interface CapabilityProbe {
-        boolean supportsPosix(Path target);
-
-        AclFileAttributeView aclView(Path target);
-
-        /**
-         * Makes the DACL of {@code target}, which already holds its final explicit entries, stop
-         * inheriting from its parent. Only a platform whose inheritance Java cannot switch off through
-         * {@link AclFileAttributeView} has anything to do here: the default does nothing, which is what a
-         * test double wants.
-         */
-        default void protectFromInheritance(Path target) throws IOException {
-        }
-
-        static CapabilityProbe real() {
-            return new CapabilityProbe() {
-                @Override
-                public boolean supportsPosix(Path target) {
-                    return target.getFileSystem().supportedFileAttributeViews().contains("posix");
-                }
-
-                @Override
-                public AclFileAttributeView aclView(Path target) {
-                    return Files.getFileAttributeView(target, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-                }
-
-                @Override
-                public void protectFromInheritance(Path target) throws IOException {
-                    WindowsDacl.protect(target);
-                }
-            };
-        }
-    }
 
     private static final ThreadLocal<CapabilityProbe> CAPABILITY_PROBE =
             ThreadLocal.withInitial(CapabilityProbe::real);

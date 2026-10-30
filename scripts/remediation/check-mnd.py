@@ -36,33 +36,33 @@ def forbid(relative: str, text: str, *needles: str) -> None:
 
 def main() -> int:
     try:
-        remote = read("minos-cli/src/main/java/com/minos/cli/LocalRemoteIndexOperations.java")
-        remote_lease = read("minos-cli/src/main/java/com/minos/cli/RemoteIndexLease.java")
+        remote = read("minos-application/src/main/java/com/minos/application/remote/RemoteIndexingUseCase.java")
+        remote_lease = read("minos-application/src/main/java/com/minos/application/remote/RemoteIndexLease.java")
         bounded_file_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
-        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/LinuxBubblewrapWorkerSandboxBackend.java")
-        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/WindowsAppContainerWorkerSandboxBackend.java")
+        linux = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java")
+        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java")
         windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-appcontainer-sandbox-v4.ps1")
-        snapshots = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
-        retention = read("minos-storage-local/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
+        snapshots = read("minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
+        retention = read("minos-storage/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java")
         runtime_codec = read("minos-application/src/main/java/com/minos/application/dynamic/RuntimeObservationEnvelopeCodec.java")
         graph_sidecar = read("minos-application/src/main/java/com/minos/program/analysis/FileProgramGraphProvider.java")
-        hosted = read("minos-storage-local/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
-        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
+        hosted = read("minos-storage/src/main/java/com/minos/storage/local/store/FileHostedControlPlaneStore.java")
+        local_storage = read("minos-storage/src/main/java/com/minos/storage/local/LocalStorageBackend.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
-        postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
+        postgres = read("minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         fingerprints = read("minos-application/src/main/java/com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider.java")
         hybrid = read("minos-application/src/main/java/com/minos/application/semantic/HybridSearchService.java")
-        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
+        polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager.java")
         discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
         plugins = read("minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
-        registry = read("minos-storage-local/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java")
-        coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
-        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/PinnedArtifactSource.java")
+        registry = read("minos-storage/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java")
+        coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
+        pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 
-        require("LocalRemoteIndexOperations.java", remote,
-                "RemoteIndexLease.acquire(application.home(), source.cacheKey())",
+        require("RemoteIndexingUseCase.java", remote,
+                "RemoteIndexLease.acquire(home, source.cacheKey())",
                 "indexUnderSourceLease")
         require("RemoteIndexLease.java", remote_lease,
                 "BoundedFileLease", "LOCK_STRIPES", "ACQUIRE_TIMEOUT", "BoundedFileLease.acquire")
@@ -99,11 +99,13 @@ def main() -> int:
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres,
                 "activeMetadata(projectId)", "queryCache", "MAX_QUERY_CACHE_WEIGHT_BYTES", "buildLocks")
         require("ProgramGraphService.java", graph_service,
-                "WeightedGraph", "evidenceWeight", "stringWeight", "maximumWeight")
+                "WeightedLruCache<CacheKey, GraphEntry> cache", "evidenceWeight", "stringWeight", "maximumWeight")
         require("FingerprintConstrainedJavaProgramGraphProvider.java", fingerprints,
-                "DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES", "trimCache", "fingerprintCacheStats")
+                "DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES", "WeightedLruCache<UUID, CachedFingerprint> immutableFingerprintCache",
+                "fingerprintCacheStats")
         require("HybridSearchService.java", hybrid,
-                "DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES", "trimCorpusCache", "MAX_QUERY_UTF8_BYTES")
+                "DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES", "WeightedLruCache<UUID, CachedCorpus> corpusCache",
+                "MAX_QUERY_UTF8_BYTES")
 
         require("ManagedPolyglotScipRuntimeManager.java", polyglot,
                 "GOSUMDB", "sum.golang.org", "<clear/>", "INTEGRITY_MARKER", "directoryDigest")

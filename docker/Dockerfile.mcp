@@ -1,7 +1,25 @@
 # <image>:<tag>@sha256:<index digest>: the digest is the immutable pin, the tag is what Dependabot
 # (docker ecosystem) follows to propose digest and version updates. A digest without a tag is not
 # followed by a tag: it would be moved to `latest`. Enforced by scripts/quality/check-image-pins.py.
-FROM eclipse-temurin:24.0.2_12-jre@sha256:8cb2387a28af84cf0db0948d9c67d4480192f4e567027a3963f145d218e8b4f2
+
+# AUD-DEP-16: the image redistributes the Java dependencies shaded into the JAR, so it ships their
+# notices and licence files where they can be read without running MINOS. The JRE image below has
+# neither `jar` nor `unzip`: this stage (the JDK pin of Dockerfile.mcp.release) extracts the
+# aggregated META-INF/NOTICE, the MINOS licence (META-INF/LICENSE) and
+# META-INF/licenses/<artifact>-<version>/ from the very JAR that is shipped, keeping the relative
+# paths of the JAR. `jar xf` silently extracts nothing for an absent entry: the tests fail the build
+# instead. Nothing else of this stage reaches the final image.
+FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e AS licenses
+COPY minos-code-intelligence-*-all.jar /tmp/minos.jar
+RUN mkdir -p /licenses \
+    && cd /licenses \
+    && jar xf /tmp/minos.jar META-INF/NOTICE META-INF/LICENSE META-INF/licenses/ \
+    && test -s META-INF/NOTICE \
+    && test -s META-INF/LICENSE \
+    && test -n "$(find META-INF/licenses -type f -size +0c -print -quit)" \
+    && chmod -R a+rX /licenses
+
+FROM eclipse-temurin:25.0.4.1_1-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5
 
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
@@ -15,6 +33,7 @@ LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
 
 WORKDIR /opt/minos
 COPY minos-code-intelligence-*-all.jar /opt/minos/minos.jar
+COPY --from=licenses /licenses /opt/minos/licenses
 
 ENV MINOS_HOME=/var/lib/minos
 

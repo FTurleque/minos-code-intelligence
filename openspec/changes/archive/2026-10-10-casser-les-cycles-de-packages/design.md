@@ -85,7 +85,7 @@ Faire ce changement **avant** AUD-ARC-02 (sprint 9) évite deux réécritures de
 | `scripts/m15/run-final.ps1:62` | lit `minos-application\src\main\java\com\minos\application\ProjectResolver.java` | A |
 | `scripts/remediation/check-post-mne.py:103,254` | lit `minos-application/.../output/DeterministicJson.java` | A |
 | `docs/user/java-api.md:359` | cite `ProjectResolver` dans la table de migration | A |
-| `docs/adr/0026-discovery-provider-spi-and-explicit-capability-profiles.md`, `docs/developer/polyglot-providers.md` | nom du package `spi` | C |
+| `docs/adr/BE-0026-discovery-provider-spi-and-explicit-capability-profiles.md`, `docs/developer/polyglot-providers.md` | nom du package `spi` | C |
 | `scripts/quality/check-polyglot-provider-consistency.py:97-99,259` | `ProjectDiscovery.java`, `DefaultDiscoveryPlugins.java`, `ProjectDiscoveryService.java` (**non déplacés** par C1) | C (à rejouer) |
 | `scripts/remediation/check-mnd.py:57-58` | `ProjectIgnorePolicy.java`, `DefaultDiscoveryPlugins.java` (**non déplacés**) | C (à rejouer) |
 | `scripts/architecture/check-module-boundaries.py` | `KNOWN_PACKAGE_CYCLES` | tous |

@@ -2,7 +2,7 @@
 
 > Vue de niveau 2, volontairement simplifiée : une flèche relie des couches, pas chaque paire de modules. Les
 > arêtes Maven exactes sont dans [module-dependencies.md](module-dependencies.md) (fichier généré, qui fait foi).
-> Détail de chaque module : [arc42 § 5.2](../arc42/05-vue-blocs.md). Preuves : `pom.xml` (14 modules),
+> Détail de chaque module : [arc42 § 5.2](../arc42/05-vue-blocs.md). Preuves : `pom.xml` (13 modules),
 > ADR-0042 (racine de composition dans `minos-bootstrap`), ADR-0044.
 
 ```mermaid
@@ -12,7 +12,7 @@ flowchart TB
     surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
     application["<b>minos-application</b><br/>services applicatifs"]
-    adapters["<b>Adaptateurs</b><br/>minos-storage-local · minos-storage-postgresql (optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
+    adapters["<b>Adaptateurs</b><br/>minos-storage (local · PostgreSQL optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
     engine["<b>minos-engine</b><br/>ports, indexation, requêtes"]
     domain["<b>minos-domain</b><br/>modèle de domaine pur"]
 
@@ -33,4 +33,4 @@ flowchart TB
 Lecture : les flèches descendent vers le cœur ; `minos-bootstrap` est le seul module non adaptateur qui connaît
 des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne dépendent pas des adaptateurs.
 
-Deux familles d'arêtes réelles sont dessinées pour ne pas masquer la dette : la flèche pointillée `surfaces → minos-engine` (les surfaces consomment encore des types du moteur ; l'ADR-0058 la déclare, l'ADR-0057 point 6 vise à la résorber) et la boucle sur « Adaptateurs » (`minos-provider-scip` → `minos-storage-local` et `minos-runtime-local`, `minos-storage-postgresql` → `minos-storage-local`). Le détail exact est dans [module-dependencies.md](module-dependencies.md), fichier généré qui fait foi.
+Deux familles d'arêtes réelles sont dessinées pour ne pas masquer la dette : la flèche pointillée `surfaces → minos-engine` (les surfaces consomment encore des types du moteur ; l'ADR-0058 la déclare, l'ADR-0057 point 6 vise à la résorber) et la boucle sur « Adaptateurs » (`minos-provider-scip` → `minos-storage` et `minos-runtime-local`). Le détail exact est dans [module-dependencies.md](module-dependencies.md), fichier généré qui fait foi.

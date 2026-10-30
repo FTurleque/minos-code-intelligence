@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "description": "Dated waivers of scripts/quality/check-embedded-tools-advisories.py. One entry per finding that is accepted until a date: component (identifier of embedded-tools.json), finding (advisory identifier, or end-of-support), reason, expires (YYYY-MM-DD). An expired entry, a malformed one, or one that no longer matches a finding fails the watch. See docs/developer/supply-chain.md.",
+  "waivers": [
+    {
+      "component": "scip-java-classpath",
+      "finding": "GHSA-xxph-c9ww-hj94",
+      "reason": "R-29: guava 33.6.0-jre is pulled by maven-core 3.9.16 and guice 5.1.0 through kotlin-scripting-dependencies-maven 2.4.21; guava fixes it in 33.7.2 only and no scip-java release ships it. Memory exhaustion on Java deserialization, bounded by the sandbox memory limit; the Windows classpath is not executed (ADR 0060).",
+      "expires": "2027-01-28"
+    }
+  ]
+}

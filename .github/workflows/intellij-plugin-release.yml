@@ -1,8 +1,26 @@
 name: Publish IntelliJ Plugin
 
+# AUD-DEP-07: a release created by release-windows.yml with the workflow token triggers no `release:` event, so the
+# plugin is attached by a call of that workflow (workflow_call), never by an event. workflow_dispatch replays the
+# attachment for an existing release (a release created by hand, or a failed call); the commit is then read on the
+# release. There is no `release:` trigger: it would attach the plugin a second time (check-ci-wiring.py, rule 5).
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Tag of the published release, for example v1.3.0'
+        required: true
+        type: string
+      commit:
+        description: 'Commit the caller published the release on (40-character SHA)'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag d'une release publiée à laquelle attacher le plugin, par exemple v1.3.0"
+        required: true
+        type: string
 
 # The default token is read-only for every job. Only the publish job, which does nothing but
 # download the already-built plugin artifact and attach it to the release, escalates to
@@ -12,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: intellij-plugin-release-${{ github.event.release.tag_name }}
+  group: intellij-plugin-release-${{ inputs.tag }}
   cancel-in-progress: false
 
 env:
@@ -21,7 +39,7 @@ env:
 jobs:
   build:
     name: Resolve release commit and build IntelliJ plugin (read-only)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:
       commit: ${{ steps.resolve.outputs.commit }}
@@ -32,10 +50,21 @@ jobs:
         id: resolve
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
-          TARGET: ${{ github.event.release.target_commitish }}
+          TAG: ${{ inputs.tag }}
+          # Empty on a workflow_dispatch replay: the commit is then the one recorded on the release.
+          EXPECTED_COMMIT: ${{ inputs.commit }}
         run: |
           set -euo pipefail
+          # The tag names a GitHub API path below: a release tag of this repository, nothing else.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Not a release tag of this repository: '$TAG' (expected vX.Y.Z or vX.Y.Z-suffix)." >&2
+            exit 1
+          fi
+          TARGET="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')"
+          if [ -n "$EXPECTED_COMMIT" ] && [ "$TARGET" != "$EXPECTED_COMMIT" ]; then
+            echo "Release $TAG records target commit '$TARGET' but the release workflow published it on $EXPECTED_COMMIT." >&2
+            exit 1
+          fi
           # A release must record the exact commit it represents, not a mutable branch name: a tag
           # reference alone is weaker than a resolved-and-verified SHA if the tag can later be
           # moved or recreated to point somewhere else.
@@ -63,6 +92,7 @@ jobs:
       - name: Checkout the exact verified release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ steps.resolve.outputs.commit }}
           fetch-depth: 0
 
@@ -70,7 +100,7 @@ jobs:
         shell: bash
         env:
           EXPECTED_COMMIT: ${{ steps.resolve.outputs.commit }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           head="$(git rev-parse HEAD)"
@@ -81,22 +111,24 @@ jobs:
           echo "Building IntelliJ plugin from verified commit $head (tag $TAG)"
 
       - name: Set up Java 21
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle 9.6.1
+      # MINOS-AUD-H09 / AUD-DEP-05 : la version vient du wrapper (minos-intellij/gradle/wrapper, SHA-256 de la
+      # distribution vérifié), comme dans intellij-plugin.yml ; setup-gradle ne sert qu'au cache et valide aussi le
+      # gradle-wrapper.jar contre les sommes publiées par Gradle. Aucun gradle-version (check-toolchain-baseline.py).
+      - name: Set up Gradle (wrapper)
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:
-          gradle-version: '9.6.1'
           cache-provider: basic
 
       - name: Resolve plugin version from release tag
         id: version
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           VERSION="$(printf '%s' "$TAG" | sed -E 's/^[^0-9]*//')"
           if [ -z "$VERSION" ] || [ "$VERSION" = "$TAG" ] && ! printf '%s' "$VERSION" | grep -Eq '^[0-9]'; then
@@ -110,7 +142,7 @@ jobs:
         env:
           MINOS_VERSION: ${{ steps.version.outputs.value }}
         run: >-
-          gradle --no-daemon
+          ./gradlew --no-daemon
           "-PminosVersion=$MINOS_VERSION"
           test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin
 
@@ -129,9 +161,9 @@ jobs:
           echo "name=$(basename "$ZIP")" >> "$GITHUB_OUTPUT"
 
       - name: Publier le plugin vérifié pour le job de publication
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: intellij-plugin-${{ github.event.release.tag_name }}
+          name: intellij-plugin-${{ inputs.tag }}
           if-no-files-found: error
           retention-days: 1
           path: |
@@ -141,21 +173,29 @@ jobs:
   publish:
     name: Attach verified plugin to GitHub Release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # AUD-DEP-06: id-token and attestations are granted to this job only, for the provenance attestation.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Télécharger le plugin déjà construit et vérifié
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: intellij-plugin-${{ github.event.release.tag_name }}
+          name: intellij-plugin-${{ inputs.tag }}
+
+      - name: Attest the provenance of the plugin archive
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ needs.build.outputs.zip_name }}
 
       - name: Attach plugin to GitHub Release
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.tag }}
           ZIP_NAME: ${{ needs.build.outputs.zip_name }}
           REPOSITORY: ${{ github.repository }}
         run: |

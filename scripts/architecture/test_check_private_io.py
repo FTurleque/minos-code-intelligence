@@ -29,8 +29,8 @@ _SPEC.loader.exec_module(_MODULE)
 
 PRIMITIVE = "minos-engine/src/main/java/com/minos/io/BoundedFileLease.java"
 NOT_A_PRIMITIVE = "minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java"
-SOURCE = "minos-storage-local/src/main/java/com/minos/storage/local/Store.java"
-OTHER = "minos-storage-local/src/main/java/com/minos/storage/local/Other.java"
+SOURCE = "minos-storage/src/main/java/com/minos/storage/local/Store.java"
+OTHER = "minos-storage/src/main/java/com/minos/storage/local/Other.java"
 BACKSLASH = chr(92)
 
 # One witness per forbidden call: (header, body) of a source that uses exactly that call.
@@ -39,11 +39,26 @@ WITNESSES = {
     "Files.write": ("", "Files.write(file, bytes);"),
     "Files.writeString": ("", "Files.writeString(file, text);"),
     "Files.newInputStream": ("", "try (var in = Files.newInputStream(file)) { }"),
+    "Files.newOutputStream": ("", "try (var out = Files.newOutputStream(file)) { }"),
+    "Files.newBufferedWriter": ("", "try (var out = Files.newBufferedWriter(file)) { }"),
+    "Files.newByteChannel": ("", "try (var channel = Files.newByteChannel(file)) { }"),
+    "Files.createFile": ("", "Files.createFile(file);"),
+    "Files.createDirectory": ("", "Files.createDirectory(dir);"),
+    "Files.createTempFile": ("", 'Files.createTempFile(dir, "p", ".tmp");'),
+    "Files.createTempDirectory": ("", 'Files.createTempDirectory(dir, "p");'),
+    "Files.copy": ("", "Files.copy(source, target);"),
+    "Files.move": ("", "Files.move(source, target);"),
+    "ProcessBuilder.redirect(file)": ("", "builder.redirectOutput(file.toFile());"),
     "Files.*": ("import static java.nio.file.Files.*;\n", "write(file, bytes);"),
     "FileChannel.open": ("", "var c = FileChannel.open(file, StandardOpenOption.WRITE);"),
     "AsynchronousFileChannel.open": ("", "var c = AsynchronousFileChannel.open(file);"),
     "FileChannel.lock": ("", "lockChannel.tryLock();"),
+    "LOGGER.log(Path)": ("", 'Path target = root; LOGGER.log(Level.WARNING, "could not reclaim " + target);'),
+    "LOGGER.log(cause)": ("", 'LOGGER.log(Level.WARNING, "could not reclaim a run", failure);'),
+    "message(Path)": ("", 'Path target = root; throw new IOException("not a directory: " + target);'),
 }
+PLUGIN = "minos-intellij/src/main/java/com/minos/intellij/protocol/Launcher.java"
+REAL_FIXED_SITE = "minos-storage/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java"
 
 
 def java(body: str, header: str = "") -> str:
@@ -121,7 +136,10 @@ class PrivateIoGateTest(unittest.TestCase):
         for method, text in (("Files.write", "BiFunction<Path, byte[], Path> f = Files::write;"),
                              ("Files.newInputStream", "Callable<InputStream> c = Files::newInputStream;"),
                              ("Files.createDirectories", "Function<Path, Path> d = Files::createDirectories;"),
-                             ("Files.writeString", "var f = Files::writeString;")):
+                             ("Files.writeString", "var f = Files::writeString;"),
+                             ("Files.newOutputStream", "Function<Path, OutputStream> o = Files::newOutputStream;"),
+                             ("Files.createDirectory", "Function<Path, Path> d = Files::createDirectory;"),
+                             ("Files.move", "BiFunction<Path, Path, Path> m = Files::move;")):
             with self.subTest(method=method):
                 violations = self.violations(java(text))
                 self.assertEqual(1, len(violations), violations)
@@ -164,8 +182,36 @@ class PrivateIoGateTest(unittest.TestCase):
 
     def test_the_similar_but_allowed_calls_are_not_caught(self):
         self.assertEqual([], self.violations(java(
-            "Files.createDirectory(d); Files.newOutputStream(f); Files.readAllBytes(f); Files.writeFoo(f);"
-            " Function<Path, OutputStream> o = Files::newOutputStream;")))
+            "Files.readAllBytes(f); Files.writeFoo(f); Files.createDirectoriesFoo(d); Files.exists(f);"
+            " Files.delete(f); Files.size(f); Files.isDirectory(d);")))
+
+    def test_a_static_import_of_a_new_api_is_caught(self):
+        violations = self.violations(
+            "package p;\nimport static java.nio.file.Files.newOutputStream;\nclass C { }\n")
+        self.assertEqual(1, len(violations))
+        self.assertIn("Files.newOutputStream", violations[0])
+
+    def test_create_directory_is_not_create_directories_and_each_is_counted_once(self):
+        violations = self.violations(java("Files.createDirectory(d); Files.createDirectories(d);"))
+        self.assertEqual(2, len(violations), violations)
+
+    def test_a_process_output_redirected_to_a_file_is_caught(self):
+        for body in ("builder.redirectOutput(file.toFile());", "builder.redirectError(target);",
+                     "builder.redirectOutput(ProcessBuilder.Redirect.to(file.toFile()));",
+                     "builder.redirectError(Redirect.appendTo(file.toFile()));",
+                     "builder.redirectOutput(\n            file.toFile());"):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("ProcessBuilder.redirect(file)", violations[0])
+
+    def test_a_process_redirection_to_a_constant_or_from_a_file_is_not_caught(self):
+        for body in ("builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);",
+                     "builder.redirectError(Redirect.INHERIT);", "builder.redirectOutput(Redirect.PIPE);",
+                     "builder.redirectInput(file.toFile());", "builder.redirectErrorStream(true);",
+                     "Redirect current = builder.redirectOutput();"):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
 
     # ------------------------------------------------------------------------------- what is ignored
 
@@ -181,13 +227,14 @@ class PrivateIoGateTest(unittest.TestCase):
 
     def test_tests_resources_the_excluded_module_and_the_primitives_are_out_of_scope(self):
         body = java("Files.createDirectories(root);")
-        self.repo.put("minos-storage-local/src/test/java/p/T.java", body)
+        self.repo.put("minos-storage/src/test/java/p/T.java", body)
         self.repo.put("minos-provider-scip/src/main/resources/p/Script.java", body)
         self.repo.put("minos-intellij/src/main/java/p/Ide.java", body)
         self.repo.put(PRIMITIVE, body)
         violations, scanned, _ = self.repo.check()
         self.assertEqual([], violations)
-        self.assertEqual(1, scanned)  # only the primitive's file is under src/main/java and scanned
+        # The primitive and the plugin are scanned for the path rules only; their raw I/O is not a finding.
+        self.assertEqual(2, scanned)
 
     def test_only_the_four_justified_primitives_are_exempt(self):
         self.assertEqual({"BoundedFileLease", "BoundedProperties", "ConfinedFileOpener", "DurableAtomicFile"},
@@ -244,8 +291,8 @@ class PrivateIoGateTest(unittest.TestCase):
 
     def test_a_directory_or_a_wildcard_is_refused(self):
         self.repo.put(SOURCE, java("Files.createDirectories(a);"))
-        for bad in ("minos-storage-local/src/main/java/", "minos-storage-local/src/main/java/**/*.java",
-                    "minos-storage-local/src/main/java/com/minos/storage/local/*.java"):
+        for bad in ("minos-storage/src/main/java/", "minos-storage/src/main/java/**/*.java",
+                    "minos-storage/src/main/java/com/minos/storage/local/*.java"):
             with self.subTest(file=bad):
                 self.repo.allow(entry(file=bad))
                 with self.assertRaises(ValueError):
@@ -254,9 +301,9 @@ class PrivateIoGateTest(unittest.TestCase):
     def test_a_missing_file_a_primitive_or_a_test_source_is_refused(self):
         self.repo.put(SOURCE, java("Files.createDirectories(a);"))
         self.repo.put(PRIMITIVE, java("Files.createDirectories(a);"))
-        self.repo.put("minos-storage-local/src/test/java/p/T.java", java("int x;"))
-        for bad in ("minos-storage-local/src/main/java/com/minos/Absent.java", PRIMITIVE,
-                    "minos-storage-local/src/test/java/p/T.java"):
+        self.repo.put("minos-storage/src/test/java/p/T.java", java("int x;"))
+        for bad in ("minos-storage/src/main/java/com/minos/Absent.java", PRIMITIVE,
+                    "minos-storage/src/test/java/p/T.java"):
             with self.subTest(file=bad):
                 self.repo.allow(entry(file=bad))
                 with self.assertRaises(ValueError):
@@ -283,6 +330,189 @@ class PrivateIoGateTest(unittest.TestCase):
                 self.repo.allow(*bad)
                 with self.assertRaises(ValueError):
                     self.repo.check()
+
+    # ------------------------------------------------------------------------- the logging rules
+
+    def test_a_path_concatenated_into_a_log_message_fails_and_has_no_exception(self):
+        for body in ('Path target = root; LOGGER.log(Level.WARNING, "x " + target);',
+                     'Path target = root; LOGGER.log(Level.WARNING, target + " failed");',
+                     'Path child = root; LOGGER.log(Level.WARNING, "x " + child.toString());',
+                     'for (Path child : kids) { LOGGER.log(Level.WARNING, "x " + child); }'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(Path)", violations[0])
+        self.repo.put(SOURCE, java('Path target = root; LOGGER.log(Level.WARNING, "x " + target);'))
+        self.repo.allow(entry(method="LOGGER.log(Path)"))
+        with self.assertRaises(ValueError):
+            self.repo.check()
+
+    def test_a_relative_path_or_a_class_name_in_a_log_message_passes(self):
+        for body in ('Path target = root; LOGGER.log(Level.WARNING, "x " + relative(root, target));',
+                     'Path target = root; LOGGER.log(Level.WARNING, "x " + root.relativize(target));',
+                     'Path target = root; String shown = shown(target); LOGGER.log(Level.WARNING, "x " + shown);',
+                     'Path target = root; LOGGER.log(Level.WARNING, "x " + failure.getClass().getSimpleName());'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+
+    def test_a_cause_or_get_message_in_a_log_call_needs_a_nominative_entry(self):
+        for body in ('LOGGER.log(Level.WARNING, "x", failure);',
+                     'LOGGER.log(Level.WARNING, "x " + failure.getMessage());',
+                     'LOGGER.log(Level.WARNING,\n            "x",\n            exception);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(cause)", violations[0])
+        self.repo.put(SOURCE, java('LOGGER.log(Level.WARNING, "x", failure);'))
+        self.repo.allow(entry(method="LOGGER.log(cause)", why="Diagnostic de bac à sable : la cause est voulue."))
+        self.assertEqual([], self.repo.check()[0])
+
+    def test_a_log_call_without_a_cause_passes_and_a_stale_entry_fails(self):
+        for body in ('LOGGER.log(Level.WARNING, "x");', 'LOGGER.log(Level.WARNING, "x " + count);',
+                     'LOGGER.log(Level.WARNING, "x {0}", "n");'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+        self.repo.put(SOURCE, java('LOGGER.log(Level.WARNING, "x");'))
+        self.repo.allow(entry(method="LOGGER.log(cause)", why="Diagnostic de bac à sable : la cause est voulue."))
+        violations = self.repo.check()[0]
+        self.assertEqual(1, len(violations))
+        self.assertIn("ratchet", violations[0])
+
+    def test_a_throwable_rendered_into_the_text_is_a_cause(self):
+        for body in ('LOGGER.log(Level.WARNING, "x: " + failure);',
+                     'LOGGER.log(Level.WARNING, failure + " while reclaiming");',
+                     'LOGGER.log(Level.WARNING, "x " + failure.toString());',
+                     'LOGGER.log(Level.WARNING, "x " + String.valueOf(failure));'):
+            with self.subTest(body=body):
+                source = java("try { run(); } catch (IOException failure) { " + body + " }")
+                violations = self.violations(source)
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(cause)", violations[0])
+
+    def test_the_class_of_a_throwable_is_not_a_cause(self):
+        source = java('try { run(); } catch (IOException failure) { LOGGER.log(Level.WARNING, '
+                      '"x " + failure.getClass().getSimpleName()); }')
+        self.assertEqual([], self.violations(source))
+
+    def test_another_logger_name_or_an_inline_logger_is_not_a_way_around_the_rules(self):
+        for body in ('LOG.log(Level.WARNING, "x", failure);',
+                     'logger.log(Level.WARNING, "x", failure);',
+                     'System.getLogger(Store.class.getName()).log(Level.WARNING, "x", failure);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("LOGGER.log(cause)", violations[0])
+        path = java('Path target = root; System.getLogger(C.class.getName()).log(Level.WARNING, "x " + target);')
+        self.assertIn("LOGGER.log(Path)", self.violations(path)[0])
+
+    def test_a_path_named_relative_is_understood_as_confined(self):
+        self.assertEqual([], self.violations(java(
+            'Path relativePath = root; LOGGER.log(Level.WARNING, "x \'" + relativePath + "\'");')))
+
+    def test_logging_inside_comments_and_literals_is_ignored(self):
+        self.assertEqual([], self.violations(java(
+            '// LOGGER.log(Level.WARNING, "x", failure);\n        String s = "LOGGER.log(a, b, failure)";')))
+
+    # ------------------------------------------------------------------------- the message rule
+
+    def test_a_path_rendered_into_an_exception_message_fails(self):
+        for body in ('Path target = root; throw new IOException("x: " + target);',
+                     'Path target = root; throw new IOException(target + " is missing");',
+                     'Path target = root; throw new IllegalStateException("x " + target.toString());',
+                     'Path target = root; throw new IllegalArgumentException("x " + String.valueOf(target));',
+                     'Path target = root; throw new IOException(String.format("x %s", target));',
+                     'Path target = root; throw new IOException("x %s".formatted(target));',
+                     'File target = root; throw new IOException("x " + target);',
+                     'throw new IOException("x " + root.toAbsolutePath());',
+                     'throw new IOException("x " + file.toFile().getAbsolutePath());',
+                     'throw new IOException(root.toRealPath() + " escapes");',
+                     'Path target = root; throw new UncheckedIOException("x " + target, failure);',
+                     'Path target = root; throw new AssertionError("x " + target);',
+                     'Path target = root; return () -> new IllegalArgumentException("x: " + target);',
+                     'Path target = root; throw new IOException("x: "\n                + target);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("message(Path)", violations[0])
+
+    def test_a_path_field_or_a_level_log_call_is_caught(self):
+        field = ("package p;\nclass C {\n    private final Path directory = null;\n"
+                 '    void m() throws Exception { throw new IOException("x " + this.directory); }\n}\n')
+        self.assertIn("message(Path)", self.violations(field)[0])
+        for body in ('Path target = root; LOG.warn("x " + target);',
+                     'Path target = root; logger.error("x " + target, failure);',
+                     'Path target = root; LOG.debug("x " + target);'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("message(Path)", violations[0])
+
+    def test_a_message_naming_the_entry_by_role_or_file_name_passes(self):
+        for body in ('Path target = root; throw new IOException("x: " + leafName(target));',
+                     'Path target = root; throw new IOException("x: " + PublicErrorMessages.leafName(target));',
+                     'Path target = root; throw new IOException("x: " + target.getFileName());',
+                     'Path target = root; throw new IOException("project root is not a directory");',
+                     'Path relativePath = root; throw new IOException("x: " + relativePath);',
+                     'Path target = root; throw new IOException("x: " + root.relativize(target));',
+                     'Path target = root; throw new IOException("x: " + count, failure);',
+                     'Path target = root; throw new IOException(String.format("x %d", count));',
+                     'Path target = root; String s = "throw new IOException(\\"x\\" + target)";'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+
+    def test_the_message_rule_applies_to_the_plugin_and_to_the_primitives(self):
+        message = java('Path target = root; throw new IOException("x: " + target);')
+        for file in (PLUGIN, PRIMITIVE):
+            with self.subTest(file=file):
+                self.repo.put(file, message)
+                violations, _, _ = self.repo.check()
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn(file, violations[0])
+                self.assertIn("message(Path)", violations[0])
+                (self.repo.root / file).unlink()
+
+    def test_an_internal_site_takes_a_justified_entry_and_the_entry_is_a_ratchet(self):
+        self.repo.put(SOURCE, java('Path target = root; throw new IOException("x: " + target);'))
+        self.repo.allow(entry(method="message(Path)", why="Diagnostic interne jamais rendu : le chemin sert au débogage."))
+        violations, _, listed = self.repo.check()
+        self.assertEqual(([], 1), (violations, listed))
+        self.repo.put(SOURCE, java('Path target = root; throw new IOException("x: " + leafName(target));'))
+        violations = self.repo.check()[0]
+        self.assertEqual(1, len(violations))
+        self.assertIn("ratchet", violations[0])
+
+    def test_a_plugin_entry_for_an_io_rule_is_refused_and_a_primitive_takes_a_path_entry(self):
+        self.repo.put(PLUGIN, java("int x;"))
+        self.repo.allow(entry(file=PLUGIN))
+        with self.assertRaises(ValueError):
+            self.repo.check()
+        self.repo.put(PRIMITIVE, java('Path target = root; throw new IOException("x: " + target);'))
+        self.repo.allow(entry(file=PRIMITIVE, method="message(Path)",
+                              why="Diagnostic interne de la primitive, jamais rendu en sortie publique."))
+        self.assertEqual([], self.repo.check()[0])
+
+    def test_a_violation_names_the_lines(self):
+        violations = self.violations(java('Path target = root;\n        throw new IOException("x: " + target);'))
+        self.assertIn("at line(s) 6", violations[0])
+
+    def test_the_inventory_classifies_each_site_by_exposure(self):
+        self.repo.put(SOURCE, java('Path target = root; LOG.debug("x " + target);\n'
+                                   '        LOG.warn("x " + target);\n'
+                                   '        throw new IOException("x " + target);'))
+        lines = _MODULE.inventory(self.repo.root, self.repo.allowlist)
+        self.assertEqual(4, len(lines), lines)
+        self.assertIn(f"{SOURCE}:5\tmessage(Path)\tlog.debug\t(b)", lines[0])
+        self.assertIn(f"{SOURCE}:6\tmessage(Path)\tlog.warn\t(a)", lines[1])
+        self.assertIn(f"{SOURCE}:7\tmessage(Path)\tnew IOException\t(a)", lines[2])
+        self.assertEqual("TOTAL 3 site(s): 2 (a) public, 1 (b) internal", lines[3])
+
+    def test_a_real_fixed_site_reverted_to_its_absolute_path_is_caught(self):
+        real = (Path(__file__).resolve().parents[2] / REAL_FIXED_SITE).read_text(encoding="utf-8")
+        self.assertEqual({}, {k: v for k, v in _MODULE.count_occurrences(real).items() if k == "message(Path)"})
+        reverted = real.replace('non-symlink directory: " + leafName(directory));',
+                                'non-symlink directory: " + directory);')
+        self.assertNotEqual(real, reverted, "the fixed site moved: update this witness")
+        self.assertEqual(1, _MODULE.count_occurrences(reverted)["message(Path)"])
 
     # ------------------------------------------------------------------------------------- the CLI
 

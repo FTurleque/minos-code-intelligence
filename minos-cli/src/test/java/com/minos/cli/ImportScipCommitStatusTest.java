@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.command.ImportScipCommand;
 import com.minos.application.ProjectOperations;
 
 import org.junit.jupiter.api.Test;

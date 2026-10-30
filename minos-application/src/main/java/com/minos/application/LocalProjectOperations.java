@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
@@ -14,21 +15,21 @@ import com.minos.orchestration.ScipSymbolSnapshotReport;
 import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.registry.UnreadableRegistryException;
+import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Local application adapter over the selected MINOS storage backend. */
 public final class LocalProjectOperations implements ProjectOperations, AutoCloseable {
@@ -70,7 +71,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             if (Thread.currentThread().isInterrupted()) throw failure;
             // A path that is not a directory is its own failure, whatever the state of the registry.
             if (!Files.isDirectory(rootPath)) throw failure;
-            Optional<UnreadableRegistryException> explained = UnreadableRegistryException.explaining(registry,
+            Optional<UnreadableRegistryException> explained = registry.explainUnreadable(
                     "the uniqueness of the registration cannot be guaranteed");
             if (explained.isEmpty()) throw failure;
             explained.get().addSuppressed(failure);
@@ -105,13 +106,19 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         }
     }
 
+    /** The SCIP artifact to import, absolute and normalized; a link or anything but a regular file is refused by name. */
+    static Path requireRegularArtifact(Path indexFile) {
+        Path artifact = Objects.requireNonNull(indexFile, "indexFile").toAbsolutePath().normalize();
+        if (Files.isSymbolicLink(artifact) || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("SCIP artifact must be an existing regular file: " + leafName(artifact));
+        }
+        return artifact;
+    }
+
     private IndexImportResult importScipLocked(RegisteredProject project, Path indexFile, String providerId,
                                                 String providerVersion, String moduleId, String snapshotId)
             throws IOException {
-        Path artifact = Objects.requireNonNull(indexFile, "indexFile").toAbsolutePath().normalize();
-        if (Files.isSymbolicLink(artifact) || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("SCIP artifact must be an existing regular file: " + artifact);
-        }
+        Path artifact = requireRegularArtifact(indexFile);
         String safeProviderId = ProviderId.require(providerId);
         String effectiveSnapshotId = snapshotId == null || snapshotId.isBlank()
                 ? "scip-" + BoundedFileDigest.sha256Exact(
@@ -132,7 +139,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         CommitOutcome commitOutcome = saveCommittedState(
                 committedState, snapshotDurabilityPending, report.commitDiagnostic());
         try {
-            writeHistory(project.id(), new IndexHistory(
+            writeHistory(historyDirectory, project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
         } catch (IOException failure) {
             // CLI history is secondary evidence. The active snapshot remains authoritative, so the import
@@ -154,7 +161,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             boolean snapshotDurabilityPending,
             String snapshotDiagnostic
     ) {
-        RuntimeException firstFailure = null;
+        IndexStateStoreException firstFailure = null;
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
                 stateStore.saveProjectState(state);
@@ -165,7 +172,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                                     "active snapshot is authoritative; durable commit acknowledgement remains pending"));
                 }
                 return new CommitOutcome(IndexImportCommitStatus.COMMITTED, null);
-            } catch (RuntimeException failure) {
+            } catch (IndexStateStoreException failure) {
                 if (firstFailure == null) firstFailure = failure;
                 else firstFailure.addSuppressed(failure);
             }
@@ -198,7 +205,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 view.lastSuccessfulIndexAt(), view.providerId(), view.providerVersion());
     }
 
-    private void writeHistory(UUID projectId, IndexHistory history) throws IOException {
+    static void writeHistory(Path historyDirectory, UUID projectId, IndexHistory history) throws IOException {
         DurableAtomicFile.ensureDirectory(historyDirectory, "CLI import history directory");
         Path target = historyDirectory.resolve(projectId + ".properties");
         Path temporary = PrivateLocalStorage.createPrivateTempFile(historyDirectory, projectId + ".", ".tmp");
@@ -208,10 +215,9 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         properties.setProperty("providerVersion", history.providerVersion() == null ? "" : history.providerVersion());
         properties.setProperty("completedAt", history.completedAt().toString());
         try {
-            try (OutputStream output = Files.newOutputStream(
-                    temporary, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                properties.store(output, "MINOS project index history");
-            }
+            ByteArrayOutputStream content = new ByteArrayOutputStream();
+            properties.store(content, "MINOS project index history");
+            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
             DurableAtomicFile.replace(temporary, target, "CLI import history replacement");
         } finally {
             Files.deleteIfExists(temporary);
@@ -226,8 +232,8 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         }
     }
 
-    private record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
-        private IndexHistory {
+    record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
+        IndexHistory {
             if (snapshotId == null || snapshotId.isBlank()) throw new IllegalArgumentException("snapshotId must not be blank");
             ProviderId.require(providerId);
             Objects.requireNonNull(completedAt, "completedAt");

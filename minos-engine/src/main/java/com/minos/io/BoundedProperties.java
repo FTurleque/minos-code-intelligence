@@ -13,6 +13,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 
 /** Shared bounded UTF-8 readers for small runtime configuration and metadata files. */
@@ -44,6 +45,24 @@ public final class BoundedProperties {
         }
         validate(properties, maximumEntries, maximumKeyChars, maximumValueChars, boundary);
         return properties;
+    }
+
+    /**
+     * Same as {@link #load} but rendering {@link Optional#empty()} when nothing at all exists at {@code file}
+     * (existence is tested without following links). Anything that does exist without being a regular
+     * non-symlink file -- a directory, a link, a dangling link -- is refused, never taken for "absent".
+     */
+    public static Optional<Properties> loadIfPresent(
+            Path file,
+            long maximumBytes,
+            int maximumEntries,
+            int maximumKeyChars,
+            int maximumValueChars,
+            String boundary
+    ) throws IOException {
+        Path source = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        if (!Files.exists(source, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
+        return Optional.of(load(source, maximumBytes, maximumEntries, maximumKeyChars, maximumValueChars, boundary));
     }
 
     /** Bounded variant for an already byte-capped UTF-8 envelope such as a ZIP manifest. */
@@ -157,9 +176,15 @@ public final class BoundedProperties {
     private static Path requireRegularFile(Path file, String boundary) throws IOException {
         Path source = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         if (Files.isSymbolicLink(source) || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException(label(boundary) + " must be a regular non-symlink file: " + source);
+            throw new IOException(label(boundary) + " must be a regular non-symlink file: " + leafName(source));
         }
         return source;
+    }
+
+    /** The file name only: a refusal message may reach a public output and must not carry the absolute path. */
+    private static String leafName(Path path) {
+        Path name = path.getFileName();
+        return name == null ? "<root>" : name.toString();
     }
 
     private static String label(String boundary) {

@@ -2,7 +2,7 @@
 
 ## Context
 
-Constats de départ (audit du 8 octobre 2026, `docs/quality/code-audit-constats.md` § 5) : H01 (rapports SpotBugs Maven sans statistiques de classes), H02 (faux rapprochements CPE), H04 (clé NVD refusée), H06 (Gitleaks hors CI), H08 (usages transitifs non déclarés), H09 (plugin IntelliJ hors contrôles), H21 (alertes SpotBugs du plugin). Mesures et commandes : `docs/quality/code-audit-couverture.md`.
+Constats de départ (audit du 8 octobre 2026, `docs/developer/quality/code-audit-constats.md` § 5) : H01 (rapports SpotBugs Maven sans statistiques de classes), H02 (faux rapprochements CPE), H04 (clé NVD refusée), H06 (Gitleaks hors CI), H08 (usages transitifs non déclarés), H09 (plugin IntelliJ hors contrôles), H21 (alertes SpotBugs du plugin). Mesures et commandes : `docs/developer/quality/code-audit-couverture.md`.
 
 ## Goals / Non-Goals
 

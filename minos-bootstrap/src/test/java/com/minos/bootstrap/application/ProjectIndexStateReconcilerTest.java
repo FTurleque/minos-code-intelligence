@@ -3,6 +3,7 @@ package com.minos.bootstrap.application;
 import com.minos.application.ProjectIndexStateReconciler;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
+import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
@@ -11,12 +12,15 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,6 +33,29 @@ class ProjectIndexStateReconcilerTest {
     Path tmp;
 
     @Test
+    void aStatusReportsThePointedSnapshotWhileItsDamagedBodyStillFailsTheLoad() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        Path snapshotRoot = tmp.resolve("snapshots-damaged");
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(snapshotRoot);
+        snapshots.publish(projectId, "snapshot-damaged", List.of(), List.of(), List.of());
+        FileIndexStateStore states = new FileIndexStateStore(tmp.resolve("state-damaged"));
+        states.saveProjectState(state(projectId, ProjectIndexState.Availability.READY, "snapshot-damaged"));
+        Path body;
+        try (Stream<Path> files = Files.walk(snapshotRoot)) {
+            body = files.filter(file -> file.getFileName().toString().endsWith(".knowledge")).findFirst().orElseThrow();
+        }
+        Files.write(body, new byte[] {1, 2, 3}, StandardOpenOption.APPEND);
+
+        ProjectIndexStateReconciler.ReconciledState status =
+                new ProjectIndexStateReconciler(snapshots, states).observeStatusState(projectId);
+
+        assertEquals(Optional.of("snapshot-damaged"), status.activeSnapshotId(),
+                "a status reads the active pointer only and does not decode the snapshot body");
+        assertThrows(IOException.class, () -> snapshots.loadActiveKnowledge(projectId),
+                "any read of the snapshot itself still fails closed on its checksum");
+    }
+
+    @Test
     void repairsCommittedSnapshotMismatchAndRemainsConsistentAfterRestart() throws Exception {
         UUID projectId = UUID.randomUUID();
         Path snapshotRoot = tmp.resolve("snapshots");
@@ -39,15 +66,15 @@ class ProjectIndexStateReconcilerTest {
         states.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
                 Optional.of("snapshot-old"), Optional.empty(), Instant.parse("2026-08-14T08:00:00Z"), Optional.empty()));
 
-        ProjectIndexStateReconciler.Reconciliation repaired =
-                new ProjectIndexStateReconciler(snapshots, states).reconcile(projectId);
+        ProjectIndexStateReconciler.ReconciledState repaired =
+                new ProjectIndexStateReconciler(snapshots, states).reconcileState(projectId);
 
         assertTrue(repaired.repaired());
         assertEquals(Optional.of("snapshot-new"), repaired.projectState().orElseThrow().activeSnapshotId());
         assertEquals(ProjectIndexState.Availability.READY, repaired.projectState().orElseThrow().availability());
 
-        ProjectIndexStateReconciler.Reconciliation afterRestart = new ProjectIndexStateReconciler(
-                new FileSymbolSnapshotStore(snapshotRoot), new FileIndexStateStore(stateRoot)).reconcile(projectId);
+        ProjectIndexStateReconciler.ReconciledState afterRestart = new ProjectIndexStateReconciler(
+                new FileSymbolSnapshotStore(snapshotRoot), new FileIndexStateStore(stateRoot)).reconcileState(projectId);
         assertFalse(afterRestart.repaired(), "restart should observe the already repaired durable state");
         assertEquals(Optional.of("snapshot-new"), afterRestart.projectState().orElseThrow().activeSnapshotId());
     }
@@ -74,8 +101,8 @@ class ProjectIndexStateReconcilerTest {
             }
         };
 
-        ProjectIndexStateReconciler.Reconciliation observed =
-                new ProjectIndexStateReconciler(snapshots, watching).observe(projectId);
+        ProjectIndexStateReconciler.ReconciledState observed =
+                new ProjectIndexStateReconciler(snapshots, watching).observeState(projectId);
 
         assertTrue(observed.repaired(), "the repair that reconcile would perform is reported");
         assertEquals(Optional.of("snapshot-new"), observed.projectState().orElseThrow().activeSnapshotId());
@@ -93,12 +120,12 @@ class ProjectIndexStateReconcilerTest {
         ProjectIndexState indexing = state(projectId, ProjectIndexState.Availability.INDEXING, "snapshot-old");
         durable.saveProjectState(indexing);
 
-        ProjectIndexStateReconciler.Reconciliation observed =
-                new ProjectIndexStateReconciler(snapshots, durable).observeStatus(projectId);
+        ProjectIndexStateReconciler.ReconciledState observed =
+                new ProjectIndexStateReconciler(snapshots, durable).observeStatusState(projectId);
 
         assertFalse(observed.repaired(), "a reader cannot tell an in-flight run from an abandoned one");
         assertEquals(indexing, observed.projectState().orElseThrow(), "the state its owner published");
-        assertEquals("snapshot-new", observed.activeSnapshot().orElseThrow().snapshotId(),
+        assertEquals("snapshot-new", observed.activeSnapshotId().orElseThrow(),
                 "the snapshot is the authoritative one, ahead of the published state");
         assertEquals(indexing, durable.findProjectState(projectId).orElseThrow(), "nothing was written");
     }
@@ -113,14 +140,14 @@ class ProjectIndexStateReconcilerTest {
         durable.saveProjectState(indexing);
         ProjectIndexStateReconciler reconciler = new ProjectIndexStateReconciler(snapshots, durable);
 
-        ProjectIndexStateReconciler.Reconciliation planned = reconciler.observe(projectId);
+        ProjectIndexStateReconciler.ReconciledState planned = reconciler.observeState(projectId);
 
         assertTrue(planned.repaired(), "the plan anticipates the recovery the real run performs under the lease");
         assertEquals(ProjectIndexState.Availability.READY, planned.projectState().orElseThrow().availability());
         assertEquals(Optional.of("snapshot-new"), planned.projectState().orElseThrow().activeSnapshotId());
         assertEquals(indexing, durable.findProjectState(projectId).orElseThrow(), "the dry run wrote nothing");
         assertEquals(planned.projectState().orElseThrow().availability(),
-                reconciler.reconcile(projectId).projectState().orElseThrow().availability(),
+                reconciler.reconcileState(projectId).projectState().orElseThrow().availability(),
                 "the dry run and the real run start from the same state");
     }
 
@@ -132,8 +159,8 @@ class ProjectIndexStateReconcilerTest {
         FileIndexStateStore durable = new FileIndexStateStore(tmp.resolve("state-abandoned"));
         durable.saveProjectState(state(projectId, ProjectIndexState.Availability.INDEXING, "snapshot-old"));
 
-        ProjectIndexStateReconciler.Reconciliation repaired =
-                new ProjectIndexStateReconciler(snapshots, durable).reconcile(projectId);
+        ProjectIndexStateReconciler.ReconciledState repaired =
+                new ProjectIndexStateReconciler(snapshots, durable).reconcileState(projectId);
 
         assertTrue(repaired.repaired(), "holding the lease proves no run is in flight: the repair is published");
         assertEquals(ProjectIndexState.Availability.READY, repaired.projectState().orElseThrow().availability());
@@ -149,16 +176,18 @@ class ProjectIndexStateReconcilerTest {
         ProjectIndexState stale = new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
                 Optional.of("snapshot-old"), Optional.empty(), Instant.parse("2026-08-14T08:00:00Z"), Optional.empty());
         IndexStateStore failing = new IndexStateStore() {
-            public Optional<ProjectIndexState> findProjectState(UUID id) { return Optional.of(stale); }
-            public Optional<IndexingRun> findRun(UUID id) { return Optional.empty(); }
-            public List<IndexingRun> listRuns(UUID id) { return List.of(); }
-            public void saveProjectState(ProjectIndexState state) { throw new IllegalStateException("synthetic disk failure"); }
-            public void saveRun(IndexingRun run) { }
-            public ProjectLease acquireProjectLease(UUID id) { return () -> { }; }
+            @Override public Optional<ProjectIndexState> findProjectState(UUID id) { return Optional.of(stale); }
+            @Override public Optional<IndexingRun> findRun(UUID id) { return Optional.empty(); }
+            @Override public List<IndexingRun> listRuns(UUID id) { return List.of(); }
+            @Override public void saveProjectState(ProjectIndexState state) { throw new IndexStateStoreException("synthetic disk failure"); }
+            @Override public void saveRun(IndexingRun run) {
+                // runs are not written by a reconciliation: nothing to record
+            }
+            @Override public ProjectLease acquireProjectLease(UUID id) { return () -> { }; }
         };
 
         IOException failure = assertThrows(IOException.class,
-                () -> new ProjectIndexStateReconciler(snapshots, failing).reconcile(projectId));
+                () -> new ProjectIndexStateReconciler(snapshots, failing).reconcileState(projectId));
         assertTrue(failure.getMessage().contains("reconciliation failed"));
         assertEquals(Optional.of("snapshot-old"), failing.findProjectState(projectId).orElseThrow().activeSnapshotId());
     }
@@ -172,7 +201,7 @@ class ProjectIndexStateReconcilerTest {
                 Optional.of("ghost"), Optional.empty(), Instant.parse("2026-08-14T08:00:00Z"), Optional.empty()));
 
         IOException failure = assertThrows(IOException.class,
-                () -> new ProjectIndexStateReconciler(snapshots, states).reconcile(projectId));
+                () -> new ProjectIndexStateReconciler(snapshots, states).reconcileState(projectId));
         assertTrue(failure.getMessage().contains("snapshot store has none"));
     }
 
@@ -205,11 +234,11 @@ class ProjectIndexStateReconcilerTest {
             }
         };
 
-        ProjectIndexStateReconciler.Reconciliation result =
-                new ProjectIndexStateReconciler(snapshots, moving).reconcile(projectId);
+        ProjectIndexStateReconciler.ReconciledState result =
+                new ProjectIndexStateReconciler(snapshots, moving).reconcileState(projectId);
 
         assertTrue(result.repaired());
-        assertEquals(Optional.of("snapshot-two"), result.activeSnapshot().map(snapshot -> snapshot.snapshotId()));
+        assertEquals(Optional.of("snapshot-two"), result.activeSnapshotId());
         assertEquals(Optional.of("snapshot-two"), result.projectState().orElseThrow().activeSnapshotId());
         assertEquals(List.of("snapshot-two"), writes,
                 "the stale snapshot observed before the move must never be written as a repair");
@@ -238,12 +267,12 @@ class ProjectIndexStateReconcilerTest {
             }
         };
 
-        ProjectIndexStateReconciler.Reconciliation result =
-                new ProjectIndexStateReconciler(snapshots, moving).reconcile(projectId);
+        ProjectIndexStateReconciler.ReconciledState result =
+                new ProjectIndexStateReconciler(snapshots, moving).reconcileState(projectId);
 
         assertTrue(result.repaired());
         assertEquals(List.of("snapshot-one", "snapshot-two"), writes);
-        assertEquals(Optional.of("snapshot-two"), result.activeSnapshot().map(snapshot -> snapshot.snapshotId()));
+        assertEquals(Optional.of("snapshot-two"), result.activeSnapshotId());
         assertEquals(Optional.of("snapshot-two"), result.projectState().orElseThrow().activeSnapshotId());
         assertEquals(Optional.of("snapshot-two"), durable.findProjectState(projectId).orElseThrow().activeSnapshotId());
     }
@@ -264,8 +293,8 @@ class ProjectIndexStateReconcilerTest {
                 Optional.of("indexing run in progress"));
         states.saveProjectState(refreshing);
 
-        ProjectIndexStateReconciler.Reconciliation result =
-                new ProjectIndexStateReconciler(snapshots, states).reconcile(projectId);
+        ProjectIndexStateReconciler.ReconciledState result =
+                new ProjectIndexStateReconciler(snapshots, states).reconcileState(projectId);
 
         assertFalse(result.repaired());
         assertEquals(ProjectIndexState.Availability.REFRESHING, result.projectState().orElseThrow().availability());

@@ -20,17 +20,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * unknown option, stray argument, case, bounds. A command is described once, by
  * {@link #command(String, String)}; every rule is then derived from that description.
  */
-final class CliArgumentRules {
+public final class CliArgumentRules {
 
     private final MinosApplication application;
     private final List<String> failures = new ArrayList<>();
 
-    CliArgumentRules(Path home) throws IOException {
+    public CliArgumentRules(Path home) throws IOException {
         this.application = MinosApplication.builder(home).hostedTenantKeyProvider(keys()).build();
     }
 
     /** A command under test: its base invocation (valid on its own) and its options. */
-    static final class Command {
+    public static final class Command {
         private final String label;
         private final List<String> base;
         private final List<String[]> texts = new ArrayList<>();
@@ -46,64 +46,64 @@ final class CliArgumentRules {
         }
 
         /** A free-text option and a sample value that the command's analysis accepts. */
-        Command text(String option, String sample) {
+        public Command text(String option, String sample) {
             texts.add(new String[]{option, sample, "free"});
             return this;
         }
 
         /** An enumerated option: its values are case-insensitive, so the upper-cased sample is accepted too. */
-        Command choice(String option, String sample) {
+        public Command choice(String option, String sample) {
             texts.add(new String[]{option, sample, "choice"});
             return this;
         }
 
         /** An integer option, its inclusive bounds and a valid sample. */
-        Command integer(String option, int minimum, int maximum, int sample) {
+        public Command integer(String option, int minimum, int maximum, int sample) {
             integers.add(new Object[]{option, minimum, maximum, sample});
             return this;
         }
 
         /** A decimal option and a valid sample (its range is the domain's to check, not the analysis'). */
-        Command decimal(String option, String sample) {
+        public Command decimal(String option, String sample) {
             texts.add(new String[]{option, sample, "decimal"});
             return this;
         }
 
         /** An integer option whose range the domain object checks: only its shape is checked at analysis. */
-        Command integerAnyRange(String option, int sample) {
+        public Command integerAnyRange(String option, int sample) {
             return integer(option, Integer.MIN_VALUE, Integer.MAX_VALUE, sample);
         }
 
-        Command flag(String option) {
+        public Command flag(String option) {
             flags.add(option);
             return this;
         }
 
         /** Names the command family in the unknown/duplicate/unexpected messages, e.g. {@code "team "}. */
-        Command scope(String scope) {
+        public Command scope(String scope) {
             this.scope = scope;
             return this;
         }
 
         /** Only the refusals are checked: accepted forms would reach a real service with side effects (network, installation). */
-        Command refusalsOnly() {
+        public Command refusalsOnly() {
             refusalsOnly = true;
             return this;
         }
 
         /** The command takes a free operand among its options (a stray argument is then not refused). */
-        Command operandsAfterOptions() {
+        public Command operandsAfterOptions() {
             operandsAfterOptions = true;
             return this;
         }
     }
 
-    static Command command(String label, String base) {
+    public static Command command(String label, String base) {
         return new Command(label, base);
     }
 
     /** Applies every uniform rule to the command. */
-    void check(Command command) throws IOException {
+    public void check(Command command) throws IOException {
         failures.clear();
         checkRules(command);
         assertTrue(failures.isEmpty(), command.label + ": " + failures.size() + " rule(s) broken\n"

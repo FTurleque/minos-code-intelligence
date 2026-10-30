@@ -70,6 +70,39 @@ class ArchitectureGraphPanelTest {
         assertTrue(domain.contains("IN API — 4 deps"));
     }
 
+    @Test
+    void countsAnEvidenceWithoutLocationLikeAnyOther() {
+        JsonObject architecture = new JsonObject();
+        JsonArray modules = new JsonArray();
+        modules.add(module("api", "API", "api"));
+        modules.add(module("domain", "Domain", "domain"));
+        architecture.add("modules", modules);
+
+        JsonObject located = new JsonObject();
+        located.addProperty("type", "DIRECT_REFERENCE");
+        located.addProperty("description", "references Domain");
+        located.addProperty("location", "src/Main.java:12");
+        JsonObject summary = new JsonObject();
+        summary.addProperty("type", "DIRECT_REFERENCE");
+        summary.addProperty("description", "references Domain: 7 additional locations omitted");
+        JsonArray evidence = new JsonArray();
+        evidence.add(located);
+        evidence.add(summary);
+        JsonObject dependency = new JsonObject();
+        dependency.addProperty("sourceModuleId", "api");
+        dependency.addProperty("targetModuleId", "domain");
+        dependency.addProperty("dependencyCount", 8);
+        dependency.add("evidence", evidence);
+        JsonArray dependencies = new JsonArray();
+        dependencies.add(dependency);
+        architecture.add("moduleDependencies", dependencies);
+
+        ArchitectureGraphPanel panel = new ArchitectureGraphPanel();
+        panel.setGraph(architecture, 20);
+
+        assertTrue(panel.edgeSummaryFor("api").contains("evidence=2"));
+    }
+
     private static JsonObject module(String id, String name, String path) {
         JsonObject module = new JsonObject();
         module.addProperty("id", id);
