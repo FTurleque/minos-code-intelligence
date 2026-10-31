@@ -3,9 +3,9 @@
 
 The Windows installer reads ``MINOS-PROGRESS step=<id> state=<state>[ percent=<n>]`` lines from a file whose path
 it passes to its configuration scripts as ``-ProgressPath``. Each script carries the same ``Write-SetupProgress``
-function, kept identical by
-``scripts/quality/check-twin-script-functions.py``; ``configure-m30-docker-services.ps1`` also carries ``Get-OllamaPullPercent``, which reads the download
-percentage out of ``ollama pull`` output.
+function, kept identical by ``scripts/quality/check-twin-script-functions.py``;
+``configure-m30-docker-services.ps1`` also carries ``Get-OllamaPullPercent``, which reads the download percentage
+out of ``ollama pull`` output.
 
 The scripts cannot be dot-sourced (they run a whole configuration at load time), so each test extracts the *real*
 function definitions with the PowerShell parser and runs them in a harness. Nothing here re-implements a script's
@@ -40,7 +40,8 @@ function Get-ScriptFunctionText([string] $Path, [string] $Name) {
     $tokens = $null; $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref] $tokens, [ref] $errors)
     if ($errors.Count -gt 0) { throw "parse failed: $($errors[0].Message)" }
-    $found = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $Name }, $true))
+    $isDefinition = { param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $Name }
+    $found = @($ast.FindAll($isDefinition, $true))
     if ($found.Count -ne 1) { throw "expected one $Name in $Path, found $($found.Count)" }
     return $found[0].Extent.Text
 }
@@ -122,7 +123,8 @@ class SetupProgressTest(unittest.TestCase):
                     f". ([scriptblock]::Create((Get-ScriptFunctionText {quote(str(EMITTERS[0]))} '{EMITTER}')))\n"
                     f"Set-Location -LiteralPath {quote(temp)}\n"
                     "$out = @(Write-SetupProgress -Step 'handshake' -State 'running')\n"
-                    "[ordered]@{ output = $out.Count; files = @(Get-ChildItem -LiteralPath . | Where-Object { $_.Name -ne 'harness.ps1' }).Count } | ConvertTo-Json -Compress\n"
+                    "$files = @(Get-ChildItem -LiteralPath . | Where-Object { $_.Name -ne 'harness.ps1' })\n"
+                    "[ordered]@{ output = $out.Count; files = $files.Count } | ConvertTo-Json -Compress\n"
                 ), Path(temp))
                 self.assertEqual({"output": 0, "files": 0}, result)
 
@@ -134,6 +136,7 @@ class SetupProgressTest(unittest.TestCase):
             "complete": ("pulling 970aa74c0a90: 100% |##########| 274 MB\nverifying sha256 digest\nsuccess", 100),
             "no percentage": ("pulling manifest\nverifying sha256 digest\nwriting manifest\nsuccess", None),
             "out of range": ("pulling 970aa74c0a90: 420%", None),
+            "more than three digits": ("pulling 970aa74c0a90: 1000%", None),
             "empty": ("", None),
         }
         for label, executable in self.runtimes:
@@ -143,7 +146,8 @@ class SetupProgressTest(unittest.TestCase):
                     sample.write_text(text, encoding="utf-8")
                     result = run_harness(executable, (
                         f". ([scriptblock]::Create((Get-ScriptFunctionText {quote(str(M30))} '{PERCENT}')))\n"
-                        f"$value = Get-OllamaPullPercent ([System.IO.File]::ReadAllText({quote(str(sample))}, [System.Text.Encoding]::UTF8))\n"
+                        f"$text = [System.IO.File]::ReadAllText({quote(str(sample))}, [System.Text.Encoding]::UTF8)\n"
+                        "$value = Get-OllamaPullPercent $text\n"
                         "[ordered]@{ value = $value } | ConvertTo-Json -Compress\n"
                     ), Path(temp))
                     self.assertEqual(expected, result["value"])

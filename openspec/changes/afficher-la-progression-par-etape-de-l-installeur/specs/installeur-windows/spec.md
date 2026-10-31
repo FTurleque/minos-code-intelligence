@@ -40,7 +40,7 @@ L'installeur SHALL lancer les étapes par `Exec`, sans redirection de leur sorti
 - **THEN** ils constatent `SetTimer`, `CreateCallback`, `KillTimer`, le passage de `-ProgressPath` aux scripts du backend et des clients, et l'absence d'`ExecAndLogOutput`
 
 ### Requirement: L'état final d'une étape découle du code de sortie
-À la fin d'un script, l'installeur SHALL passer en vert les rangées en cours si le code est 0, et en rouge les rangées en cours si le code est non nul ; si aucune n'est en cours, la première rangée en attente du groupe SHALL passer en rouge. Une rangée jamais signalée SHALL NOT passer au vert. Le message d'erreur existant SHALL être conservé.
+À la fin d'un script, l'installeur SHALL passer en vert les rangées en cours si le code est 0, et en rouge les rangées en cours si le code est non nul ; si aucune n'est en cours, la première rangée en attente, ou à défaut la dernière rangée du groupe, SHALL passer en rouge. Une rangée jamais signalée SHALL NOT passer au vert. Le message d'erreur existant SHALL être conservé.
 
 #### Scenario: Échec du backend
 - **GIVEN** le modèle de l'installeur

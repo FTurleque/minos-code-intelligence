@@ -736,19 +736,21 @@ begin
   try
     ApplySetupProgressFile;
   except
-    Log('Setup progress: progress file not applied: ' + GetExceptionMessage);
+    Log('Setup progress: progress file not applied on this tick.');
   end;
 end;
 
 // The exit code decides the final state: running rows of a succeeded script are done, a row it
 // never reported is not turned green; on failure the running rows (or, if none, the first
-// pending one) are failed and the remaining ones were not run.
+// pending one, or else the group's last row) are failed and the remaining ones were not run.
 procedure FinishSetupStepGroup(Group: String; Succeeded: Boolean);
 var
   I: Integer;
+  LastRow: Integer;
   Blamed: Boolean;
 begin
   Blamed := False;
+  LastRow := -1;
   for I := 0 to GetArrayLength(SetupStepRows) - 1 do
     if (SetupStepRows[I].Group = Group) and (SetupStepRows[I].State = 'running') then
     begin
@@ -769,6 +771,14 @@ begin
       else
         SetSetupStepState(SetupStepRows[I].Id, 'notrun', -1);
     end;
+  // A script can fail after every step it reported is done (commit, rollback): the failure
+  // still shows on the group's last row.
+  if (not Succeeded) and (not Blamed) then
+  begin
+    for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+      if SetupStepRows[I].Group = Group then LastRow := I;
+    if LastRow >= 0 then SetSetupStepState(SetupStepRows[LastRow].Id, 'failed', -1);
+  end;
 end;
 
 procedure StartSetupProgress;
@@ -778,13 +788,18 @@ begin
     SetupProgressTimer := SetTimer(0, 0, 250, CreateCallback(@SetupProgressTick));
 end;
 
-procedure StopSetupProgress(Group: String; Succeeded: Boolean);
+procedure KillSetupProgressTimer;
 begin
   if SetupProgressTimer <> 0 then
   begin
     KillTimer(0, SetupProgressTimer);
     SetupProgressTimer := 0;
   end;
+end;
+
+procedure StopSetupProgress(Group: String; Succeeded: Boolean);
+begin
+  KillSetupProgressTimer;
   SetupProgressTick(0, 0, 0, 0);
   DeleteFile(SetupProgressPath);
   FinishSetupStepGroup(Group, Succeeded);
@@ -976,6 +991,7 @@ var
   LogPath: String;
   LastLogLine: String;
   DiagnosticLine: String;
+  Succeeded: Boolean;
 begin
   Result := True;
   if IsSmokeBuild() or NoMcpSelected() then exit;
@@ -1009,7 +1025,12 @@ begin
   end;
   Parameters := Parameters + ' -ProgressPath "' + SetupProgressPath + '"';
   StartSetupProgress;
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  try
+    Succeeded := Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  finally
+    KillSetupProgressTimer;
+  end;
+  if not Succeeded then
   begin
     StopSetupProgress('backend', False);
     LogPath := EffectiveDataRoot() + '\runtime\backend-switch.log';
@@ -1039,6 +1060,7 @@ var
   ResultCode: Integer;
   Parameters: String;
   PowerShell: String;
+  Succeeded: Boolean;
 begin
   if IsSmokeBuild() or (not McpBackendSelected()) or (not McpClientSelected()) then exit;
   WizardForm.StatusLabel.Caption := 'Configuration des intégrations clientes IA détectées...';
@@ -1056,7 +1078,12 @@ begin
   else if McpCodexDesktop.Enabled and McpCodexDesktop.Checked then Parameters := Parameters + ' -Codex -CodexMode desktop';
   Parameters := Parameters + ' -ProgressPath "' + SetupProgressPath + '"';
   StartSetupProgress;
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  try
+    Succeeded := Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  finally
+    KillSetupProgressTimer;
+  end;
+  if not Succeeded then
   begin
     StopSetupProgress('clients', False);
     MsgBox(

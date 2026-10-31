@@ -311,9 +311,9 @@ function Sync-ManagedPostgresPassword([string] $SecretFile) {
 # record is cleaned and split before the last "NN%" is taken; a value above 100 is not a percentage.
 function Get-OllamaPullPercent([string] $Text) {
     $Clean = [regex]::Replace($Text, '\x1B\[[0-9;?]*[A-Za-z]', '')
-    $Segments = @($Clean -split "[`r`n]" | Where-Object { $_ -match '\d{1,3}%' })
+    $Segments = @($Clean -split "[`r`n]" | Where-Object { $_ -match '(?<!\d)\d{1,3}%' })
     if ($Segments.Count -eq 0) { return $null }
-    $Found = [regex]::Matches($Segments[$Segments.Count - 1], '(\d{1,3})%')
+    $Found = [regex]::Matches($Segments[$Segments.Count - 1], '(?<!\d)(\d{1,3})%')
     $Value = [int]$Found[$Found.Count - 1].Groups[1].Value
     if ($Value -gt 100) { return $null }
     return $Value

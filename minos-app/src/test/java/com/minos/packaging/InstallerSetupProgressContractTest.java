@@ -83,7 +83,8 @@ class InstallerSetupProgressContractTest {
         }
 
         // Only complete lines that match the grammar exactly and name an existing row are applied.
-        String parse = body(installer, "function ParseSetupProgressLine(Line: String; var Id, State: String; var Percent: Integer): Boolean;");
+        String parse = body(installer,
+                "function ParseSetupProgressLine(Line: String; var Id, State: String; var Percent: Integer): Boolean;");
         assertTrue(parse.contains("'MINOS-PROGRESS step='"));
         assertTrue(parse.contains("' state='"));
         assertTrue(parse.contains("' percent='"));
@@ -101,6 +102,8 @@ class InstallerSetupProgressContractTest {
         assertTrue(finish.contains("if Succeeded then"));
         assertTrue(finish.contains("'unreported'"), "a row never reported must not turn green");
         assertTrue(finish.contains("'failed'"));
+        assertTrue(finish.contains("if LastRow >= 0 then SetSetupStepState(SetupStepRows[LastRow].Id, 'failed', -1);"),
+                "a failure after every reported step is done must still show red");
 
         assertOrdered(body(installer, "function ConfigureRuntimeSettings(): Boolean;"),
                 "SetSetupStepState('runtime', 'running', -1);",

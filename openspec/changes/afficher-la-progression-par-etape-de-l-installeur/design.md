@@ -66,7 +66,7 @@ Les émetteurs n'acceptent qu'un identifiant de la forme `^[a-z][a-z0-9-]{0,47}$
 À la fin d'un `Exec` :
 
 - code 0 : les rangées du groupe restées `running` passent `done` ; une rangée restée `pending` reçoit « non signalée » (barre vide) plutôt qu'un vert non prouvé ;
-- code non nul : les rangées `running` passent `failed` (rouge) ; si aucune ne l'est, la première rangée `pending` du groupe passe `failed` ; les suivantes restent « non exécutée ». Le `MsgBox` existant garde la cause.
+- code non nul : les rangées `running` passent `failed` (rouge) ; si aucune ne l'est, la première rangée `pending` du groupe passe `failed`, et les suivantes restent « non exécutée » ; si toutes étaient déjà `done` (échec à la validation finale ou au retour arrière), la dernière rangée du groupe passe `failed`. Le `MsgBox` existant garde la cause.
 - Étapes non lancées (backend en échec, donc clients non configurés) : « non exécutée ».
 
 Pour les clients, le script émet `done` par client seulement après la vérification de l'état (`configure-mcp-clients-setup.ps1:69-89`) et `failed` n'est pas émis : un client manquant fait échouer le script, et D3 marque alors les rangées encore `running` en échec.
@@ -99,7 +99,9 @@ Windows seulement pour le comportement (Inno Setup, Windows PowerShell 5.1). Les
 
 - **Ligne perdue** (écriture refusée malgré les tentatives) : une rangée peut rester « en cours » jusqu'à la fin de l'étape ; l'état final reste juste (D3).
 - **Rafraîchissement** : 250 ms entre deux lectures ; le fichier fait au plus quelques centaines de lignes (pourcentages émis seulement s'ils changent).
-- **Échec avant toute ligne** : la première rangée en attente est marquée en échec, alors que l'échec a pu survenir en préparation ; le message d'erreur détaille la cause.
+- **Échec avant toute ligne ou après la dernière** : la première rangée en attente, ou la dernière rangée, est marquée en échec alors que l'échec a pu survenir en préparation ou à la validation finale ; le message d'erreur détaille la cause.
+- **Pourcentage par couche** : Ollama télécharge plusieurs couches et affiche l'avancement de la couche en cours ; la barre peut repartir de zéro d'une couche à l'autre.
+- **Exception de `Exec`** : le minuteur est arrêté dans un `finally` ; l'exception suit son cours comme au HEAD.
 
 ## Décisions en attente du propriétaire
 
