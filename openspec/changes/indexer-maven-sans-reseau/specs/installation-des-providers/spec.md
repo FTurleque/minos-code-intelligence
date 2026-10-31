@@ -59,3 +59,16 @@ Le `settings.xml` du run SHALL avoir un contenu constant, sans serveur, miroir, 
 - **GIVEN** sous Linux, une désignation refusée
 - **WHEN** `minos doctor` est lancé
 - **THEN** la sortie nomme le réglage et l'état refusé, et ne contient pas le chemin désigné
+
+### Requirement: Les réglages globaux du Maven de l'hôte sont masqués et seul Maven 3.9.x est accepté
+Hors Windows, le plan scip-java SHALL masquer `conf/settings.xml` et `conf/toolchains.xml` du Maven résolu par un montage en lecture seule d'un fichier vide. Un Maven absent ou hors de la plage 3.9.x MUST faire refuser le plan avant toute copie du projet, par un message actionnable sans chemin absolu.
+
+#### Scenario: Réglages globaux avec un serveur
+- **GIVEN** sous Linux avec bac à sable qualifié, un Maven dont `conf/settings.xml` contient un serveur à mot de passe
+- **WHEN** le build lancé par scip-java lit ce fichier
+- **THEN** il lit un fichier vide
+
+#### Scenario: Maven 4
+- **GIVEN** sous Linux, un Maven 4.0.0 dans le `PATH`
+- **WHEN** le plan scip-java est construit
+- **THEN** il est refusé avant tout lancement, le message nomme la plage 3.9.x et aucun espace de travail n'est créé

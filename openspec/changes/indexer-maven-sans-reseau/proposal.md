@@ -6,17 +6,17 @@ Sous Linux, un provider géré s'exécute dans le bac à sable bubblewrap + cgro
 
 Au HEAD `8c3d4615`, rien ne rend un dépôt Maven visible au build analysé : le plan scip-java ne déclare ni dépôt, ni réglages Maven, ni environnement (`ScipJavaProcessPlanFactory.java:165-171`) ; le bac à sable ne monte que `/usr`, `/bin`, `/lib`, `/lib64`, `/sbin`, la racine d'outil gérée et les fichiers nommés par la commande, jamais un répertoire arbitraire (`LinuxBubblewrapWorkerSandboxBackend.java:377-410`). Le réseau reste fermé par conception (`IndexerProcessPlanFactory.java:17-30`) : l'ouvrir donnerait la sortie réseau aux plugins Maven que contrôle le dépôt analysé.
 
-Conséquence : sous Linux comme dans la voie WSL2 retenue par l'ADR SEC-0074 (décision 3, « dépôt Maven visible du bac à sable sans sortie réseau »), aucun projet Maven réel ne s'indexe. Ce changement instruit les options et propose une voie ; **aucune implémentation avant la décision du propriétaire** (design, « Décisions attendues »).
+Conséquence : sous Linux comme dans la voie WSL2 retenue par l'ADR SEC-0074 (décision 3, « dépôt Maven visible du bac à sable sans sortie réseau »), aucun projet Maven réel ne s'indexe. Ce changement instruit les options ; le propriétaire a retenu l'option A le 2026-10-31 (design, « Décisions du propriétaire »).
 
 ## What Changes
 
-Proposition (option A du design, recommandée ; à confirmer) :
+Option A du design, retenue :
 
 - **Dépôt Maven désigné, monté en lecture seule.** L'utilisateur désigne explicitement un dépôt Maven local (réglage MINOS, aucun défaut). Le bac à sable Linux le monte en lecture seule, ce répertoire exact et lui seul, jamais un ancêtre. Désignation refusée si elle est le dossier personnel, l'un de ses ancêtres, ou un dossier qui contient `settings.xml`, `settings-security.xml` ou `toolchains.xml`.
-- **Maven hors ligne, réglages neutralisés.** Le plan passe à scip-java, après `--`, une ligne Maven fixe : `--batch-mode --offline`, réglages utilisateur et globaux remplacés par un fichier vide écrit par MINOS dans le run (aucun serveur, miroir ni proxy), dépôt local inscriptible et éphémère dans le run, dépôt désigné en « tail » lecture seule (Maven 3.9), puis `clean verify -DskipTests`.
+- **Maven hors ligne, réglages neutralisés.** Le plan passe à scip-java, après `--`, une ligne Maven fixe : `--batch-mode --offline`, réglages utilisateur et globaux remplacés par un fichier de contenu constant écrit par MINOS dans le run (aucun serveur, miroir ni proxy), dépôt local créé vide pour le run, dépôt désigné en « tail » lecture seule, puis `clean verify -DskipTests`. Les réglages globaux du Maven de l'hôte sont masqués dans le bac à sable ; seul Maven 3.9.x est accepté.
 - **Racines de lecture déclarées par le plan.** `IndexerProcessPlan` porte une liste de racines en lecture seule ; le backend Linux les monte telles quelles ; tout backend qui ne sait pas les honorer (Windows AppContainer, backend natif) refuse le plan avant tout lancement.
 - **Refus actionnable.** Sans dépôt désigné, ou dépôt illisible, le plan scip-java d'un projet Maven est refusé avant toute copie du projet, par un message qui nomme le réglage, sans chemin absolu. Un artefact absent du dépôt donne l'échec Maven hors ligne, que la documentation explique.
-- **ADR** : un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-0075` si SEC-0074 est fusionné) fixe la voie retenue pour l'exigence de SEC-0074 décision 3 et confirme `DENY` de SEC-0070 pour scip-java ; ou, au choix du propriétaire, un ADR consolidé remplace SEC-0074. Planifié en tâche 0.2, rien n'est écrit pendant la spécification.
+- **ADR** : un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-0075` si SEC-0074 est fusionné) fixe la voie retenue pour l'exigence de SEC-0074 décision 3 et confirme `DENY` de SEC-0070 pour scip-java  ; SEC-0074 reste actif. Planifié en tâche 0.2, rien n'est écrit pendant la spécification.
 
 ## Capabilities
 
@@ -38,8 +38,8 @@ Proposition (option A du design, recommandée ; à confirmer) :
 
 ## Hors périmètre
 
-- Une phase de résolution avec réseau (option B du design) et un dépôt géré et peuplé par MINOS (option C) : écartées ou différées par la recommandation, chacune exigerait son propre ADR.
-- Le peuplement du dépôt désigné : responsabilité de l'utilisateur ; la documentation dit qu'un `mvn` lancé sur l'hôte exécute le build du projet hors bac à sable.
+- Une phase de résolution avec réseau (option B du design) et un dépôt géré et peuplé par MINOS (option C) : écartées ou différées, chacune exigerait son propre ADR.
+- Le peuplement du dépôt désigné : responsabilité de l'utilisateur ; la documentation interdit de lancer Maven dans un projet non fiable pour le peupler et donne une procédure sûre.
 - Le Maven exécuté sous Linux (celui du `PATH`, non vérifié par MINOS) et le JDK du projet sous `/etc` (traité dans une autre session) ; Gradle.
 - Windows natif (scip-java `BLOCKED`, ADR SEC-0074) et runtime Docker (aucun provider) : inchangés.
 - Les workers distribués (ADR SEC-0070 § distribué) : la désignation est locale.

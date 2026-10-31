@@ -53,7 +53,7 @@ clean verify -DskipTests
 
 `settings.xml` est écrit par MINOS, vide de serveurs, miroirs, proxys et profils. Le dépôt de tête (`<run>/maven/local`) reçoit ce que Maven écrit (`_remote.repositories`, `resolver-status.properties`) et disparaît avec le run ; le dépôt désigné n'est jamais écrit.
 
-- **Secrets** : `~/.m2/settings.xml` et `settings-security.xml` ne sont jamais montés : seul le répertoire désigné l'est, et une désignation dangereuse est refusée (D3). `-s` et `-gs` neutralisent les réglages globaux pour Maven ; le fichier reste lisible sous `/usr` et peut être recopié dans l'index (écart ci-dessus) : le masquer par un `--ro-bind` d'un fichier vide sur `$MAVEN_HOME/conf/settings.xml` et `toolchains.xml` du Maven résolu est peu coûteux (décision 6). Le dépôt peut contenir des artefacts privés d'autres projets, que le build peut recopier dans l'index : risque résiduel à déclarer, réduit par un dépôt dédié.
+- **Secrets** : `~/.m2/settings.xml` et `settings-security.xml` ne sont jamais montés : seul le répertoire désigné l'est, et une désignation dangereuse est refusée (D3). `-s` et `-gs` neutralisent les réglages globaux pour Maven ; le fichier reste lisible sous `/usr` et peut être recopié dans l'index (écart ci-dessus) : le masquer par un `--ro-bind` d'un fichier vide sur `$MAVEN_HOME/conf/settings.xml` et `toolchains.xml` du Maven résolu est retenu (décision 6). Le dépôt peut contenir des artefacts privés d'autres projets, que le build peut recopier dans l'index : risque résiduel à déclarer, réduit par un dépôt dédié.
 - **Code du dépôt exécuté** : les plugins et extensions déjà présents dans le dépôt désigné, sous le bac à sable, sans réseau ; `.mvn/maven.config` peut ajouter des options mais ni ouvrir le réseau ni écrire le dépôt désigné. Aucune empreinte : un artefact altéré du dépôt est exécuté, avec les mêmes bornes que le reste du build.
 - **Complétude** : partielle. Un artefact absent fait échouer le build hors ligne. Peupler le dépôt revient à l'utilisateur, et la façon naturelle de le faire (`mvn dependency:go-offline` dans le projet) charge `.mvn/extensions.xml` et `.mvn/jvm.config` **sur l'hôte, avec réseau et secrets** : le confinement serait vidé par son mode d'emploi. La documentation interdit donc de lancer Maven dans un projet non fiable pour peupler le dépôt et donne une procédure sûre : `mvn dependency:get -Dartifact=…` depuis un dossier vide, coordonnées lues dans le POM, ou dépôt dédié peuplé par un projet de confiance.
 - **Linux** : qualifiable (bind en lecture seule de bubblewrap). **WSL2** : même mécanisme ; un dépôt Windows sous `/mnt/c/Users/<compte>/.m2/repository` est un sous-dossier du profil monté seul, jamais le profil ; propriétaire et performances DrvFs à mesurer. **Windows natif** : sans objet tant que scip-java est `BLOCKED` ; l'AppContainer refuse un plan qui déclare des racines de lecture (aucun octroi nouveau, ADR SEC-0074 décision 4). **Docker** : sans objet.
@@ -89,7 +89,7 @@ Un dépôt sous `MINOS_HOME` (par exemple `MINOS_HOME/tools/maven-repository/<ve
 
 ## Décisions
 
-### D1. Voie retenue : A (recommandation)
+### D1. Voie retenue : A (décision du propriétaire, 2026-10-31)
 
 Seule option qui garde `DENY`, n'ajoute ni téléchargement ni dépendance, et réutilise un mécanisme du bac à sable déjà qualifié (montage en lecture seule). Capacité **partielle** : elle dépend d'un dépôt peuplé par l'utilisateur, et la sortie le déclare (limite du provider, `doctor`).
 
@@ -99,7 +99,7 @@ Seule option qui garde `DENY`, n'ajoute ni téléchargement ni dépendance, et r
 
 Direction des dépendances (ADR 0068) : `minos-provider-scip` (adaptateur) remplit une composante d'un type exporté de `minos-runtime-local` (`process`, liste A10) ; `minos-bootstrap` lit le réglage et le passe au constructeur de la factory. Aucun sens nouveau, aucun package nouveau.
 
-### D3. Désignation explicite, sans défaut (recommandation)
+### D3. Désignation explicite, sans défaut (décision 2)
 
 Le réglage `minos.scip.java.maven-repository` (nom à confirmer) n'a pas de valeur par défaut : `~/.m2/repository` n'est pas monté sans que l'utilisateur l'ait choisi. Refus à la lecture du réglage et au plan :
 
@@ -120,18 +120,18 @@ Versions de Maven : `maven.repo.local.tail` existe depuis Maven 3.9 ; Maven 4 d�
 
 Le choix passe le filtre de `.claude/rules/adr.md` : options réelles, modèle de confiance du code analysé, garantie de sécurité coûteuse à inverser. SEC-0074 décision 3 n'en fixe que l'exigence (« dépôt Maven visible du bac à sable sans sortie réseau ») ; SEC-0070 fixe `DENY`, que ce choix confirme sans le changer.
 
-Recommandation : un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-0075` si SEC-0074 est fusionné) qui fixe la voie A et écarte B et C, en citant SEC-0074 décision 3 sans la reformuler. Si le propriétaire veut que SEC-0074 dise la voie elle-même, c'est un amendement partiel : un ADR consolidé remplace SEC-0074, qui passe `Superseded` (GEN-0073 ; aucun amendement qui cohabite avec l'original).
+Un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-0075` si SEC-0074 est fusionné) fixe la voie A et écarte B et C, en citant SEC-0074 décision 3 sans la reformuler (décision 5). SEC-0074 reste actif et inchangé.
 
-## Décisions attendues du propriétaire
+## Décisions du propriétaire (2026-10-31)
 
-1. **Voie** : A (recommandée), B2 (chantier séparé), ou C1 en complément ?
-2. **Défaut du réglage** : aucun (recommandé) ou `~/.m2/repository` s'il existe ?
-3. **Désignation sous le profil Windows depuis WSL** (`/mnt/c/Users/<compte>/.m2/repository`) : acceptée comme sous-dossier exact (recommandé), ou refusée au nom de l'ADR SEC-0074 décision 4 ?
-4. **Risque résiduel** des artefacts privés d'autres projets lisibles par le build : déclaré dans la documentation (recommandé), ou dépôt dédié exigé ?
-5. **ADR** : nouvel ADR qui fixe la voie en citant SEC-0074 (recommandé), ou ADR consolidé qui remplace SEC-0074 ?
-6. **Masquage des réglages globaux** du Maven de l'hôte (`--ro-bind` d'un fichier vide sur `conf/settings.xml` et `toolchains.xml`) : dans ce changement (recommandé), ou suite séparée ?
-7. **Plage de versions Maven** qualifiée : 3.9.x seule, refus actionnable sinon (recommandé) ?
-8. **Preuve d'indexation réelle** : job de CI Linux qui peuple un dépôt de qualification hors bac à sable depuis la fixture de confiance puis indexe sous bac à sable exigé (recommandé), ou qualification manuelle déclarée comme telle ?
+1. **Voie** : option A.
+2. **Défaut du réglage** : aucun ; `~/.m2/repository` n'est jamais monté sans désignation.
+3. **Désignation sous le profil Windows depuis WSL** : `/mnt/<lecteur>/Users/<compte>/.m2/repository` est accepté comme sous-dossier exact, monté seul ; le profil et ses ancêtres restent refusés (D3).
+4. **Risque résiduel** des artefacts privés d'autres projets lisibles par le build : déclaré dans la documentation, dépôt dédié recommandé.
+5. **ADR** : nouvel ADR du domaine sécurité qui fixe la voie en citant SEC-0074 décision 3, sans la reformuler.
+6. **Masquage des réglages globaux** du Maven de l'hôte (`--ro-bind` d'un fichier vide sur `conf/settings.xml` et `toolchains.xml`) : dans ce changement.
+7. **Plage de versions Maven** : 3.9.x seule, refus actionnable sinon.
+8. **Preuve d'indexation réelle** : job de CI Linux qui peuple un dépôt de qualification hors bac à sable depuis la fixture de confiance, puis indexe sous bac à sable exigé.
 
 ## Risques
 
@@ -146,7 +146,7 @@ Recommandation : un nouvel ADR du domaine sécurité (numéro attribué à la r�
 
 | Capacité | État visé par ce changement |
 |---|---|
-| Indexation scip-java Maven sous Linux, dépôt désigné complet | qualifiée seulement si la décision 8 retient le job de CI ; sinon partielle, preuve manuelle (WSL2) déclarée comme telle |
+| Indexation scip-java Maven sous Linux, dépôt désigné complet | qualifiée par le job de CI Linux de la décision 8 (dépôt de qualification peuplé hors bac à sable, indexation sous bac à sable exigé), complétée par la mesure WSL2 manuelle |
 | Idem, dépôt incomplet | partielle : échec hors ligne déclaré, aucun repli réseau |
 | Racines de lecture sous Windows et backend natif | non supportée : refus avant lancement |
 | Windows natif, Docker | inchangés (SEC-0074) |
