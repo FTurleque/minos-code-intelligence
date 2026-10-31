@@ -1009,7 +1009,8 @@ begin
   ProtectedRoots[3] := EffectiveDataRoot();
   ProtectedRoots[4] := EffectiveDockerDataRoot();
   for I := 0 to GetArrayLength(ProtectedRoots) - 1 do
-    if ((not InsideTemporary) and IsSameOrInsideDirectory(Path, ProtectedRoots[I])) or
+    if ((not (InsideTemporary and IsSameOrInsideDirectory(GetTempDir(), ProtectedRoots[I]))) and
+        IsSameOrInsideDirectory(Path, ProtectedRoots[I])) or
        IsSameOrInsideDirectory(ProtectedRoots[I], Path) then
     begin
       Result := 'un dossier de données d''application ou de MINOS, l''un de ses parents ou l''un de ses sous-dossiers';

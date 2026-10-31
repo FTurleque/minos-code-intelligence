@@ -26,10 +26,39 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DockerProjectsRootContractTest {
 
     private static final String FUNCTION = "Get-UnsafeDockerProjectsRootReason";
+    private static final String CALL = "$UnsafeProjectsRoot = " + FUNCTION + " ";
     private static final String PROFILE = "C:\\Users\\alice";
-    private static final String PROTECTED = String.join(";",
-            "C:\\Users\\alice\\AppData\\Local", "C:\\Users\\alice\\AppData\\Roaming", "E:\\tools\\minos\\data");
     private static final String TEMPORARY = "C:\\Users\\alice\\AppData\\Local\\Temp\\";
+    private static final String PROTECTED = String.join(";",
+            "C:\\Users\\alice\\AppData\\Local", "C:\\Users\\alice\\AppData\\Roaming", "E:\\tools\\minos\\data",
+            "C:\\Users\\alice\\AppData\\Local\\Temp\\qualification\\data");
+
+    /** Roots every entry point must refuse: label -> projects root and user profile, separated by '|'. */
+    private static final Map<String, String> REFUSED = cases(
+            "profile", PROFILE + "|" + PROFILE,
+            "profileOtherCase", "c:\\users\\ALICE\\|" + PROFILE,
+            "profileParent", "C:\\Users|" + PROFILE,
+            "volumeRoot", "C:\\|" + PROFILE,
+            "otherVolumeRoot", "N:\\|" + PROFILE,
+            "shareRoot", "\\\\server\\share|" + PROFILE,
+            "localAppData", "C:\\Users\\alice\\AppData\\Local|" + PROFILE,
+            "insideLocalAppData", "C:\\Users\\alice\\AppData\\Local\\MINOS\\projects|" + PROFILE,
+            "roamingAppData", "C:\\Users\\alice\\AppData\\Roaming\\Code|" + PROFILE,
+            "minosDataParent", "E:\\tools|" + PROFILE,
+            "insideMinosData", "E:\\tools\\minos\\data\\projects|" + PROFILE,
+            "unknownProfile", "N:\\workspace-dev|",
+            "temporaryFolder", "C:\\Users\\alice\\AppData\\Local\\Temp|" + PROFILE,
+            "insideTemporaryMinosData", "C:\\Users\\alice\\AppData\\Local\\Temp\\qualification\\data\\p|" + PROFILE,
+            "temporaryMinosDataParent", "C:\\Users\\alice\\AppData\\Local\\Temp\\qualification|" + PROFILE);
+
+    /** Roots dedicated to projects, which every entry point must accept. */
+    private static final Map<String, String> ACCEPTED = cases(
+            "profileSubfolder", "C:\\Users\\alice\\source\\repos|" + PROFILE,
+            "otherVolumeFolder", "N:\\workspace-dev|" + PROFILE,
+            "profileNamePrefix", "C:\\Users\\alicebis|" + PROFILE,
+            "appDataNamePrefix", "C:\\Users\\alice\\AppDataX|" + PROFILE,
+            "minosSibling", "E:\\tools\\minos\\projects|" + PROFILE,
+            "temporarySubfolder", "C:\\Users\\alice\\AppData\\Local\\Temp\\qualification\\projects|" + PROFILE);
 
     @Test
     void installerProposesNoDefaultAndRefusesUnsafeRoots() throws IOException {
@@ -59,95 +88,90 @@ class DockerProjectsRootContractTest {
 
         for (String script : List.of(switcher, zip)) {
             assertTrue(script.contains("function " + FUNCTION + "("));
-            int refusal = script.indexOf("$UnsafeProjectsRoot = " + FUNCTION + " ");
+            int refusal = script.indexOf(CALL);
             int exists = script.indexOf("Test-Path -LiteralPath $ProjectsRoot -PathType Container");
             assertTrue(refusal > 0 && exists > refusal, "the unsafe-root refusal must precede the existence check");
             assertTrue(script.contains("[Environment]::GetFolderPath('UserProfile')"));
             assertTrue(script.contains("[Environment]::GetFolderPath('LocalApplicationData')"));
             assertTrue(script.contains("[Environment]::GetFolderPath('ApplicationData')"));
-        }
-        assertTrue(zip.indexOf("$UnsafeProjectsRoot = " + FUNCTION + " ") < zip.indexOf("Expand-Archive"),
-                "the ZIP install must refuse before extracting the package");
-        assertTrue(switcher.indexOf("$UnsafeProjectsRoot = " + FUNCTION + " ")
-                        < switcher.indexOf("New-Item -ItemType Directory -Force -Path $RuntimeRoot"),
-                "the switcher must refuse before writing its runtime folder");
-        for (String script : List.of(switcher, zip)) {
             assertTrue(script.chars().allMatch(c -> c < 128), "shipped PowerShell scripts stay ASCII");
         }
+        assertTrue(zip.indexOf(CALL) < zip.indexOf("Expand-Archive"),
+                "the ZIP install must refuse before extracting the package");
+        assertTrue(switcher.indexOf(CALL) < switcher.indexOf("New-Item -ItemType Directory -Force -Path $RuntimeRoot"),
+                "the switcher must refuse before writing its runtime folder");
     }
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void refusalUnderWindowsPowerShell(@TempDir Path work) throws Exception {
-        Map<String, String> cases = new LinkedHashMap<>();
-        cases.put("profile", PROFILE + "|" + PROFILE);
-        cases.put("profileOtherCase", "c:\\users\\ALICE\\|" + PROFILE);
-        cases.put("profileParent", "C:\\Users|" + PROFILE);
-        cases.put("volumeRoot", "C:\\|" + PROFILE);
-        cases.put("otherVolumeRoot", "N:\\|" + PROFILE);
-        cases.put("shareRoot", "\\\\server\\share|" + PROFILE);
-        cases.put("localAppData", "C:\\Users\\alice\\AppData\\Local|" + PROFILE);
-        cases.put("insideLocalAppData", "C:\\Users\\alice\\AppData\\Local\\MINOS\\projects|" + PROFILE);
-        cases.put("roamingAppData", "C:\\Users\\alice\\AppData\\Roaming\\Code|" + PROFILE);
-        cases.put("minosDataParent", "E:\\tools|" + PROFILE);
-        cases.put("insideMinosData", "E:\\tools\\minos\\data\\projects|" + PROFILE);
-        cases.put("unknownProfile", "N:\\workspace-dev|");
-        cases.put("profileSubfolder", "C:\\Users\\alice\\source\\repos|" + PROFILE);
-        cases.put("otherVolumeFolder", "N:\\workspace-dev|" + PROFILE);
-        cases.put("profileNamePrefix", "C:\\Users\\alicebis|" + PROFILE);
-        cases.put("appDataNamePrefix", "C:\\Users\\alice\\AppDataX|" + PROFILE);
-        cases.put("minosSibling", "E:\\tools\\minos\\projects|" + PROFILE);
-        cases.put("temporaryFolder", "C:\\Users\\alice\\AppData\\Local\\Temp|" + PROFILE);
-        cases.put("temporarySubfolder", "C:\\Users\\alice\\AppData\\Local\\Temp\\minos-q\\projects|" + PROFILE);
+        Map<String, String> all = new LinkedHashMap<>(REFUSED);
+        all.putAll(ACCEPTED);
 
-        Map<String, String> switcher = run(work, "scripts/install/switch-mcp-backend.ps1", cases);
-        Map<String, String> zip = run(work, "scripts/install/install-windows.ps1", cases);
+        Map<String, String> switcher = run(work, "scripts/install/switch-mcp-backend.ps1", all);
+        Map<String, String> zip = run(work, "scripts/install/install-windows.ps1", all);
         assertEquals(switcher, zip, "the switcher and the ZIP install must decide alike");
 
-        for (String refused : List.of("profile", "profileOtherCase", "profileParent", "volumeRoot",
-                "otherVolumeRoot", "shareRoot", "localAppData", "insideLocalAppData", "roamingAppData",
-                "minosDataParent", "insideMinosData", "unknownProfile", "temporaryFolder")) {
-            String reason = switcher.get(refused);
-            assertFalse(reason.isEmpty() || reason.equals("ACCEPTED"), refused + " must be refused");
-            assertFalse(reason.contains("\\") || reason.contains(":"), refused + " reason must carry no path");
-        }
-        for (String accepted : List.of("profileSubfolder", "otherVolumeFolder", "profileNamePrefix",
-                "appDataNamePrefix", "minosSibling", "temporarySubfolder")) {
-            assertEquals("ACCEPTED", switcher.get(accepted), accepted + " must be accepted");
-        }
+        REFUSED.keySet().forEach(label -> assertRefusedWithoutPath(label, switcher.get(label)));
+        ACCEPTED.keySet().forEach(label -> assertEquals("ACCEPTED", switcher.get(label), label + " must be accepted"));
+    }
+
+    private static void assertRefusedWithoutPath(String label, String reason) {
+        assertFalse(reason.isEmpty() || reason.equals("ACCEPTED"), label + " must be refused");
+        assertFalse(reason.contains("\\") || reason.contains(":"), label + " reason must carry no path");
     }
 
     /** Runs the real function, extracted by the PowerShell parser, on every case; returns label -> reason. */
     private static Map<String, String> run(Path work, String script, Map<String, String> cases) throws Exception {
-        Path scriptPath = repoRoot().resolve(script);
         StringBuilder input = new StringBuilder();
         cases.forEach((label, value) -> input.append(label).append('|').append(value).append('\n'));
         Path casesFile = work.resolve("cases.txt");
         Files.writeString(casesFile, input.toString(), StandardCharsets.UTF_8);
         Path harness = work.resolve("harness.ps1");
-        Files.writeString(harness, """
+        Files.writeString(harness, harnessText(), StandardCharsets.UTF_8);
+
+        String output = runWindowsPowerShell(work, harness, "-ScriptPath", repoRoot().resolve(script).toString(),
+                "-CasesPath", casesFile.toString(), "-Protected", PROTECTED, "-Temporary", TEMPORARY);
+        Map<String, String> reasons = new LinkedHashMap<>();
+        for (String line : output.split("\\R")) {
+            int separator = line.indexOf('=');
+            if (separator > 0) reasons.put(line.substring(0, separator), line.substring(separator + 1).trim());
+        }
+        assertEquals(cases.keySet(), reasons.keySet(), script + " harness output:\n" + output);
+        return reasons;
+    }
+
+    private static String harnessText() {
+        return """
                 param([string] $ScriptPath, [string] $CasesPath, [string] $Protected, [string] $Temporary)
                 $ErrorActionPreference = 'Stop'
                 $tokens = $null; $errors = $null
                 $ast = [System.Management.Automation.Language.Parser]::ParseFile($ScriptPath, [ref] $tokens, [ref] $errors)
                 if ($errors.Count -gt 0) { throw "parse failed: $($errors[0].Message)" }
-                $found = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq '%s' }, $true))
+                $isTarget = { param($n)
+                    $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq '%1$s' }
+                $found = @($ast.FindAll($isTarget, $true))
                 if ($found.Count -ne 1) { throw "expected one definition, found $($found.Count)" }
                 . ([scriptblock]::Create($found[0].Extent.Text))
                 foreach ($line in [System.IO.File]::ReadAllLines($CasesPath)) {
                     if ([string]::IsNullOrWhiteSpace($line)) { continue }
                     $parts = $line.Split('|')
-                    $reason = %s -ProjectsRoot $parts[1] -UserProfile $parts[2] -ProtectedRoots ($Protected.Split(';')) -TemporaryRoot $Temporary
+                    $reason = %1$s -ProjectsRoot $parts[1] -UserProfile $parts[2] `
+                        -ProtectedRoots ($Protected.Split(';')) -TemporaryRoot $Temporary
                     if ([string]::IsNullOrEmpty($reason)) { $reason = 'ACCEPTED' }
                     [Console]::Out.WriteLine($parts[0] + '=' + $reason)
                 }
-                """.formatted(FUNCTION, FUNCTION), StandardCharsets.UTF_8);
+                """.formatted(FUNCTION);
+    }
 
+    /** Windows PowerShell 5.1 (the installer's runtime) by absolute path, with an allow-listed environment. */
+    private static String runWindowsPowerShell(Path work, Path harness, String... arguments) throws Exception {
         String systemRoot = System.getenv().getOrDefault("SystemRoot", "C:\\Windows");
         Path powershell = Path.of(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-        ProcessBuilder builder = new ProcessBuilder(powershell.toString(), "-NoProfile", "-NonInteractive",
-                "-ExecutionPolicy", "Bypass", "-File", harness.toString(),
-                "-ScriptPath", scriptPath.toString(), "-CasesPath", casesFile.toString(), "-Protected", PROTECTED, "-Temporary", TEMPORARY);
+        List<String> command = new java.util.ArrayList<>(List.of(powershell.toString(), "-NoProfile",
+                "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", harness.toString()));
+        command.addAll(List.of(arguments));
+        ProcessBuilder builder = new ProcessBuilder(command);
         Map<String, String> environment = builder.environment();
         Map<String, String> inherited = Map.copyOf(environment);
         environment.clear();
@@ -156,19 +180,22 @@ class DockerProjectsRootContractTest {
             String value = inherited.get(name);
             if (value != null) environment.put(name, value);
         }
-        builder.directory(work.toFile()).redirectErrorStream(true);
+        Path outputFile = work.resolve("harness-output.txt");
+        builder.directory(work.toFile()).redirectErrorStream(true).redirectOutput(outputFile.toFile());
         Process process = builder.start();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        assertTrue(process.waitFor(60, TimeUnit.SECONDS), "PowerShell harness timed out");
-        assertEquals(0, process.exitValue(), script + " harness failed:\n" + output);
-
-        Map<String, String> reasons = new LinkedHashMap<>();
-        for (String line : output.split("\\R")) {
-            int separator = line.indexOf('=');
-            if (separator > 0) reasons.put(line.substring(0, separator), line.substring(separator + 1).trim());
+        if (!process.waitFor(60, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new AssertionError("PowerShell harness timed out");
         }
-        assertEquals(cases.keySet(), reasons.keySet(), script + " harness output:\n" + output);
-        return reasons;
+        String output = Files.readString(outputFile, StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), "PowerShell harness failed:\n" + output);
+        return output;
+    }
+
+    private static Map<String, String> cases(String... labelsAndValues) {
+        Map<String, String> cases = new LinkedHashMap<>();
+        for (int i = 0; i < labelsAndValues.length; i += 2) cases.put(labelsAndValues[i], labelsAndValues[i + 1]);
+        return cases;
     }
 
     private static String between(String text, String start, String end) {

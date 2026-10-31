@@ -45,10 +45,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-function Get-UnsafeDockerProjectsRootReason([string] $ProjectsRoot, [string] $UserProfile, [string[]] $ProtectedRoots, [string] $TemporaryRoot) {
+function Get-UnsafeDockerProjectsRootReason(
+    [string] $ProjectsRoot, [string] $UserProfile, [string[]] $ProtectedRoots, [string] $TemporaryRoot) {
     # The projects root is bind-mounted into the MINOS containers. Returns why it must be refused, or an empty
     # string when it may be mounted. The reason carries no path. A strict subfolder of the temporary folder is
-    # not refused for lying inside a protected folder (qualification runs use one), only for containing one.
+    # not refused for lying inside a protected folder that holds the temporary folder (application data, where
+    # qualification runs place their roots); it is refused when it lies inside or contains any other one.
     function ConvertTo-ComparableRoot([string] $Path) {
         return [System.IO.Path]::GetFullPath($Path).TrimEnd([char[]] @('\', '/'))
     }
@@ -66,15 +68,16 @@ function Get-UnsafeDockerProjectsRootReason([string] $ProjectsRoot, [string] $Us
     if (Test-SameOrInside (ConvertTo-ComparableRoot $UserProfile) $Candidate) {
         return 'the user profile or one of its parents'
     }
-    $InsideTemporary = $false
+    $Temporary = ''
     if (-not [string]::IsNullOrWhiteSpace($TemporaryRoot)) {
         $Temporary = ConvertTo-ComparableRoot $TemporaryRoot
-        $InsideTemporary = $Candidate.StartsWith($Temporary + '\', [System.StringComparison]::OrdinalIgnoreCase)
+        if (-not $Candidate.StartsWith($Temporary + '\', [System.StringComparison]::OrdinalIgnoreCase)) { $Temporary = '' }
     }
     foreach ($Protected in @($ProtectedRoots)) {
         if ([string]::IsNullOrWhiteSpace($Protected)) { continue }
         $ProtectedRoot = ConvertTo-ComparableRoot $Protected
-        $Inside = (Test-SameOrInside $Candidate $ProtectedRoot) -and -not $InsideTemporary
+        $HoldsTemporary = ($Temporary -ne '') -and (Test-SameOrInside $Temporary $ProtectedRoot)
+        $Inside = (Test-SameOrInside $Candidate $ProtectedRoot) -and -not $HoldsTemporary
         if ($Inside -or (Test-SameOrInside $ProtectedRoot $Candidate)) {
             return 'an application data or MINOS folder, one of its parents or one of its subfolders'
         }
@@ -141,7 +144,8 @@ if ($TargetBackend -eq 'docker') {
         -ProtectedRoots @([Environment]::GetFolderPath('LocalApplicationData'), [Environment]::GetFolderPath('ApplicationData'),
             $InstallRoot, $DataRoot, $DockerInstallRoot, $DockerDataRoot)
     if (-not [string]::IsNullOrEmpty($UnsafeProjectsRoot)) {
-        throw "MINOS refuses this Docker projects root: it is $UnsafeProjectsRoot. It is mounted into the MINOS containers; choose a folder dedicated to your projects."
+        throw ("MINOS refuses this Docker projects root: it is $UnsafeProjectsRoot. It is mounted into " +
+            'the MINOS containers; choose a folder dedicated to your projects.')
     }
     if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
         throw "MINOS Docker projects root does not exist: $ProjectsRoot"
