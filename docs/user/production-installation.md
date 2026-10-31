@@ -322,6 +322,24 @@ Une section `mcp_servers.<nom>` non détenue par MINOS n'est jamais écrasée.
 
 Codex CLI et Codex Desktop ciblent la même intégration MINOS nommée : le wizard les détecte séparément mais interdit de cocher les deux simultanément.
 
+## 8 bis. Progression de la configuration
+
+Après la copie des fichiers, la page d'installation affiche une rangée par étape que vos choix déclenchent, sous la barre de copie :
+
+| Rangée | Présente si |
+|---|---|
+| Paramètres d'exécution MINOS | toujours |
+| Image Docker MINOS | mode MCP Docker |
+| PostgreSQL géré | mode MCP Docker et PostgreSQL |
+| Service Ollama géré | mode MCP Docker et Ollama |
+| Modèle Ollama | mode MCP Docker, Ollama et téléchargement du modèle coché |
+| Validation du backend MCP | un mode MCP choisi |
+| Client … | chaque client IA coché |
+
+Chaque rangée passe d'« en attente » à « en cours », puis à « terminée » (barre verte). Une étape en échec reste **rouge** ; le message d'erreur qui suit en donne la cause, et les étapes suivantes restent « non exécutée ». « réutilisée » signale un runtime Docker de même version redémarré tel quel.
+
+Un pourcentage n'est affiché que pour le téléchargement du modèle Ollama, et seulement si Ollama l'imprime. Les autres étapes, dont la construction de l'image Docker (une dizaine de minutes à la première installation), n'exposent pas d'avancement : leur barre défile tant que l'étape est en cours.
+
 ## 9. Ownership et backups
 
 Règles :

@@ -71,6 +71,10 @@ TWINS = (
                                             "scripts/install/switch-mcp-backend.ps1")),
     # MCP client detection and configuration, both shipped.
     ("Get-UserFolderPath", ("scripts/install/configure-mcp-clients.ps1", "scripts/install/detect-mcp-clients.ps1")),
+    # Installer progress protocol, written by each configuration script the installer runs with -ProgressPath.
+    ("Write-SetupProgress", ("docker/scripts/configure-docker-mcp.ps1", _DOCKER_SERVICES,
+                             "scripts/install/configure-mcp-clients-setup.ps1",
+                             "scripts/install/switch-mcp-backend.ps1")),
     # Native calls of the release scripts.
     ("Invoke-NativeChecked", ("scripts/release/build-windows-distribution.ps1",
                               "scripts/release/publish-windows-release.ps1")),

@@ -110,6 +110,16 @@ Require 'function LastBackendSwitchLogLine' 'Installer does not surface the actu
 # steps that follow it give no visual feedback at all unless the script explicitly updates the
 # status text, which otherwise reads as a frozen/hung installer during a multi-minute Docker build.
 Require 'WizardForm.StatusLabel.Caption :=' 'Installer gives no textual progress feedback during its long-running post-install configuration steps.'
+# One progress row per selected post-install step. The configuration scripts append protocol lines
+# to -ProgressPath and a timer reads that file while Exec waits: the scripts' own stdout/stderr
+# (docker build progress included) are never piped through the installer.
+Require 'procedure BuildSetupStepRows;' 'Installer does not create one progress row per selected post-install step.'
+Require "external 'SetTimer@user32.dll stdcall'" 'Installer does not read the progress file while a configuration script runs.'
+Require 'CreateCallback(@SetupProgressTick)' 'Installer progress timer is not wired to the progress-file reader.'
+Require "KillTimer(0, SetupProgressTimer);" 'Installer does not stop the progress timer after a configuration script.'
+Require "' -ProgressPath `"' + SetupProgressPath + '`"'" 'Installer does not pass the progress file to its configuration scripts.'
+Require 'procedure FinishSetupStepGroup(Group: String; Succeeded: Boolean);' 'Installer does not derive the final row state from the exit code.'
+Forbid 'ExecAndLogOutput' 'Installer must not pipe configuration-script output (docker build writes megabytes to stderr) through ExecAndLogOutput.'
 Require 'if not DockerReady() then' 'Installer does not block an explicitly selected unavailable Docker backend.'
 Require 'Result := False;' 'Installer Docker prerequisite failure does not block wizard progression.'
 Require 'aucun fallback silencieux' 'Installer does not explain fail-closed backend selection.'

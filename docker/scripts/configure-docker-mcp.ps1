@@ -30,11 +30,32 @@ param(
     [ValidateRange(32, 16384)]
     [int] $SemanticDimensions = 768,
 
-    [switch] $ProvisionOllamaModel
+    [switch] $ProvisionOllamaModel,
+
+    # Installer progress file; empty (the default) writes no progress.
+    [string] $ProgressPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# Installer progress protocol, read by the Windows installer while this script runs (-ProgressPath).
+# A line carries only a step id, a state and a number: no path, URL, model name or secret can reach it.
+function Write-SetupProgress([string] $Step, [string] $State, [int] $Percent = -1) {
+    if ([string]::IsNullOrWhiteSpace($ProgressPath)) { return }
+    if ($Step -cnotmatch '^[a-z][a-z0-9-]{0,47}\z') { return }
+    if (@('running', 'done', 'skipped') -cnotcontains $State) { return }
+    if ($Percent -lt -1 -or $Percent -gt 100) { return }
+    $Line = "MINOS-PROGRESS step=$Step state=$State"
+    if ($Percent -ge 0) { $Line += " percent=$Percent" }
+    for ($Attempt = 1; $Attempt -le 5; $Attempt++) {
+        try {
+            [System.IO.File]::AppendAllText($ProgressPath, $Line + "`r`n", [System.Text.Encoding]::ASCII)
+            return
+        }
+        catch { Start-Sleep -Milliseconds 50 }
+    }
+}
 
 function Fail-Or-Warn([string] $Message) {
     if ($Strict) { throw $Message }
@@ -152,6 +173,7 @@ try {
         "minos.semantic.provider=$BaseSemanticProvider"
     ) | Set-Content -LiteralPath $BaseProperties -Encoding ascii
 
+    Write-SetupProgress -Step 'docker-image' -State 'running'
     Invoke-DockerWorkflow -Action Install -AdditionalParameters @{
         Jar = $Jar
         Version = $Version
@@ -159,6 +181,7 @@ try {
         ProjectsRoot = $ProjectsRoot
         SemanticProvider = $BaseSemanticProvider
     }
+    Write-SetupProgress -Step 'docker-image' -State 'done'
 
     $NeedsM30Services = $StorageBackend -eq 'postgresql' -or $SemanticProvider -eq 'ollama'
     if ($NeedsM30Services) {
@@ -175,6 +198,7 @@ try {
             Start = $Start
         }
         if ($ProvisionOllamaModel) { $ServiceParameters['ProvisionOllamaModel'] = $true }
+        if (-not [string]::IsNullOrWhiteSpace($ProgressPath)) { $ServiceParameters['ProgressPath'] = $ProgressPath }
         & $M30Services @ServiceParameters
     }
 

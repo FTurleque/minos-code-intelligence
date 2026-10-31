@@ -114,6 +114,30 @@ var
   SummaryMemo: TNewMemo;
   DeleteUserDataOnUninstall: Boolean;
 
+type
+  // One progress row of the post-install configuration: a step the wizard choices trigger.
+  TSetupStepRow = record
+    Id: String;
+    Group: String;
+    Caption: String;
+    State: String;
+    Percent: Integer;
+    StateLabel: TNewStaticText;
+    Bar: TNewProgressBar;
+  end;
+
+var
+  SetupStepRows: array of TSetupStepRow;
+  SetupProgressPath: String;
+  SetupProgressTimer: LongWord;
+
+// Exec processes window messages while it waits, so a thread timer fires during a long
+// configuration script and the progress rows are redrawn without redirecting its output.
+function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: LongWord): LongWord;
+  external 'SetTimer@user32.dll stdcall';
+function KillTimer(hWnd, uIDEvent: LongWord): BOOL;
+  external 'KillTimer@user32.dll stdcall';
+
 function IfThen(Condition: Boolean; TrueValue, FalseValue: String): String;
 begin
   if Condition then Result := TrueValue else Result := FalseValue;
@@ -481,6 +505,344 @@ begin
     (McpCodexDesktop.Enabled and McpCodexDesktop.Checked);
 end;
 
+function SetupStepRowIndex(Id: String): Integer;
+var
+  I: Integer;
+begin
+  Result := -1;
+  for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+    if SetupStepRows[I].Id = Id then
+    begin
+      Result := I;
+      exit;
+    end;
+end;
+
+procedure AddSetupStepRow(Id, Group, Caption: String);
+var
+  I: Integer;
+begin
+  I := GetArrayLength(SetupStepRows);
+  SetArrayLength(SetupStepRows, I + 1);
+  SetupStepRows[I].Id := Id;
+  SetupStepRows[I].Group := Group;
+  SetupStepRows[I].Caption := Caption;
+  SetupStepRows[I].State := 'pending';
+  SetupStepRows[I].Percent := -1;
+end;
+
+// A bar shows a percentage only when the script reported one; a running step without one is
+// indeterminate (marquee). Done is full and green, failed is red, reused is full and paused.
+procedure RenderSetupStepRow(Index: Integer);
+var
+  Row: TSetupStepRow;
+  Detail: String;
+begin
+  Row := SetupStepRows[Index];
+  if Row.Bar = nil then exit;
+  Row.Bar.Style := npbstNormal;
+  Row.Bar.State := npbsNormal;
+  if Row.State = 'running' then
+  begin
+    if Row.Percent >= 0 then
+    begin
+      Row.Bar.Position := Row.Percent;
+      Detail := 'en cours (' + IntToStr(Row.Percent) + ' %)';
+    end
+    else
+    begin
+      Row.Bar.Style := npbstMarquee;
+      Detail := 'en cours';
+    end;
+  end
+  else if Row.State = 'done' then
+  begin
+    Row.Bar.Position := 100;
+    Detail := 'terminée';
+  end
+  else if Row.State = 'skipped' then
+  begin
+    Row.Bar.Position := 100;
+    Row.Bar.State := npbsPaused;
+    Detail := 'réutilisée';
+  end
+  else if Row.State = 'failed' then
+  begin
+    Row.Bar.Position := 100;
+    Row.Bar.State := npbsError;
+    Detail := 'échec';
+  end
+  else
+  begin
+    Row.Bar.Position := 0;
+    if Row.State = 'unreported' then Detail := 'non signalée'
+    else if Row.State = 'notrun' then Detail := 'non exécutée'
+    else Detail := 'en attente';
+  end;
+  Row.StateLabel.Caption := Row.Caption + ' — ' + Detail;
+end;
+
+procedure SetSetupStepState(Id, State: String; Percent: Integer);
+var
+  I: Integer;
+begin
+  I := SetupStepRowIndex(Id);
+  if I < 0 then exit;
+  if (SetupStepRows[I].State = State) and (SetupStepRows[I].Percent = Percent) then exit;
+  if SetupStepRows[I].State <> State then Log('Setup progress: ' + Id + ' ' + State);
+  SetupStepRows[I].State := State;
+  SetupStepRows[I].Percent := Percent;
+  RenderSetupStepRow(I);
+end;
+
+// Rows sit under Inno's own (already full) progress gauge: label on the left, bar on the right,
+// rows shortened when every selected step would not fit at the default height.
+procedure LayoutSetupStepRows;
+var
+  I: Integer;
+  Count: Integer;
+  Top: Integer;
+  RowHeight: Integer;
+  BarHeight: Integer;
+  LabelWidth: Integer;
+  StateLabel: TNewStaticText;
+  Bar: TNewProgressBar;
+begin
+  Count := GetArrayLength(SetupStepRows);
+  if Count = 0 then exit;
+  Top := WizardForm.ProgressGauge.Top + WizardForm.ProgressGauge.Height + ScaleY(12);
+  RowHeight := ScaleY(20);
+  if RowHeight * Count > WizardForm.InstallingPage.Height - Top then
+    RowHeight := (WizardForm.InstallingPage.Height - Top) div Count;
+  BarHeight := ScaleY(14);
+  if BarHeight > RowHeight - ScaleY(2) then BarHeight := RowHeight - ScaleY(2);
+  LabelWidth := (WizardForm.ProgressGauge.Width * 3) div 5;
+  for I := 0 to Count - 1 do
+  begin
+    StateLabel := TNewStaticText.Create(WizardForm);
+    StateLabel.Parent := WizardForm.InstallingPage;
+    StateLabel.AutoSize := False;
+    StateLabel.WordWrap := False;
+    StateLabel.Left := WizardForm.ProgressGauge.Left;
+    StateLabel.Top := Top + I * RowHeight + (RowHeight - BarHeight) div 2;
+    StateLabel.Width := LabelWidth - ScaleX(8);
+    StateLabel.Height := RowHeight;
+    Bar := TNewProgressBar.Create(WizardForm);
+    Bar.Parent := WizardForm.InstallingPage;
+    Bar.Left := WizardForm.ProgressGauge.Left + LabelWidth;
+    Bar.Top := Top + I * RowHeight + (RowHeight - BarHeight) div 2;
+    Bar.Width := WizardForm.ProgressGauge.Width - LabelWidth;
+    Bar.Height := BarHeight;
+    Bar.Min := 0;
+    Bar.Max := 100;
+    SetupStepRows[I].StateLabel := StateLabel;
+    SetupStepRows[I].Bar := Bar;
+    RenderSetupStepRow(I);
+  end;
+end;
+
+function IsSetupStepId(Value: String): Boolean;
+var
+  I: Integer;
+  C: Char;
+begin
+  Result := False;
+  if (Length(Value) < 1) or (Length(Value) > 48) then exit;
+  if not ((Value[1] >= 'a') and (Value[1] <= 'z')) then exit;
+  for I := 2 to Length(Value) do
+  begin
+    C := Value[I];
+    if not (((C >= 'a') and (C <= 'z')) or ((C >= '0') and (C <= '9')) or (C = '-')) then exit;
+  end;
+  Result := True;
+end;
+
+// Accepts exactly "MINOS-PROGRESS step=<id> state=<running|done|skipped>[ percent=<0-100>]" for
+// an existing row; any other text in the progress file is ignored and never shown or logged.
+function ParseSetupProgressLine(Line: String; var Id, State: String; var Percent: Integer): Boolean;
+var
+  Rest: String;
+  Digits: String;
+  P: Integer;
+  I: Integer;
+begin
+  Result := False;
+  Percent := -1;
+  if Pos('MINOS-PROGRESS step=', Line) <> 1 then exit;
+  Rest := Copy(Line, Length('MINOS-PROGRESS step=') + 1, Length(Line));
+  P := Pos(' state=', Rest);
+  if P < 2 then exit;
+  Id := Copy(Rest, 1, P - 1);
+  Rest := Copy(Rest, P + Length(' state='), Length(Rest));
+  P := Pos(' percent=', Rest);
+  if P > 0 then
+  begin
+    Digits := Copy(Rest, P + Length(' percent='), Length(Rest));
+    Rest := Copy(Rest, 1, P - 1);
+    if (Length(Digits) < 1) or (Length(Digits) > 3) then exit;
+    for I := 1 to Length(Digits) do
+      if (Digits[I] < '0') or (Digits[I] > '9') then exit;
+    Percent := StrToInt(Digits);
+    if Percent > 100 then exit;
+  end;
+  State := Rest;
+  if not ((State = 'running') or (State = 'done') or (State = 'skipped')) then exit;
+  Result := IsSetupStepId(Id) and (SetupStepRowIndex(Id) >= 0);
+end;
+
+// The whole file is read on every tick and its last state per step applied: only lines ended by a
+// line feed count, so a line still being written is applied on a later tick, never truncated.
+procedure ApplySetupProgressFile;
+var
+  Raw: AnsiString;
+  Text: String;
+  Lines: TArrayOfString;
+  States: TArrayOfString;
+  Percents: array of Integer;
+  I: Integer;
+  Index: Integer;
+  Last: Integer;
+  Percent: Integer;
+  Id: String;
+  State: String;
+begin
+  if (SetupProgressPath = '') or (not FileExists(SetupProgressPath)) then exit;
+  if not LoadStringFromFile(SetupProgressPath, Raw) then exit;
+  Text := String(Raw);
+  if Text = '' then exit;
+  Lines := StringSplit(Text, [#10], stAll);
+  Last := GetArrayLength(Lines) - 1;
+  if Text[Length(Text)] <> #10 then Last := Last - 1;
+  SetArrayLength(States, GetArrayLength(SetupStepRows));
+  SetArrayLength(Percents, GetArrayLength(SetupStepRows));
+  for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+  begin
+    States[I] := '';
+    Percents[I] := -1;
+  end;
+  for I := 0 to Last do
+    if ParseSetupProgressLine(Trim(Lines[I]), Id, State, Percent) then
+    begin
+      Index := SetupStepRowIndex(Id);
+      States[Index] := State;
+      Percents[Index] := Percent;
+    end;
+  for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+    if States[I] <> '' then SetSetupStepState(SetupStepRows[I].Id, States[I], Percents[I]);
+end;
+
+procedure SetupProgressTick(Wnd, Msg, IdEvent, Time: LongWord);
+begin
+  try
+    ApplySetupProgressFile;
+  except
+    Log('Setup progress: progress file not applied on this tick.');
+  end;
+end;
+
+// The exit code decides the final state: running rows of a succeeded script are done, a row it
+// never reported is not turned green; on failure the running rows (or, if none, the first
+// pending one, or else the group's last row) are failed and the remaining ones were not run.
+procedure FinishSetupStepGroup(Group: String; Succeeded: Boolean);
+var
+  I: Integer;
+  LastRow: Integer;
+  Blamed: Boolean;
+begin
+  Blamed := False;
+  LastRow := -1;
+  for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+    if (SetupStepRows[I].Group = Group) and (SetupStepRows[I].State = 'running') then
+    begin
+      if Succeeded then SetSetupStepState(SetupStepRows[I].Id, 'done', -1)
+      else SetSetupStepState(SetupStepRows[I].Id, 'failed', -1);
+      Blamed := True;
+    end;
+  for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+    if (SetupStepRows[I].Group = Group) and (SetupStepRows[I].State = 'pending') then
+    begin
+      if Succeeded then
+        SetSetupStepState(SetupStepRows[I].Id, 'unreported', -1)
+      else if not Blamed then
+      begin
+        SetSetupStepState(SetupStepRows[I].Id, 'failed', -1);
+        Blamed := True;
+      end
+      else
+        SetSetupStepState(SetupStepRows[I].Id, 'notrun', -1);
+    end;
+  // A script can fail after every step it reported is done (commit, rollback): the failure
+  // still shows on the group's last row.
+  if (not Succeeded) and (not Blamed) then
+  begin
+    for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+      if SetupStepRows[I].Group = Group then LastRow := I;
+    if LastRow >= 0 then SetSetupStepState(SetupStepRows[LastRow].Id, 'failed', -1);
+  end;
+end;
+
+procedure StartSetupProgress;
+begin
+  DeleteFile(SetupProgressPath);
+  if SetupProgressTimer = 0 then
+    SetupProgressTimer := SetTimer(0, 0, 250, CreateCallback(@SetupProgressTick));
+end;
+
+procedure KillSetupProgressTimer;
+begin
+  if SetupProgressTimer <> 0 then
+  begin
+    KillTimer(0, SetupProgressTimer);
+    SetupProgressTimer := 0;
+  end;
+end;
+
+procedure StopSetupProgress(Group: String; Succeeded: Boolean);
+begin
+  KillSetupProgressTimer;
+  SetupProgressTick(0, 0, 0, 0);
+  DeleteFile(SetupProgressPath);
+  FinishSetupStepGroup(Group, Succeeded);
+end;
+
+procedure MarkSetupStepsNotRun;
+var
+  I: Integer;
+begin
+  for I := 0 to GetArrayLength(SetupStepRows) - 1 do
+    if SetupStepRows[I].State = 'pending' then SetSetupStepState(SetupStepRows[I].Id, 'notrun', -1);
+end;
+
+// One row per step the wizard choices trigger, under the same conditions as the parameters the
+// configuration functions below pass; none in smoke mode, where those functions do nothing.
+procedure BuildSetupStepRows;
+begin
+  if IsSmokeBuild() then exit;
+  SetupProgressPath := ExpandConstant('{tmp}\minos-setup-progress.txt');
+  AddSetupStepRow('runtime', 'runtime', 'Paramètres d''exécution MINOS');
+  if McpBackendSelected() then
+  begin
+    if DockerMcpSelected() then
+    begin
+      AddSetupStepRow('docker-image', 'backend', 'Image Docker MINOS');
+      if PostgreSqlSelected() then AddSetupStepRow('postgres', 'backend', 'PostgreSQL géré');
+      if OllamaSelected() then AddSetupStepRow('ollama', 'backend', 'Service Ollama géré');
+      if OllamaSelected() and OllamaProvisionCheck.Checked then AddSetupStepRow('ollama-model', 'backend', 'Modèle Ollama');
+    end;
+    AddSetupStepRow('handshake', 'backend', 'Validation du backend MCP');
+  end;
+  if McpBackendSelected() and McpClientSelected() then
+  begin
+    if McpCopilotJetBrains.Enabled and McpCopilotJetBrains.Checked then AddSetupStepRow('client-copilot-jetbrains', 'clients', 'Client Copilot JetBrains');
+    if McpCopilotCli.Enabled and McpCopilotCli.Checked then AddSetupStepRow('client-copilot-cli', 'clients', 'Client Copilot CLI');
+    if McpClaudeCode.Enabled and McpClaudeCode.Checked then AddSetupStepRow('client-claude-code', 'clients', 'Client Claude Code');
+    if McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked then AddSetupStepRow('client-claude-desktop', 'clients', 'Client Claude Desktop');
+    if (McpCodexCli.Enabled and McpCodexCli.Checked) or (McpCodexDesktop.Enabled and McpCodexDesktop.Checked) then
+      AddSetupStepRow('client-codex', 'clients', 'Client OpenAI Codex');
+  end;
+  LayoutSetupStepRows;
+end;
+
 procedure PersistInstallerRegistry;
 begin
   if IsSmokeBuild() then exit;
@@ -550,14 +912,18 @@ begin
       Parameters := Parameters + ' -SemanticEndpoint "' + OllamaEndpointEdit.Text + '"';
   end;
 
+  SetSetupStepState('runtime', 'running', -1);
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
+    FinishSetupStepGroup('runtime', False);
     MsgBox(
       'La configuration avancée MINOS n''a pas pu être appliquée.' + #13#10 + #13#10 +
       'Aucun fallback silencieux n''a été utilisé. Consultez le journal de l''installateur.',
       mbError, MB_OK);
     Result := False;
-  end;
+  end
+  else
+    FinishSetupStepGroup('runtime', True);
   if PasswordFile <> '' then DeleteFile(PasswordFile);
 end;
 
@@ -625,6 +991,7 @@ var
   LogPath: String;
   LastLogLine: String;
   DiagnosticLine: String;
+  Succeeded: Boolean;
 begin
   Result := True;
   if IsSmokeBuild() or NoMcpSelected() then exit;
@@ -656,8 +1023,16 @@ begin
         Parameters := Parameters + ' -ProvisionOllamaModel';
     end;
   end;
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  Parameters := Parameters + ' -ProgressPath "' + SetupProgressPath + '"';
+  StartSetupProgress;
+  try
+    Succeeded := Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  finally
+    KillSetupProgressTimer;
+  end;
+  if not Succeeded then
   begin
+    StopSetupProgress('backend', False);
     LogPath := EffectiveDataRoot() + '\runtime\backend-switch.log';
     LastLogLine := LastBackendSwitchLogLine(LogPath);
     if LastLogLine <> '' then
@@ -675,7 +1050,9 @@ begin
       'ou consultez le journal complet : ' + LogPath,
       mbError, MB_OK);
     Result := False;
-  end;
+  end
+  else
+    StopSetupProgress('backend', True);
 end;
 
 procedure ConfigureMcpClients;
@@ -683,6 +1060,7 @@ var
   ResultCode: Integer;
   Parameters: String;
   PowerShell: String;
+  Succeeded: Boolean;
 begin
   if IsSmokeBuild() or (not McpBackendSelected()) or (not McpClientSelected()) then exit;
   WizardForm.StatusLabel.Caption := 'Configuration des intégrations clientes IA détectées...';
@@ -698,13 +1076,23 @@ begin
   if McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked then Parameters := Parameters + ' -ClaudeDesktop';
   if McpCodexCli.Enabled and McpCodexCli.Checked then Parameters := Parameters + ' -Codex -CodexMode cli'
   else if McpCodexDesktop.Enabled and McpCodexDesktop.Checked then Parameters := Parameters + ' -Codex -CodexMode desktop';
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  Parameters := Parameters + ' -ProgressPath "' + SetupProgressPath + '"';
+  StartSetupProgress;
+  try
+    Succeeded := Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+  finally
+    KillSetupProgressTimer;
+  end;
+  if not Succeeded then
   begin
+    StopSetupProgress('clients', False);
     MsgBox(
       'MINOS est installé et le backend MCP a été validé, mais une ou plusieurs intégrations clientes n''ont pas pu être configurées.' + #13#10 + #13#10 +
       'Le point d''entrée stable minos.exe mcp reste utilisable directement.' + #13#10 +
       'Diagnostic : %LOCALAPPDATA%\MINOS\mcp-clients.log', mbError, MB_OK);
-  end;
+  end
+  else
+    StopSetupProgress('clients', True);
 end;
 
 procedure ConfigurePostgresControls;
@@ -1374,12 +1762,18 @@ begin
   if CurStep = ssPostInstall then
   begin
     if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
-    if not ConfigureRuntimeSettings() then exit;
+    BuildSetupStepRows;
+    if not ConfigureRuntimeSettings() then
+    begin
+      MarkSetupStepsNotRun;
+      exit;
+    end;
     PersistInstallerRegistry;
     if ConfigureSelectedMcpBackend() then
       ConfigureMcpClients
     else
       RevertRuntimeSettingsToLocal;
+    MarkSetupStepsNotRun;
   end;
 end;
 

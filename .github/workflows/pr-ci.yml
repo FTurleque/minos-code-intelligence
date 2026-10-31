@@ -114,6 +114,9 @@ jobs:
       - name: Docker script context tests (runtime .env and image build context; whole verification script in the verify job)
         run: python scripts/install/test_docker_script_contexts.py -v
 
+      - name: Installer progress protocol tests (pwsh here, Windows PowerShell 5.1 and pwsh in the verify job)
+        run: python scripts/install/test_setup_progress.py -v
+
       - name: Delegated cgroup root validation tests (provisioning scripts run with a recording sudo)
         run: python scripts/deploy/test_cgroup_root_validation.py -v
 
@@ -406,6 +409,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # The Docker helper scripts under Windows PowerShell 5.1 and pwsh, and verify-run-configurations.ps1 when Compose answers.
           python scripts/install/test_docker_script_contexts.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The installer progress emitters of the shipped configuration scripts, under Windows PowerShell 5.1 and pwsh.
+          python scripts/install/test_setup_progress.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # AUD-DEP-06: the release scripts run under Windows PowerShell 5.1 too; the real Get-AuthenticodeSignature.
           & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File scripts/release/test-release-signature.ps1
