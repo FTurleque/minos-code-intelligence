@@ -2,7 +2,7 @@
 
 ## Context
 
-Demande produit : une barre par étape de la configuration post-installation de l'installeur Windows, pour que l'utilisateur voie chaque étape passer au vert. HEAD analysé : `b908b249` (`develop`). `ISS` = `packaging/windows/minos-installer.iss.template`. Inno Setup 6.7.1 (épinglé par `.github/workflows/release-windows.yml:38`, même version sur le poste : `C:\ProgramData\chocolatey\lib\InnoSetup\innosetup.nuspec`).
+Demande produit : une barre par étape de la configuration post-installation de l'installeur Windows, pour que l'utilisateur voie chaque étape passer au vert. HEAD analysé : `b908b249` (`develop`). `ISS` = `packaging/windows/minos-installer.iss.template`. Inno Setup 6.7.1 est épinglé par `.github/workflows/release-windows.yml:38`. Le poste de mesure a Inno Setup 6.7.3 (moteur rapporté par `ISCC.exe`, alors que les métadonnées Chocolatey indiquent 6.7.1) et Inno Setup 7.
 
 ## État vérifié au HEAD
 
@@ -18,7 +18,7 @@ Demande produit : une barre par étape de la configuration post-installation de 
 ### Écarts avec la conception envisagée par la demande
 
 1. **`ExecAndLogOutput` n'est pas employé au HEAD** : les étapes passent par `Exec`.
-2. **`ExecAndLogOutput` ne convient pas aux étapes longues.** Mesures faites le 31 octobre 2026 avec Inno Setup 6.7.1 (installeurs d'essai compilés par `ISCC.exe`, hors dépôt) :
+2. **`ExecAndLogOutput` ne convient pas aux étapes longues.** Mesures faites le 31 octobre 2026 avec Inno Setup 6.7.3, sur des installeurs d'essai compilés par `ISCC.exe` hors dépôt ; non reproduites en 6.7.1 :
    - les lignes arrivent bien au rappel `OnLog` pendant l'exécution (trois lignes espacées de 2 s reçues à 2 s d'intervalle) ;
    - mais la sortie est drainée lentement : 3 000 lignes de 100 octets en 7 s, 30 000 en 48 s (environ 64 Kio/s) ; un processus qui écrit 15 Mio reste bloqué sur son écriture, sans consommation CPU, au-delà de 90 s.
    - Or `ExecAndLogOutput` redirige stdout **et** stderr du processus et de tous ses fils, et `docker build` écrit sa progression sur stderr pendant toute la préparation de l'image. La construction serait ralentie, voire bloquée, et une sortie trop longue couperait le flux (limite documentée de 10 millions d'octets).

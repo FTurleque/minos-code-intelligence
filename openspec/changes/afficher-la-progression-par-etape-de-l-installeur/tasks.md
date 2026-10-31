@@ -19,7 +19,7 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Les scripts
 
 ## 4. Preuve sur un installeur construit
 
-- [ ] 4.1 Construire `scripts/release/build-local-windows-candidate.ps1 -Version 1.3.0 -SkipMavenVerify` ; le modèle compile avec Inno Setup 6.7.1.
+- [x] 4.1 Construire `scripts/release/build-local-windows-candidate.ps1 -Version 1.3.0 -SkipMavenVerify` : SUCCESS au HEAD `f40fa3d0` (compilateur choisi automatiquement : Inno Setup 7). Le modèle compile aussi avec Inno Setup 6.7.3 (`build-windows-installer.ps1 -IsccPath`). La compilation en 6.7.1, version épinglée par la CI de release, n'a pas pu être faite sur le poste ; elle revient à `release-windows.yml`.
 - [ ] 4.2 **(manuelle)** Installation interactive du candidat, backend natif et au moins un client IA : une rangée par étape, chacune passe au vert. Noter le résultat dans la PR.
 
 ## 5. Recette Docker
