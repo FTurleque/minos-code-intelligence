@@ -266,9 +266,11 @@ $SecretPath = $null
 
 if ($StorageBackend -eq 'postgresql') {
     if ($ManagedDockerPostgres.IsPresent) {
-        # Managed Docker PostgreSQL: connection settings are written by configure-m30-docker-services.ps1.
-        # Record the backend selection only; do not validate external URL/credentials here.
-        $Configuration['minos.postgres.managed'] = 'true'
+        # Managed Docker PostgreSQL is reachable only from the Docker runtime: its settings, written by
+        # configure-m30-docker-services.ps1 into the Docker data folder, name a host of the managed Docker
+        # network and no port is published on the host. The native MINOS home keeps local storage; the
+        # installer state below records the PostgreSQL choice.
+        $Configuration['minos.storage.backend'] = 'local'
     } else {
         Assert-ExternalPostgresUrl $PostgresUrl
         Require-Identifier $PostgresUser 'PostgreSQL user'
