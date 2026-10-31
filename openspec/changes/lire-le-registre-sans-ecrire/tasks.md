@@ -37,8 +37,8 @@ Ordre dans chaque section : rouge, correction, preuve. Les tâches 1 à 4 décri
 
 ## 4-B. Variante si l'option B est retenue (remplace 1 à 4)
 
-- [ ] 4-B.1 [LS-01] Rouge : `M29DockerAdministrationContractTest` exige que le montage des données de `minos-mcp` **ne soit pas** `read_only` dans les deux compose, et que le commentaire du service dise pourquoi. Puis `docker/compose-mcp.prod.yaml`, `docker/compose-mcp.connected.yaml`. Preuve : `./mvnw -B -ntp -pl minos-app -am test "-Dtest=M29Docker*"` ; `python scripts/quality/check-compose-limits.py`.
-- [ ] 4-B.2 [LS-01] Qualification : le conteneur MCP monte les données comme le compose corrigé ; la requête de symboles reste exigée. `docs/user/docker-runtime.md:11` (« MCP query … read-write »), « Mise en œuvre » de l'ADR 0021 **amendée**, `MinosMcpReadOnlyHomeTest` et l'exigence « Le statut MCP n'a aucun effet de bord » relus (une lecture durcit et ouvre le verrou). Les tests rouges de 0.2 sont remplacés par un test qui fixe le message d'un répertoire de données non inscriptible.
+- [x] 4-B.1 **Sans objet** (option A retenue le 2026-10-13, voir l'en-tête) — [LS-01] Rouge : `M29DockerAdministrationContractTest` exige que le montage des données de `minos-mcp` **ne soit pas** `read_only` dans les deux compose, et que le commentaire du service dise pourquoi. Puis `docker/compose-mcp.prod.yaml`, `docker/compose-mcp.connected.yaml`. Preuve : `./mvnw -B -ntp -pl minos-app -am test "-Dtest=M29Docker*"` ; `python scripts/quality/check-compose-limits.py`.
+- [x] 4-B.2 **Sans objet** (option A retenue le 2026-10-13, voir l'en-tête) — [LS-01] Qualification : le conteneur MCP monte les données comme le compose corrigé ; la requête de symboles reste exigée. `docs/user/docker-runtime.md:11` (« MCP query … read-write »), « Mise en œuvre » de l'ADR 0021 **amendée**, `MinosMcpReadOnlyHomeTest` et l'exigence « Le statut MCP n'a aucun effet de bord » relus (une lecture durcit et ouvre le verrou). Les tests rouges de 0.2 sont remplacés par un test qui fixe le message d'un répertoire de données non inscriptible.
 
 ## 5. Clôture
 
