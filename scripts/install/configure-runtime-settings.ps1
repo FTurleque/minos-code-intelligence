@@ -42,11 +42,27 @@ param(
 
     [switch] $ProvisionOllamaModel,
 
-    [string] $InstallerStatePath = ''
+    [string] $InstallerStatePath = '',
+
+    [string] $FailureLogPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# The installer runs this script through Exec, which keeps no output: the message of the error that
+# stops it is written to -FailureLogPath, which the installer copies to its log and shows the user.
+trap {
+    if (-not [string]::IsNullOrWhiteSpace($FailureLogPath)) {
+        try {
+            [System.IO.File]::WriteAllText($FailureLogPath, $_.Exception.Message, [System.Text.UTF8Encoding]::new($true))
+        }
+        catch {
+            Write-Warning "Unable to write the failure message to $FailureLogPath"
+        }
+    }
+    break
+}
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS installer runtime settings currently target Windows hosts.'

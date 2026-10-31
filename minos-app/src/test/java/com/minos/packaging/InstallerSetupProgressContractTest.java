@@ -122,6 +122,29 @@ class InstallerSetupProgressContractTest {
         assertTrue(installer.contains("WizardForm.StatusLabel.Caption :="));
     }
 
+    // The bar carries the state of a step (empty, scrolling, green, red, paused): the label only names
+    // the step, so a state word next to it would repeat the bar.
+    @Test
+    void stepLabelNamesTheStepAndLeavesTheStateToTheBar() throws Exception {
+        String render = body(installer(), "procedure RenderSetupStepRow(Index: Integer);");
+        assertTrue(render.contains("Row.StateLabel.Caption := Row.Caption;"), "label does not name the step alone");
+        for (String state : new String[]{"en attente", "en cours", "terminée", "réutilisée", "échec",
+                "non signalée", "non exécutée", "Detail"}) {
+            assertFalse(render.contains(state), "label repeats the state of the bar: " + state);
+        }
+    }
+
+    // The status label is one line wide: the duration warning of the backend step goes on the line
+    // under it, where it is read in full.
+    @Test
+    void backendDurationWarningHasItsOwnLine() throws Exception {
+        String backend = body(installer(), "function ConfigureSelectedMcpBackend(): Boolean;");
+        assertTrue(backend.contains("WizardForm.StatusLabel.Caption := 'Configuration et validation du backend MCP MINOS...';"));
+        assertTrue(backend.contains(
+                "WizardForm.FilenameLabel.Caption := 'Peut prendre plusieurs minutes lors d''une préparation Docker.';"));
+        assertFalse(backend.contains("(peut prendre"), "warning still on the status line");
+    }
+
     @Test
     void scriptsEmitOnlyStepsTheInstallerDisplays() throws Exception {
         Path root = repoRoot();

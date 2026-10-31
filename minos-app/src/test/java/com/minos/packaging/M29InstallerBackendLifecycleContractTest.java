@@ -140,6 +140,65 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(runner.contains("M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS"));
     }
 
+    // Exec() keeps no output of configure-runtime-settings.ps1, so a failure (an unwritable data\config
+    // directory, for one) reached the user as "failed", without the reason. The script writes the message
+    // of the error that stops it to -FailureLogPath; both calls pass that file, read it back into the
+    // setup log, and the failure message shows the cause and names the log.
+    @Test
+    void runtimeSettingsFailureCauseReachesTheUserAndTheInstallerLog() throws Exception {
+        Path root = repoRoot();
+        String installer = text(root.resolve("packaging/windows/minos-installer.iss.template"));
+        String script = text(root.resolve("scripts/install/configure-runtime-settings.ps1"));
+
+        assertTrue(script.contains("[string] $FailureLogPath = ''"), "script has no failure file parameter");
+        assertOrdered(script, "trap {", "WriteAllText($FailureLogPath, $_.Exception.Message", "break", "$DataRoot = [System.IO.Path]::GetFullPath($DataRoot)");
+
+        String reader = section(installer, "function ReadRuntimeSettingsFailure(Caller: String): String;", "\nend;\n");
+        assertTrue(reader.contains("LoadStringsFromFile(RuntimeSettingsFailureFile(), Lines)"));
+        assertTrue(reader.contains("Log(Caller + ': configure-runtime-settings.ps1 failed: ' + Result);"));
+
+        String configure = section(installer, "function ConfigureRuntimeSettings(): Boolean;", "\nend;\n");
+        assertTrue(configure.contains("' -FailureLogPath \"' + RuntimeSettingsFailureFile() + '\"'"));
+        assertTrue(configure.contains("'Cause : ' + ReadRuntimeSettingsFailure('ConfigureRuntimeSettings')"),
+                "failure message does not show the cause");
+        assertTrue(configure.contains("ExpandConstant('{log}')"), "failure message does not name the installer log");
+
+        String revert = section(installer, "procedure RevertRuntimeSettingsToLocal;", "\nend;\n");
+        assertTrue(revert.contains("' -FailureLogPath \"' + RuntimeSettingsFailureFile() + '\"'"));
+        assertTrue(revert.contains("ReadRuntimeSettingsFailure('RevertRuntimeSettingsToLocal');"));
+    }
+
+    // The switch writes backend-switch.json only after COMMIT. A state file it cannot write was found
+    // there, after a ten-minute Docker build, and turned a working switch into a rollback. Every runtime
+    // file the switch writes is proven writable before BEGIN.
+    @Test
+    void backendSwitchProvesItsRuntimeFilesWritableBeforeItStarts() throws Exception {
+        String switcher = text(repoRoot().resolve("scripts/install/switch-mcp-backend.ps1"));
+        assertTrue(switcher.contains("function Assert-RuntimeFileWritable([string] $Path)"));
+        assertOrdered(switcher,
+                "Assert-RuntimeFileWritable -Path $SwitchLog",
+                "Assert-RuntimeFileWritable -Path $BackendFile",
+                "Assert-RuntimeFileWritable -Path $SwitchStateFile",
+                "Write-SwitchLog \"BEGIN previous=");
+    }
+
+    // The installer cannot tell which step of the switch failed: its message names the switch, not the
+    // handshake, and leaves the step to the last log line it prints.
+    @Test
+    void backendSwitchFailureMessageDoesNotClaimTheHandshakeFailed() throws Exception {
+        String installer = text(repoRoot().resolve("packaging/windows/minos-installer.iss.template"));
+        String configure = section(installer, "function ConfigureSelectedMcpBackend(): Boolean;", "\nend;\n");
+        assertFalse(configure.contains("validation/handshake"), "message claims the handshake failed");
+    }
+
+    private static String section(String text, String start, String end) {
+        int from = text.indexOf(start);
+        assertTrue(from >= 0, "missing section: " + start);
+        int to = text.indexOf(end, from);
+        assertTrue(to > from, "unterminated section: " + start);
+        return text.substring(from, to);
+    }
+
     // The installer runs every shipped .ps1 through {sys}\WindowsPowerShell\v1.0\powershell.exe.
     // Windows PowerShell 5.1 decodes a BOM-less script as ANSI, so a UTF-8 non-ASCII character
     // is mis-decoded -- and an em dash becomes a sequence containing U+0094, which PowerShell
