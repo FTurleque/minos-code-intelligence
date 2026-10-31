@@ -70,6 +70,10 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     /** Aggregate CPU bandwidth per {@link LinuxCgroupJob#CPU_PERIOD_MICROS}, enforced by {@code cpu.max}. */
     static final long MAX_CPU_MICROS_PER_PERIOD = 8L * LinuxCgroupJob.CPU_PERIOD_MICROS;
 
+    private static final String PROC = "/proc";
+    private static final String RO_BIND = "--ro-bind";
+    private static final String TOOLS_DIRECTORY = "tools";
+
     private static final Path POSIX_SHELL = Path.of("/bin/sh");
 
     /** Provider environment keys whose value names a JDK the provider runs or hands to its build. */
@@ -308,7 +312,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         sandbox.add("--dev");
         sandbox.add("/dev");
         sandbox.add("--proc");
-        sandbox.add("/proc");
+        sandbox.add(PROC);
         sandbox.add("--tmpfs");
         sandbox.add("/tmp");
         // The environment the provider really receives (ProcessIndexerExecutor applies the same allowlist):
@@ -350,7 +354,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         command.add("--dev");
         command.add("/dev");
         command.add("--proc");
-        command.add("/proc");
+        command.add(PROC);
         command.add("--");
         command.add("/bin/true");
         try {
@@ -424,7 +428,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             }
         }
 
-        Path tools = minosHome == null ? null : minosHome.resolve("tools").toAbsolutePath().normalize();
+        Path tools = minosHome == null ? null : minosHome.resolve(TOOLS_DIRECTORY).toAbsolutePath().normalize();
         for (String argument : providerCommand) {
             try {
                 Path candidate = Path.of(argument);
@@ -474,7 +478,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path named;
         try {
             named = Path.of(value);
-        } catch (InvalidPathException notAPath) {
+        } catch (InvalidPathException _) {
             return;
         }
         if (!named.isAbsolute() || !Files.isDirectory(named)) return;
@@ -521,12 +525,12 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     static boolean isPrivateMinosData(Path realRoot, Path minosHome) {
         if (minosHome == null) return false;
         Path home = minosHome.toAbsolutePath().normalize();
-        Path tools = home.resolve("tools");
+        Path tools = home.resolve(TOOLS_DIRECTORY);
         if (Files.exists(home)) {
             try {
                 home = home.toRealPath();
-                tools = home.resolve("tools");
-            } catch (IOException unresolvable) {
+                tools = home.resolve(TOOLS_DIRECTORY);
+            } catch (IOException _) {
                 // The normalized spelling is compared instead; it is never broader.
             }
         }
@@ -536,7 +540,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     /** A root whose mount would expose far more than one toolchain. */
     static boolean isOverBroadToolchainRoot(Path directory, Path minosHome) {
         if (directory.getNameCount() < 2) return true;
-        for (String system : List.of("/etc", "/proc", "/sys", "/dev", "/run")) {
+        for (String system : List.of("/etc", PROC, "/sys", "/dev", "/run")) {
             if (directory.startsWith(system)) return true;
         }
         List<Path> broad = new ArrayList<>();
@@ -552,29 +556,37 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
      */
     private static int addAllowListedLinkTargets(List<String> command, Set<Path> mounted, Path root)
             throws IOException {
-        List<Path> links = toolchainLinks(root);
         int refused = 0;
-        for (Path link : links) {
-            Path target;
-            try {
-                target = link.toRealPath();
-            } catch (IOException dangling) {
-                continue;
-            }
-            if (target.startsWith(root) || mounted.stream().anyMatch(target::startsWith)) continue;
-            if (!isAllowListedLinkTarget(target)) {
-                refused++;
-                continue;
-            }
-            addReadOnlyAt(command, mounted, target, target);
-            // The link resolves inside the sandbox by its literal spelling; when an intermediate link
-            // makes that spelling differ from the real target, the same source is bound there too.
-            Path literal = link.getParent().resolve(Files.readSymbolicLink(link)).toAbsolutePath().normalize();
-            if (!literal.equals(target) && isAllowListedLinkTarget(literal)) {
-                addReadOnlyAt(command, mounted, target, literal);
-            }
+        for (Path link : toolchainLinks(root)) {
+            if (!mountLinkTarget(command, mounted, root, link)) refused++;
         }
         return refused;
+    }
+
+    /**
+     * Mounts the exact target of one toolchain link when it is outward and allow-listed.
+     *
+     * @return false only for an outward target that is refused; a dangling, inward or already
+     *         covered target needs no mount
+     */
+    private static boolean mountLinkTarget(List<String> command, Set<Path> mounted, Path root, Path link)
+            throws IOException {
+        Path target;
+        try {
+            target = link.toRealPath();
+        } catch (IOException _) {
+            return true;
+        }
+        if (target.startsWith(root) || mounted.stream().anyMatch(target::startsWith)) return true;
+        if (!isAllowListedLinkTarget(target)) return false;
+        addReadOnlyAt(command, mounted, target, target);
+        // The link resolves inside the sandbox by its literal spelling; when an intermediate link
+        // makes that spelling differ from the real target, the same source is bound there too.
+        Path literal = link.getParent().resolve(Files.readSymbolicLink(link)).toAbsolutePath().normalize();
+        if (!literal.equals(target) && isAllowListedLinkTarget(literal)) {
+            addReadOnlyAt(command, mounted, target, literal);
+        }
+        return true;
     }
 
     /** The symbolic links of a toolchain root, found without following any link and within fixed bounds. */
@@ -617,7 +629,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         if (mounted.stream().anyMatch(marker::startsWith)) return;
         if (!mounted.add(marker)) return;
         addDestinationParents(command, marker);
-        command.add("--ro-bind");
+        command.add(RO_BIND);
         command.add(source.toString());
         command.add(marker.toString());
     }
@@ -645,7 +657,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         }
         if (!mounted.add(real)) return;
         addDestinationParents(command, destination);
-        command.add("--ro-bind");
+        command.add(RO_BIND);
         command.add(real.toString());
         command.add(destination.toString());
     }
@@ -659,7 +671,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path marker = destination.toAbsolutePath().normalize();
         if (!mounted.add(marker)) return;
         addDestinationParents(command, marker);
-        command.add("--ro-bind");
+        command.add(RO_BIND);
         command.add(realSource.toString());
         command.add(marker.toString());
     }

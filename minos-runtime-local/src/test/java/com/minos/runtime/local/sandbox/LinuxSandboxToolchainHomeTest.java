@@ -121,7 +121,8 @@ class LinuxSandboxToolchainHomeTest {
 
     @Test
     void filesystemRootAsJavaHomeIsRefusedWithoutAPath() {
-        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> plan(Path.of("/")));
+        Path root = Path.of("/");
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> plan(root));
         assertTrue(refused.getMessage().contains("JAVA_HOME"), refused.getMessage());
         assertFalse(refused.getMessage().contains("/"), refused.getMessage());
     }
@@ -161,7 +162,8 @@ class LinuxSandboxToolchainHomeTest {
 
     @Test
     void etcDirectoryAsJavaHomeIsRefused() {
-        assertThrows(IllegalStateException.class, () -> plan(Path.of("/etc/ssl")));
+        Path etcDirectory = Path.of("/etc/ssl");
+        assertThrows(IllegalStateException.class, () -> plan(etcDirectory));
     }
 
     @Test
