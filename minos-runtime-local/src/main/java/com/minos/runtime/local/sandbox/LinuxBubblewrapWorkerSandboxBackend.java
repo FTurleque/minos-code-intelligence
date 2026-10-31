@@ -635,7 +635,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         return "java".equals(name) || name.startsWith("java-") || JAVA_VERSIONED_DIRECTORY.matcher(name).matches();
     }
 
-    private static final Pattern JAVA_VERSIONED_DIRECTORY = Pattern.compile("java[0-9]+(-[A-Za-z0-9._-]+)?");
+    private static final Pattern JAVA_VERSIONED_DIRECTORY = Pattern.compile("java\\d+(-[A-Za-z0-9._-]+)?");
 
     /** Binds {@code source} read-only at {@code destination} once, unless a mounted root already covers it. */
     private static void addReadOnlyAt(List<String> command, Set<Path> mounted, Path source, Path destination) {
