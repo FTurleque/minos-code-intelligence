@@ -106,6 +106,26 @@ minos.cmd doctor
 minos.cmd index <project> --dry-run
 ```
 
+## Linux : JDK et Maven de `scip-java` dans le bac à sable
+
+Sous Linux, `scip-java` s'exécute dans le bac à sable bubblewrap avec un egress `DENY`. Le bac à sable ne voit que `/usr`, `/bin`, `/lib`, `/lib64`, `/sbin`, les outils gérés de `MINOS_HOME/tools`, le projet et le run. Il ajoute, en lecture seule :
+
+- **le JDK désigné par `JAVA_HOME`** (ou `JDK_HOME`), entier, où qu'il soit : JDK de paquet (`apt install openjdk-21-jdk`, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`) ou JDK autonome extrait dans le profil (Temurin, archive) ;
+- **la configuration Java de `/etc` que ce JDK lie**, fichier par fichier, et seulement sous `/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java` ou `/etc/pki/ca-trust/extracted`. `/etc` n'est jamais monté en entier ; un lien du JDK vers un autre emplacement n'est pas suivi et le journal le signale (« did not mount … link target(s) of JAVA_HOME »).
+
+`JAVA_HOME` doit désigner **le répertoire du JDK lui-même**. Une valeur trop large (`/`, `/opt`, `/home`, le répertoire personnel, `MINOS_HOME`, un répertoire sous `/etc`, `/proc`, `/sys`, `/dev` ou `/run`) est refusée avant le lancement : « JAVA_HOME names a directory too broad to mount in the Linux sandbox ».
+
+Vérifier :
+
+```bash
+echo "$JAVA_HOME"
+"$JAVA_HOME/bin/javac" -version
+```
+
+**Maven** est cherché dans le `PATH` du provider, et le bac à sable n'en monte que ce qui est sous `/usr` : installer une **archive Apache Maven sous `/usr`** (par exemple `/usr/local/apache-maven-3.9.x`, avec un lien `/usr/local/bin/mvn`). Le paquet `apt install maven` n'est **pas pris en charge** : il lie sa configuration vers `/etc/maven`, que le bac à sable ne monte pas, et un Maven installé hors de `/usr` (profil, `/opt`) n'y est pas visible.
+
+**Limite actuelle** : sous Linux natif, l'indexation d'un projet Maven par `scip-java` échoue encore à la résolution des greffons Maven (`Plugin org.apache.maven.plugins:maven-clean-plugin:… could not be resolved`). L'egress est `DENY` et le bac à sable ne montre aucun dépôt Maven local (`~/.m2` n'y est pas visible) : le build ne peut ni télécharger ni retrouver ses greffons. Un JDK correct fait passer le lancement de la JVM et de Maven, pas cette étape.
+
 ## Windows : « cannot grant AppContainer read access … without administrator privileges »
 
 **MINOS n'exige jamais de droits administrateur pour indexer** : ni pour installer, ni pour lancer, ni pour utiliser le MCP natif, ni pour indexer avec `scip-java` ou un autre provider — y compris en développement, lancé depuis IntelliJ avec un JDK installé sous `Program Files`.
