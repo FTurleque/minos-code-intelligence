@@ -35,6 +35,20 @@ def runtimes() -> list[tuple[str, str]]:
     return found
 
 
+def readable_by_users(folder: Path) -> None:
+    """Gives the secret folder an inheritable ACL that every local user can read, as a shared data volume has.
+
+    Without it, the folder lives under a temporary directory created with a non-inheritable ACL, and a file
+    created there carries the default ACL of the process token: under an elevated runner account that list
+    keeps entries the restriction does not remove, and the script rightly refuses it. The secret file
+    restriction itself is tested by test_secret_file_acl.py.
+    """
+    folder.mkdir(parents=True)
+    icacls = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "icacls.exe"
+    subprocess.run([str(icacls), str(folder), "/grant", "*S-1-5-32-545:(OI)(CI)R"],
+                   capture_output=True, text=True, timeout=60, check=True)
+
+
 def run_script(executable: str, work: Path, arguments: list[str]) -> tuple[dict[str, str], dict]:
     """Runs the script on an empty data folder; returns the written properties and the installer state."""
     native_home = work / "data"
@@ -80,6 +94,7 @@ class RuntimeSettingsStorageTest(unittest.TestCase):
         def check(executable, work):
             password = work / "password.txt"
             password.write_text("fixture-value\n", encoding="utf-8")
+            readable_by_users(work / "data" / "secrets")
             properties, state = run_script(executable, work, [
                 "-StorageBackend", "postgresql", "-McpBackend", "native",
                 "-PostgresUrl", "jdbc:postgresql://127.0.0.1:5432/minos", "-PostgresUser", "minos",
