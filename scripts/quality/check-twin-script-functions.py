@@ -66,6 +66,9 @@ TWINS = (
     # Ceiling overrides kept across a restart of the Docker MCP runtime.
     ("Test-CeilingOverride", ("docker/scripts/mcp-lifecycle.ps1", "docker/scripts/prod-mcp.ps1")),
     ("Get-PreservedCeilingOverrides", ("docker/scripts/mcp-lifecycle.ps1", "docker/scripts/prod-mcp.ps1")),
+    # Docker projects root refusal: the ZIP install refuses before extracting the package, which ships the switcher.
+    ("Get-UnsafeDockerProjectsRootReason", ("scripts/install/install-windows.ps1",
+                                            "scripts/install/switch-mcp-backend.ps1")),
     # MCP client detection and configuration, both shipped.
     ("Get-UserFolderPath", ("scripts/install/configure-mcp-clients.ps1", "scripts/install/detect-mcp-clients.ps1")),
     # Installer progress protocol, written by each configuration script the installer runs with -ProgressPath.
