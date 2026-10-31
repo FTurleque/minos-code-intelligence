@@ -91,10 +91,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     // interpreter and the script are ordinary, sandbox-grantable paths under MINOS_HOME/tools.
     /**
      * What a Windows installation reports until the scip-java chain is run end to end under the AppContainer sandbox.
-     * The chain has only been run outside it: capability honesty forbids calling it ready.
+     * The chain has only been run outside it: capability honesty forbids calling it ready. No other runtime takes over:
+     * the Docker administration plane launches no provider, so the message names no alternative.
      */
     static final String SANDBOXED_EXECUTION_NOT_QUALIFIED = "scip-java execution under the Windows AppContainer sandbox "
-            + "is not qualified; index Java projects with the Docker runtime (docs/user/docker-runtime.md)";
+            + "is not qualified; MINOS has no supported way to index Java projects from a Windows host "
+            + "(docs/user/troubleshooting.md)";
 
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
     private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";

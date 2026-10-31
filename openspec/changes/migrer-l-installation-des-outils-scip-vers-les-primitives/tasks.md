@@ -19,7 +19,7 @@ Ordre dans chaque section : rouge, correction, preuve. Chaque tâche retire ses 
 
 ## 4. Mesures et gates (AUD-SEC-03)
 
-- [ ] 4.1 [AUD-SEC-03] **(manuelle)** D5 : (a) durée de `replace` d'une archive Node et de `moveDirectory` d'un arbre `node_modules` sous Windows, antivirus actif ; (b) installation puis indexation réelle d'un projet Java par `scip-java` sous Windows (AppContainer) et sous Linux (bubblewrap) ; consigner dans `design.md` et décider selon le seuil.
+- [ ] 4.1 [AUD-SEC-03] **(manuelle)** D5 : (a) durée de `replace` d'une archive Node et de `moveDirectory` d'un arbre `node_modules` sous Windows, antivirus actif ; (b) installation puis indexation réelle d'un projet Java par `scip-java` sous Windows (AppContainer) et sous Linux (bubblewrap) ; consigner dans `design.md` et décider selon le seuil. **Partie (b) sous Windows sans objet (2026-10-31)** : scip-java y est `BLOCKED` avant tout lancement et aucune voie n'indexe un projet Java depuis Windows ([ADR SEC-0074](../../../docs/architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)). Restent (a) et (b) sous Linux.
 - [x] 4.2 [AUD-SEC-03] Rejouer `python scripts/architecture/test_check_private_io.py -v`, `python scripts/remediation/check-mnd.py`, `check-mne.py`, `check-post-mne.py`, `check-p0-p2.py`, `python .claude/scripts/run_gates.py --fast`.
 - [x] 4.3 [AUD-SEC-03] `./mvnw -B -ntp -pl minos-provider-scip -am verify` puis `python scripts/quality/check-jacoco.py` (scope `m24-polyglot-provider-platform`, comparé à `develop` sous Windows ; scope `global`) ; aucun plancher abaissé. **Preuve de CI : `check-jacoco.py` exécuté sur `Verify (ubuntu-24.04)`, tous les scopes PASS, aucun plancher abaissé (run 39165629467, PR #510 ; `Verify` vert sur chaque PR de la série).**
 
