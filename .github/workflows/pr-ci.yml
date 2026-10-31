@@ -105,6 +105,9 @@ jobs:
       - name: Installation secret file tests (declared skipped here, executed on Windows in the verify job)
         run: python scripts/install/test_secret_file_acl.py -v
 
+      - name: Installation storage selection tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_runtime_settings_storage.py -v
+
       - name: Development launcher tests (declared skipped here, executed on Windows in the verify job)
         run: python scripts/install/test_dev_launcher.py -v
 
@@ -401,6 +404,9 @@ jobs:
         shell: pwsh
         run: |
           python scripts/install/test_secret_file_acl.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The native MINOS home of an installation with PostgreSQL managed by Docker keeps local storage.
+          python scripts/install/test_runtime_settings_storage.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/install/test_dev_launcher.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
