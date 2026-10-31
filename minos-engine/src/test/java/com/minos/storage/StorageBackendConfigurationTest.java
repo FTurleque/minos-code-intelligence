@@ -16,6 +16,65 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class StorageBackendConfigurationTest {
+    private static final String MANAGED_LOOPBACK_URL = "jdbc:postgresql://127.0.0.1:5432/minos";
+    private static final Path HOME = Path.of("target/test-minos-home");
+
+    /**
+     * The native MINOS home written by a 1.3.0 installation with PostgreSQL managed by Docker: the managed backend
+     * is selected but its connection settings live only in the Docker data folder.
+     */
+    private static Properties managedPostgresqlWithoutUrl() {
+        Properties file = new Properties();
+        file.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
+        file.setProperty(StorageBackendConfiguration.POSTGRES_MANAGED_PROPERTY, "true");
+        return file;
+    }
+
+    @Test
+    void aManagedPostgresqlWithoutUrlIsRefusedOutsideDockerWithTheRemedy() {
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(
+                HOME, managedPostgresqlWithoutUrl(), Map.of(), new Properties());
+
+        IOException refusal = assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
+
+        assertTrue(refusal.getMessage().contains("MINOS_RUNTIME_LOCATION=docker"), refusal.getMessage());
+        assertTrue(refusal.getMessage().contains("minos.storage.backend=local"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(HOME.toAbsolutePath().toString()), "no absolute path");
+    }
+
+    @Test
+    void theSameConfigurationIsResolvedInsideDocker() throws IOException {
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(
+                HOME, managedPostgresqlWithoutUrl(), Map.of("MINOS_RUNTIME_LOCATION", "docker"), new Properties());
+
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(settings);
+
+        assertTrue(value.postgresql());
+        assertTrue(value.postgresManaged());
+    }
+
+    @Test
+    void aManagedPostgresqlWithAUrlIsResolvedOutsideDocker() throws IOException {
+        Properties file = managedPostgresqlWithoutUrl();
+        file.setProperty(StorageBackendConfiguration.POSTGRES_URL_PROPERTY, MANAGED_LOOPBACK_URL);
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(HOME, file, Map.of(), new Properties());
+
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(settings);
+
+        assertTrue(value.postgresManaged());
+        assertEquals(MANAGED_LOOPBACK_URL, value.postgresUrl());
+    }
+
+    @Test
+    void anUnknownRuntimeLocationIsRefusedForAManagedPostgresqlWithoutUrl() {
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(
+                HOME, managedPostgresqlWithoutUrl(), Map.of("MINOS_RUNTIME_LOCATION", "podman"), new Properties());
+
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                () -> StorageBackendConfiguration.resolve(settings));
+
+        assertTrue(refusal.getMessage().contains("podman"), refusal.getMessage());
+    }
 
     @Test
     void defaultsToHistoricalLocalBackend() throws IOException {
@@ -50,7 +109,7 @@ class StorageBackendConfigurationTest {
                 value.safeDescription());
     }
 
-    /** MINOS-AUD-B13 : le diagnostic ajoutait une seconde paire de crochets à un hôte qui en porte déjà (`[[::1]]`). */
+    /** The diagnostic never adds a second pair of brackets to a host that already has them (`[[::1]]`). */
     @Test
     void anIpv6HostCarriesASinglePairOfBracketsInTheDiagnostics() throws IOException {
         assertEquals("jdbc:postgresql://[::1]:5432/minos",
@@ -110,6 +169,7 @@ class StorageBackendConfigurationTest {
         Properties properties = new Properties();
         properties.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
         properties.setProperty(StorageBackendConfiguration.POSTGRES_MANAGED_PROPERTY, "true");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_URL_PROPERTY, MANAGED_LOOPBACK_URL);
         StorageBackendConfiguration value = StorageBackendConfiguration.resolve(
                 Path.of("target/test-minos-home"), Map.of(), properties);
         assertTrue(value.postgresManaged());
@@ -137,9 +197,9 @@ class StorageBackendConfigurationTest {
     }
 
     /**
-     * MINOS-AUD-B08 : un minos.properties enregistre par Windows PowerShell 5.1 (Out-File -Encoding utf8) commence par un
-     * BOM. La premiere propriete etait perdue sans erreur : minos.storage.backend=postgresql basculait sur le stockage
-     * local. Les octets EF BB BF sont ecrits explicitement.
+     * A minos.properties saved by Windows PowerShell 5.1 (Out-File -Encoding utf8) starts with a byte order mark,
+     * which must not hide the first property: minos.storage.backend=postgresql must not turn into local storage.
+     * The bytes EF BB BF are written explicitly.
      */
     @Test
     void aSettingsFileWithALeadingByteOrderMarkStillSelectsPostgresql() throws IOException {
@@ -148,7 +208,8 @@ class StorageBackendConfigurationTest {
         Files.createDirectories(config.getParent());
         byte[] bom = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
         byte[] body = (StorageBackendConfiguration.BACKEND_PROPERTY + "=postgresql\r\n"
-                + StorageBackendConfiguration.POSTGRES_MANAGED_PROPERTY + "=true\r\n")
+                + StorageBackendConfiguration.POSTGRES_MANAGED_PROPERTY + "=true\r\n"
+                + StorageBackendConfiguration.POSTGRES_URL_PROPERTY + "=" + MANAGED_LOOPBACK_URL + "\r\n")
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8);
         byte[] content = new byte[bom.length + body.length];
         System.arraycopy(bom, 0, content, 0, bom.length);

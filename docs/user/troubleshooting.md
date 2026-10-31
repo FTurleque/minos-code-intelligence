@@ -370,6 +370,14 @@ Cause : le `MINOS_HOME` a été configuré pour le backend Docker (l'installatio
 
 Remède : utiliser la recherche sémantique par le backend Docker, ou, pour un usage natif, fixer `minos.semantic.endpoint` (ou `MINOS_SEMANTIC_ENDPOINT`) sur un endpoint de bouclage, par exemple `http://127.0.0.1:11434/api/embed`. Les autres commandes ne sont pas concernées. Détail : `docs/user/docker-runtime.md`, « `minos-ollama` : réservé au runtime Docker ».
 
+## La commande native refuse un PostgreSQL géré par Docker
+
+Symptôme : toute commande `minos` native sort en code 1 sur `error: MINOS bootstrap failed: managed PostgreSQL storage is reachable only from the MINOS Docker runtime (MINOS_RUNTIME_LOCATION=docker) …`.
+
+Cause : le `MINOS_HOME` natif sélectionne un PostgreSQL géré par Docker sans paramètre de connexion (configuration écrite par l'installeur 1.3.0 avec le backend MCP Docker et PostgreSQL). Ce PostgreSQL n'est joignable que depuis le runtime Docker ; MINOS refuse plutôt que de basculer en silence sur un autre stockage.
+
+Remède : relancer l'installateur MINOS, qui écrit `minos.storage.backend=local` dans le dossier natif ; ou, à la main, remplacer `minos.storage.backend=postgresql` par `minos.storage.backend=local` et retirer `minos.postgres.managed` dans `config\minos.properties` du dossier natif. Les projets et index du runtime Docker s'administrent par `minos-admin`. Détail : [Deux `MINOS_HOME` : natif et Docker](docker-runtime.md#deux-minos_home--natif-et-docker).
+
 ## `impact` retourne des limitations
 
 Normal : l’impact est volontairement conservateur et décrit une estimation du graphe observé, pas une preuve d’exhaustivité runtime.

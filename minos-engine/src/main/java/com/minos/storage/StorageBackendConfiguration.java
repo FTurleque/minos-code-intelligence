@@ -1,5 +1,7 @@
 package com.minos.storage;
 
+import com.minos.domain.registry.ProjectPathMapping;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -77,7 +79,7 @@ public record StorageBackendConfiguration(
                 POSTGRES_PASSWORD_FILE_PROPERTY,
                 POSTGRES_PASSWORD_FILE_ENV
         );
-        return new StorageBackendConfiguration(
+        StorageBackendConfiguration configuration = new StorageBackendConfiguration(
                 backend,
                 settings.home(),
                 settings.value(POSTGRES_URL_PROPERTY, POSTGRES_URL_ENV),
@@ -86,6 +88,28 @@ public record StorageBackendConfiguration(
                 settings.value(POSTGRES_SCHEMA_PROPERTY, POSTGRES_SCHEMA_ENV),
                 parseBoolean(settings.value(POSTGRES_MANAGED_PROPERTY, POSTGRES_MANAGED_ENV), "PostgreSQL managed flag")
         );
+        requireManagedPostgresqlReachable(configuration, settings);
+        return configuration;
+    }
+
+    /**
+     * A managed PostgreSQL without connection settings is the one the installer runs inside the MINOS Docker
+     * runtime: its URL names a host of the managed Docker network and lives only in the Docker data folder. A
+     * native launcher cannot reach it, so it is refused with the remedy instead of failing later on a missing
+     * URL. It never falls back to local storage, which would silently hide the PostgreSQL index.
+     */
+    private static void requireManagedPostgresqlReachable(
+            StorageBackendConfiguration configuration,
+            MinosRuntimeSettings settings
+    ) throws IOException {
+        if (!configuration.postgresql() || !configuration.postgresManaged()) return;
+        String url = configuration.postgresUrl();
+        if (url != null && !url.isBlank()) return;
+        if (settings.runtimeLocation() == ProjectPathMapping.RuntimeLocation.DOCKER) return;
+        throw new IOException("managed PostgreSQL storage is reachable only from the MINOS Docker runtime "
+                + "(MINOS_RUNTIME_LOCATION=docker) and this launcher has no PostgreSQL connection settings; "
+                + "use the Docker MCP backend, or set minos.storage.backend=local in config/minos.properties "
+                + "of this MINOS home (or rerun the MINOS installer) to use local storage");
     }
 
     public boolean postgresql() {
