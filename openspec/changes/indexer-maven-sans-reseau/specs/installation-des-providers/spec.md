@@ -27,7 +27,7 @@ Hors Windows, le plan SHALL être refusé avant toute copie du projet sans dép�
 - **THEN** il est refusé sans chemin absolu dans le message
 
 ### Requirement: Une désignation qui n'a pas la forme d'un dépôt Maven est refusée
-Le plan SHALL refuser une désignation dont la racine contient `settings.xml`, `settings-security.xml`, `toolchains.xml`, un dossier caché (`.ssh`, `.m2`, `.config`…) ou un fichier ordinaire hors d'une liste fermée de métadonnées Maven, ou qui est située sous `MINOS_HOME`. Le message MUST NOT contenir de chemin absolu.
+Le plan SHALL refuser une désignation dont la racine contient `settings.xml`, `settings-security.xml`, `toolchains.xml`, un dossier caché (`.ssh`, `.m2`, `.config`…) ou un fichier ordinaire hors d'une liste fermée de métadonnées Maven, ou qui est nommée `.m2` ou située sous `MINOS_HOME` ou `/run`. Le message MUST NOT contenir de chemin absolu.
 
 #### Scenario: Désignation qui contient les réglages de l'utilisateur
 - **GIVEN** sous Linux, un dépôt désigné qui contient `settings.xml` à sa racine
@@ -72,3 +72,16 @@ Hors Windows, le plan scip-java SHALL masquer `conf/settings.xml` et `conf/toolc
 - **GIVEN** sous Linux, un Maven 4.0.0 dans le `PATH`
 - **WHEN** le plan scip-java est construit
 - **THEN** il est refusé avant tout lancement, le message nomme la plage 3.9.x et aucun espace de travail n'est créé
+
+### Requirement: Sous Linux, scip-java n'est prêt que s'il peut construire hors ligne
+Sous Linux, l'état de scip-java SHALL être `BLOCKED`, avec un diagnostic de prérequis machine actionnable, quand aucun `mvn` 3.9.x n'est trouvé dans le `PATH` sous une racine montée par le bac à sable, ou quand le dépôt désigné est absent ou refusé. La version MUST être lue sur disque, sans exécuter Maven.
+
+#### Scenario: Maven trop ancien
+- **GIVEN** sous Linux, un `mvn` dans le `PATH` dont l'installation porte `lib/maven-core-3.8.8.jar`
+- **WHEN** `minos doctor` inspecte scip-java
+- **THEN** l'état est `BLOCKED`, un diagnostic nomme la plage 3.9.x, et `mvn` n'est pas exécuté
+
+#### Scenario: Prérequis réunis
+- **GIVEN** sous Linux, classpath installé, JDK du projet, Maven 3.9.x sous `/usr` et dépôt désigné valide
+- **WHEN** `minos doctor` inspecte scip-java
+- **THEN** l'état est `READY`

@@ -26,9 +26,14 @@ HEAD `8c3d4615` (`develop`, 2026-10-31). L'ADR SEC-0074 est cité dans sa versio
 | Aucun `~/.m2` monté ; sous Linux `HOME` n'est pas hérité (seule la liste Windows le contient), `MAVEN_ARGS` et `MAVEN_OPTS` non plus | `minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProviderProcessEnvironment.java:21-42`, `:54` | confirmé |
 | `IndexerProcessPlan` = commande, répertoire, environnement, artefact, délai ; aucune racine de lecture | `minos-runtime-local/src/main/java/com/minos/runtime/local/process/IndexerProcessPlan.java:12-18` | confirmé |
 | Le Maven de l'hôte installé sous `/usr/local` est lisible du bac à sable, son `conf/settings.xml` (réglages globaux) aussi | conséquence de `:377-379` (`/usr` monté entier) | déduit, non mesuré |
+| Sous Linux, scip-java est `READY` dès que Coursier, le classpath et un JDK à `javac` sont là : aucun contrôle de Maven ni du dépôt local ; le Maven géré n'est exigé que sous Windows | `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java:228-245` | confirmé |
+| Les fichiers Compose posent `MAVEN_OPTS=-Dmaven.repo.local=…` sur le conteneur d'administration, que la documentation présente comme confinement de Maven ; la valeur n'atteint aucun provider (`MAVEN_OPTS` hors liste d'autorisation, et ce plan ne lance aucun provider) | `docker/compose-mcp.prod.yaml:87`, `docker/compose-mcp.connected.yaml:121`, `docs/user/docker-runtime.md:152-156` | confirmé |
+| La documentation d'installation affirme que, sans réseau, greffons et dépendances « doivent déjà être dans `~/.m2` » : faux sous Linux (aucun `~/.m2` visible du bac à sable), sans objet sous Windows (`BLOCKED`) | `docs/user/production-installation.md:109` | confirmé |
+| `minos-provider-scip` nomme déjà `IndexerProcessPlan` (4 fichiers comptés par la règle A10) | `scripts/architecture/check-module-boundaries.py:642` | confirmé |
+| Maven 3.9 (`DefaultRepositorySystemSessionFactory`, branche `maven-3.9.x`) : `maven.repo.local.tail` chaîne des dépôts locaux de queue en lecture, les écritures vont au dépôt de tête ; `maven.repo.local.tail.ignoreAvailability` vaut `true` par défaut ; `MAVEN_ARGS` est préfixé à la ligne de commande par le lanceur `mvn` | source de Maven, relevé de la PR #629 | confirmé par lecture de la source, non exécuté |
 | Sous Windows natif, scip-java est `BLOCKED` et le runtime Docker ne lance aucun provider | ADR SEC-0074, décisions 1 et Context (PR #626) | confirmé (texte de l'ADR) |
 
-Non mesuré au HEAD : la valeur de `user.home` vue par Maven dans le bac à sable (sans `HOME` ni `/etc/passwd`), donc l'emplacement du dépôt local qu'il tente d'utiliser ; le comportement de Maven 3.9.16 avec `-Dmaven.repo.local.tail` sur un dépôt monté en lecture seule ; les besoins réseau propres à scip-java pendant le build (greffon `semanticdb-javac`).
+Non mesuré au HEAD : la valeur de `user.home` vue par Maven dans le bac à sable (sans `HOME` ni `/etc/passwd`), donc l'emplacement du dépôt local qu'il tente d'utiliser ; le comportement réel de Maven 3.9.16 avec `-Dmaven.repo.local.tail` sur un dépôt monté en lecture seule ; ce que scip-java fait des arguments placés après `--` et de `MAVEN_ARGS` ; les besoins réseau propres à scip-java pendant le build (greffon `semanticdb-javac`).
 
 ### Écart avec l'énoncé de la tâche
 
@@ -57,7 +62,7 @@ clean verify -DskipTests
 - **Code du dépôt exécuté** : les plugins et extensions déjà présents dans le dépôt désigné, sous le bac à sable, sans réseau ; `.mvn/maven.config` peut ajouter des options mais ni ouvrir le réseau ni écrire le dépôt désigné. Aucune empreinte : un artefact altéré du dépôt est exécuté, avec les mêmes bornes que le reste du build.
 - **Complétude** : partielle. Un artefact absent fait échouer le build hors ligne. Peupler le dépôt revient à l'utilisateur, et la façon naturelle de le faire (`mvn dependency:go-offline` dans le projet) charge `.mvn/extensions.xml` et `.mvn/jvm.config` **sur l'hôte, avec réseau et secrets** : le confinement serait vidé par son mode d'emploi. La documentation interdit donc de lancer Maven dans un projet non fiable pour peupler le dépôt et donne une procédure sûre : `mvn dependency:get -Dartifact=…` depuis un dossier vide, coordonnées lues dans le POM, ou dépôt dédié peuplé par un projet de confiance.
 - **Linux** : qualifiable (bind en lecture seule de bubblewrap). **WSL2** : même mécanisme ; un dépôt Windows sous `/mnt/c/Users/<compte>/.m2/repository` est un sous-dossier du profil monté seul, jamais le profil ; propriétaire et performances DrvFs à mesurer. **Windows natif** : sans objet tant que scip-java est `BLOCKED` ; l'AppContainer refuse un plan qui déclare des racines de lecture (aucun octroi nouveau, ADR SEC-0074 décision 4). **Docker** : sans objet.
-- **Coût** : une composante de plan, un montage, un réglage, un fichier écrit dans le run ; aucune dépendance nouvelle.
+- **Coût** : une composante de plan, un montage, un réglage, un fichier écrit dans le run ; aucune dépendance nouvelle. Maven 3.9.0 au minimum (`maven.repo.local.tail`).
 
 ### B. Phase de résolution de confiance avec réseau, puis indexation `DENY`
 
@@ -97,7 +102,7 @@ Seule option qui garde `DENY`, n'ajoute ni téléchargement ni dépendance, et r
 
 `IndexerProcessPlan` reçoit une composante `readOnlyRoots` (liste de répertoires absolus, vide par défaut, constructeur existant conservé) et une méthode de copie (`withCommand(…)`) qui la conserve ; chaque transformateur relevé au HEAD passe par elle, et un test ou un gate vérifie qu'aucun site principal ne reconstruit un plan à racines sans les propager. Juste avant de construire sa commande, le backend Linux revérifie chaque racine (chemin réel égal au chemin normalisé, composants possédés par l'utilisateur ou root et non inscriptibles par d'autres, aucun chevauchement — égalité, ancêtre ou descendance — avec workspace, artefact, run ou projet source) puis la monte par `--ro-bind` après les montages système et inscriptibles. Reste un TOCTOU limité au même compte. `WindowsAppContainerWorkerSandboxBackend`, `WindowsJobObjectProcessOwnership` et un exécuteur sans bac à sable OS refusent un plan dont la liste n'est pas vide, avant tout lancement. Le mécanisme générique sert aussi plus tard à d'autres providers (Gradle, NuGet), chacun par décision propre.
 
-Direction des dépendances (ADR 0068) : `minos-provider-scip` (adaptateur) remplit une composante d'un type exporté de `minos-runtime-local` (`process`, liste A10) ; `minos-bootstrap` lit le réglage et le passe au constructeur de la factory. Aucun sens nouveau, aucun package nouveau.
+Direction des dépendances (ADR 0068) : `minos-provider-scip` (adaptateur) remplit une composante d'un type exporté de `minos-runtime-local` (`process`, liste A10), qu'il nomme déjà dans 4 fichiers (`check-module-boundaries.py:642`) ; aucun fichier nouveau ne doit le nommer, sinon le compte de la règle A10 est à revoir. `minos-bootstrap` lit le réglage et le passe au constructeur de la factory. Aucun sens nouveau, aucun package nouveau, aucune dépendance Maven ajoutée.
 
 ### D3. Désignation explicite, sans défaut (décision 2)
 
@@ -105,16 +110,25 @@ Le réglage `minos.scip.java.maven-repository` (nom à confirmer) n'a pas de val
 
 - chemin relatif, inexistant, non répertoire, lien ;
 - désignation égale à, ou ancêtre de : le dossier personnel, `/mnt/<lecteur>/Users/<compte>` (profil Windows vu de WSL), `/etc`, `/proc`, `/sys`, `/dev`, `/root`, `MINOS_HOME` (donc `/`, `/home`, `/mnt`, `/mnt/c`, `/mnt/c/Users`) ;
-- désignation sous `MINOS_HOME` ;
+- désignation sous `MINOS_HOME` ou sous `/run`, ou répertoire nommé `.m2` ;
 - forme qui n'est pas celle d'un dépôt Maven : à la racine, `settings.xml`, `settings-security.xml`, `toolchains.xml`, un dossier caché, ou un fichier ordinaire hors d'une liste fermée de métadonnées Maven.
 
 Le contrôle de forme (positif) couvre ce que la liste d'ancêtres ne voit pas (`/home/<autre>`, `~/.config`). Les messages, `doctor`, `tools verify` et les journaux nomment le réglage et son état, jamais le chemin.
 
 ### D4. Ligne Maven fixe et réglages neutralisés
 
-Arguments de D1 ajoutés après `--`, pour les deux branches du plan Linux (classpath installé et lanceur du `PATH`) ; `-Dmaven.repo.local.tail.ignoreAvailability=true` si la mesure montre qu'un artefact du dépôt désigné est jugé indisponible faute du même identifiant de dépôt distant. Le `settings.xml` du run a un contenu constant (sans `<localRepository>`, `<offline>`, `<servers>`, `<mirrors>`, `<proxies>`, `<profiles>`), écrit par une primitive privée (`check-private-io.py`) ; le dépôt de tête est créé vide pour le run, refus s'il existe déjà (un dépôt de tête partagé laisserait un build déposer un plugin piégé pour le suivant). Le mode hors ligne n'est pas une garantie de sécurité (le réseau est fermé par le bac à sable) : il rend l'échec immédiat et lisible.
+Arguments de D1 ajoutés après `--`, pour les deux branches du plan Linux (classpath installé et lanceur du `PATH`) . `maven.repo.local.tail.ignoreAvailability` vaut `true` par défaut en Maven 3.9 : un artefact de la queue est accepté quel que soit le dépôt distant qui l'a fourni ; la mesure 1.1 le confirme. Les arguments vont après `--`, mécanisme documenté par scip-java, et restent des éléments de liste (un blanc dans un chemin ne les découpe pas). Replis, dans l'ordre, si la mesure 1.1 montre que scip-java ne les transmet pas tels quels : `MAVEN_ARGS` déclaré par le plan (découpé sur les blancs par le lanceur `mvn` : un chemin du run ou du dépôt qui contient un blanc refuse alors le plan), puis `.mvn/maven.config` de la copie de travail, écrit par MINOS après les options du projet. Le `settings.xml` du run a un contenu constant (sans `<localRepository>`, `<offline>`, `<servers>`, `<mirrors>`, `<proxies>`, `<profiles>`), écrit par une primitive privée (`check-private-io.py`) ; le dépôt de tête est créé vide pour le run, refus s'il existe déjà (un dépôt de tête partagé laisserait un build déposer un plugin piégé pour le suivant). Le mode hors ligne n'est pas une garantie de sécurité (le réseau est fermé par le bac à sable) : il rend l'échec immédiat et lisible.
 
 Versions de Maven : `maven.repo.local.tail` existe depuis Maven 3.9 ; Maven 4 déprécie `-gs` et lit `.mvn/settings.xml` (réglages contrôlés par le dépôt). La plage qualifiée est Maven 3.9.x ; une autre version donne un refus actionnable (décision 7). Un Maven installé par `apt` (`/usr/bin/mvn` par `/etc/alternatives`, `conf/` vers `/etc/maven`) ne démarre probablement pas dans le bac à sable, `/etc` n'étant pas monté en `DENY` : échec fail-closed, à mesurer en tâche 1.1.
+
+### D5b. État honnête dans `doctor`
+
+Sous Linux, `inspectJavaInstalled` ajoute deux diagnostics `ExternalPrerequisite`, donc `BLOCKED` :
+
+- aucun `mvn` dans le `PATH` sous une racine que monte le bac à sable (`/usr`, `/bin`…), ou version hors de la plage 3.9.x ; la version est lue sur disque (`lib/maven-core-<version>.jar` de l'installation réelle), sans exécuter Maven ;
+- dépôt désigné absent ou refusé (D3) ; le diagnostic nomme le réglage et renvoie à la procédure de peuplement sûre (A, « Complétude »), jamais à un `mvn` lancé dans le projet.
+
+Un dépôt présent mais incomplet n'est pas détectable sans construire le modèle du projet : l'échec reste celui du build hors ligne (code de sortie, journal du run). La sortie d'erreur du provider n'est pas analysée (texte non fiable).
 
 ### D5. ADR
 
@@ -140,6 +154,8 @@ Un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-00
 - Le Maven du `PATH` sous Linux n'est pas vérifié par MINOS (hors périmètre, suite possible : Maven géré, comme sous Windows).
 - Canal de sortie par l'index : tout ce que le bac à sable rend lisible peut finir dans l'artefact SCIP servi par MCP ; déclaré dans l'ADR et la documentation utilisateur.
 - Sur DrvFs (`/mnt/c`), Windows peut modifier les fichiers du dépôt pendant le run (même compte) ; les liens et jonctions Windows du dépôt pointent vers des chemins non montés.
+- Concurrence : deux runs lisent la même queue sans l'écrire ; aucun verrou requis.
+- Suites distinctes : Maven géré sous Linux (version garantie, plus de dépendance au Maven de l'hôte) ; retrait de `MAVEN_OPTS` des fichiers Compose.
 - Suite possible, non retenue : un overlay bubblewrap (dépôt de tête au-dessus du dépôt désigné), `--overlay` arrivant avec bubblewrap 0.10 alors qu'Ubuntu 24.04 livre 0.9.
 
 ## Qualification

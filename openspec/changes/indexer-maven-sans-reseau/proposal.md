@@ -15,6 +15,7 @@ Option A du design, retenue :
 - **Dépôt Maven désigné, monté en lecture seule.** L'utilisateur désigne explicitement un dépôt Maven local (réglage MINOS, aucun défaut). Le bac à sable Linux le monte en lecture seule, ce répertoire exact et lui seul, jamais un ancêtre. Désignation refusée si elle est le dossier personnel, l'un de ses ancêtres, ou un dossier qui contient `settings.xml`, `settings-security.xml` ou `toolchains.xml`.
 - **Maven hors ligne, réglages neutralisés.** Le plan passe à scip-java, après `--`, une ligne Maven fixe : `--batch-mode --offline`, réglages utilisateur et globaux remplacés par un fichier de contenu constant écrit par MINOS dans le run (aucun serveur, miroir ni proxy), dépôt local créé vide pour le run, dépôt désigné en « tail » lecture seule, puis `clean verify -DskipTests`. Les réglages globaux du Maven de l'hôte sont masqués dans le bac à sable ; seul Maven 3.9.x est accepté.
 - **Racines de lecture déclarées par le plan.** `IndexerProcessPlan` porte une liste de racines en lecture seule ; le backend Linux les monte telles quelles ; tout backend qui ne sait pas les honorer (Windows AppContainer, backend natif) refuse le plan avant tout lancement.
+- **État honnête.** Sous Linux, `doctor` rend scip-java `BLOCKED` sans Maven 3.9.x lisible du bac à sable (version lue sur disque, sans exécuter Maven) ou sans dépôt désigné valide.
 - **Refus actionnable.** Sans dépôt désigné, ou dépôt illisible, le plan scip-java d'un projet Maven est refusé avant toute copie du projet, par un message qui nomme le réglage, sans chemin absolu. Un artefact absent du dépôt donne l'échec Maven hors ligne, que la documentation explique.
 - **ADR** : un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-0075` si SEC-0074 est fusionné) fixe la voie retenue pour l'exigence de SEC-0074 décision 3 et confirme `DENY` de SEC-0070 pour scip-java  ; SEC-0074 reste actif. Planifié en tâche 0.2, rien n'est écrit pendant la spécification.
 
@@ -27,7 +28,7 @@ Option A du design, retenue :
 ### Modified Capabilities
 
 - `confinement-code-non-fiable` : racines de lecture déclarées par le plan, montées exactement sous Linux, refusées par les backends qui ne les honorent pas.
-- `installation-des-providers` : plan scip-java Maven hors ligne sur dépôt désigné ; refus avant préparation sans dépôt ; réglages Maven de l'hôte jamais lus.
+- `installation-des-providers` : plan scip-java Maven hors ligne sur dépôt désigné ; refus avant préparation sans dépôt ; réglages Maven de l'hôte jamais lus ; scip-java `BLOCKED` sous Linux sans Maven 3.9.x ni dépôt.
 
 ## Impact
 
@@ -43,3 +44,8 @@ Option A du design, retenue :
 - Le Maven exécuté sous Linux (celui du `PATH`, non vérifié par MINOS) et le JDK du projet sous `/etc` (traité dans une autre session) ; Gradle.
 - Windows natif (scip-java `BLOCKED`, ADR SEC-0074) et runtime Docker (aucun provider) : inchangés.
 - Les workers distribués (ADR SEC-0070 § distribué) : la désignation est locale.
+- Maven géré sous Linux et retrait de `MAVEN_OPTS` des fichiers Compose : suites distinctes.
+
+## Pré-requis
+
+Le changement `monter-le-jdk-du-projet-dans-le-bac-a-sable-linux` (PR #628) : sans JDK du projet visible du bac à sable, Maven ne démarre pas.
