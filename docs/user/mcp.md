@@ -147,7 +147,7 @@ MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 
 Si le mode natif est décoché, la page d'intégration des clients IA est ignorée. Le binaire MCP natif reste installé et peut être configuré manuellement plus tard.
 
-Si le mode Docker est sélectionné, une page séparée demande ensuite la racine des projets à exposer au conteneur.
+Si le mode Docker est sélectionné, une page séparée demande ensuite la racine des projets à exposer au conteneur. Ce dossier est monté en lecture seule dans `minos-mcp` et dans `minos-admin`, qui accède au réseau : choisissez un dossier **dédié à vos projets** (par exemple `%USERPROFILE%\source\repos` ou `N:\workspace-dev`). Le champ est vide à la première installation ; une mise à jour reprend la valeur enregistrée. L'installeur refuse une racine de volume, le profil de l'utilisateur ou l'un de ses parents, et tout dossier qui est, contient ou se trouve dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS. Le paramètre `/DOCKERPROJECTSROOT`, l'installation silencieuse, `install-windows.ps1 -ProjectsRoot` et `switch-mcp-backend.ps1 -ProjectsRoot` appliquent le même refus.
 
 ### Préflight
 

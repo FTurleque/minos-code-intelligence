@@ -1344,7 +1344,7 @@ begin
     'MCP Docker MINOS', 'Configurez les données et projets exposés au runtime Docker',
     'Les projets sont montés en lecture seule. PostgreSQL/Ollama gérés ne publient aucun port réseau sur l''hôte.', False, '');
   DockerProjectsPage.Add('Racine des projets :');
-  DockerProjectsPage.Values[0] := ExpandConstant('{param:DOCKERPROJECTSROOT|' + ReadInstallerValue('ProjectsRoot', ExpandConstant('{%USERPROFILE}')) + '}');
+  DockerProjectsPage.Values[0] := ExpandConstant('{param:DOCKERPROJECTSROOT|' + ReadInstallerValue('ProjectsRoot', '') + '}');
   DockerDataRootLabel := TNewStaticText.Create(DockerProjectsPage);
   DockerDataRootLabel.Parent := DockerProjectsPage.Surface;
   DockerDataRootLabel.Caption := 'Données Docker persistantes :';
@@ -1369,6 +1369,57 @@ begin
   SummaryMemo.Left := 0; SummaryMemo.Top := ScaleY(8);
   SummaryMemo.Width := SummaryPage.SurfaceWidth; SummaryMemo.Height := SummaryPage.SurfaceHeight - ScaleY(16);
   SummaryMemo.ReadOnly := True; SummaryMemo.ScrollBars := ssVertical;
+end;
+
+{ The Docker projects root is bind-mounted into the MINOS containers. The same rule guards
+  switch-mcp-backend.ps1 (Get-UnsafeDockerProjectsRootReason), which also covers silent installs. }
+function ComparableDirectory(Path: String): String;
+begin
+  Result := AnsiLowercase(RemoveBackslash(ExpandFileName(Trim(Path))));
+end;
+
+function IsSameOrInsideDirectory(Child, Parent: String): Boolean;
+var
+  ComparableChild: String;
+  ComparableParent: String;
+begin
+  Result := False;
+  if (Trim(Child) = '') or (Trim(Parent) = '') then exit;
+  ComparableChild := ComparableDirectory(Child);
+  ComparableParent := ComparableDirectory(Parent);
+  Result := (ComparableChild = ComparableParent) or (Pos(ComparableParent + '\', ComparableChild) = 1);
+end;
+
+function UnsafeDockerProjectsRootReason(Path: String): String;
+var
+  Candidate: String;
+  UserProfile: String;
+  InsideTemporary: Boolean;
+  ProtectedRoots: array of String;
+  I: Integer;
+begin
+  Result := '';
+  Candidate := ComparableDirectory(Path);
+  if (Candidate = '') or (Candidate = AnsiLowercase(RemoveBackslash(ExtractFileDrive(Candidate)))) then
+  begin Result := 'une racine de volume'; exit; end;
+  UserProfile := ExpandConstant('{%USERPROFILE}');
+  if (Trim(UserProfile) = '') or IsSameOrInsideDirectory(UserProfile, Path) then
+  begin Result := 'le profil de l''utilisateur ou l''un de ses dossiers parents'; exit; end;
+  InsideTemporary := IsSameOrInsideDirectory(Path, GetTempDir()) and (Candidate <> ComparableDirectory(GetTempDir()));
+  SetArrayLength(ProtectedRoots, 5);
+  ProtectedRoots[0] := ExpandConstant('{localappdata}');
+  ProtectedRoots[1] := ExpandConstant('{userappdata}');
+  ProtectedRoots[2] := WizardDirValue();
+  ProtectedRoots[3] := EffectiveDataRoot();
+  ProtectedRoots[4] := EffectiveDockerDataRoot();
+  for I := 0 to GetArrayLength(ProtectedRoots) - 1 do
+    if ((not (InsideTemporary and IsSameOrInsideDirectory(GetTempDir(), ProtectedRoots[I]))) and
+        IsSameOrInsideDirectory(Path, ProtectedRoots[I])) or
+       IsSameOrInsideDirectory(ProtectedRoots[I], Path) then
+    begin
+      Result := 'un dossier de données d''application ou de MINOS, l''un de ses parents ou l''un de ses sous-dossiers';
+      exit;
+    end;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -1396,6 +1447,7 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   Dimensions: Integer;
+  Reason: String;
 begin
   Result := True;
 
@@ -1456,6 +1508,20 @@ begin
 
   if (CurPageID = DockerProjectsPage.ID) and DockerMcpSelected() then
   begin
+    if Trim(DockerProjectsPage.Values[0]) = '' then
+    begin MsgBox('Choisissez la racine des projets : un dossier dédié à vos projets, monté en lecture seule dans les conteneurs MINOS.', mbError, MB_OK); Result := False; exit; end;
+    if not IsAbsoluteWindowsPath(DockerProjectsPage.Values[0]) then
+    begin MsgBox('Choisissez un chemin absolu pour la racine des projets.', mbError, MB_OK); Result := False; exit; end;
+    Reason := UnsafeDockerProjectsRootReason(DockerProjectsPage.Values[0]);
+    if Reason <> '' then
+    begin
+      MsgBox(
+        'Cette racine des projets est refusée : c''est ' + Reason + '.' + #13#10 + #13#10 +
+        'Elle serait montée dans les conteneurs MINOS, dont l''un accède au réseau. ' +
+        'Choisissez un dossier dédié à vos projets, par exemple un sous-dossier de votre profil hors AppData.',
+        mbError, MB_OK);
+      Result := False; exit;
+    end;
     if not DirExists(DockerProjectsPage.Values[0]) then
     begin MsgBox('La racine des projets n''existe pas. Choisissez un dossier existant.', mbError, MB_OK); Result := False; exit; end;
     if (DockerDataRootEdit.Text = '') or (not IsAbsoluteWindowsPath(DockerDataRootEdit.Text)) then
