@@ -12,7 +12,7 @@ Le bac à sable Windows accorde déjà la lecture de la racine nommée par `JAVA
 ## What Changes
 
 - Le bac à sable Linux monte **en lecture seule** la racine réelle du JDK nommée par `JAVA_HOME` ou `JDK_HOME` dans l'environnement du provider (les mêmes clés que le bac à sable Windows).
-- Il monte aussi, en lecture seule et **fichier par fichier**, la cible exacte de chaque lien symbolique de ce JDK qui sort de ce qui est déjà monté, à la seule condition que cette cible appartienne à une liste fermée de configuration Java de `/etc` (`/etc/java*`, `/etc/ssl/certs`, `/etc/pki/java`, `/etc/pki/ca-trust/extracted`). `/etc` n'est jamais monté en entier ; une cible hors de la liste n'est jamais montée.
+- Il monte aussi, en lecture seule et **fichier par fichier**, la cible exacte de chaque lien symbolique de ce JDK qui sort de ce qui est déjà monté, à la seule condition que cette cible appartienne à une liste fermée de configuration Java de `/etc` (`/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java`, `/etc/pki/ca-trust/extracted`). `/etc` n'est jamais monté en entier ; une cible hors de la liste n'est jamais montée.
 - Une racine trop large (racine du système de fichiers, répertoire de premier niveau, répertoire personnel ou un de ses ancêtres, `MINOS_HOME`, `/etc`, `/proc`, `/sys`, `/dev`, `/run`) est **refusée avant le lancement** par un message actionnable sans chemin absolu.
 - La qualification du backend déclare cette règle (`LINUX_TOOLCHAIN_HOME_READ_ONLY_ROOT_AND_ALLOWLISTED_ETC_LINK_TARGETS`).
 - `docs/user/` décrit les prérequis Linux du JDK et de Maven pour scip-java.

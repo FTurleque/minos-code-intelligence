@@ -120,6 +120,22 @@ class LinuxSandboxToolchainHomeTest {
     }
 
     @Test
+    void onlyJavaConfigurationDirectoriesOfEtcAreAllowListed() {
+        assertTrue(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(
+                Path.of("/etc/java-21-openjdk/security/java.security")));
+        assertTrue(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(Path.of("/etc/java/security")));
+        assertTrue(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(
+                Path.of("/etc/java21-openjdk/security/java.security")));
+        assertTrue(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(
+                Path.of("/etc/ssl/certs/java/cacerts")));
+        assertFalse(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(Path.of("/etc/javascript-x/secret")));
+        assertFalse(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(Path.of("/etc/javaconfig/secret")));
+        assertFalse(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(Path.of("/etc/java-21-openjdk")));
+        assertFalse(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(Path.of("/etc/ssl/certs")));
+        assertFalse(LinuxBubblewrapWorkerSandboxBackend.isAllowListedLinkTarget(Path.of("/etc/ssl/private/key.pem")));
+    }
+
+    @Test
     void filesystemRootAsJavaHomeIsRefusedWithoutAPath() {
         Path root = Path.of("/");
         IllegalStateException refused = assertThrows(IllegalStateException.class, () -> plan(root));

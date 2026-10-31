@@ -14,7 +14,7 @@ Sous Linux, quand l'environnement du provider nomme par `JAVA_HOME` ou `JDK_HOME
 - **THEN** il monte `<tmp>/profil/jdk` en `--ro-bind` et ne monte ni `<tmp>/profil` ni `secret.txt`
 
 ### Requirement: Les liens du JDK ne montent qu'une cible exacte de la configuration Java de /etc
-Sous Linux, pour un lien du JDK nommé dont la cible sort de ce qui est monté, le bac à sable SHALL monter en lecture seule la cible exacte si elle est sous `/etc/java*`, `/etc/ssl/certs`, `/etc/pki/java` ou `/etc/pki/ca-trust/extracted`. Il MUST NOT monter `/etc`, le répertoire de la cible ni une cible hors de cette liste.
+Sous Linux, pour un lien du JDK nommé dont la cible sort de ce qui est monté, le bac à sable SHALL monter en lecture seule la cible exacte si elle est sous `/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java` ou `/etc/pki/ca-trust/extracted`. Il MUST NOT monter `/etc`, le répertoire de la cible ni une cible hors de cette liste.
 
 #### Scenario: Disposition Debian
 - **GIVEN** sous Linux, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` installé par paquet

@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
@@ -479,6 +480,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         try {
             named = Path.of(value);
         } catch (InvalidPathException _) {
+            // A value that is not a path names no toolchain root: nothing to mount, nothing granted.
             return;
         }
         if (!named.isAbsolute() || !Files.isDirectory(named)) return;
@@ -575,6 +577,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         try {
             target = link.toRealPath();
         } catch (IOException _) {
+            // A dangling link resolves to nothing inside the sandbox either: there is nothing to mount.
             return true;
         }
         if (target.startsWith(root) || mounted.stream().anyMatch(target::startsWith)) return true;
@@ -618,10 +621,21 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     static boolean isAllowListedLinkTarget(Path target) {
         Path normalized = target.toAbsolutePath().normalize();
         if (normalized.getNameCount() >= 3 && normalized.startsWith(ETC)
-                && normalized.getName(1).toString().startsWith("java")) return true;
+                && isJavaConfigurationDirectoryName(normalized.getName(1).toString())) return true;
         return ETC_LINK_TARGET_ROOTS.stream()
                 .anyMatch(allowed -> normalized.startsWith(allowed) && !normalized.equals(allowed));
     }
+
+    /**
+     * First-level /etc directory names a JDK package uses for its configuration: {@code java}
+     * (Fedora/RHEL), {@code java-21-openjdk} (Debian/Ubuntu), {@code java21-openjdk} (Arch). A name that
+     * merely starts with "java", such as {@code javascript}, is not one.
+     */
+    static boolean isJavaConfigurationDirectoryName(String name) {
+        return "java".equals(name) || name.startsWith("java-") || JAVA_VERSIONED_DIRECTORY.matcher(name).matches();
+    }
+
+    private static final Pattern JAVA_VERSIONED_DIRECTORY = Pattern.compile("java[0-9]+(-[A-Za-z0-9._-]+)?");
 
     /** Binds {@code source} read-only at {@code destination} once, unless a mounted root already covers it. */
     private static void addReadOnlyAt(List<String> command, Set<Path> mounted, Path source, Path destination) {
