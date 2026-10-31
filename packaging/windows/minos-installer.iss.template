@@ -857,6 +857,28 @@ begin
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot', DockerProjectsPage.Values[0]);
 end;
 
+// configure-runtime-settings.ps1 writes the message of the error that stopped it to the file
+// passed as -FailureLogPath (UTF-8 with BOM). The installer runs it through Exec, which keeps no
+// output, so this file is the only place the cause survives; it goes to the setup log and is
+// returned for the failure message.
+function RuntimeSettingsFailureFile(): String;
+begin
+  Result := ExpandConstant('{tmp}\minos-runtime-settings-failure.txt');
+end;
+
+function ReadRuntimeSettingsFailure(Caller: String): String;
+var
+  Lines: TArrayOfString;
+  Index: Integer;
+begin
+  Result := '';
+  if FileExists(RuntimeSettingsFailureFile()) and LoadStringsFromFile(RuntimeSettingsFailureFile(), Lines) then
+    for Index := 0 to GetArrayLength(Lines) - 1 do
+      Result := Trim(Result + ' ' + Lines[Index]);
+  if Result = '' then Result := 'cause non transmise par le script';
+  Log(Caller + ': configure-runtime-settings.ps1 failed: ' + Result);
+end;
+
 function ConfigureRuntimeSettings(): Boolean;
 var
   ResultCode: Integer;
@@ -912,13 +934,17 @@ begin
       Parameters := Parameters + ' -SemanticEndpoint "' + OllamaEndpointEdit.Text + '"';
   end;
 
+  DeleteFile(RuntimeSettingsFailureFile());
+  Parameters := Parameters + ' -FailureLogPath "' + RuntimeSettingsFailureFile() + '"';
   SetSetupStepState('runtime', 'running', -1);
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     FinishSetupStepGroup('runtime', False);
     MsgBox(
       'La configuration avancée MINOS n''a pas pu être appliquée.' + #13#10 + #13#10 +
-      'Aucun fallback silencieux n''a été utilisé. Consultez le journal de l''installateur.',
+      'Cause : ' + ReadRuntimeSettingsFailure('ConfigureRuntimeSettings') + #13#10 + #13#10 +
+      'Aucun fallback silencieux n''a été utilisé. Journal de l''installateur :' + #13#10 +
+      ExpandConstant('{log}'),
       mbError, MB_OK);
     Result := False;
   end
@@ -954,9 +980,14 @@ begin
     '" -SetupMode ' + SetupMode +
     ' -McpBackend native -McpServerName "' + EffectiveMcpServerName() +
     '" -StorageBackend local -SemanticProvider disabled' +
-    ' -DockerInstanceName "' + DockerInstanceEdit.Text + '"';
+    ' -DockerInstanceName "' + DockerInstanceEdit.Text + '"' +
+    ' -FailureLogPath "' + RuntimeSettingsFailureFile() + '"';
+  DeleteFile(RuntimeSettingsFailureFile());
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    ReadRuntimeSettingsFailure('RevertRuntimeSettingsToLocal');
     Log('RevertRuntimeSettingsToLocal: fallback did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
+  end;
 end;
 
 // The backend-switch log is a plain append-only line log (see switch-mcp-backend.ps1's own
@@ -1041,8 +1072,8 @@ begin
       DiagnosticLine := 'Journal complet : ' + LogPath;
     MsgBox(
       'MINOS Code Intelligence a été installé/mis à jour avec succès.' + #13#10 + #13#10 +
-      'En revanche, la (re)configuration du backend MCP n''a pas abouti : la validation/handshake ' +
-      'a échoué. Cela n''affecte PAS les fichiers du programme, qui sont à jour.' + #13#10 + #13#10 +
+      'En revanche, la (re)configuration du backend MCP n''a pas abouti ; l''étape en échec est ' +
+      'indiquée ci-dessous. Cela n''affecte PAS les fichiers du programme, qui sont à jour.' + #13#10 + #13#10 +
       'Aucun changement silencieux n''a été appliqué : le backend MCP précédemment actif a été ' +
       'conservé ou restauré automatiquement et reste utilisable normalement.' + #13#10 + #13#10 +
       DiagnosticLine + #13#10 + #13#10 +
