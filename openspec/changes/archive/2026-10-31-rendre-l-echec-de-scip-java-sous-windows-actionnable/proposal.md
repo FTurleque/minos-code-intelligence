@@ -16,7 +16,7 @@ Deux lots.
   - l'échec de sortie d'un provider nomme son journal par un chemin relatif à `MINOS_HOME` ;
   - le refus « dépendance non accordable » du bac à sable nomme le fichier par son nom seul ;
   - scip-java sous Windows utilise le PowerShell 5.1 canonique du répertoire système (celui en qui le bac à sable a confiance), jamais un PowerShell trouvé dans le `PATH`.
-- **Lot 2 — exécution réelle sous AppContainer (exige une décision)** : tant que la chaîne n'est pas qualifiée sous le bac à sable, `minos doctor` et `minos providers` ne déclarent plus scip-java `READY` sous Windows et l'indexation refuse avant tout lancement par une erreur d'usage qui nomme l'alternative (runtime Docker). La qualification réelle (runner, shims compilés à l'installation, JVM du projet sous AppContainer) fait l'objet d'un ADR à écrire, car elle touche la frontière du bac à sable.
+- **Lot 2 — exécution réelle sous AppContainer (exige une décision)** : tant que la chaîne n'est pas qualifiée sous le bac à sable, `minos doctor` et `minos providers` ne déclarent plus scip-java `READY` sous Windows et l'indexation refuse avant tout lancement par une erreur d'usage qui dit qu'aucune voie n'indexe un projet Java depuis Windows (le runtime Docker ne lance aucun provider : ADR 0074). La qualification réelle (runner, shims compilés à l'installation, JVM du projet sous AppContainer) fait l'objet d'un ADR à écrire, car elle touche la frontière du bac à sable.
 
 ## Capabilities
 
