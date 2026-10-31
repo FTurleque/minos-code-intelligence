@@ -85,7 +85,7 @@ Reste hors de ce sprint : aligner la construction de ligne de commande du moteur
 
 ## Audit 2026-10-10 — sprint 7 (2026-10-17)
 
-Cinq des six changements du sprint 7 (« sorties publiques : messages, MCP, rendus ») sont **fusionnés dans `develop` et archivés** (PR #485, #487, #488) ; le sixième, `reserver-minos-ollama-au-runtime-docker` (PR #486), est fusionné et reste actif jusqu'à sa preuve manuelle :
+Cinq des six changements du sprint 7 (« sorties publiques : messages, MCP, rendus ») sont **fusionnés dans `develop` et archivés** (PR #485, #487, #488) ; le sixième, `reserver-minos-ollama-au-runtime-docker` (PR #486), est fusionné, prouvé sur une installation Docker réelle le 2026-10-31 et archivé :
 
 - **Chemins absolus dans les erreurs** : `PublicErrorMessages` retire les séquences ANSI complètes avant d'analyser, de sorte qu'un chemin absolu masqué par une séquence est détecté ; les refus de cible des primitives d'E/S privées nomment l'entrée, jamais le chemin. Limite : un chemin POSIX accolé à un identifiant, sans séquence de contrôle, reste non détecté. Une vingtaine de messages de même famille restent à nommer (liste dans le suivi).
 - **MCP** : les arguments hors schéma sont refusés par `MinosMcpTools`, nom borné, jamais la valeur ; `minos_project_structure` ne rend plus que le nom du répertoire racine dans `rootPath` (la CLI lue par le plugin garde le chemin absolu) ; `authorEmail` vaut `[masked]` par défaut, l'adresse réelle n'étant rendue que sur `--include-author-emails` (CLI `git-activity`) ou par le composant `includeAuthorEmails` de la requête Java — **changement de la sortie par défaut** de ces deux surfaces.
