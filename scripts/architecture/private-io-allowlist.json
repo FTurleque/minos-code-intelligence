@@ -63,7 +63,7 @@
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackend.java",
     "method": "LOGGER.log(cause)",
     "max": 1,
-    "justification": "Diagnostic de la sonde bubblewrap (démarrage impossible) : la cause est voulue, la dégradation vers un bac à sable plus faible doit être observable."
+    "justification": "Sonde bubblewrap qui ne démarre pas : cause voulue, le repli vers un bac à sable plus faible doit être visible."
   },
   {
     "file": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsJobObjectProcessOwnership.java",

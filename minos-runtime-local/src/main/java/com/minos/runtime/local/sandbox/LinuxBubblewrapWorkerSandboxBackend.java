@@ -9,7 +9,6 @@ import com.minos.runtime.local.workspace.ProviderWriteQuota;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
@@ -51,7 +50,7 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  * guarantee. Without a delegated cgroup v2 boundary this backend does not exist and untrusted
  * execution is refused before the provider starts.</p>
  */
-public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxBackend {
+public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWorkerSandboxBackend {
 
     private static final System.Logger LOGGER =
             System.getLogger(LinuxBubblewrapWorkerSandboxBackend.class.getName());
@@ -143,16 +142,6 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     @Override
     public String id() {
         return "linux-bubblewrap-cgroup2-v5";
-    }
-
-    @Override
-    public WorkerIsolation isolation() {
-        return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE;
-    }
-
-    @Override
-    public NetworkGuarantee networkGuarantee() {
-        return NetworkGuarantee.OS_ENFORCED;
     }
 
     @Override
@@ -358,6 +347,11 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         command.add(PROC);
         command.add("--");
         command.add("/bin/true");
+        return probeSucceeds(command);
+    }
+
+    /** True when the bounded probe command succeeds; every way it can fail is logged before declining to qualify. */
+    private static boolean probeSucceeds(List<String> command) {
         try {
             Process process = new ProcessBuilder(command)
                     .redirectErrorStream(true)
@@ -432,26 +426,33 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path tools = minosHome == null ? null : minosHome.resolve(TOOLS_DIRECTORY).toAbsolutePath().normalize();
         for (String argument : providerCommand) {
             try {
-                Path candidate = Path.of(argument);
-                if (!candidate.isAbsolute() || !Files.exists(candidate)) continue;
-                Path normalized = candidate.toAbsolutePath().normalize();
-                Path real = candidate.toRealPath();
-                if (mounted.stream().anyMatch(real::startsWith)) continue;
-
-                Path managedRoot = managedRuntimeRoot(normalized, tools);
-                if (managedRoot != null) {
-                    addReadOnlyIfPresent(command, mounted, managedRoot);
-                    continue;
-                }
-                if (Files.isRegularFile(real)) {
-                    addReadOnlyFile(command, mounted, real, normalized);
-                }
-                // Arbitrary directories are deliberately not promoted to read roots. Project,
-                // artifact and run directories are mounted explicitly by sandboxPlan.
-            } catch (RuntimeException ignored) {
+                addProviderArgumentBind(command, mounted, argument, tools);
+            } catch (InvalidPathException _) {
                 // Non-path provider arguments stay opaque.
             }
         }
+    }
+
+    /**
+     * Mounts what one absolute provider argument needs: the exact managed runtime root under
+     * {@code tools}, or the exact regular file it names.
+     */
+    private static void addProviderArgumentBind(List<String> command, Set<Path> mounted, String argument, Path tools)
+            throws IOException {
+        Path candidate = Path.of(argument);
+        if (!candidate.isAbsolute() || !Files.exists(candidate)) return;
+        Path normalized = candidate.toAbsolutePath().normalize();
+        Path real = candidate.toRealPath();
+        if (mounted.stream().anyMatch(real::startsWith)) return;
+
+        Path managedRoot = managedRuntimeRoot(normalized, tools);
+        if (managedRoot != null) {
+            addReadOnlyIfPresent(command, mounted, managedRoot);
+        } else if (Files.isRegularFile(real)) {
+            addReadOnlyFile(command, mounted, real, normalized);
+        }
+        // Arbitrary directories are deliberately not promoted to read roots. Project,
+        // artifact and run directories are mounted explicitly by sandboxPlan.
     }
 
     /**
@@ -475,27 +476,11 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             String value,
             Path minosHome
     ) throws IOException {
-        if (value.isBlank()) return;
-        Path named;
-        try {
-            named = Path.of(value);
-        } catch (InvalidPathException _) {
-            // A value that is not a path names no toolchain root: nothing to mount, nothing granted.
-            return;
-        }
-        if (!named.isAbsolute() || !Files.isDirectory(named)) return;
-        Path normalized = named.toAbsolutePath().normalize();
-        Path real = named.toRealPath();
-        if (isOverBroadToolchainRoot(real, minosHome) || isOverBroadToolchainRoot(normalized, minosHome)) {
-            throw new IllegalStateException(key + " names a directory too broad to mount in the Linux sandbox "
-                    + "(a filesystem root, a top-level or system directory, the home directory or MINOS_HOME); "
-                    + "point " + key + " to the JDK's own directory");
-        }
-        if (!isJdkShaped(real) || isPrivateMinosData(real, minosHome)) {
-            throw new IllegalStateException(key + " does not name a JDK directory the Linux sandbox may mount "
-                    + "(bin/java with a release file or lib/libjli.so, outside MINOS_HOME except its tools); "
-                    + "point " + key + " to the JDK's own directory");
-        }
+        Optional<Path> named = existingAbsoluteDirectory(value);
+        if (named.isEmpty()) return;
+        Path normalized = named.orElseThrow().toAbsolutePath().normalize();
+        Path real = named.orElseThrow().toRealPath();
+        requireMountableToolchainRoot(key, real, normalized, minosHome);
         addReadOnlyAt(command, mounted, real, real);
         if (!normalized.equals(real)) {
             if (Files.isSymbolicLink(normalized)) {
@@ -508,6 +493,36 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         if (refused > 0) {
             LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux sandbox did not mount " + refused
                     + " link target(s) of " + key + " outside the allow-listed Java configuration of /etc");
+        }
+    }
+
+    /** The directory a toolchain variable names, when its value is an absolute path to an existing directory. */
+    private static Optional<Path> existingAbsoluteDirectory(String value) {
+        if (value.isBlank()) return Optional.empty();
+        try {
+            Path named = Path.of(value);
+            return named.isAbsolute() && Files.isDirectory(named) ? Optional.of(named) : Optional.empty();
+        } catch (InvalidPathException _) {
+            // A value that is not a path names no toolchain root: nothing to mount, nothing granted.
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Refuses, before anything is launched, a toolchain root that is too broad or is not a JDK.
+     *
+     * @throws IllegalStateException naming {@code key} only, never a path
+     */
+    private static void requireMountableToolchainRoot(String key, Path real, Path normalized, Path minosHome) {
+        if (isOverBroadToolchainRoot(real, minosHome) || isOverBroadToolchainRoot(normalized, minosHome)) {
+            throw new IllegalStateException(key + " names a directory too broad to mount in the Linux sandbox "
+                    + "(a filesystem root, a top-level or system directory, the home directory or MINOS_HOME); "
+                    + "point " + key + " to the JDK's own directory");
+        }
+        if (!isJdkShaped(real) || isPrivateMinosData(real, minosHome)) {
+            throw new IllegalStateException(key + " does not name a JDK directory the Linux sandbox may mount "
+                    + "(bin/java with a release file or lib/libjli.so, outside MINOS_HOME except its tools); "
+                    + "point " + key + " to the JDK's own directory");
         }
     }
 
