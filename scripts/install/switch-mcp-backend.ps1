@@ -39,11 +39,32 @@ param(
     [string] $LauncherPath = '',
     [string] $HandshakeProbePath = '',
     [string] $DockerConfiguratorPath = '',
-    [string] $DockerWorkflowPath = ''
+    [string] $DockerWorkflowPath = '',
+
+    # Installer progress file; empty (the default) writes no progress.
+    [string] $ProgressPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# Installer progress protocol, read by the Windows installer while this script runs (-ProgressPath).
+# A line carries only a step id, a state and a number: no path, URL, model name or secret can reach it.
+function Write-SetupProgress([string] $Step, [string] $State, [int] $Percent = -1) {
+    if ([string]::IsNullOrWhiteSpace($ProgressPath)) { return }
+    if ($Step -cnotmatch '^[a-z][a-z0-9-]{0,47}\z') { return }
+    if (@('running', 'done', 'skipped') -cnotcontains $State) { return }
+    if ($Percent -lt -1 -or $Percent -gt 100) { return }
+    $Line = "MINOS-PROGRESS step=$Step state=$State"
+    if ($Percent -ge 0) { $Line += " percent=$Percent" }
+    for ($Attempt = 1; $Attempt -le 5; $Attempt++) {
+        try {
+            [System.IO.File]::AppendAllText($ProgressPath, $Line + "`r`n", [System.Text.Encoding]::ASCII)
+            return
+        }
+        catch { Start-Sleep -Milliseconds 50 }
+    }
+}
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS MCP backend switching currently targets Windows hosts.'
@@ -309,6 +330,11 @@ try {
             Invoke-DockerRuntimeAction -Action Start -Runtime $ReusableRuntime
             Invoke-DockerRuntimeAction -Action Validate -Runtime $ReusableRuntime
             Write-SwitchLog 'PREPARE target=docker mode=reuse result=success'
+            # The same-version runtime is started as it is: image and managed services are not rebuilt.
+            Write-SetupProgress -Step 'docker-image' -State 'skipped'
+            Write-SetupProgress -Step 'postgres' -State 'skipped'
+            Write-SetupProgress -Step 'ollama' -State 'skipped'
+            Write-SetupProgress -Step 'ollama-model' -State 'skipped'
         }
         else {
             $DockerParameters = @{
@@ -331,6 +357,10 @@ try {
             if ($ProvisionOllamaModel) {
                 $DockerParameters['ProvisionOllamaModel'] = $true
             }
+            # Passed only when set, so an injected test configurator without the parameter stays callable.
+            if (-not [string]::IsNullOrWhiteSpace($ProgressPath)) {
+                $DockerParameters['ProgressPath'] = $ProgressPath
+            }
             & $DockerConfiguratorPath @DockerParameters
             Write-SwitchLog 'PREPARE target=docker mode=install result=success'
         }
@@ -352,8 +382,10 @@ try {
         ('docker.probeTimeoutMillis=' + ($ProbeTimeoutSeconds * 1000))
     ) | Set-Content -LiteralPath $CandidateBackendFile -Encoding ascii
 
+    Write-SetupProgress -Step 'handshake' -State 'running'
     & $HandshakeProbePath -LauncherPath $LauncherPath -CandidateHome $CandidateHome -TimeoutSeconds $ProbeTimeoutSeconds
     Write-SwitchLog "HANDSHAKE target=$TargetBackend result=success"
+    Write-SetupProgress -Step 'handshake' -State 'done'
 
     # COMMIT only after the new backend has proved readiness.
     Write-BackendConfiguration -Backend $TargetBackend

@@ -263,15 +263,15 @@ class CheckTwinScriptFunctionsTest(unittest.TestCase):
     def test_the_real_repository_is_accepted(self):
         failures, entries, compared, scripts = gate.check(REAL_ROOT)
         self.assertEqual([], failures)
-        self.assertEqual(12, entries)
-        self.assertEqual(25, compared)
+        self.assertEqual(13, entries)
+        self.assertEqual(29, compared)
         self.assertGreaterEqual(scripts, 39)
 
     def test_the_command_line_reports_the_counts(self):
         result = subprocess.run([sys.executable, str(_MODULE_PATH), "--root", str(REAL_ROOT)],
                                 capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("entries=12, copies compared=25", result.stdout)
+        self.assertIn("entries=13, copies compared=29", result.stdout)
 
 
 if __name__ == "__main__":
