@@ -24,7 +24,7 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Les scripts
 
 ## 5. Recette Docker
 
-- [ ] 5.1 **(manuelle)** Installation interactive avec le backend Docker, PostgreSQL et Ollama avec provisionnement : rangées image, PostgreSQL, Ollama, modèle et validation ; indiquer si un pourcentage du modèle a été affiché (capacité partielle de D4).
+- [x] 5.1 **(manuelle)** Installation interactive avec le backend Docker, PostgreSQL et Ollama avec provisionnement : rangées image, PostgreSQL, Ollama, modèle et validation ; indiquer si un pourcentage du modèle a été affiché (capacité partielle de D4). **Fait le 2026-10-31** sur le candidat `8a113943` (poste Windows 10, Docker Desktop), modèle absent du volume : journal de l'installeur, `Setup progress:` `docker-image` running 15:13:29 → done 15:16:52, `postgres` done 15:16:54, `ollama` done 15:16:55, `ollama-model` running 15:16:55 → done 15:17:05 (`nomic-embed-text`, 274 Mo retéléchargé), `handshake` done 15:17:46, `client-claude-code` et `client-claude-desktop` done 15:17:49 ; `backend-switch.log` : `SUCCESS previous=native target=docker`. Pourcentage du modèle : la barre s'est remplie progressivement (constat visuel de l'utilisateur ; le journal n'enregistre que les changements d'état). Une réinstallation de la même version donne les rangées image, PostgreSQL, Ollama et modèle en `skipped` (barre pleine, en pause, jaune) avec `PREPARE target=docker mode=reuse`.
 
 ## 6. Clôture
 
