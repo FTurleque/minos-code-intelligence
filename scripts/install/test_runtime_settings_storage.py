@@ -37,17 +37,17 @@ def runtimes() -> list[tuple[str, str]]:
 
 def run_script(executable: str, work: Path, arguments: list[str]) -> tuple[dict[str, str], dict]:
     """Runs the script on an empty data folder; returns the written properties and the installer state."""
-    data = work / "data"
+    native_home = work / "data"
     state = work / "installer-state.json"
     completed = subprocess.run(
         [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
-         "-DataRoot", str(data), "-DockerDataRoot", str(work / "docker-data"),
+         "-DataRoot", str(native_home), "-DockerDataRoot", str(work / "docker-data"),
          "-InstallerStatePath", str(state), *arguments],
         capture_output=True, text=True, timeout=180, check=False)
     if completed.returncode != 0:
         raise AssertionError(f"exit {completed.returncode}\n{completed.stdout}\n{completed.stderr}")
     properties = {}
-    for line in (data / "config" / "minos.properties").read_text(encoding="utf-8").splitlines():
+    for line in (native_home / "config" / "minos.properties").read_text(encoding="utf-8").splitlines():
         if line and not line.startswith("#"):
             key, _, value = line.partition("=")
             properties[key] = value
