@@ -186,6 +186,20 @@ function Write-SwitchLog([string] $Message) {
     Add-Content -LiteralPath $SwitchLog -Value $Line -Encoding UTF8
 }
 
+function Assert-RuntimeFileWritable([string] $Path) {
+    # An existing file is opened for writing and closed untouched: a DACL that denies the user is found
+    # here, before PREPARE, not after COMMIT once a Docker build has run. A missing file is created later
+    # in the runtime directory, which New-Item above has just proven usable.
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $Stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::ReadWrite)
+        $Stream.Dispose()
+    }
+    catch {
+        throw "MINOS runtime file is not writable by the current user: $Path. Restore the owner's access (icacls `"$Path`" /grant:r `"$($env:USERNAME):F`") and run the installer again."
+    }
+}
+
 function Read-KeyValueFile([string] $Path) {
     $Values = @{}
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
@@ -369,6 +383,9 @@ $DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -
 $CandidateHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-m29-backend-probe-' + [Guid]::NewGuid())
 $Committed = $false
 
+Assert-RuntimeFileWritable -Path $SwitchLog
+Assert-RuntimeFileWritable -Path $BackendFile
+Assert-RuntimeFileWritable -Path $SwitchStateFile
 Write-SwitchLog "BEGIN previous=$PreviousBackend target=$TargetBackend reuseDocker=$ReuseDockerRuntime"
 try {
     # PREPARE + VALIDATE. Reuse a same-version managed Docker runtime when

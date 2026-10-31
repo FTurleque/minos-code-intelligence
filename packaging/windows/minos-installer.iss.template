@@ -531,12 +531,13 @@ begin
   SetupStepRows[I].Percent := -1;
 end;
 
-// A bar shows a percentage only when the script reported one; a running step without one is
-// indeterminate (marquee). Done is full and green, failed is red, reused is full and paused.
+// The bar alone carries the state; the label only names the step. A bar shows a percentage only
+// when the script reported one; a running step without one is indeterminate (marquee). Done is full
+// and green, failed is full and red, reused is full and paused; pending, unreported and not run are
+// empty.
 procedure RenderSetupStepRow(Index: Integer);
 var
   Row: TSetupStepRow;
-  Detail: String;
 begin
   Row := SetupStepRows[Index];
   if Row.Bar = nil then exit;
@@ -544,42 +545,24 @@ begin
   Row.Bar.State := npbsNormal;
   if Row.State = 'running' then
   begin
-    if Row.Percent >= 0 then
-    begin
-      Row.Bar.Position := Row.Percent;
-      Detail := 'en cours (' + IntToStr(Row.Percent) + ' %)';
-    end
-    else
-    begin
-      Row.Bar.Style := npbstMarquee;
-      Detail := 'en cours';
-    end;
+    if Row.Percent >= 0 then Row.Bar.Position := Row.Percent
+    else Row.Bar.Style := npbstMarquee;
   end
   else if Row.State = 'done' then
-  begin
-    Row.Bar.Position := 100;
-    Detail := 'terminée';
-  end
+    Row.Bar.Position := 100
   else if Row.State = 'skipped' then
   begin
     Row.Bar.Position := 100;
     Row.Bar.State := npbsPaused;
-    Detail := 'réutilisée';
   end
   else if Row.State = 'failed' then
   begin
     Row.Bar.Position := 100;
     Row.Bar.State := npbsError;
-    Detail := 'échec';
   end
   else
-  begin
     Row.Bar.Position := 0;
-    if Row.State = 'unreported' then Detail := 'non signalée'
-    else if Row.State = 'notrun' then Detail := 'non exécutée'
-    else Detail := 'en attente';
-  end;
-  Row.StateLabel.Caption := Row.Caption + ' — ' + Detail;
+  Row.StateLabel.Caption := Row.Caption;
 end;
 
 procedure SetSetupStepState(Id, State: String; Percent: Integer);
@@ -857,6 +840,28 @@ begin
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot', DockerProjectsPage.Values[0]);
 end;
 
+// configure-runtime-settings.ps1 writes the message of the error that stopped it to the file
+// passed as -FailureLogPath (UTF-8 with BOM). The installer runs it through Exec, which keeps no
+// output, so this file is the only place the cause survives; it goes to the setup log and is
+// returned for the failure message.
+function RuntimeSettingsFailureFile(): String;
+begin
+  Result := ExpandConstant('{tmp}\minos-runtime-settings-failure.txt');
+end;
+
+function ReadRuntimeSettingsFailure(Caller: String): String;
+var
+  Lines: TArrayOfString;
+  Index: Integer;
+begin
+  Result := '';
+  if FileExists(RuntimeSettingsFailureFile()) and LoadStringsFromFile(RuntimeSettingsFailureFile(), Lines) then
+    for Index := 0 to GetArrayLength(Lines) - 1 do
+      Result := Trim(Result + ' ' + Lines[Index]);
+  if Result = '' then Result := 'cause non transmise par le script';
+  Log(Caller + ': configure-runtime-settings.ps1 failed: ' + Result);
+end;
+
 function ConfigureRuntimeSettings(): Boolean;
 var
   ResultCode: Integer;
@@ -868,6 +873,7 @@ begin
   Result := True;
   if IsSmokeBuild() then exit;
   WizardForm.StatusLabel.Caption := 'Préparation des paramètres d''exécution MINOS...';
+  WizardForm.FilenameLabel.Caption := '';
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if AdvancedSetupSelected() then SetupMode := 'advanced' else SetupMode := 'standard';
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
@@ -912,13 +918,17 @@ begin
       Parameters := Parameters + ' -SemanticEndpoint "' + OllamaEndpointEdit.Text + '"';
   end;
 
+  DeleteFile(RuntimeSettingsFailureFile());
+  Parameters := Parameters + ' -FailureLogPath "' + RuntimeSettingsFailureFile() + '"';
   SetSetupStepState('runtime', 'running', -1);
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     FinishSetupStepGroup('runtime', False);
     MsgBox(
       'La configuration avancée MINOS n''a pas pu être appliquée.' + #13#10 + #13#10 +
-      'Aucun fallback silencieux n''a été utilisé. Consultez le journal de l''installateur.',
+      'Cause : ' + ReadRuntimeSettingsFailure('ConfigureRuntimeSettings') + #13#10 + #13#10 +
+      'Aucun fallback silencieux n''a été utilisé. Journal de l''installateur :' + #13#10 +
+      ExpandConstant('{log}'),
       mbError, MB_OK);
     Result := False;
   end
@@ -954,9 +964,14 @@ begin
     '" -SetupMode ' + SetupMode +
     ' -McpBackend native -McpServerName "' + EffectiveMcpServerName() +
     '" -StorageBackend local -SemanticProvider disabled' +
-    ' -DockerInstanceName "' + DockerInstanceEdit.Text + '"';
+    ' -DockerInstanceName "' + DockerInstanceEdit.Text + '"' +
+    ' -FailureLogPath "' + RuntimeSettingsFailureFile() + '"';
+  DeleteFile(RuntimeSettingsFailureFile());
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    ReadRuntimeSettingsFailure('RevertRuntimeSettingsToLocal');
     Log('RevertRuntimeSettingsToLocal: fallback did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
+  end;
 end;
 
 // The backend-switch log is a plain append-only line log (see switch-mcp-backend.ps1's own
@@ -996,9 +1011,9 @@ begin
   Result := True;
   if IsSmokeBuild() or NoMcpSelected() then exit;
   if NativeMcpSelected() then TargetBackend := 'native' else TargetBackend := 'docker';
-  WizardForm.StatusLabel.Caption :=
-    'Configuration et validation du backend MCP MINOS (peut prendre plusieurs minutes lors d''une ' +
-    'préparation Docker)...';
+  // The status label holds one line: the duration warning goes on the line under it.
+  WizardForm.StatusLabel.Caption := 'Configuration et validation du backend MCP MINOS...';
+  WizardForm.FilenameLabel.Caption := 'Peut prendre plusieurs minutes lors d''une préparation Docker.';
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\integration\switch-mcp-backend.ps1') +
@@ -1041,8 +1056,8 @@ begin
       DiagnosticLine := 'Journal complet : ' + LogPath;
     MsgBox(
       'MINOS Code Intelligence a été installé/mis à jour avec succès.' + #13#10 + #13#10 +
-      'En revanche, la (re)configuration du backend MCP n''a pas abouti : la validation/handshake ' +
-      'a échoué. Cela n''affecte PAS les fichiers du programme, qui sont à jour.' + #13#10 + #13#10 +
+      'En revanche, la (re)configuration du backend MCP n''a pas abouti ; l''étape en échec est ' +
+      'indiquée ci-dessous. Cela n''affecte PAS les fichiers du programme, qui sont à jour.' + #13#10 + #13#10 +
       'Aucun changement silencieux n''a été appliqué : le backend MCP précédemment actif a été ' +
       'conservé ou restauré automatiquement et reste utilisable normalement.' + #13#10 + #13#10 +
       DiagnosticLine + #13#10 + #13#10 +
@@ -1064,6 +1079,7 @@ var
 begin
   if IsSmokeBuild() or (not McpBackendSelected()) or (not McpClientSelected()) then exit;
   WizardForm.StatusLabel.Caption := 'Configuration des intégrations clientes IA détectées...';
+  WizardForm.FilenameLabel.Caption := '';
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\integration\configure-mcp-clients-setup.ps1') +
