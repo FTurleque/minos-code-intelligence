@@ -36,7 +36,6 @@
 | [ARCH-0056](../adr/ARCH-0056-ports-de-lecture-des-snapshots.md) | Port de lecture neutre et compatibilité de SnapshotQueryView | Accepted | 2026-10-05 | — |
 | [ARCH-0057](../adr/ARCH-0057-finaliser-les-frontieres-hexagonales.md) | Cas d'usage partagés et frontières résiduelles, bootstrap existant préservé | Accepted — travaux résiduels planifiés | 2026-10-05 | — |
 | [ARCH-0058](../adr/ARCH-0058-declarer-les-usages-de-modules.md) | Déclarer chaque module utilisé | Accepted | 2026-10-09 | — |
-| [SEC-0060](../adr/SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Accepted | 2026-10-18 | — |
 | [SEC-0061](../adr/SEC-0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité | Accepted | 2026-10-23 | — |
 | [ARCH-0064](../adr/ARCH-0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) | Cœur agnostique du langage et de l'indexeur, SCIP protocole privilégié | Accepted | 2026-10-23 | Remplace ADR-0001, ADR-0002 |
 | [BE-0065](../adr/BE-0065-providers-scip-polyglottes-livres-dans-le-paquet.md) | Providers SCIP polyglottes sous preuve, livrés dans le paquet | Accepted | 2026-10-23 | Remplace ADR-0032, ADR-0040 |
@@ -48,10 +47,11 @@
 | [SEC-0071](../adr/SEC-0071-plan-de-controle-d-equipe-embarque.md) | Plan de contrôle d'équipe embarqué | Accepted | 2026-10-23 | Remplace ADR-0035, ADR-0036 |
 | [ARCH-0072](../adr/ARCH-0072-graphe-de-programme-honnete-sur-ses-capacites.md) | Graphe de programme honnête sur ses capacités | Accepted | 2026-10-23 | Remplace ADR-0028, ADR-0036 |
 | [GEN-0073](../adr/GEN-0073-tenir-le-registre-d-adr-au-format-archgate.md) | Tenir le registre d'ADR au format Archgate, à l'emplacement arc42 | Accepted | 2026-10-23 | Remplace ADR-0063 |
+| [SEC-0074](../adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) | scip-java sous Windows : bloqué en natif, aucune voie d'indexation Java, WSL2 retenu pour la suite | Accepted | 2026-10-31 | Remplace ADR-0060 |
 
 ## ADR archivés
 
-Remplacés, rejetés ou reclassés le 2026-10-23 (tri du registre) ; conservés dans `docs/architecture/adr/archive/`.
+Remplacés, rejetés ou reclassés ; conservés dans `docs/architecture/adr/archive/`.
 
 | Identifiant | Titre | Statut d'archive |
 |---|---|---|
@@ -89,3 +89,4 @@ Remplacés, rejetés ou reclassés le 2026-10-23 (tri du registre) ; conservés 
 | [ADR-0059](../adr/archive/0059-migrer-le-socle-vers-java-25-lts.md) | Migrer le socle MINOS vers Java 25 LTS et garder la baseline par un gate | Superseded by ADR-0067 |
 | [ADR-0062](../adr/archive/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) | Confirmer les emplacements de l'ADR 0044 et ne créer de package que sous les racines de son module | Superseded by ADR-0068 |
 | [ADR-0063](../adr/archive/0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate dans le registre arc42 | Superseded by GEN-0073 |
+| [ADR-0060](../adr/archive/0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Superseded by SEC-0074 |
