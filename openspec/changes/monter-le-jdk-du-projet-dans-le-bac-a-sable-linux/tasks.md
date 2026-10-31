@@ -1,0 +1,22 @@
+# Tasks
+
+Constats : **C1** (JDK de paquet Debian, `/etc/java-N-openjdk` invisible) et **C2** (JDK autonome hors de `/usr`, `libjli.so` invisible), mesurés le 2026-10-31 sous WSL2 Ubuntu 24.04. Tests Linux sous `@EnabledOnOs(OS.LINUX)`, dans une classe nouvelle pour ne pas ajouter de saut aux classes dont la CI exige zéro saut. Tout `-pl` s'accompagne de `-am`.
+
+## 1. Racine du JDK montée en lecture seule (C2, D1, D3)
+
+- [x] 1.1 Rouge : `LinuxSandboxToolchainHomeTest` (`minos-runtime-local`, package `sandbox`) — `$JAVA_HOME/bin/java -version` exécuté dans le vrai bac à sable (bubblewrap et prlimit requis par `SandboxTestSupport.decide`) avec `JAVA_HOME` = le JDK des tests ; le plan monte la racine du JDK et pas son parent ; `JAVA_HOME=/` et `JAVA_HOME` = répertoire personnel refusés avant lancement, message sans chemin. **Preuve du rouge (WSL2 Ubuntu 24.04, HEAD `8c3d4615`) : 9 échecs sur 10, dont `selfContainedJdkOutsideUsrRunsInsideTheSandbox` en 127 (`libjli.so: cannot open shared object file`) et les trois refus non levés.**
+- [x] 1.2 `LinuxBubblewrapWorkerSandboxBackend` : environnement du provider par `ProviderProcessEnvironment.sanitize` ; montage de la racine réelle de `JAVA_HOME`/`JDK_HOME` ; refus d'une racine trop large, d'une racine qui n'a pas la forme d'un JDK ou située dans `MINOS_HOME` hors de `tools` (constat de la revue de sécurité, tests `javaHomeLinkedToANonJdkProfileDirectoryIsRefusedAndNotMounted`, `jdkInsideMinosHomeIsRefusedUnlessItIsAManagedTool`). Preuve : 12/12 sous Linux ; `python scripts/remediation/check-mnd.py`, `check-post-mne.py`, `check-minos-01.py`, `python scripts/architecture/check-private-io.py` verts.
+
+## 2. Cibles de liens bornées à la configuration Java de `/etc` (C1, D2)
+
+- [x] 2.1 Rouge : dans `LinuxSandboxToolchainHomeTest`, un JDK factice dont `lib/security/cacerts` lie vers `/etc/ssl/certs/ca-certificates.crt` monte ce fichier exact et ni `/etc`, ni `/etc/ssl`, ni `/etc/ssl/certs` ; des liens vers un fichier du profil, `/etc/shadow` et `/etc/ssh` ne montent rien ; avec un JDK de paquet présent (`/usr/lib/jvm/java-*-openjdk-*`, saut par hypothèse nommée sinon), `java -XshowSettings:security:properties -version` réussit dans le bac à sable. **Preuve du rouge : au HEAD, `java.lang.InternalError: Error loading java.security file` sur `java-21-openjdk-amd64`.**
+- [x] 2.2 Parcours borné de la racine du JDK sans suivre les liens ; liste fermée `/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java`, `/etc/pki/ca-trust/extracted` ; WARNING sans chemin pour les cibles écartées ; limitation `LINUX_TOOLCHAIN_HOME_READ_ONLY_ROOT_AND_ALLOWLISTED_ETC_LINK_TARGETS`. Preuve : tests verts sous Linux ; module `minos-runtime-local` complet sous Linux (585 tests, 0 échec) ; mêmes gates qu'en 1.2.
+- [x] 2.3 Preuve (manuelle) : sous WSL2 Ubuntu 24.04, indexation de `fixtures/java/java-simple`. Avec le JAR 1.3.0 : échec C1 (JDK de paquet) et C2 (JDK autonome du profil, code 127). Avec le JAR de la branche : les deux JDK démarrent scip-java et Maven, puis le build échoue sur C3 (`maven-clean-plugin … could not be resolved`, egress `DENY`, aucun dépôt Maven local visible), hors périmètre.
+
+## 3. Documentation
+
+- [x] 3.1 `docs/user/troubleshooting.md` (renvoi depuis `docs/user/production-installation.md`) : prérequis Linux de scip-java — JDK désigné par `JAVA_HOME` monté en lecture seule, racine trop large refusée, configuration Java de `/etc` limitée à la liste fermée, Maven d'archive sous `/usr` requis, Maven de paquet non pris en charge, limite C3. `docs/developer/testing.md` : classe de test Linux. `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check` verts.
+
+## 4. Clôture
+
+- [ ] 4.1 Revue `minos-security-reviewer` faite (aucun bloquant ; validation de forme de JDK et refus sous `MINOS_HOME` ajoutés, texte du design corrigé sur l'ordre cgroup/plan) ; `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; `./mvnw -B -ntp -pl minos-runtime-local -am test` sous Windows (tests Linux sautés) et sous Linux. Avant archivage : `docs/project/governance/STATUS.md` (scip-java natif Linux limité par C3) ; ouvrir le changement de C3.
