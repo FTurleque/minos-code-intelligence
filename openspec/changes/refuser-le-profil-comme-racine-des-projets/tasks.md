@@ -1,0 +1,19 @@
+# Tasks
+
+Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Aucun code Java de production ni script renommé : aucun gate littéral `check-*.py` ni scope JaCoCo n'est concerné ; `verify-installer-template.ps1` porte les chaînes exigées de l'installeur.
+
+## 1. Refus dans les scripts PowerShell (commutateur et installation ZIP)
+
+- [x] 1.1 Rouge : `minos-app/src/test/java/com/minos/packaging/DockerProjectsRootContractTest.java` — sous Windows PowerShell 5.1 (`@EnabledOnOs(WINDOWS)`), extraire `Get-UnsafeDockerProjectsRootReason` de `switch-mcp-backend.ps1` et de `install-windows.ps1` par l'analyseur, exiger deux définitions identiques, puis vérifier : profil, parent du profil, racine de volume, `%LOCALAPPDATA%` et un de ses sous-dossiers, parent d'un dossier de MINOS, profil inconnu → refus ; sous-dossier du profil hors AppData et dossier d'un autre volume → accepté. Contrat textuel : chaque script appelle la fonction avant `Test-Path` de la racine, et `install-windows.ps1` avant l'extraction. **Preuve du rouge : la fonction n'existe pas au HEAD.**
+- [x] 1.2 Ajouter la fonction (ASCII, compatible 5.1) aux deux scripts et l'appeler avec le profil (`[Environment]::GetFolderPath('UserProfile')`) et les dossiers protégés ; message sans chemin ; déclarer la copie dans `TWINS` de `scripts/quality/check-twin-script-functions.py` (et ses comptes dans `test_check_twin_script_functions.py`). Preuve : test vert ; `powershell -File scripts/install/verify-mcp-backend-lifecycle.ps1` vert ; `./mvnw -B -ntp -pl minos-app -am test "-Dtest=DockerProjectsRootContractTest" "-Dsurefire.failIfNoSpecifiedTests=false"`.
+
+## 2. Installeur Inno Setup
+
+- [x] 2.1 Rouge : dans `DockerProjectsRootContractTest`, contrat de `minos-installer.iss.template` — `ReadInstallerValue('ProjectsRoot', '')`, aucune occurrence de `ReadInstallerValue('ProjectsRoot', ExpandConstant('{%USERPROFILE}'))`, refus d'un champ vide et appel de `UnsafeDockerProjectsRootReason(DockerProjectsPage.Values[0])` dans `NextButtonClick`. Ajouter les `Require`/`Forbid` correspondants dans `scripts/install/verify-installer-template.ps1` (et corriger son commentaire `:50-53`). **Preuve du rouge : test et vérificateur échouent au HEAD.**
+- [x] 2.2 Modifier le gabarit : champ vide par défaut, fonction Pascal `UnsafeDockerProjectsRootReason` (racine de volume, profil et parents, `{localappdata}`, `{userappdata}`, dossier d'installation, données MINOS, données Docker), messages en français sans chemin. Preuve : test vert, `powershell -File scripts/install/verify-installer-template.ps1` vert.
+
+## 3. Clôture
+
+- [x] 3.1 `docs/user/mcp.md` (page Docker : champ obligatoire, racines refusées) et `docs/user/troubleshooting.md` (message de refus ; runtime qui monte déjà le profil : désinstaller avec purge, réinstaller avec un dossier dédié). Rejouer `python scripts/docs/check-current-docs.py`.
+- [x] 3.2 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict` ; `./mvnw -B -ntp -pl minos-app -am test "-Dtest=com.minos.packaging.*Test" "-Dsurefire.failIfNoSpecifiedTests=false"` (le module complet est exécuté par `Verify (windows-2022)` et `Verify (ubuntu-24.04)`).
+- [ ] 3.3 **(manuelle)** Construire l'installeur par `scripts/release/build-local-windows-candidate.ps1 -Version 1.3.0 -SkipMavenVerify` et vérifier sur la page Docker : champ vide sans réglage, profil refusé, sous-dossier dédié accepté.

@@ -165,6 +165,14 @@ MINOS réserve à son propriétaire chaque dossier privé qu'il utilise, à comm
 
 Remède : choisir un `MINOS_HOME` dédié (par défaut `%USERPROFILE%\.minos`) ; pour un dossier créé par une exécution en administrateur, en reprendre la propriété (`takeown /F <dossier>` puis `icacls <dossier> /setowner <compte>`) ou le recréer. Le plugin IntelliJ applique la même règle à son dossier MINOS.
 
+## Windows : « MINOS refuses this Docker projects root » ou « Cette racine des projets est refusée »
+
+La racine des projets du backend MCP Docker est montée dans les conteneurs MINOS, dont `minos-admin` accède au réseau. L'installeur, `install-windows.ps1` et `switch-mcp-backend.ps1` refusent, avant toute modification, une racine de volume, le profil de l'utilisateur ou l'un de ses parents, et tout dossier qui est, contient ou se trouve dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS (installation, données, runtime Docker, données Docker). Le message nomme la catégorie refusée, sans chemin.
+
+Remède : choisir un dossier dédié à vos projets, par exemple `%USERPROFILE%\source\repos` ou un dossier d'un autre volume.
+
+Une installation qui monte déjà le profil (`MINOS_PROJECTS_DIR` dans `%LOCALAPPDATA%\MINOS\docker\runtime\.env`) le garde tant qu'une autre racine n'est pas appliquée. Changer de racine sur un runtime existant est refusé par la correspondance de chemins enregistrée (« refusing to replace ») : désinstaller MINOS en acceptant la suppression des données, puis réinstaller en choisissant un dossier dédié.
+
 ## Espace disque dans `MINOS_HOME`
 
 Une copie de projet (`local-provider-workspaces/`), un temporaire de clonage distant (`remote-cache/repositories/.entry-*.tmp`) ou un

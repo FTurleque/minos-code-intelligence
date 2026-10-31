@@ -46,12 +46,22 @@ Require 'DockerProjectsPage := CreateInputDirPage(' 'Installer is missing the Do
 Require 'McpClientsPage.ID,' 'Docker projects page must follow client integration.'
 Require 'Result := NoMcpSelected()' 'Shared MCP client page must be skipped only when MCP configuration is disabled.'
 Require 'Result := not DockerMcpSelected()' 'Docker projects page is not conditional on Docker MCP mode.'
-# A previously customized Docker projects root must survive an upgrade. Without this, every
-# upgrade wizard run resets the field to {%USERPROFILE} regardless of what was configured before,
-# and the fail-closed project-path-mapping guard then refuses to silently replace the differing
-# on-disk mapping -- surfacing as a backend-switch failure on every single future update.
-Require "ReadInstallerValue('ProjectsRoot'" 'Installer does not restore a previously configured Docker projects root on upgrade -- every upgrade will reset it to {%USERPROFILE} and trip the project-path-mapping guard.'
+# A previously customized Docker projects root must survive an upgrade: the fail-closed
+# project-path-mapping guard refuses to silently replace a differing on-disk mapping, so a reset
+# field would surface as a backend-switch failure on every future update.
+Require "ReadInstallerValue('ProjectsRoot'" 'Installer does not restore a previously configured Docker projects root on upgrade -- every upgrade will reset it and trip the project-path-mapping guard.'
 Require "RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot'" 'Installer does not persist the configured Docker projects root for the next upgrade.'
+# The projects root is bind-mounted into the MINOS containers: without a saved value the field
+# starts empty, and the Docker page refuses the user profile, its parents, a volume root and the
+# application data or MINOS folders before checking that the folder exists.
+Require "ReadInstallerValue('ProjectsRoot', '')" 'Installer must not propose a default Docker projects root.'
+Forbid "ReadInstallerValue('ProjectsRoot', ExpandConstant('{%USERPROFILE}'))" 'Installer proposes the user profile as the Docker projects root; the whole profile would be mounted into the MINOS containers.'
+Require 'function UnsafeDockerProjectsRootReason(Path: String): String;' 'Installer does not model the unsafe Docker projects root refusal.'
+Require "if Trim(DockerProjectsPage.Values[0]) = '' then" 'Docker page accepts an empty projects root.'
+Require 'Reason := UnsafeDockerProjectsRootReason(DockerProjectsPage.Values[0]);' 'Docker page does not refuse an unsafe projects root.'
+Require "IsSameOrInsideDirectory(UserProfile, Path)" 'Unsafe projects root refusal does not cover the user profile and its parents.'
+Require "ExpandConstant('{localappdata}')" 'Unsafe projects root refusal does not cover the local application data folder.'
+Require "ExpandConstant('{userappdata}')" 'Unsafe projects root refusal does not cover the roaming application data folder.'
 Require 'McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot JetBrains MCP row.'
 Require 'McpCopilotCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot CLI MCP row.'
 Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude CLI / Code MCP row.'

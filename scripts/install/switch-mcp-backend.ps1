@@ -45,6 +45,43 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Get-UnsafeDockerProjectsRootReason([string] $ProjectsRoot, [string] $UserProfile, [string[]] $ProtectedRoots, [string] $TemporaryRoot) {
+    # The projects root is bind-mounted into the MINOS containers. Returns why it must be refused, or an empty
+    # string when it may be mounted. The reason carries no path. A strict subfolder of the temporary folder is
+    # not refused for lying inside a protected folder (qualification runs use one), only for containing one.
+    function ConvertTo-ComparableRoot([string] $Path) {
+        return [System.IO.Path]::GetFullPath($Path).TrimEnd([char[]] @('\', '/'))
+    }
+    function Test-SameOrInside([string] $Child, [string] $Parent) {
+        return $Child.Equals($Parent, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $Child.StartsWith($Parent + '\', [System.StringComparison]::OrdinalIgnoreCase)
+    }
+    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { return 'empty' }
+    if ([string]::IsNullOrWhiteSpace($UserProfile)) { return 'not verifiable because the user profile is unknown' }
+    $Candidate = ConvertTo-ComparableRoot $ProjectsRoot
+    $VolumeRoot = [System.IO.Path]::GetPathRoot($Candidate)
+    if ([string]::IsNullOrEmpty($VolumeRoot) -or $Candidate.Length -le $VolumeRoot.TrimEnd([char[]] @('\', '/')).Length) {
+        return 'a volume root'
+    }
+    if (Test-SameOrInside (ConvertTo-ComparableRoot $UserProfile) $Candidate) {
+        return 'the user profile or one of its parents'
+    }
+    $InsideTemporary = $false
+    if (-not [string]::IsNullOrWhiteSpace($TemporaryRoot)) {
+        $Temporary = ConvertTo-ComparableRoot $TemporaryRoot
+        $InsideTemporary = $Candidate.StartsWith($Temporary + '\', [System.StringComparison]::OrdinalIgnoreCase)
+    }
+    foreach ($Protected in @($ProtectedRoots)) {
+        if ([string]::IsNullOrWhiteSpace($Protected)) { continue }
+        $ProtectedRoot = ConvertTo-ComparableRoot $Protected
+        $Inside = (Test-SameOrInside $Candidate $ProtectedRoot) -and -not $InsideTemporary
+        if ($Inside -or (Test-SameOrInside $ProtectedRoot $Candidate)) {
+            return 'an application data or MINOS folder, one of its parents or one of its subfolders'
+        }
+    }
+    return ''
+}
+
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS MCP backend switching currently targets Windows hosts.'
 }
@@ -97,6 +134,14 @@ if ($TargetBackend -eq 'docker') {
     }
     if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
         throw '-ProjectsRoot is required when switching to the Docker backend.'
+    }
+    $UnsafeProjectsRoot = Get-UnsafeDockerProjectsRootReason -ProjectsRoot $ProjectsRoot `
+        -UserProfile ([Environment]::GetFolderPath('UserProfile')) `
+        -TemporaryRoot ([System.IO.Path]::GetTempPath()) `
+        -ProtectedRoots @([Environment]::GetFolderPath('LocalApplicationData'), [Environment]::GetFolderPath('ApplicationData'),
+            $InstallRoot, $DataRoot, $DockerInstallRoot, $DockerDataRoot)
+    if (-not [string]::IsNullOrEmpty($UnsafeProjectsRoot)) {
+        throw "MINOS refuses this Docker projects root: it is $UnsafeProjectsRoot. It is mounted into the MINOS containers; choose a folder dedicated to your projects."
     }
     if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
         throw "MINOS Docker projects root does not exist: $ProjectsRoot"
