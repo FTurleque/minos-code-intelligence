@@ -14,12 +14,12 @@ Sous Windows, le plan et la disponibilité de scip-java SHALL utiliser le Window
 - **THEN** sa commande commence par le `powershell.exe` du répertoire système et ne nomme pas cet autre répertoire
 
 ### Requirement: scip-java sous Windows n'est pas déclaré prêt sans exécution qualifiée sous le bac à sable
-Tant qu'aucun test n'exécute la chaîne scip-java Windows sous le bac à sable AppContainer, la disponibilité de scip-java sous Windows SHALL être bloquée, avec un prérequis qui dit que l'exécution sous le bac à sable n'est pas qualifiée et nomme le runtime Docker. L'indexation Java SHALL alors être refusée avant tout lancement de provider.
+Tant qu'aucun test n'exécute la chaîne scip-java Windows sous le bac à sable AppContainer, la disponibilité de scip-java sous Windows SHALL être bloquée, avec un prérequis qui dit que l'exécution sous le bac à sable n'est pas qualifiée et qu'aucune voie n'indexe un projet Java depuis Windows ; il MUST NOT renvoyer vers le runtime Docker, qui ne lance aucun provider. L'indexation Java SHALL alors être refusée avant tout lancement de provider.
 
 #### Scenario: Doctor sous Windows
 - **GIVEN** sous Windows, scip-java installé avec tous ses fichiers
 - **WHEN** `minos doctor` est lancé
-- **THEN** scip-java n'est pas `READY` et son diagnostic nomme le runtime Docker
+- **THEN** scip-java n'est pas `READY`, son diagnostic dit qu'aucune voie n'indexe un projet Java depuis Windows et ne nomme pas le runtime Docker
 
 #### Scenario: Linux inchangé
 - **GIVEN** sous Linux, scip-java installé avec tous ses fichiers

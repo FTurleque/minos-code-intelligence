@@ -1,11 +1,13 @@
 ---
-id: SEC-0060
+id: ADR-0060
 title: "scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker"
 domain: security
 rules: false
 ---
 
-# scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker
+# ADR-0060 — scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker
+
+> **Archivé le 2026-10-31** : Superseded by [SEC-0074](../SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) (le runtime Docker ne lance aucun provider : aucune voie n'indexe un projet Java depuis Windows ; voie WSL2 retenue). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Date : 2026-10-18. Statut : **Accepted**.
 
@@ -62,5 +64,5 @@ Le principe *capability-honest* interdit de déclarer prêt un provider dont l'e
 ## References
 
 - Changement OpenSpec : `openspec/changes/rendre-l-echec-de-scip-java-sous-windows-actionnable/`.
-- Frontières de production : ADR [0036](archive/0036-fail-closed-production-boundaries-and-measured-program-graph.md) ; confinement des ressources des workers : ADR [0038](archive/0038-aggregate-worker-resource-containment.md) ; outils livrés : ADR [0040](archive/0040-distribution-auto-portante-indexeurs-embarques.md).
-- Constat antérieur : [`S15-REGRESSION-RUNTIME-GRANT.md`](../../project/audits/archive/2026-09/S15-REGRESSION-RUNTIME-GRANT.md) (points 1 et 2).
+- Frontières de production : ADR [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) ; confinement des ressources des workers : ADR [0038](0038-aggregate-worker-resource-containment.md) ; outils livrés : ADR [0040](0040-distribution-auto-portante-indexeurs-embarques.md).
+- Constat antérieur : [`S15-REGRESSION-RUNTIME-GRANT.md`](../../../project/audits/archive/2026-09/S15-REGRESSION-RUNTIME-GRANT.md) (points 1 et 2).
