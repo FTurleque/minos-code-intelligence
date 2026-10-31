@@ -349,7 +349,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             // returns false, and that degradation must be observable, not silent.
             LOGGER.log(System.Logger.Level.WARNING,
                     "MINOS Linux sandbox capability probe could not resolve a required bind path: "
-                            + exception.getMessage());
+                            + exception.getClass().getSimpleName());
             return false;
         }
         command.add("--dev");
