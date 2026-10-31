@@ -6,7 +6,7 @@ Après la copie des fichiers, l'installeur Windows (`packaging/windows/minos-ins
 
 ## What Changes
 
-- **Une rangée par étape sélectionnée** sur la page d'installation (`WizardForm.InstallingPage`) : libellé et barre (`TNewProgressBar`). Une rangée passe d'« en attente » à « en cours », puis à « terminée » (barre pleine, verte) ou « échec » (barre rouge). Seules les étapes que les choix de l'assistant déclenchent ont une rangée.
+- **Une rangée par étape sélectionnée** sur la page d'installation (`WizardForm.InstallingPage`) : libellé et barre (`TNewProgressBar`). Le libellé nomme l'étape ; la barre seule porte son état : vide en attente, défilante ou chiffrée pendant l'étape, pleine et verte à la fin, rouge en échec. Seules les étapes que les choix de l'assistant déclenchent ont une rangée.
 - **Protocole de progression** : les scripts lancés par l'installeur ajoutent des lignes `MINOS-PROGRESS step=<id> state=<état>[ percent=<n>]` à un fichier dont le chemin leur est passé par `-ProgressPath`. Identifiants d'étape et états viennent d'une liste fermée ; aucun texte libre n'est écrit.
 - **Lecture pendant l'exécution** : un minuteur Windows (`SetTimer`, rappel créé par `CreateCallback`) relit ce fichier pendant que `Exec` attend le script ; les processus fils gardent leurs descripteurs actuels. `ExecAndLogOutput` est écarté (mesures au design, D1).
 - **Capacité honnête** : un pourcentage n'est affiché que si l'outil en fournit un (téléchargement du modèle Ollama par `ollama pull`). Sinon la barre est indéterminée (défilement) pendant l'étape. L'état final d'une étape découle du code de sortie du script ; une étape en échec reste rouge et le message d'erreur existant garde la cause.

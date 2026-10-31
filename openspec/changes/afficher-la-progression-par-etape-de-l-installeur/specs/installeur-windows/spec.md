@@ -1,7 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: Une rangée de progression par étape de configuration sélectionnée
-Pendant la configuration post-installation, l'installeur Windows SHALL afficher sur la page d'installation une rangée (libellé et barre) pour chaque étape que les choix de l'assistant déclenchent : paramètres d'exécution, image Docker, PostgreSQL, Ollama, modèle Ollama, validation du backend, chaque client IA coché. Une étape non sélectionnée SHALL NOT avoir de rangée.
+Pendant la configuration post-installation, l'installeur Windows SHALL afficher sur la page d'installation une rangée (libellé et barre) pour chaque étape que les choix de l'assistant déclenchent : paramètres d'exécution, image Docker, PostgreSQL, Ollama, modèle Ollama, validation du backend, chaque client IA coché. Une étape non sélectionnée SHALL NOT avoir de rangée. Le libellé SHALL nommer l'étape sans son état, que seule la barre porte.
+
+#### Scenario: Libellé sans état
+- **GIVEN** le modèle de l'installeur au HEAD
+- **WHEN** `InstallerSetupProgressContractTest.stepLabelNamesTheStepAndLeavesTheStateToTheBar` est exécuté
+- **THEN** le libellé d'une rangée est le nom de son étape, sans « en attente », « en cours » ni « terminée »
 
 #### Scenario: Backend Docker avec PostgreSQL et un client
 - **GIVEN** le modèle de l'installeur au HEAD
