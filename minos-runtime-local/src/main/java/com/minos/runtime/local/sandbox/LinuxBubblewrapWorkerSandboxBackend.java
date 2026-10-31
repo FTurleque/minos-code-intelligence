@@ -4,6 +4,7 @@ import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.local.process.ProcessSandboxCapableIndexerExecutor;
+import com.minos.runtime.local.process.ProviderProcessEnvironment;
 import com.minos.runtime.local.workspace.ProviderWriteQuota;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -13,8 +14,13 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -30,7 +36,10 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  *
  * <p>The host root is never exposed wholesale. System runtime roots and the exact managed provider
  * runtime needed by the command are mounted read-only; arbitrary absolute files are mounted as
- * individual files instead of exposing their parent directories. The workspace, artifact and MINOS
+ * individual files instead of exposing their parent directories. The JDK named by {@code JAVA_HOME} or
+ * {@code JDK_HOME} in the provider environment is mounted read-only as a whole real root, with only the
+ * exact allow-listed Java configuration under /etc its links reach; an over-broad root is refused before
+ * launch. The workspace, artifact and MINOS
  * run roots are writable. DENY keeps bubblewrap's isolated network namespace; ALLOW explicitly
  * shares the host network namespace.</p>
  *
@@ -62,6 +71,24 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     static final long MAX_CPU_MICROS_PER_PERIOD = 8L * LinuxCgroupJob.CPU_PERIOD_MICROS;
 
     private static final Path POSIX_SHELL = Path.of("/bin/sh");
+
+    /** Provider environment keys whose value names a JDK the provider runs or hands to its build. */
+    static final List<String> TOOLCHAIN_HOME_KEYS = List.of("JAVA_HOME", "JDK_HOME");
+
+    private static final Path ETC = Path.of("/etc");
+
+    /**
+     * Public certificate stores a JDK links its {@code cacerts} into (Debian/Ubuntu, Fedora/RHEL). With
+     * first-level {@code /etc/java*} directories they are the only /etc locations a toolchain link may reach.
+     */
+    static final List<Path> ETC_LINK_TARGET_ROOTS = List.of(
+            Path.of("/etc/ssl/certs"),
+            Path.of("/etc/pki/java"),
+            Path.of("/etc/pki/ca-trust/extracted"));
+
+    /** Bounds of the link scan of a toolchain root; a JDK has a few thousand entries. */
+    static final int MAX_TOOLCHAIN_SCAN_DEPTH = 16;
+    static final int MAX_TOOLCHAIN_SCAN_ENTRIES = 50_000;
 
     private final Path minosHome;
     private final Path bubblewrap;
@@ -158,7 +185,8 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                         "LINUX_SANDBOX_SCRATCH_IS_PRIVATE_TMPFS_CHARGED_TO_THE_JOB_MEMORY_LIMIT",
                         "LINUX_RUNTIME_CAPABILITY_PROBE_REQUIRED",
                         "MINOS_SUPERVISED_PROVIDER_WRITE_QUOTA_BYTES_AND_ENTRIES",
-                        "MINOS_WALL_CLOCK_TIMEOUT_AND_RUN_RESIDUE_RECLAMATION"));
+                        "MINOS_WALL_CLOCK_TIMEOUT_AND_RUN_RESIDUE_RECLAMATION",
+                        "LINUX_TOOLCHAIN_HOME_READ_ONLY_ROOT_AND_ALLOWLISTED_ETC_LINK_TARGETS"));
     }
 
     /** Aggregate containment this backend really enforces once the cgroup boundary exists. */
@@ -283,7 +311,11 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         sandbox.add("/proc");
         sandbox.add("--tmpfs");
         sandbox.add("/tmp");
-        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy, minosHome);
+        // The environment the provider really receives (ProcessIndexerExecutor applies the same allowlist):
+        // a toolchain home it names, notably the project JDK, is a runtime root the provider must read.
+        Map<String, String> providerEnvironment =
+                ProviderProcessEnvironment.sanitize(new ProcessBuilder().environment(), plan.environment());
+        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy, minosHome, providerEnvironment);
         addWritableBind(sandbox, working);
         if (!artifactParent.startsWith(working)) addWritableBind(sandbox, artifactParent);
         if (!run.startsWith(working) && !run.startsWith(artifactParent)) addWritableBind(sandbox, run);
@@ -304,7 +336,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     private boolean probeOsIsolation() {
         List<String> command = baseCommand(5L, WorkerNetworkPolicy.DENY);
         try {
-            addRuntimeReadOnlyBinds(command, List.of("/bin/true"), WorkerNetworkPolicy.DENY, minosHome);
+            addRuntimeReadOnlyBinds(command, List.of("/bin/true"), WorkerNetworkPolicy.DENY, minosHome, Map.of());
         } catch (IOException exception) {
             // Every other failure branch in this method logs before declining to qualify; this one
             // must too -- discover() feeds WorkerSandboxBackends.strongestAvailable(), which falls
@@ -371,7 +403,8 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             List<String> command,
             List<String> providerCommand,
             WorkerNetworkPolicy networkPolicy,
-            Path minosHome
+            Path minosHome,
+            Map<String, String> providerEnvironment
     ) throws IOException {
         Set<Path> mounted = new LinkedHashSet<>();
         for (String root : List.of("/usr", "/bin", "/lib", "/lib64", "/sbin")) {
@@ -382,6 +415,12 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                     "/etc/ssl", "/etc/ca-certificates", "/etc/resolv.conf", "/etc/hosts",
                     "/etc/nsswitch.conf", "/etc/passwd", "/etc/group", "/etc/ld.so.cache")) {
                 addReadOnlyIfPresent(command, mounted, Path.of(value));
+            }
+        }
+        for (String key : TOOLCHAIN_HOME_KEYS) {
+            String value = providerEnvironment.get(key);
+            if (value != null) {
+                addToolchainHomeBinds(command, mounted, key, value, minosHome);
             }
         }
 
@@ -408,6 +447,179 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                 // Non-path provider arguments stay opaque.
             }
         }
+    }
+
+    /**
+     * Mounts the toolchain root named by {@code key} read-only, then the exact allow-listed /etc targets
+     * of its outward configuration links.
+     *
+     * <p>A distribution JDK lives under /usr (already mounted) but links each configuration file to
+     * /etc/java-N-openjdk or a CA bundle under /etc/ssl/certs; a self-contained JDK lives anywhere and
+     * needs its whole root, since its launcher loads {@code lib/libjli.so} relative to itself. The root
+     * is the real directory, never its parent. A link target is mounted only as the exact file or
+     * directory it designates and only when {@link #isAllowListedLinkTarget} accepts it: the root is named by an
+     * environment variable and may be writable by the user, so a planted link must never expose a
+     * profile file or an /etc secret.</p>
+     *
+     * @throws IllegalStateException when the root is too broad to mount (fail-closed, no path in the message)
+     */
+    static void addToolchainHomeBinds(
+            List<String> command,
+            Set<Path> mounted,
+            String key,
+            String value,
+            Path minosHome
+    ) throws IOException {
+        if (value.isBlank()) return;
+        Path named;
+        try {
+            named = Path.of(value);
+        } catch (InvalidPathException notAPath) {
+            return;
+        }
+        if (!named.isAbsolute() || !Files.isDirectory(named)) return;
+        Path normalized = named.toAbsolutePath().normalize();
+        Path real = named.toRealPath();
+        if (isOverBroadToolchainRoot(real, minosHome) || isOverBroadToolchainRoot(normalized, minosHome)) {
+            throw new IllegalStateException(key + " names a directory too broad to mount in the Linux sandbox "
+                    + "(a filesystem root, a top-level or system directory, the home directory or MINOS_HOME); "
+                    + "point " + key + " to the JDK's own directory");
+        }
+        if (!isJdkShaped(real) || isPrivateMinosData(real, minosHome)) {
+            throw new IllegalStateException(key + " does not name a JDK directory the Linux sandbox may mount "
+                    + "(bin/java with a release file or lib/libjli.so, outside MINOS_HOME except its tools); "
+                    + "point " + key + " to the JDK's own directory");
+        }
+        addReadOnlyAt(command, mounted, real, real);
+        if (!normalized.equals(real)) {
+            if (Files.isSymbolicLink(normalized)) {
+                addReadOnlyIfPresent(command, mounted, normalized);
+            } else {
+                addReadOnlyAt(command, mounted, real, normalized);
+            }
+        }
+        int refused = addAllowListedLinkTargets(command, mounted, real);
+        if (refused > 0) {
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux sandbox did not mount " + refused
+                    + " link target(s) of " + key + " outside the allow-listed Java configuration of /etc");
+        }
+    }
+
+    /**
+     * True for a real directory laid out as a JDK: its own {@code bin/java} regular file (no link out of
+     * the root) and a {@code release} file or {@code lib/libjli.so}. A variable pointing at a profile
+     * directory such as {@code ~/.ssh} is therefore never mounted.
+     */
+    static boolean isJdkShaped(Path realRoot) {
+        Path java = realRoot.resolve("bin").resolve("java");
+        if (!Files.isRegularFile(java, LinkOption.NOFOLLOW_LINKS)) return false;
+        return Files.isRegularFile(realRoot.resolve("release"), LinkOption.NOFOLLOW_LINKS)
+                || Files.isRegularFile(realRoot.resolve("lib").resolve("libjli.so"), LinkOption.NOFOLLOW_LINKS);
+    }
+
+    /** MINOS_HOME holds private control-plane data; only its managed tools may be a toolchain root. */
+    static boolean isPrivateMinosData(Path realRoot, Path minosHome) {
+        if (minosHome == null) return false;
+        Path home = minosHome.toAbsolutePath().normalize();
+        Path tools = home.resolve("tools");
+        if (Files.exists(home)) {
+            try {
+                home = home.toRealPath();
+                tools = home.resolve("tools");
+            } catch (IOException unresolvable) {
+                // The normalized spelling is compared instead; it is never broader.
+            }
+        }
+        return realRoot.startsWith(home) && !realRoot.startsWith(tools);
+    }
+
+    /** A root whose mount would expose far more than one toolchain. */
+    static boolean isOverBroadToolchainRoot(Path directory, Path minosHome) {
+        if (directory.getNameCount() < 2) return true;
+        for (String system : List.of("/etc", "/proc", "/sys", "/dev", "/run")) {
+            if (directory.startsWith(system)) return true;
+        }
+        List<Path> broad = new ArrayList<>();
+        String home = System.getProperty("user.home");
+        if (home != null && !home.isBlank()) broad.add(Path.of(home).toAbsolutePath().normalize());
+        if (minosHome != null) broad.add(minosHome.toAbsolutePath().normalize());
+        return broad.stream().anyMatch(location -> location.startsWith(directory));
+    }
+
+    /**
+     * Walks the toolchain root without following links and mounts each outward link target that
+     * {@link #isAllowListedLinkTarget} accepts, exactly; returns how many outward targets were refused.
+     */
+    private static int addAllowListedLinkTargets(List<String> command, Set<Path> mounted, Path root)
+            throws IOException {
+        List<Path> links = toolchainLinks(root);
+        int refused = 0;
+        for (Path link : links) {
+            Path target;
+            try {
+                target = link.toRealPath();
+            } catch (IOException dangling) {
+                continue;
+            }
+            if (target.startsWith(root) || mounted.stream().anyMatch(target::startsWith)) continue;
+            if (!isAllowListedLinkTarget(target)) {
+                refused++;
+                continue;
+            }
+            addReadOnlyAt(command, mounted, target, target);
+            // The link resolves inside the sandbox by its literal spelling; when an intermediate link
+            // makes that spelling differ from the real target, the same source is bound there too.
+            Path literal = link.getParent().resolve(Files.readSymbolicLink(link)).toAbsolutePath().normalize();
+            if (!literal.equals(target) && isAllowListedLinkTarget(literal)) {
+                addReadOnlyAt(command, mounted, target, literal);
+            }
+        }
+        return refused;
+    }
+
+    /** The symbolic links of a toolchain root, found without following any link and within fixed bounds. */
+    private static List<Path> toolchainLinks(Path root) throws IOException {
+        List<Path> links = new ArrayList<>();
+        Files.walkFileTree(root, Set.of(), MAX_TOOLCHAIN_SCAN_DEPTH, new SimpleFileVisitor<>() {
+            private int visited;
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                if (attributes.isSymbolicLink()) links.add(file);
+                return ++visited >= MAX_TOOLCHAIN_SCAN_ENTRIES ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException unreadable) {
+                // An unreadable entry is not mounted either: skipping it grants nothing.
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return links;
+    }
+
+    /**
+     * True for public Java configuration under /etc only: the exact file or directory below a
+     * first-level {@code /etc/java*} directory or below one of {@link #ETC_LINK_TARGET_ROOTS}, never the
+     * allowed directory itself and never anything else under /etc.
+     */
+    static boolean isAllowListedLinkTarget(Path target) {
+        Path normalized = target.toAbsolutePath().normalize();
+        if (normalized.getNameCount() >= 3 && normalized.startsWith(ETC)
+                && normalized.getName(1).toString().startsWith("java")) return true;
+        return ETC_LINK_TARGET_ROOTS.stream()
+                .anyMatch(allowed -> normalized.startsWith(allowed) && !normalized.equals(allowed));
+    }
+
+    /** Binds {@code source} read-only at {@code destination} once, unless a mounted root already covers it. */
+    private static void addReadOnlyAt(List<String> command, Set<Path> mounted, Path source, Path destination) {
+        Path marker = destination.toAbsolutePath().normalize();
+        if (mounted.stream().anyMatch(marker::startsWith)) return;
+        if (!mounted.add(marker)) return;
+        addDestinationParents(command, marker);
+        command.add("--ro-bind");
+        command.add(source.toString());
+        command.add(marker.toString());
     }
 
     static Path managedRuntimeRoot(Path candidate, Path tools) {
