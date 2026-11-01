@@ -46,6 +46,7 @@ public final class DockerRuntimeBootstrap {
     private static final String REPLACE = "--replace";
     private static final String DRY_RUN = "--dry-run";
     private static final String SKIP = "--skip";
+    private static final String MOUNTS = "mounts";
     private static final String USAGE = "error: expected one of: " + INIT_PROJECT_MOUNTS + " <container-root>; "
             + ADD_PROJECT_MOUNT + " <name> <host-folder>; " + REMOVE_PROJECT_MOUNT + " <name>; "
             + LIST_PROJECT_MOUNTS + " --format json; " + MIGRATE_PROJECT_MOUNTS + " [--dry-run] [--skip <path>]...; "
@@ -152,13 +153,13 @@ public final class DockerRuntimeBootstrap {
         Optional<ProjectPathMapping> saved = ProjectPathMappingService.forHome(home).load();
         Map<String, Object> listing;
         if (saved.isEmpty()) {
-            listing = DeterministicJson.object("formatVersion", 0, "containerRoot", null, "mounts", List.of());
+            listing = DeterministicJson.object("formatVersion", 0, "containerRoot", null, MOUNTS, List.of());
         } else {
             ProjectPathMapping mapping = saved.orElseThrow();
             listing = DeterministicJson.object(
                     "formatVersion", mapping.mountTable() ? 2 : 1,
                     "containerRoot", mapping.containerRoot(),
-                    "mounts", mounts(mapping.mounts()));
+                    MOUNTS, mounts(mapping.mounts()));
         }
         output.append(DeterministicJson.render(listing)).append('\n');
         return CliExitCodes.SUCCESS;
@@ -167,11 +168,14 @@ public final class DockerRuntimeBootstrap {
     private static int migrate(Path home, String[] arguments, Appendable output, Appendable error) throws IOException {
         boolean dryRun = false;
         Set<String> skipped = new LinkedHashSet<>();
-        for (int index = 0; index < arguments.length; index++) {
+        int index = 0;
+        while (index < arguments.length) {
             if (DRY_RUN.equals(arguments[index])) {
                 dryRun = true;
+                index += 1;
             } else if (SKIP.equals(arguments[index]) && index + 1 < arguments.length) {
-                skipped.add(arguments[++index]);
+                skipped.add(arguments[index + 1]);
+                index += 2;
             } else {
                 return usage(error);
             }
@@ -184,7 +188,7 @@ public final class DockerRuntimeBootstrap {
         }
         output.append(DeterministicJson.render(DeterministicJson.object(
                 "outcome", migration.outcome().name(),
-                "mounts", mounts(migration.table().mounts()),
+                MOUNTS, mounts(migration.table().mounts()),
                 "skipped", skippedProjects))).append('\n');
         return CliExitCodes.SUCCESS;
     }

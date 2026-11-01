@@ -311,7 +311,11 @@ public record ProjectPathMapping(String hostRoot, String containerRoot, List<Pro
     static String normalizeRelative(String value) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException("relative project root must not be blank");
         String normalized = normalizeCandidate(value);
-        if (".".equals(normalized)) return normalized;
+        if (!".".equals(normalized)) requireSafeRelative(normalized, value);
+        return normalized;
+    }
+
+    private static void requireSafeRelative(String normalized, String value) {
         if (normalized.startsWith("/") || isWindowsAbsolute(normalized)) {
             throw new IllegalArgumentException("project root must be relative: " + value);
         }
@@ -320,7 +324,6 @@ public record ProjectPathMapping(String hostRoot, String containerRoot, List<Pro
                 throw new IllegalArgumentException("unsafe relative project root: " + value);
             }
         }
-        return normalized;
     }
 
     private static boolean isWindowsAbsolute(String value) {

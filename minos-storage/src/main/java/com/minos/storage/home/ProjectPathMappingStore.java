@@ -42,9 +42,15 @@ public final class ProjectPathMappingStore {
     public static final String FILE_NAME = "project-paths.properties";
 
     private static final long MAX_MAPPING_BYTES = 64L * 1024L;
-    private static final Set<String> SINGLE_ROOT_KEYS = Set.of("formatVersion", "hostRoot", "containerRoot");
-    private static final Set<String> TABLE_KEYS = Set.of("formatVersion", "containerRoot");
-    private static final Pattern MOUNT_KEY = Pattern.compile("mount\\.(0|[1-9][0-9]?)\\.(path|hostRoot)");
+    private static final String FORMAT_VERSION = "formatVersion";
+    private static final String HOST_ROOT = "hostRoot";
+    private static final String CONTAINER_ROOT = "containerRoot";
+    private static final String MOUNT = "mount.";
+    private static final String HOME_LABEL = "MINOS home";
+    private static final String DIRECTORY_LABEL = "project path mapping directory";
+    private static final Set<String> SINGLE_ROOT_KEYS = Set.of(FORMAT_VERSION, HOST_ROOT, CONTAINER_ROOT);
+    private static final Set<String> TABLE_KEYS = Set.of(FORMAT_VERSION, CONTAINER_ROOT);
+    private static final Pattern MOUNT_KEY = Pattern.compile("mount\\.(0|[1-9]\\d?)\\.(path|hostRoot)");
     private static final int MAX_ENTRIES = TABLE_KEYS.size() + 2 * ProjectPathMapping.MAX_MOUNTS;
 
     private final Path home;
@@ -82,25 +88,25 @@ public final class ProjectPathMappingStore {
 
     public void save(ProjectPathMapping mapping) throws IOException {
         Objects.requireNonNull(mapping, "mapping");
-        validateExistingContainer(home, "MINOS home");
-        validateExistingContainer(runtimeDirectory, "project path mapping directory");
-        DurableAtomicFile.ensureDirectory(runtimeDirectory, "project path mapping directory");
+        validateExistingContainer(home, HOME_LABEL);
+        validateExistingContainer(runtimeDirectory, DIRECTORY_LABEL);
+        DurableAtomicFile.ensureDirectory(runtimeDirectory, DIRECTORY_LABEL);
         Properties properties = new Properties();
         int version;
         if (mapping.mountTable()) {
             version = MOUNT_TABLE_FORMAT_VERSION;
-            properties.setProperty("containerRoot", mapping.containerRoot());
+            properties.setProperty(CONTAINER_ROOT, mapping.containerRoot());
             List<ProjectMount> mounts = mapping.mounts();
             for (int index = 0; index < mounts.size(); index++) {
-                properties.setProperty("mount." + index + ".path", mounts.get(index).path());
-                properties.setProperty("mount." + index + ".hostRoot", mounts.get(index).hostRoot());
+                properties.setProperty(MOUNT + index + ".path", mounts.get(index).path());
+                properties.setProperty(MOUNT + index + ".hostRoot", mounts.get(index).hostRoot());
             }
         } else {
             version = SINGLE_ROOT_FORMAT_VERSION;
-            properties.setProperty("hostRoot", mapping.hostRoot());
-            properties.setProperty("containerRoot", mapping.containerRoot());
+            properties.setProperty(HOST_ROOT, mapping.hostRoot());
+            properties.setProperty(CONTAINER_ROOT, mapping.containerRoot());
         }
-        properties.setProperty("formatVersion", Integer.toString(version));
+        properties.setProperty(FORMAT_VERSION, Integer.toString(version));
         Path temporary = PrivateLocalStorage.createPrivateTempFile(runtimeDirectory, FILE_NAME + ".", ".tmp");
         try {
             ByteArrayOutputStream content = new ByteArrayOutputStream();
@@ -120,8 +126,8 @@ public final class ProjectPathMappingStore {
      */
     public Path backupBeside(String suffix) throws IOException {
         Objects.requireNonNull(suffix, "suffix");
-        validateExistingContainer(home, "MINOS home");
-        validateExistingContainer(runtimeDirectory, "project path mapping directory");
+        validateExistingContainer(home, HOME_LABEL);
+        validateExistingContainer(runtimeDirectory, DIRECTORY_LABEL);
         byte[] content;
         try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
             content = input.readNBytes((int) MAX_MAPPING_BYTES + 1);
@@ -145,8 +151,8 @@ public final class ProjectPathMappingStore {
     }
 
     private Optional<Properties> loadProperties() throws IOException {
-        validateExistingContainer(home, "MINOS home");
-        validateExistingContainer(runtimeDirectory, "project path mapping directory");
+        validateExistingContainer(home, HOME_LABEL);
+        validateExistingContainer(runtimeDirectory, DIRECTORY_LABEL);
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("project path mapping is not a regular non-symlink file: " + leafName(file));
@@ -163,7 +169,7 @@ public final class ProjectPathMappingStore {
     }
 
     private static int formatVersion(Properties properties) {
-        String raw = required(properties, "formatVersion");
+        String raw = required(properties, FORMAT_VERSION);
         final int version;
         try {
             version = Integer.parseInt(raw);
@@ -181,7 +187,7 @@ public final class ProjectPathMappingStore {
             String key = String.valueOf(rawKey);
             if (!SINGLE_ROOT_KEYS.contains(key)) throw unknownKey(key);
         }
-        return ProjectPathMapping.singleRoot(required(properties, "hostRoot"), required(properties, "containerRoot"));
+        return ProjectPathMapping.singleRoot(required(properties, HOST_ROOT), required(properties, CONTAINER_ROOT));
     }
 
     private static ProjectPathMapping table(Properties properties) throws IOException {
@@ -202,10 +208,10 @@ public final class ProjectPathMappingStore {
         List<ProjectMount> mounts = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
             mounts.add(new ProjectMount(
-                    required(properties, "mount." + index + ".path"),
-                    required(properties, "mount." + index + ".hostRoot")));
+                    required(properties, MOUNT + index + ".path"),
+                    required(properties, MOUNT + index + ".hostRoot")));
         }
-        return ProjectPathMapping.mounted(required(properties, "containerRoot"), mounts);
+        return ProjectPathMapping.mounted(required(properties, CONTAINER_ROOT), mounts);
     }
 
     private static IOException unknownKey(String key) {
