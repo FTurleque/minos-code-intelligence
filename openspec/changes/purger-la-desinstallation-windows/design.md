@@ -50,7 +50,7 @@ Le script expose `-RemoveImages` (testé) ; le désinstalleur ne le passe qu'une
 
 ### D5 — Codex : les marqueurs font la propriété
 
-Seul MINOS écrit `# BEGIN/END MINOS MANAGED MCP SERVER`. À la désinstallation, le bloc qu'ils bornent est retiré, après sauvegarde, que l'état soit absent, `managed` ou `preexisting`, et que le mode enregistré soit `toml` ou `cli` (reste d'une installation Desktop précédente). Exceptions conservées : un bloc dont l'empreinte diffère de celle enregistrée (modifié par l'utilisateur) reste en place avec un avertissement, désormais journalisé ; une section `[mcp_servers.minos]` sans marqueurs n'est jamais touchée. Rupture voulue du contrat `preexisting` de `scripts/install/verify-codex-mcp-integration.ps1`.
+Seul MINOS écrit `# BEGIN/END MINOS MANAGED MCP SERVER`. À la désinstallation, le bloc qu'ils bornent est retiré, après sauvegarde, que l'état soit absent, `managed` ou `preexisting`, et que le mode enregistré soit `toml` ou `cli` (reste d'une installation Desktop précédente). Sans fichier d'état, aucune empreinte n'est connue : le bloc est retiré sans ce contrôle, avec une sauvegarde complète du fichier et la raison `missing-state` au journal. Exceptions conservées : avec un état, un bloc dont l'empreinte diffère de celle enregistrée (modifié par l'utilisateur) reste en place avec un avertissement, désormais journalisé ; une section `[mcp_servers.minos]` sans marqueurs n'est jamais touchée. Rupture voulue du contrat `preexisting` de `scripts/install/verify-codex-mcp-integration.ps1`.
 
 ## Direction des dépendances
 

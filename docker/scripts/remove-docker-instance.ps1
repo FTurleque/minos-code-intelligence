@@ -62,7 +62,8 @@ function Invoke-Docker([string[]] $Arguments) {
     return [pscustomobject]@{ ExitCode = $ExitCode; Lines = $Lines; Output = ($Lines -join "`n") }
 }
 
-# Names or ids printed one per line by a successful listing; $null when the listing itself failed.
+# Names or ids printed one per line by a successful listing, as an array even when empty or single
+# (the leading comma stops PowerShell from unrolling it); $null when the listing itself failed.
 function Get-Listing([string] $Step, [string[]] $Arguments) {
     $Result = Invoke-Docker $Arguments
     if ($Result.ExitCode -ne 0) {
@@ -70,7 +71,7 @@ function Get-Listing([string] $Step, [string[]] $Arguments) {
         Write-Step ("step=$Step result=failed exit=$($Result.ExitCode) detail=" + (Format-Detail $Result.Output))
         return $null
     }
-    return @($Result.Lines | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' } | Sort-Object -Unique)
+    return , @($Result.Lines | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' } | Sort-Object -Unique)
 }
 
 function Get-LabelledObjects([string] $Kind, [string[]] $Labels) {
@@ -80,7 +81,7 @@ function Get-LabelledObjects([string] $Kind, [string[]] $Labels) {
         if ($null -eq $Listing) { continue }
         $Names += $Listing
     }
-    return @($Names | Sort-Object -Unique)
+    return , @($Names | Sort-Object -Unique)
 }
 
 function Remove-Object([string] $Step, [string[]] $Command, [string] $Name) {
@@ -139,7 +140,7 @@ foreach ($Network in $Networks) { Remove-Object 'network' @('network', 'rm') $Ne
 # 3. Volumes, on purge only: the project's Compose volumes, the volumes labelled for the instance and
 # the two external volumes the installer names after it (PostgreSQL data and Ollama models).
 if ($Purge) {
-    $Volumes = @(Get-LabelledObjects 'volume' @('com.docker.compose.project', 'io.minos.installation'))
+    $Volumes = Get-LabelledObjects 'volume' @('com.docker.compose.project', 'io.minos.installation')
     $AllVolumes = Get-Listing 'volume-list' @('volume', 'ls', '-q')
     if ($null -ne $AllVolumes) {
         foreach ($Named in @("$ComposeProject-postgres-data", "$ComposeProject-ollama-models")) {

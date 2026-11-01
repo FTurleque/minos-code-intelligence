@@ -267,7 +267,37 @@ try {
     Assert-True ($Refs -contains 'nginx:1') 'Image removal removed an image of another repository.'
     Assert-True ($Images.Log.Contains('step=image result=kept-in-use name=minos-code-intelligence:1.2.0-abc-query')) 'An image kept because it is in use was not logged.'
 
-    # 6. The script ships ASCII-only, for Windows PowerShell 5.1.
+    # 6. An instance with nothing left (a second uninstall, or a native-only machine with Docker): every
+    # step says so and the removal succeeds; nothing of the other projects is touched.
+    $EmptyState = New-InstanceState
+    $EmptyState.containers = @($EmptyState.containers | Where-Object { $_.id -in @('c-other', 'c-unrelated') })
+    $EmptyState.volumes = @($EmptyState.volumes | Where-Object { $_.name -in @('other-instance-postgres-data', 'unrelated-data') })
+    $EmptyState.networks = @($EmptyState.networks | Where-Object { $_.id -in @('other-instance_default', 'unrelated_default') })
+    $EmptyState.images = @($EmptyState.images | Where-Object { $_.ref -eq 'nginx:1' })
+    $Empty = Invoke-Scenario 'empty' $EmptyState @{ Purge = $true; RemoveImages = $true }
+    Assert-True ($Empty.ExitCode -eq 0) "Removal of an instance with nothing left failed (exit $($Empty.ExitCode)): $($Empty.Output)"
+    foreach ($Step in @('container', 'network', 'volume', 'image')) {
+        Assert-True ($Empty.Log.Contains("step=$Step result=none")) "Removal of an instance with nothing left did not log step=$Step result=none."
+    }
+    Assert-True ((Names $Empty.State.containers 'id').Count -eq 2 -and (Names $Empty.State.volumes 'name').Count -eq 2) 'Removal of an empty instance touched another project.'
+
+    # 7. The usual single-network project: one container, one network, one volume. A one-element result
+    # must not be unrolled into a string (Set-StrictMode Latest refuses .Count on it).
+    $SingleState = New-InstanceState
+    $SingleState.containers = @($SingleState.containers | Where-Object { $_.id -in @('c-postgres', 'c-unrelated') })
+    $SingleState.containers[0].networks = @('minos-mcp-prod_default')
+    $SingleState.volumes = @($SingleState.volumes | Where-Object { $_.name -in @('minos-mcp-prod-postgres-data', 'unrelated-data') })
+    $SingleState.networks = @($SingleState.networks | Where-Object { $_.id -in @('minos-mcp-prod_default', 'unrelated_default') })
+    $SingleState.images = @($SingleState.images | Where-Object { $_.ref -in @('minos-code-intelligence:1.3.0-def', 'nginx:1') })
+    $Single = Invoke-Scenario 'single' $SingleState @{ Purge = $true; RemoveImages = $true }
+    Assert-True ($Single.ExitCode -eq 0) "Removal of a single-container instance failed (exit $($Single.ExitCode)): $($Single.Output)"
+    foreach ($Line in @('step=container result=removed name=c-postgres', 'step=network result=removed name=minos-mcp-prod_default',
+            'step=volume result=removed name=minos-mcp-prod-postgres-data', 'step=image result=removed name=minos-code-intelligence:1.3.0-def')) {
+        Assert-True ($Single.Log.Contains($Line)) "Removal of a single-container instance did not log: $Line"
+    }
+    Assert-True ((Names $Single.State.containers 'id') -contains 'c-unrelated') 'Removal of a single-container instance touched another project.'
+
+    # 8. The script ships ASCII-only, for Windows PowerShell 5.1.
     $Bytes = [System.IO.File]::ReadAllBytes($Remover)
     Assert-True (@($Bytes | Where-Object { $_ -gt 127 }).Count -eq 0) 'remove-docker-instance.ps1 must be ASCII-only.'
 
