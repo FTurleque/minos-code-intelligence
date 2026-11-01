@@ -556,7 +556,10 @@ class ProjectMountLifecycleTests(PowerShellCase):
             self.assertFalse(any("add-project-mount" in call or "up -d" in call for call in calls), (label, calls))
             flat = flatten(output)
             self.assertIn("user profile", flat, label)
-            self.assertNotIn(str(Path.home()), flat.replace(" ", ""), (label, "the refusal names no path"))
+            # The refusal itself names no path (PowerShell's error record adds the script location around it).
+            refusal = re.search(r"cannot be exposed to the MINOS Docker runtime:(.*?)Nothing was changed", flat)
+            self.assertIsNotNone(refusal, (label, flat))
+            self.assertNotIn(str(Path.home()), refusal.group(1), (label, "the refusal names no path"))
 
     def test_a_folder_with_a_dollar_sign_is_refused_before_the_bootstrap(self):
         for label, executable in self.runtimes:

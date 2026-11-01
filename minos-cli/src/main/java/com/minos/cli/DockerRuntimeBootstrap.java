@@ -10,9 +10,11 @@ import com.minos.output.json.DeterministicJson;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -148,17 +150,17 @@ public final class DockerRuntimeBootstrap {
             return usage(error);
         }
         Optional<ProjectPathMapping> saved = ProjectPathMappingService.forHome(home).load();
-        StringBuilder json = new StringBuilder("{\"formatVersion\":");
+        Map<String, Object> listing;
         if (saved.isEmpty()) {
-            json.append("0,\"containerRoot\":null,\"mounts\":[]");
+            listing = DeterministicJson.object("formatVersion", 0, "containerRoot", null, "mounts", List.of());
         } else {
             ProjectPathMapping mapping = saved.orElseThrow();
-            json.append(mapping.mountTable() ? 2 : 1)
-                    .append(",\"containerRoot\":").append(DeterministicJson.quote(mapping.containerRoot()))
-                    .append(",\"mounts\":");
-            appendMounts(json, mapping.mounts());
+            listing = DeterministicJson.object(
+                    "formatVersion", mapping.mountTable() ? 2 : 1,
+                    "containerRoot", mapping.containerRoot(),
+                    "mounts", mounts(mapping.mounts()));
         }
-        output.append(json.append("}\n"));
+        output.append(DeterministicJson.render(listing)).append('\n');
         return CliExitCodes.SUCCESS;
     }
 
@@ -175,31 +177,26 @@ public final class DockerRuntimeBootstrap {
             }
         }
         ProjectPathMappingService.Migration migration = ProjectPathMappingService.forHome(home).migrate(skipped, dryRun);
-        StringBuilder json = new StringBuilder("{\"outcome\":")
-                .append(DeterministicJson.quote(migration.outcome().name()))
-                .append(",\"mounts\":");
-        appendMounts(json, migration.table().mounts());
-        json.append(",\"skipped\":[");
-        for (int index = 0; index < migration.skipped().size(); index++) {
-            ProjectPathMappingService.Skipped entry = migration.skipped().get(index);
-            if (index > 0) json.append(',');
-            json.append("{\"project\":").append(DeterministicJson.quote(entry.displayName()))
-                    .append(",\"reason\":").append(DeterministicJson.quote(entry.reason().name())).append('}');
+        List<Object> skippedProjects = new ArrayList<>();
+        for (ProjectPathMappingService.Skipped entry : migration.skipped()) {
+            skippedProjects.add(DeterministicJson.object(
+                    "project", entry.displayName(), "reason", entry.reason().name()));
         }
-        output.append(json.append("]}\n"));
+        output.append(DeterministicJson.render(DeterministicJson.object(
+                "outcome", migration.outcome().name(),
+                "mounts", mounts(migration.table().mounts()),
+                "skipped", skippedProjects))).append('\n');
         return CliExitCodes.SUCCESS;
     }
 
-    private static void appendMounts(StringBuilder json, List<ProjectMount> mounts) {
-        json.append('[');
-        for (int index = 0; index < mounts.size(); index++) {
-            ProjectMount mount = mounts.get(index);
-            if (index > 0) json.append(',');
-            json.append("{\"name\":").append(DeterministicJson.quote(mount.path()))
-                    .append(",\"path\":").append(DeterministicJson.quote(mount.path()))
-                    .append(",\"hostRoot\":").append(DeterministicJson.quote(mount.hostRoot())).append('}');
+    /** The mounts as the lifecycle script reads them: name, container path and host folder. */
+    private static List<Object> mounts(List<ProjectMount> mounts) {
+        List<Object> rendered = new ArrayList<>();
+        for (ProjectMount mount : mounts) {
+            rendered.add(DeterministicJson.object(
+                    "name", mount.path(), "path", mount.path(), "hostRoot", mount.hostRoot()));
         }
-        json.append(']');
+        return rendered;
     }
 
     private static int configure(Path home, String[] arguments, Appendable output, Appendable error)
