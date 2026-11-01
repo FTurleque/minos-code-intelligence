@@ -2,7 +2,6 @@ package com.minos.application;
 
 import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.ProjectPathMappings;
-import com.minos.registry.ProjectPathMappings.Replacement;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

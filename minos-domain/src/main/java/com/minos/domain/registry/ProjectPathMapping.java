@@ -90,7 +90,7 @@ public record ProjectPathMapping(String hostRoot, String containerRoot) {
     public Optional<String> relativeForHostPath(String hostPath) {
         try {
             return Optional.of(relativeFrom(hostRoot, normalizeCandidate(hostPath)));
-        } catch (IllegalArgumentException outside) {
+        } catch (IllegalArgumentException _) {
             return Optional.empty();
         }
     }

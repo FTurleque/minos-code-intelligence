@@ -28,14 +28,21 @@ class DockerProjectsRootReplacementContractTest {
     private static final String CALL = "$RecordedProjectsRoot = " + FUNCTION
             + " -DockerDataRoot $DockerDataRoot -ProjectsRoot $ProjectsRoot";
 
+    /** A mapping file as minos-bootstrap writes it (Java properties escaping, comment header). */
+    private static final String OTHER_ROOT_MAPPING = """
+            #MINOS project path mapping v1
+            containerRoot=/workspace/projects
+            formatVersion=1
+            hostRoot=C\\:/Users/alice
+            """;
+
     /** label -> mapping file content ('-' for no file), chosen root, expected result ('' when no change). */
     private static final Map<String, String[]> CASES = cases(
             "noMapping", new String[]{"-", "N:\\workspace-dev", ""},
             "sameRoot", new String[]{"formatVersion=1\nhostRoot=N\\:/workspace-dev\ncontainerRoot=/workspace/projects\n",
                     "N:\\workspace-dev\\", ""},
             "sameRootOtherCase", new String[]{"hostRoot=n\\:/WORKSPACE-dev\n", "N:\\workspace-dev", ""},
-            "otherRoot", new String[]{"#MINOS project path mapping v1\ncontainerRoot=/workspace/projects\n"
-                    + "formatVersion=1\nhostRoot=C\\:/Users/alice\n", "N:\\workspace-dev", "C:/Users/alice"},
+            "otherRoot", new String[]{OTHER_ROOT_MAPPING, "N:\\workspace-dev", "C:/Users/alice"},
             "noHostRoot", new String[]{"formatVersion=1\n", "N:\\workspace-dev", ""});
 
     @Test

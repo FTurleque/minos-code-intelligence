@@ -64,22 +64,29 @@ final class ProjectRootReplacement {
         int detached = 0;
         for (Planned entry : plan) {
             // An unchanged mapping leaves every attached entry as it is: only detached entries are reattached.
-            if (unchanged && !entry.detached()) continue;
-            Optional<String> relative = desired.relativeForHostPath(entry.hostRoot());
-            if (relative.isEmpty()) {
-                detached++;
-                continue;
+            if (!unchanged || entry.detached()) {
+                switch (reexpress(entry, desired, backupStamp)) {
+                    case REBASED -> rebased++;
+                    case REATTACHED -> reattached++;
+                    case DETACHED -> detached++;
+                }
             }
-            if (entry.detached()) {
-                LocalProjectRegistry.backupOnce(entry.file(), backupOf(entry.file(), backupStamp));
-                reattached++;
-            } else {
-                rebased++;
-            }
-            LocalProjectRegistry.writePropertiesAtomically(entry.file(), portableForm(entry, relative.orElseThrow()));
         }
         return new Replacement(rebased, reattached, detached);
     }
+
+    /** Writes {@code entry} under {@code desired} when its host root lies there; a detached entry is saved first. */
+    private static Placement reexpress(Planned entry, ProjectPathMapping desired, String backupStamp) throws IOException {
+        Optional<String> relative = desired.relativeForHostPath(entry.hostRoot());
+        if (relative.isEmpty()) return Placement.DETACHED;
+        if (entry.detached()) {
+            LocalProjectRegistry.backupOnce(entry.file(), backupOf(entry.file(), backupStamp));
+        }
+        LocalProjectRegistry.writePropertiesAtomically(entry.file(), portableForm(entry, relative.orElseThrow()));
+        return entry.detached() ? Placement.REATTACHED : Placement.REBASED;
+    }
+
+    private enum Placement { REBASED, REATTACHED, DETACHED }
 
     private List<Planned> plan(ProjectPathMapping existing) throws IOException {
         List<Planned> plan = new ArrayList<>();
@@ -111,7 +118,7 @@ final class ProjectRootReplacement {
                     ? existing.hostPathOf(existing.relativeForLegacyPath(legacy))
                     : existing.hostPathOf(relative);
             return Optional.of(new Planned(file, properties, hostRoot, false));
-        } catch (IOException | IllegalArgumentException unreadable) {
+        } catch (IOException | IllegalArgumentException _) {
             return Optional.empty();
         }
     }

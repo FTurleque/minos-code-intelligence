@@ -65,7 +65,7 @@ class ProjectRootReplacementTest {
         assertNotEquals(homonym, detached.rootPath());
         assertFalse(detached.rootPath().startsWith(newRoot));
         assertFalse(Files.exists(detached.rootPath()));
-        assertTrue(backupsOf(app.id()).size() == 1, "the entry is saved before it is rewritten");
+        assertEquals(1, backupsOf(app.id()).size(), "the entry is saved before it is rewritten");
     }
 
     @Test
