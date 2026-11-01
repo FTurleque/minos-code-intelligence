@@ -134,7 +134,7 @@ Un dépôt présent mais incomplet n'est pas détectable sans construire le mod�
 
 Le choix passe le filtre de `.claude/rules/adr.md` : options réelles, modèle de confiance du code analysé, garantie de sécurité coûteuse à inverser. SEC-0074 décision 3 n'en fixe que l'exigence (« dépôt Maven visible du bac à sable sans sortie réseau ») ; SEC-0070 fixe `DENY`, que ce choix confirme sans le changer.
 
-Un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-0075` si SEC-0074 est fusionné) fixe la voie A et écarte B et C, en citant SEC-0074 décision 3 sans la reformuler (décision 5). SEC-0074 reste actif et inchangé.
+Un nouvel ADR du domaine sécurité (`SEC-0076`) fixe la voie A et écarte B et C, en citant SEC-0074 décision 3 sans la reformuler (décision 5). SEC-0074 reste actif et inchangé.
 
 ## Décisions du propriétaire (2026-10-31)
 

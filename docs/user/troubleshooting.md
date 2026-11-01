@@ -128,7 +128,7 @@ echo "$JAVA_HOME"
 
 ## Linux : dépôt Maven désigné, build hors ligne
 
-Le build Maven d'un projet analysé exécute du code que contrôle ce projet (greffons, extensions de `.mvn/extensions.xml`, options de `.mvn/jvm.config`). Sous Linux il tourne dans le bac à sable, **sans réseau** ([ADR SEC-0075](../architecture/adr/SEC-0075-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md)) : ses greffons et dépendances viennent d'un **dépôt Maven que vous désignez**, monté en lecture seule. MINOS lance alors Maven avec `--offline`, ses propres réglages (aucun serveur, miroir ni proxy) et un dépôt de tête vide créé pour le run ; le dépôt désigné n'est jamais écrit.
+Le build Maven d'un projet analysé exécute du code que contrôle ce projet (greffons, extensions de `.mvn/extensions.xml`, options de `.mvn/jvm.config`). Sous Linux il tourne dans le bac à sable, **sans réseau** ([ADR SEC-0076](../architecture/adr/SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md)) : ses greffons et dépendances viennent d'un **dépôt Maven que vous désignez**, monté en lecture seule. MINOS lance alors Maven avec `--offline`, ses propres réglages (aucun serveur, miroir ni proxy) et un dépôt de tête vide créé pour le run ; le dépôt désigné n'est jamais écrit.
 
 Le réglage `minos.scip.java.maven-repository` n'a **pas de valeur par défaut**. Le définir, au choix :
 

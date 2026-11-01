@@ -115,7 +115,7 @@ class DefaultMinosApplicationComposerTest {
                 new DefaultMinosApplicationComposer().projectPathMappings(home));
     }
 
-    /** ADR SEC-0075: the Maven repository designated in minos.properties reaches the scip-java runtime manager. */
+    /** ADR SEC-0076: the Maven repository designated in minos.properties reaches the scip-java runtime manager. */
     @Test
     @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.LINUX)
     void theMavenRepositoryDesignatedInTheConfigurationReachesScipJava(@TempDir Path temp) throws Exception {

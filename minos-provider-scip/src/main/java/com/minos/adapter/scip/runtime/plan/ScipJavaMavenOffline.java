@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * The offline Maven build scip-java runs outside Windows (ADR SEC-0075).
+ * The offline Maven build scip-java runs outside Windows (ADR SEC-0076).
  *
  * <p>The build of an analysed project is untrusted code and runs with the network denied, so its plugins and
  * dependencies come from a Maven repository the user designates explicitly; there is no default. This class
@@ -154,7 +154,7 @@ public final class ScipJavaMavenOffline {
         return problems;
     }
 
-    /** Decides whether the designation may be mounted (ADR SEC-0075, decision 3). */
+    /** Decides whether the designation may be mounted (ADR SEC-0076, decision 3). */
     Repository repository() {
         if (designation == null) return new Repository(RepositoryState.ABSENT, "", Optional.empty());
         Path named;

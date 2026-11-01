@@ -84,7 +84,7 @@ Un `IndexerProcessPlan` peut déclarer des **racines de lecture** (`readOnlyRoot
 - `LinuxBubblewrapWorkerSandboxBackend` revérifie chaque racine juste avant de construire sa commande (chemin absolu, répertoire existant, aucun lien, composants appartenant à l'utilisateur ou à root et non inscriptibles par d'autres comptes, aucun chevauchement avec l'espace de travail, l'artefact, le run ou `MINOS_HOME`), la monte par `--ro-bind` vers elle-même après les montages inscriptibles, puis lie `/dev/null` sur chaque fichier masqué existant. Le réseau reste celui de la politique du plan.
 - `WindowsAppContainerWorkerSandboxBackend`, `WindowsJobObjectProcessOwnership` et la propriété cgroup Linux sans bac à sable OS refusent un plan qui en déclare, avant tout fichier de plan, octroi ou processus.
 
-Seul scip-java en déclare aujourd'hui (ADR SEC-0075) ; un autre usage (Gradle, NuGet) demande sa propre décision.
+Seul scip-java en déclare aujourd'hui (ADR SEC-0076) ; un autre usage (Gradle, NuGet) demande sa propre décision.
 
 ## Providers SCIP gérés
 
@@ -100,7 +100,7 @@ Le runtime géré utilise Coursier pour lancer la version de `scip-java` verroui
 
 Le projet doit fournir son JDK via `JAVA_HOME` et appartenir au périmètre de build qualifié. M14 ne transforme pas le runtime Java embarqué de MINOS en JDK du projet.
 
-Hors Windows, le build Maven est hors ligne (ADR SEC-0075) : `ScipJavaMavenOffline` valide la désignation `minos.scip.java.maven-repository` (lue par `minos-bootstrap` dans les réglages de MINOS) et le Maven 3.9.x du `PATH`, écrit dans le run un `settings.xml` constant par `PrivateLocalStorage` et un dépôt de tête vide, puis le plan passe à scip-java, après `--`, `--batch-mode --offline -s … -gs … -Dmaven.repo.local=… -Dmaven.repo.local.tail=… clean verify -DskipTests`. Le dépôt désigné est la seule racine de lecture du plan ; `conf/settings.xml` et `conf/toolchains.xml` du Maven résolu sont masqués. Tout refus survient avant la copie du projet.
+Hors Windows, le build Maven est hors ligne (ADR SEC-0076) : `ScipJavaMavenOffline` valide la désignation `minos.scip.java.maven-repository` (lue par `minos-bootstrap` dans les réglages de MINOS) et le Maven 3.9.x du `PATH`, écrit dans le run un `settings.xml` constant par `PrivateLocalStorage` et un dépôt de tête vide, puis le plan passe à scip-java, après `--`, `--batch-mode --offline -s … -gs … -Dmaven.repo.local=… -Dmaven.repo.local.tail=… clean verify -DskipTests`. Le dépôt désigné est la seule racine de lecture du plan ; `conf/settings.xml` et `conf/toolchains.xml` du Maven résolu sont masqués. Tout refus survient avant la copie du projet.
 
 ## Lifecycle d'un projet
 

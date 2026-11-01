@@ -388,7 +388,7 @@ jobs:
           bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
           ./mvnw -B -ntp -Dminos.postgresql.tests.required=true -Dminos.sandbox.tests.required=true clean verify
 
-      # ADR SEC-0075: a real scip-java index of the trusted fixture, built offline under the required Linux sandbox
+      # ADR SEC-0076: a real scip-java index of the trusted fixture, built offline under the required Linux sandbox
       # from a qualification Maven repository populated outside it; the repository must come out unchanged.
       - name: Offline Maven index under the Linux sandbox (scip-java, designated repository)
         if: runner.os != 'Windows'

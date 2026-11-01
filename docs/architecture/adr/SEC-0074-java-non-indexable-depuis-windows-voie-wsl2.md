@@ -11,7 +11,7 @@ rules: false
 - **Date** : 2026-10-31
 - **Origine** : changement OpenSpec `rendre-l-echec-de-scip-java-sous-windows-actionnable` (tâche 5.2) ; décision du propriétaire du 2026-10-31
 - **Remplace** : ADR-0060
-- **Complété par** : [SEC-0075](SEC-0075-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md) (dépôt Maven visible du bac à sable sans sortie réseau, décision 3)
+- **Complété par** : [SEC-0076](SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md) (dépôt Maven visible du bac à sable sans sortie réseau, décision 3)
 
 ## Context
 

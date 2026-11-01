@@ -39,7 +39,7 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  * classpath: a standalone {@code scip-java} launcher found in the {@code PATH} (the one the Docker image builds, or a
  * tool chosen by the operator, like {@code node} for the other providers).</p>
  *
- * <p>Outside Windows the build runs offline ({@link ScipJavaMavenOffline}, ADR SEC-0075): the designated Maven
+ * <p>Outside Windows the build runs offline ({@link ScipJavaMavenOffline}, ADR SEC-0076): the designated Maven
  * repository is a read-only root of the plan, the global settings of the host Maven are masked, and the plan is
  * refused before the project is staged when the repository or a qualified Maven is missing.</p>
  */

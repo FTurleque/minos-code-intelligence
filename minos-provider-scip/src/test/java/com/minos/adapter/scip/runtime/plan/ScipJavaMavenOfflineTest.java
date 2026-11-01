@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * What {@link ScipJavaMavenOffline#prepare} gives the scip-java plan, which calls it before staging the project.
- * Outside Windows the scip-java plan builds offline from the designated Maven repository (ADR SEC-0075): fixed
+ * Outside Windows the scip-java plan builds offline from the designated Maven repository (ADR SEC-0076): fixed
  * Maven line after {@code --}, the repository as the only read-only root, the host Maven settings masked, constant
  * run settings and a fresh head repository; every designation that would expose a sensitive directory, and every
  * unqualified Maven, is refused before the project is staged, without a path in the message.

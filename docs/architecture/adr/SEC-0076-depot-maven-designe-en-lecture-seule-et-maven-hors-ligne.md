@@ -1,5 +1,5 @@
 ---
-id: SEC-0075
+id: SEC-0076
 title: "scip-java sous Linux : dépôt Maven désigné en lecture seule, Maven hors ligne, réseau fermé"
 domain: security
 rules: false

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real offline Maven indexing under the qualified Linux sandbox (ADR SEC-0075).
+# Real offline Maven indexing under the qualified Linux sandbox (ADR SEC-0076).
 #
 # 1. A qualification Maven repository is populated OUTSIDE the sandbox, with network, from the trusted fixture
 #    fixtures/java/java-simple only. Running Maven on an untrusted project to populate a repository is exactly
