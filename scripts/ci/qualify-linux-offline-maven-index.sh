@@ -9,7 +9,8 @@
 #    network denied. The sandbox is required: without it scip-java is refused, and so is this job.
 # 3. The SCIP artifact must exist and the designated repository must be unchanged (file list and mtimes).
 #
-# Usage (Linux, delegated cgroup v2, bubblewrap, Maven 3.9.x under /usr, JAVA_HOME = a JDK with javac):
+# Usage (Linux, delegated cgroup v2, bubblewrap, Maven 3.9.x under /usr (installed from the tool catalog inside
+# GitHub Actions), JAVA_HOME = a JDK with javac):
 #   bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$ && bash scripts/ci/qualify-linux-offline-maven-index.sh
 set -euo pipefail
 
@@ -26,14 +27,40 @@ if [[ ${#SHADED_JARS[@]} -ne 1 ]]; then
 fi
 JAR="${SHADED_JARS[0]}"
 
-MVN="$(command -v mvn || true)"
-if [[ -z "$MVN" ]]; then
-  echo "Maven 3.9.x is required in PATH" >&2
-  exit 1
+maven_version() {
+  if command -v mvn >/dev/null 2>&1; then
+    mvn -v | sed -n 's/^Apache Maven \([0-9.]*\).*/\1/p'
+  fi
+}
+
+# Inside GitHub Actions, a runner whose Maven is outside 3.9.x gets the Maven MINOS pins in its tool catalog
+# (embedded-tools.json: same URL and SHA-256), unpacked under /usr/local where the sandbox mounts it.
+install_qualified_maven() {
+  local catalog="$REPOSITORY_ROOT/minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/embedded-tools.json"
+  local fields url sha256 version
+  fields="$(python3 -c 'import json,sys
+for tool in json.load(open(sys.argv[1], encoding="utf-8"))["artifacts"]:
+    if tool["id"] == "maven":
+        print(tool["url"], tool["sha256"], tool["version"])' "$catalog")"
+  read -r url sha256 version <<<"$fields"
+  if [[ -z "$url" || -z "$sha256" || "$version" != 3.9.* ]]; then
+    echo "the tool catalog pins no Maven 3.9.x" >&2
+    exit 1
+  fi
+  curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 120 -fsSLo "$WORK/maven.zip" "$url"
+  printf '%s  %s\n' "$sha256" "$WORK/maven.zip" | sha256sum -c -
+  sudo unzip -q -o "$WORK/maven.zip" -d /usr/local
+  sudo chmod 755 "/usr/local/apache-maven-$version/bin/mvn"
+  export PATH="/usr/local/apache-maven-$version/bin:$PATH"
+}
+
+MAVEN_VERSION="$(maven_version)"
+if [[ "$MAVEN_VERSION" != 3.9.* && "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  install_qualified_maven
+  MAVEN_VERSION="$(maven_version)"
 fi
-MAVEN_VERSION="$(mvn -v | sed -n 's/^Apache Maven \([0-9.]*\).*/\1/p')"
 if [[ "$MAVEN_VERSION" != 3.9.* ]]; then
-  echo "Maven 3.9.x is required, found ${MAVEN_VERSION:-none}" >&2
+  echo "Maven 3.9.x is required in PATH, found ${MAVEN_VERSION:-none}" >&2
   exit 1
 fi
 
