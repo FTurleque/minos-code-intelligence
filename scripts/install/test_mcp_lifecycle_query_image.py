@@ -440,6 +440,12 @@ class ProjectMountsOverrideTests(PowerShellCase):
         self.assertEqual("RETURNED", result["outcome"], result)
         return "".join(result["value"])
 
+    def test_a_dollar_sign_is_doubled_so_that_compose_never_interpolates_it(self):
+        for label, executable in self.runtimes:
+            text = self.generate(executable, "[pscustomobject]@{ Name = 'app'; HostRoot = 'D:/src/p/${A:-..}' }")
+            sources = {mount["source"] for mount in override_mounts(text)}
+            self.assertEqual({"D:/src/p/$${A:-..}"}, sources, (label, text))
+
     def test_an_empty_table_mounts_nothing(self):
         for label, executable in self.runtimes:
             text = self.generate(executable, "")
@@ -551,6 +557,30 @@ class ProjectMountLifecycleTests(PowerShellCase):
             flat = flatten(output)
             self.assertIn("user profile", flat, label)
             self.assertNotIn(str(Path.home()), flat.replace(" ", ""), (label, "the refusal names no path"))
+
+    def test_a_folder_with_a_dollar_sign_is_refused_before_the_bootstrap(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.add(executable, "%ROOT%/projects/p$x",
+                                           prepare=lambda root: (root / "projects" / "p$x").mkdir())
+            self.assertNotEqual(0, code, (label, output))
+            self.assertFalse(any("add-project-mount" in call for call in calls), (label, calls))
+            self.assertIn("dollar sign", flatten(output), label)
+
+    def test_a_mounted_folder_that_became_a_link_is_omitted_at_start(self):
+        def link(root: Path) -> None:
+            target = root / "projects" / "real"
+            target.mkdir()
+            if os.name == "nt":
+                subprocess.run(["cmd", "/c", "mklink", "/J", str(root / "projects" / "app"), str(target)],
+                               capture_output=True, check=True)
+            else:
+                os.symlink(target, root / "projects" / "app")
+        for label, executable in self.runtimes:
+            code, output, _ = self.start(executable, self.compose, QUERY_ENVIRONMENT, prepare=link,
+                                         table=table_of(("app", "%ROOT%/projects/app")))
+            self.assertEqual(0, code, (label, output))
+            self.assertEqual([], override_mounts(self.last_override), (label, self.last_override))
+            self.assertIn("junction or a symbolic link", flatten(output), label)
 
     def test_a_missing_folder_is_refused_before_the_bootstrap(self):
         for label, executable in self.runtimes:

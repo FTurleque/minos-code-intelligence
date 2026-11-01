@@ -136,7 +136,7 @@ try {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot) -or $ReplaceProjectsRoot) {
-        Write-Warning 'The projects root is ignored: the MINOS Docker runtime mounts no projects root, only the projects exposed with minos-docker.ps1 -Action AddProject -ProjectPath <folder>.'
+        Write-Warning 'The projects root is ignored: the MINOS Docker runtime mounts no projects root, only the projects exposed with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.'
     }
 
     $VersionFile = Join-Path $InstallRoot 'VERSION'
@@ -242,7 +242,7 @@ configuredAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
     }
 
     Write-Host 'MINOS Docker MCP setup SUCCESS' -ForegroundColor Green
-    Write-Host 'Projects : none mounted until exposed with minos-docker.ps1 -Action AddProject -ProjectPath <folder>'
+    Write-Host 'Projects : none mounted until exposed with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>'
     Write-Host "Storage  : $StorageBackend"
     Write-Host "Semantic : $SemanticProvider"
     Write-Host "Log      : $LogPath"

@@ -57,14 +57,22 @@ param(
  [string]$DockerInstallRoot,[string]$DockerDataRoot,[string]$DockerImageTag,
  [string]$DockerContainerName,[string]$DockerComposeProject,[switch]$ReplaceProjectsRoot)
 Add-Content -LiteralPath $env:MINOS_S7_FAKE_LOG -Value 'configure:docker' -Encoding ascii
-if ($ReplaceProjectsRoot) {
-    # Stands for minos-bootstrap configure-project-paths --replace: new mapping, rewritten registry entries.
-    Add-Content -LiteralPath $env:MINOS_S7_FAKE_LOG -Value 'configure:replace' -Encoding ascii
-    $mapping = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
-    @('formatVersion=1', ('hostRoot=' + $ProjectsRoot.Replace('\', '/').Replace(':', '\:')),
-      'containerRoot=/workspace/projects') | Set-Content -LiteralPath $mapping -Encoding ascii
-    Get-ChildItem -LiteralPath (Join-Path $DockerDataRoot 'registry\projects') -Filter '*.properties' |
-        ForEach-Object { Set-Content -LiteralPath $_.FullName -Value 'detachedHostRoot=rewritten' -Encoding ascii }
+# The switcher forwards no projects root and no replacement: either one reaching the configurator is a defect.
+if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    Add-Content -LiteralPath $env:MINOS_S7_FAKE_LOG -Value 'configure:projectsRoot' -Encoding ascii
+}
+if ($ReplaceProjectsRoot) { Add-Content -LiteralPath $env:MINOS_S7_FAKE_LOG -Value 'configure:replace' -Encoding ascii }
+# Stands for mcp-lifecycle.ps1 -Action Install: a format 1 mapping (one projects root) is migrated to the
+# format 2 mount table; MINOS_S7_FAIL_MIGRATION=1 fails the migration after it rewrote the mapping.
+$mapping = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
+$format1 = (Test-Path -LiteralPath $mapping -PathType Leaf) -and
+    (@([System.IO.File]::ReadAllLines($mapping)) -contains 'formatVersion=1')
+if ($format1 -or ($env:MINOS_S7_CREATE_MAPPING -eq '1')) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $mapping) | Out-Null
+    @('formatVersion=2', 'containerRoot=/workspace/projects', 'mount.0.name=app') |
+        Set-Content -LiteralPath $mapping -Encoding ascii
+    Add-Content -LiteralPath $env:MINOS_S7_FAKE_LOG -Value 'configure:migrate' -Encoding ascii
+    if ($env:MINOS_S7_FAIL_MIGRATION -eq '1') { throw 'forced project mount migration failure' }
 }
 $runtime = Join-Path $DockerInstallRoot 'runtime'
 New-Item -ItemType Directory -Force -Path $runtime | Out-Null
@@ -79,7 +87,6 @@ foreach ($line in [System.IO.File]::ReadAllLines((Join-Path $InstallRoot 'VERSIO
 @(
  ('version=' + [string]$identity['version']),
  ('commit=' + [string]$identity['commit']),
- ('projectsRoot=' + $ProjectsRoot),
  ('dockerInstallRoot=' + $DockerInstallRoot),
  ('dockerDataRoot=' + $DockerDataRoot),
  ('containerName=' + $DockerContainerName),
@@ -102,6 +109,8 @@ $OldFailProbe = $env:MINOS_S7_FAIL_PROBE
 $OldFailConfigure = $env:MINOS_S7_FAIL_CONFIGURE
 $OldFailAction = $env:MINOS_S7_FAIL_DOCKER_ACTION
 $OldFakeLog = $env:MINOS_S7_FAKE_LOG
+$OldFailMigration = $env:MINOS_S7_FAIL_MIGRATION
+$OldCreateMapping = $env:MINOS_S7_CREATE_MAPPING
 try {
     $InstallRoot = Join-Path $Root 'install'
     $DataRoot = Join-Path $Root 'data'
@@ -121,6 +130,8 @@ try {
     $env:MINOS_S7_FAIL_PROBE = ''
     $env:MINOS_S7_FAIL_CONFIGURE = ''
     $env:MINOS_S7_FAIL_DOCKER_ACTION = ''
+    $env:MINOS_S7_FAIL_MIGRATION = ''
+    $env:MINOS_S7_CREATE_MAPPING = ''
 
     $Common = @{
         InstallRoot = $InstallRoot
@@ -140,7 +151,7 @@ try {
     Assert-True ((Read-Backend $DataRoot) -eq 'native') 'Fresh native backend selection was not committed.'
 
     # Native -> Docker initial install; candidate must be configured and probed.
-    & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot
+    & $Switcher @Common -TargetBackend docker
     Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Native -> Docker switch was not committed.'
     $Generation1 = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
     $Actions = [System.IO.File]::ReadAllLines($FakeLog)
@@ -155,7 +166,11 @@ try {
 
     # Same-version native -> Docker must reuse the managed runtime instead of
     # rebuilding it. Start + Validate + handshake prove readiness before commit.
-    & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot
+    # The marker an earlier release wrote still carries a projects root: it is read, not compared.
+    $Marker = Join-Path $InstallRoot '.docker-mcp-managed'
+    Assert-True (-not (@([System.IO.File]::ReadAllLines($Marker)) -like 'projectsRoot=?*')) 'The Docker ownership marker still records a projects root.'
+    Add-Content -LiteralPath $Marker -Value ('projectsRoot=' + (Join-Path $Root 'legacy-projects')) -Encoding ascii
+    & $Switcher @Common -TargetBackend docker
     $GenerationAfterReuse = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
     Assert-True ($GenerationAfterReuse -eq $Generation1) 'Same-version native -> Docker rebuilt the managed runtime instead of reusing it.'
     Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Reusable Docker runtime was not selected.'
@@ -167,14 +182,14 @@ try {
     & $Switcher @Common -TargetBackend native
     $env:MINOS_S7_FAIL_PROBE = 'docker'
     $FailedAsExpected = $false
-    try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot } catch { $FailedAsExpected = $true }
+    try { & $Switcher @Common -TargetBackend docker } catch { $FailedAsExpected = $true }
     Assert-True $FailedAsExpected 'Forced Docker handshake failure did not fail the switch.'
     Assert-True ((Read-Backend $DataRoot) -eq 'native') 'Failed Docker handshake changed the active backend.'
     $env:MINOS_S7_FAIL_PROBE = ''
 
     # Re-establish Docker, then fail retirement while switching to native. The
     # previous config must be restored and the Docker backend restarted.
-    & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot
+    & $Switcher @Common -TargetBackend docker
     Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Docker setup before retirement rollback test failed.'
     $env:MINOS_S7_FAIL_DOCKER_ACTION = 'Stop'
     $FailedAsExpected = $false
@@ -189,7 +204,7 @@ try {
     # must advance and the marker must be replaced only after preparation.
     Write-Identity -InstallRoot $InstallRoot -Version '1.0.1-test2' -Commit 'commit-2'
     $BeforeGeneration = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
-    & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot
+    & $Switcher @Common -TargetBackend docker
     $AfterGeneration = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
     Assert-True ($AfterGeneration -eq ($BeforeGeneration + 1)) 'Docker package upgrade did not prepare a new runtime generation.'
     Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Docker package upgrade changed backend selection.'
@@ -200,7 +215,7 @@ try {
     Write-Identity -InstallRoot $InstallRoot -Version '1.0.1-test3' -Commit 'commit-3'
     $env:MINOS_S7_FAIL_PROBE = 'docker'
     $FailedAsExpected = $false
-    try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot } catch { $FailedAsExpected = $true }
+    try { & $Switcher @Common -TargetBackend docker } catch { $FailedAsExpected = $true }
     Assert-True $FailedAsExpected 'Forced Docker upgrade handshake failure did not fail the upgrade.'
     $env:MINOS_S7_FAIL_PROBE = ''
     $RolledBackGeneration = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
@@ -209,7 +224,8 @@ try {
     $Actions = [System.IO.File]::ReadAllLines($FakeLog)
     Assert-True ($Actions -contains 'workflow:Start') 'Failed Docker upgrade did not restart the restored Docker runtime.'
 
-    # The Docker runtime recorded another projects root (minos-bootstrap mapping, one registered project).
+    # The Docker runtime of an earlier release mounted one projects root (mapping format 1, one registered
+    # project). The root differs from the one passed below: neither is compared, refused or forwarded.
     $OtherRoot = Join-Path $Root 'other-projects'
     $Mapping = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
     $Entry = Join-Path $DockerDataRoot ('registry\projects\' + [Guid]::NewGuid() + '.properties')
@@ -217,46 +233,66 @@ try {
     @('formatVersion=1', ('hostRoot=' + $OtherRoot.Replace('\', '/').Replace(':', '\:')),
       'containerRoot=/workspace/projects') | Set-Content -LiteralPath $Mapping -Encoding ascii
     @('id=fixture', 'rootRelativePath=app') | Set-Content -LiteralPath $Entry -Encoding ascii
-    $MappingHash = (Get-FileHash -LiteralPath $Mapping -Algorithm SHA256).Hash
-    $EntryHash = (Get-FileHash -LiteralPath $Entry -Algorithm SHA256).Hash
+    $MappingBytes = [System.IO.File]::ReadAllBytes($Mapping)
+    $EntryBytes = [System.IO.File]::ReadAllBytes($Entry)
+    $SwitchLog = Join-Path $DataRoot 'runtime\backend-switch.log'
 
-    # Unconfirmed change: refused before preparing anything, with the confirmations named.
-    $ConfiguresBefore = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:docker' }).Count
-    $Refusal = ''
-    try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot } catch { $Refusal = $_.Exception.Message }
-    $NamesConfirmations = $Refusal.Contains('/REPLACEDOCKERPROJECTSROOT=1') -and $Refusal.Contains('-ReplaceDockerProjectsRoot')
-    Assert-True $NamesConfirmations "An unconfirmed projects root change was not refused with its confirmations: $Refusal"
-    $ConfiguresAfter = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:docker' }).Count
-    Assert-True ($ConfiguresAfter -eq $ConfiguresBefore) 'An unconfirmed projects root change prepared the Docker runtime.'
-    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'An unconfirmed projects root change changed the active backend.'
-
-    # Confirmed change whose handshake fails: the mapping and the registry are written back.
-    $env:MINOS_S7_FAIL_PROBE = 'docker'
+    # Upgrade whose migration fails after rewriting the mapping: the format 1 mapping and the registry entry
+    # are written back byte for byte, the previous runtime is restored and the backend stays docker.
+    Write-Identity -InstallRoot $InstallRoot -Version '1.0.1-test4' -Commit 'commit-4'
+    $env:MINOS_S7_FAIL_MIGRATION = '1'
     $FailedAsExpected = $false
     try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot -ReplaceDockerProjectsRoot } catch { $FailedAsExpected = $true }
-    $env:MINOS_S7_FAIL_PROBE = ''
-    Assert-True $FailedAsExpected 'Forced handshake failure did not fail the projects root change.'
-    Assert-True (([System.IO.File]::ReadAllLines($FakeLog)) -contains 'configure:replace') 'The confirmed projects root change was not forwarded to the configurator.'
-    Assert-True (((Get-FileHash -LiteralPath $Mapping -Algorithm SHA256).Hash) -eq $MappingHash) 'A failed projects root change did not restore the recorded mapping.'
-    Assert-True (((Get-FileHash -LiteralPath $Entry -Algorithm SHA256).Hash) -eq $EntryHash) 'A failed projects root change did not restore the registry entries.'
+    $env:MINOS_S7_FAIL_MIGRATION = ''
+    Assert-True $FailedAsExpected 'A forced project mount migration failure did not fail the upgrade.'
+    Assert-True (([System.IO.File]::ReadAllLines($FakeLog)) -contains 'configure:migrate') 'The upgrade did not reach the project mount migration.'
+    Assert-True ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($Mapping)) -eq [Convert]::ToBase64String($MappingBytes)) 'A failed migration did not restore the format 1 mapping byte for byte.'
+    Assert-True ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($Entry)) -eq [Convert]::ToBase64String($EntryBytes)) 'A failed migration did not restore the registry entry byte for byte.'
+    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'A failed migration changed the active backend selection.'
 
-    # Confirmed change: committed; the next switch with the same root needs no confirmation.
+    # Upgrade whose handshake fails after a successful migration: the format 1 mapping is restored too.
+    $env:MINOS_S7_FAIL_PROBE = 'docker'
+    $FailedAsExpected = $false
+    try { & $Switcher @Common -TargetBackend docker } catch { $FailedAsExpected = $true }
+    $env:MINOS_S7_FAIL_PROBE = ''
+    Assert-True $FailedAsExpected 'A forced handshake failure after the migration did not fail the upgrade.'
+    Assert-True ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($Mapping)) -eq [Convert]::ToBase64String($MappingBytes)) 'A failed upgrade did not restore the migrated format 1 mapping byte for byte.'
+
+    # Legacy parameters: ignored with a warning in the switch log; nothing is forwarded to the configurator.
     & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot -ReplaceDockerProjectsRoot
-    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'The confirmed projects root change was not committed.'
-    Assert-True (((Get-FileHash -LiteralPath $Mapping -Algorithm SHA256).Hash) -ne $MappingHash) 'The confirmed projects root change left the old mapping.'
-    $ReplacesBefore = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:replace' }).Count
-    & $Switcher @Common -TargetBackend docker -ProjectsRoot ($ProjectsRoot.ToUpperInvariant() + '\')
-    $ReplacesAfter = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:replace' }).Count
-    Assert-True ($ReplacesAfter -eq $ReplacesBefore) 'The same projects root (case and trailing separator aside) asked for a replacement.'
+    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'The upgrade with legacy parameters was not committed.'
+    Assert-True (@([System.IO.File]::ReadAllLines($Mapping)) -contains 'formatVersion=2') 'The committed upgrade did not keep the migrated mapping.'
+    $LogText = [System.IO.File]::ReadAllText($SwitchLog)
+    Assert-True ($LogText.Contains('WARNING ignored=ProjectsRoot')) 'A legacy -ProjectsRoot did not reach the switch log as a warning.'
+    Assert-True ($LogText.Contains('WARNING ignored=ReplaceDockerProjectsRoot')) 'A legacy -ReplaceDockerProjectsRoot did not reach the switch log as a warning.'
+    Assert-True (-not $LogText.Contains('projectsRoot=replace')) 'The switcher still prepared a projects root replacement.'
+    $Forwarded = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:projectsRoot' -or $_ -eq 'configure:replace' })
+    Assert-True ($Forwarded.Count -eq 0) 'The switcher forwarded a projects root or a replacement to the Docker configurator.'
+    $State = [System.IO.File]::ReadAllText((Join-Path $DataRoot 'runtime\backend-switch.json'))
+    Assert-True (-not $State.Contains('projectsRoot')) 'The switch state still records a projects root.'
+
+    # Install whose configurator creates the mount table and then fails: the table it created is removed.
+    Remove-Item -LiteralPath $Mapping -Force
+    Write-Identity -InstallRoot $InstallRoot -Version '1.0.1-test5' -Commit 'commit-5'
+    $env:MINOS_S7_CREATE_MAPPING = '1'
+    $env:MINOS_S7_FAIL_MIGRATION = '1'
+    $FailedAsExpected = $false
+    try { & $Switcher @Common -TargetBackend docker } catch { $FailedAsExpected = $true }
+    $env:MINOS_S7_CREATE_MAPPING = ''
+    $env:MINOS_S7_FAIL_MIGRATION = ''
+    Assert-True $FailedAsExpected 'A forced failure after creating the mount table did not fail the upgrade.'
+    Assert-True (-not (Test-Path -LiteralPath $Mapping)) 'A failed install left the mount table it created.'
 
     # Third-party client configuration is outside backend transaction and must
     # remain byte-identical through every switch/rollback/upgrade case.
     Assert-True (((Get-FileHash -LiteralPath $ThirdParty -Algorithm SHA256).Hash) -eq $ThirdPartyHash) 'Backend lifecycle modified unrelated third-party client configuration.'
 
     Write-Host 'MINOS MCP BACKEND TRANSACTIONAL LIFECYCLE VERIFICATION SUCCESS' -ForegroundColor Green
-    Write-Host 'Cases: native install, Docker install, reuse, native<->Docker, rollback, Docker upgrade + upgrade rollback, projects root change (refused, restored, confirmed, same root)'
+    Write-Host 'Cases: native install, Docker install, reuse (legacy marker), native<->Docker, rollback, Docker upgrade + upgrade rollback, project mount migration (failed, restored, committed), legacy projects root parameters ignored'
 }
 finally {
+    $env:MINOS_S7_FAIL_MIGRATION = $OldFailMigration
+    $env:MINOS_S7_CREATE_MAPPING = $OldCreateMapping
     $env:MINOS_S7_FAIL_PROBE = $OldFailProbe
     $env:MINOS_S7_FAIL_CONFIGURE = $OldFailConfigure
     $env:MINOS_S7_FAIL_DOCKER_ACTION = $OldFailAction

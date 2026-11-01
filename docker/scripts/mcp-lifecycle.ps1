@@ -170,7 +170,9 @@ function Get-ComposeFileArguments {
 }
 
 # A YAML scalar for any string: a JSON string (YAML is a superset of JSON) escaping the quote, the backslash, every
-# control character and every non-ASCII character, so that no folder name can end the scalar or inject a key.
+# control character and every non-ASCII character, so that no folder name can end the scalar or inject a key. Compose
+# interpolates ${...} in every string of every file it reads: '$' is doubled, so that the mounted folder is exactly
+# the one that was checked.
 function ConvertTo-YamlString([string] $Value) {
     $Builder = New-Object System.Text.StringBuilder
     [void] $Builder.Append('"')
@@ -178,6 +180,7 @@ function ConvertTo-YamlString([string] $Value) {
         $Code = [int] $Character
         if ($Character -eq '"') { [void] $Builder.Append('\"') }
         elseif ($Character -eq '\') { [void] $Builder.Append('\\') }
+        elseif ($Character -eq '$') { [void] $Builder.Append('$$') }
         elseif ($Code -lt 32 -or $Code -gt 126) { [void] $Builder.Append(('\u{0:x4}' -f $Code)) }
         else { [void] $Builder.Append($Character) }
     }
@@ -300,8 +303,18 @@ function Update-ProjectMountsOverride {
     $States = Get-ProjectMountStates
     $Mounted = @()
     foreach ($State in $States) {
-        if ($State.Available) { $Mounted += $State }
-        else { Write-Warning "MINOS Docker project mount '$($State.Name)' is not mounted: its host folder no longer exists. Its projects are reported rootAvailable: false; expose the folder again, or remove the mount with -Action RemoveProject -Name $($State.Name)." }
+        if (-not $State.Available) {
+            Write-Warning "MINOS Docker project mount '$($State.Name)' is not mounted: its host folder no longer exists. Its projects are reported rootAvailable: false; expose the folder again, or remove the mount with -Action RemoveProject -Name $($State.Name)."
+            continue
+        }
+        # The folder may have changed since it was exposed (a link checked out in its place, for example): the host
+        # check of AddProject is replayed before every mount.
+        $Refusal = Get-ProjectFolderRefusal $State.HostRoot
+        if ($Refusal -ne '') {
+            Write-Warning "MINOS Docker project mount '$($State.Name)' is not mounted: $Refusal. Its projects are reported rootAvailable: false; remove the mount with -Action RemoveProject -Name $($State.Name)."
+            continue
+        }
+        $Mounted += $State
     }
     Write-ProjectMountsOverride -Mounts $Mounted
     return , $States
@@ -374,6 +387,7 @@ function Test-ReparsePointInPath([string] $Path) {
 function Get-ProjectFolderRefusal([string] $Folder) {
     if ([string]::IsNullOrWhiteSpace($Folder)) { return 'no folder was given' }
     if (-not [System.IO.Path]::IsPathRooted($Folder)) { return 'the folder is not an absolute path' }
+    if ($Folder.Contains('$')) { return 'the folder path contains a dollar sign, which Docker Compose would interpret' }
     if (-not (Test-Path -LiteralPath $Folder -PathType Container)) { return 'the folder does not exist' }
     if (Test-ReparsePointInPath $Folder) {
         return 'the folder or one of its parents is a junction or a symbolic link; give the real folder'
@@ -782,6 +796,11 @@ switch ($Action) {
             if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { throw 'This release recipe mounts one projects root: -ProjectsRoot is required.' }
             $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
             if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) { throw 'The projects root of this release recipe does not exist.' }
+            $MappingFile = Join-Path (Join-Path $DataRoot 'runtime') 'project-paths.properties'
+            if ((Test-Path -LiteralPath $MappingFile -PathType Leaf) -and
+                (@(Get-Content -LiteralPath $MappingFile) -match '^\s*formatVersion\s*[=:]\s*2\s*$').Count -gt 0) {
+                throw 'This release recipe mounts one projects root, and this MINOS Docker data root exposes one mount per project: it is refused, so that no projects root is mounted again. Nothing was changed.'
+            }
         }
         $ResolvedSemanticProvider = Resolve-SemanticProvider $SemanticProvider
 

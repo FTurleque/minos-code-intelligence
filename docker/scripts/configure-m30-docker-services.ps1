@@ -237,6 +237,10 @@ function Ensure-ManagedVolume([string] $Name, [string] $Plane) {
 
 function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
     $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile, '-f', $ComposeFile)
+    # The project mounts override that mcp-lifecycle.ps1 generates (one read-only mount per exposed project) takes
+    # part in every Compose call: without it, minos-mcp would be recreated with no project mounted.
+    $ProjectMounts = Join-Path $RuntimeRoot 'compose-mcp.projects.yaml'
+    if (Test-Path -LiteralPath $ProjectMounts -PathType Leaf) { $Base += @('-f', $ProjectMounts) }
     foreach ($Profile in $Profiles) { $Base += @('--profile', $Profile) }
     # Stdin MUST be a non-terminal pipe here, for the same reason as prod-mcp-release.ps1's
     # Compose helper: some invocation contexts (notably an installer's inherited console)

@@ -117,12 +117,12 @@ var
   McpCodexDesktopStatus: TNewStaticText;
   McpPreflightIni: String;
   McpPreflightCompleted: Boolean;
-  DockerProjectsPage: TInputDirWizardPage;
+  DockerProjectsPage: TWizardPage;
+  DockerProjectsHint: TNewStaticText;
   DockerInstanceLabel: TNewStaticText;
   DockerInstanceEdit: TNewEdit;
   DockerDataRootLabel: TNewStaticText;
   DockerDataRootEdit: TNewEdit;
-  ReplaceDockerProjectsRootConfirmed: Boolean;
   SummaryPage: TWizardPage;
   SummaryMemo: TNewMemo;
   DeleteUserDataOnUninstall: Boolean;
@@ -241,13 +241,6 @@ function EffectiveDockerDataRoot(): String;
 begin
   if AdvancedSetupSelected() then Result := DockerDataRootEdit.Text
   else Result := DefaultDockerDataRoot();
-end;
-
-{ Replacing the projects root recorded by the Docker runtime is confirmed on the Docker page, or by
-  /REPLACEDOCKERPROJECTSROOT=1 for a silent install; switch-mcp-backend.ps1 refuses an unconfirmed change. }
-function ReplaceDockerProjectsRootRequested(): Boolean;
-begin
-  Result := ReplaceDockerProjectsRootConfirmed or (ExpandConstant('{param:REPLACEDOCKERPROJECTSROOT|0}') = '1');
 end;
 
 function EffectiveMcpServerName(): String;
@@ -857,7 +850,23 @@ begin
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'StorageBackend', EffectiveStorageBackend());
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'SemanticProvider', EffectiveSemanticProvider());
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'DockerInstanceName', DockerInstanceEdit.Text);
-  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot', DockerProjectsPage.Values[0]);
+  // The Docker runtime mounts no projects root: the value saved by earlier installers is removed.
+  RegDeleteValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot');
+end;
+
+// The legacy Docker projects root settings are ignored, never refused: each one present reaches the
+// setup log as a warning, and none mounts a folder or reaches the backend switcher.
+procedure LogIgnoredDockerProjectsRootSettings;
+var
+  SavedRoot: String;
+begin
+  if ExpandConstant('{param:DOCKERPROJECTSROOT|}') <> '' then
+    Log('Warning: /DOCKERPROJECTSROOT is ignored: the MINOS Docker runtime mounts no projects root. ' +
+      'Expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.');
+  if ExpandConstant('{param:REPLACEDOCKERPROJECTSROOT|}') <> '' then
+    Log('Warning: /REPLACEDOCKERPROJECTSROOT is ignored: the MINOS Docker runtime has no projects root to replace.');
+  if RegQueryStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot', SavedRoot) and (SavedRoot <> '') then
+    Log('Warning: the Docker projects root saved by an earlier installer is ignored and removed from the registry.');
 end;
 
 // configure-runtime-settings.ps1 writes the message of the error that stopped it to the file
@@ -1043,14 +1052,11 @@ begin
   if DockerMcpSelected() then
   begin
     Parameters := Parameters +
-      ' -ProjectsRoot "' + DockerProjectsPage.Values[0] +
-      '" -DockerDataRoot "' + EffectiveDockerDataRoot() +
+      ' -DockerDataRoot "' + EffectiveDockerDataRoot() +
       '" -DockerContainerName "' + DockerInstanceEdit.Text +
       '" -DockerComposeProject "' + DockerInstanceEdit.Text +
       '" -StorageBackend ' + EffectiveStorageBackend() +
       ' -SemanticProvider ' + EffectiveSemanticProvider();
-    if ReplaceDockerProjectsRootRequested() then
-      Parameters := Parameters + ' -ReplaceDockerProjectsRoot';
     if OllamaSelected() then
     begin
       Parameters := Parameters +
@@ -1229,11 +1235,9 @@ begin
   if DockerMcpSelected() then
   begin
     Text := Text + #13#10 +
-      'Racine projets Docker : ' + DockerProjectsPage.Values[0] + #13#10 +
+      'Projets Docker : aucun dossier monté d''office ; chaque projet s''expose par prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier>' + #13#10 +
       'Données Docker : ' + EffectiveDockerDataRoot() + #13#10 +
       'Instance Docker : ' + DockerInstanceEdit.Text;
-    if ReplaceDockerProjectsRootRequested() then
-      Text := Text + #13#10 + 'Racine projets Docker : remplace la racine enregistrée (projets hors racine conservés, signalés indisponibles)';
     if PostgreSqlSelected() then Text := Text + #13#10 + 'PostgreSQL : géré par MINOS dans Docker (pgvector)';
     if OllamaSelected() then
     begin
@@ -1364,11 +1368,19 @@ begin
   McpPreflightCompleted := False;
   DisableAllMcpRows('Détection en attente');
 
-  DockerProjectsPage := CreateInputDirPage(McpClientsPage.ID,
-    'MCP Docker MINOS', 'Configurez les données et projets exposés au runtime Docker',
-    'Les projets sont montés en lecture seule. PostgreSQL/Ollama gérés ne publient aucun port réseau sur l''hôte.', False, '');
-  DockerProjectsPage.Add('Racine des projets :');
-  DockerProjectsPage.Values[0] := ExpandConstant('{param:DOCKERPROJECTSROOT|' + ReadInstallerValue('ProjectsRoot', '') + '}');
+  DockerProjectsPage := CreateCustomPage(McpClientsPage.ID,
+    'MCP Docker MINOS', 'Configurez les données et l''instance du runtime Docker');
+  DockerProjectsHint := TNewStaticText.Create(DockerProjectsPage);
+  DockerProjectsHint.Parent := DockerProjectsPage.Surface;
+  DockerProjectsHint.Left := 0; DockerProjectsHint.Top := 0;
+  DockerProjectsHint.Width := DockerProjectsPage.SurfaceWidth; DockerProjectsHint.Height := ScaleY(100);
+  DockerProjectsHint.AutoSize := False; DockerProjectsHint.WordWrap := True;
+  DockerProjectsHint.Caption :=
+    'Aucun dossier n''est monté d''office dans les conteneurs MINOS. Après l''installation, exposez chaque projet, ' +
+    'en lecture seule, par :' + #13#10 +
+    '  prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier>' + #13#10 +
+    '(dans le dossier docker\scripts de MINOS ; -Action Status les liste, -Action RemoveProject -Name <nom> en retire un).' + #13#10 +
+    'PostgreSQL/Ollama gérés ne publient aucun port réseau sur l''hôte.';
   DockerDataRootLabel := TNewStaticText.Create(DockerProjectsPage);
   DockerDataRootLabel.Parent := DockerProjectsPage.Surface;
   DockerDataRootLabel.Caption := 'Données Docker persistantes :';
@@ -1393,90 +1405,6 @@ begin
   SummaryMemo.Left := 0; SummaryMemo.Top := ScaleY(8);
   SummaryMemo.Width := SummaryPage.SurfaceWidth; SummaryMemo.Height := SummaryPage.SurfaceHeight - ScaleY(16);
   SummaryMemo.ReadOnly := True; SummaryMemo.ScrollBars := ssVertical;
-end;
-
-{ The Docker projects root is bind-mounted into the MINOS containers. The same rule guards
-  switch-mcp-backend.ps1 (Get-UnsafeDockerProjectsRootReason), which also covers silent installs. }
-function ComparableDirectory(Path: String): String;
-begin
-  Result := AnsiLowercase(RemoveBackslash(ExpandFileName(Trim(Path))));
-end;
-
-function IsSameOrInsideDirectory(Child, Parent: String): Boolean;
-var
-  ComparableChild: String;
-  ComparableParent: String;
-begin
-  Result := False;
-  if (Trim(Child) = '') or (Trim(Parent) = '') then exit;
-  ComparableChild := ComparableDirectory(Child);
-  ComparableParent := ComparableDirectory(Parent);
-  Result := (ComparableChild = ComparableParent) or (Pos(ComparableParent + '\', ComparableChild) = 1);
-end;
-
-function UnsafeDockerProjectsRootReason(Path: String): String;
-var
-  Candidate: String;
-  UserProfile: String;
-  InsideTemporary: Boolean;
-  ProtectedRoots: array of String;
-  I: Integer;
-begin
-  Result := '';
-  Candidate := ComparableDirectory(Path);
-  if (Candidate = '') or (Candidate = AnsiLowercase(RemoveBackslash(ExtractFileDrive(Candidate)))) then
-  begin Result := 'une racine de volume'; exit; end;
-  UserProfile := ExpandConstant('{%USERPROFILE}');
-  if (Trim(UserProfile) = '') or IsSameOrInsideDirectory(UserProfile, Path) then
-  begin Result := 'le profil de l''utilisateur ou l''un de ses dossiers parents'; exit; end;
-  InsideTemporary := IsSameOrInsideDirectory(Path, GetTempDir()) and (Candidate <> ComparableDirectory(GetTempDir()));
-  SetArrayLength(ProtectedRoots, 5);
-  ProtectedRoots[0] := ExpandConstant('{localappdata}');
-  ProtectedRoots[1] := ExpandConstant('{userappdata}');
-  ProtectedRoots[2] := WizardDirValue();
-  ProtectedRoots[3] := EffectiveDataRoot();
-  ProtectedRoots[4] := EffectiveDockerDataRoot();
-  for I := 0 to GetArrayLength(ProtectedRoots) - 1 do
-    if ((not (InsideTemporary and IsSameOrInsideDirectory(GetTempDir(), ProtectedRoots[I]))) and
-        IsSameOrInsideDirectory(Path, ProtectedRoots[I])) or
-       IsSameOrInsideDirectory(ProtectedRoots[I], Path) then
-    begin
-      Result := 'un dossier de données d''application ou de MINOS, l''un de ses parents ou l''un de ses sous-dossiers';
-      exit;
-    end;
-end;
-
-{ Host projects root of the mapping that minos-bootstrap saved in the Docker data root (a Java
-  properties file: ':' and '\' are escaped), or '' when there is none. Same reading as
-  Get-RecordedDockerProjectsRoot in switch-mcp-backend.ps1. }
-function RecordedDockerProjectsRoot(): String;
-var
-  Lines: TArrayOfString;
-  Line: String;
-  I: Integer;
-begin
-  Result := '';
-  if not LoadStringsFromFile(AddBackslash(EffectiveDockerDataRoot()) + 'runtime\project-paths.properties', Lines) then exit;
-  for I := 0 to GetArrayLength(Lines) - 1 do
-  begin
-    Line := Trim(Lines[I]);
-    if Pos('hostRoot=', Line) = 1 then
-    begin
-      Result := Copy(Line, Length('hostRoot=') + 1, Length(Line));
-      StringChangeEx(Result, '\:', ':', True);
-      StringChangeEx(Result, '\\', '\', True);
-      Result := Trim(Result);
-      exit;
-    end;
-  end;
-end;
-
-function ComparableDockerProjectsRoot(Path: String): String;
-begin
-  Result := AnsiLowercase(Trim(Path));
-  StringChangeEx(Result, '\', '/', True);
-  while (Length(Result) > 0) and (Result[Length(Result)] = '/') do
-    Delete(Result, Length(Result), 1);
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -1504,8 +1432,6 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   Dimensions: Integer;
-  Reason: String;
-  RecordedRoot: String;
 begin
   Result := True;
 
@@ -1566,42 +1492,10 @@ begin
 
   if (CurPageID = DockerProjectsPage.ID) and DockerMcpSelected() then
   begin
-    if Trim(DockerProjectsPage.Values[0]) = '' then
-    begin MsgBox('Choisissez la racine des projets : un dossier dédié à vos projets, monté en lecture seule dans les conteneurs MINOS.', mbError, MB_OK); Result := False; exit; end;
-    if not IsAbsoluteWindowsPath(DockerProjectsPage.Values[0]) then
-    begin MsgBox('Choisissez un chemin absolu pour la racine des projets.', mbError, MB_OK); Result := False; exit; end;
-    Reason := UnsafeDockerProjectsRootReason(DockerProjectsPage.Values[0]);
-    if Reason <> '' then
-    begin
-      MsgBox(
-        'Cette racine des projets est refusée : c''est ' + Reason + '.' + #13#10 + #13#10 +
-        'Elle serait montée dans les conteneurs MINOS, dont l''un accède au réseau. ' +
-        'Choisissez un dossier dédié à vos projets, par exemple un sous-dossier de votre profil hors AppData.',
-        mbError, MB_OK);
-      Result := False; exit;
-    end;
-    if not DirExists(DockerProjectsPage.Values[0]) then
-    begin MsgBox('La racine des projets n''existe pas. Choisissez un dossier existant.', mbError, MB_OK); Result := False; exit; end;
     if (DockerDataRootEdit.Text = '') or (not IsAbsoluteWindowsPath(DockerDataRootEdit.Text)) then
     begin MsgBox('Choisissez un chemin absolu valide pour les données Docker.', mbError, MB_OK); Result := False; exit; end;
     if not IsSafeDockerName(DockerInstanceEdit.Text) then
     begin MsgBox('Le nom de l''instance Docker contient un caractère non autorisé.', mbError, MB_OK); Result := False; exit; end;
-    ReplaceDockerProjectsRootConfirmed := False;
-    RecordedRoot := RecordedDockerProjectsRoot();
-    if (RecordedRoot <> '') and (not WizardSilent()) and
-       (ComparableDockerProjectsRoot(RecordedRoot) <> ComparableDockerProjectsRoot(DockerProjectsPage.Values[0])) then
-    begin
-      if MsgBox(
-        'Le runtime Docker MINOS utilise déjà une autre racine des projets :' + #13#10 + RecordedRoot + #13#10 + #13#10 +
-        'La remplacer par la racine choisie ? Chaque projet inscrit reste inscrit avec son index : ceux qui se trouvent ' +
-        'sous la nouvelle racine sont rebasés, les autres sont signalés indisponibles (rootAvailable: false). ' +
-        'Chaque inscription modifiée est sauvegardée, et tout est restauré si l''installation échoue.' + #13#10 + #13#10 +
-        'Choisissez Non pour revenir à la page et choisir une autre racine.',
-        mbConfirmation, MB_YESNO) = IDYES then
-        ReplaceDockerProjectsRootConfirmed := True
-      else
-      begin Result := False; exit; end;
-    end;
     if not DockerReady() then
     begin
       MsgBox(
@@ -1951,6 +1845,7 @@ begin
   begin
     if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
     BuildSetupStepRows;
+    LogIgnoredDockerProjectsRootSettings;
     if not ConfigureRuntimeSettings() then
     begin
       MarkSetupStepsNotRun;

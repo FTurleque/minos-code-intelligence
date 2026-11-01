@@ -132,7 +132,9 @@ class M29DockerAdministrationContractTest {
         assertTrue(workflow.contains("'tools', 'verify', '--all', '--format', 'json'"));
         assertTrue(workflow.contains("provider-inventory.json"));
         assertTrue(workflow.contains("provider-binary-sha256.txt"));
-        assertTrue(workflow.contains("formatVersion = 5"));
+        assertTrue(workflow.contains("formatVersion = 6"));
+        assertTrue(workflow.contains("projectMounts = [ordered]@{"),
+                "installation.json names the project mounts, never a projects root");
         assertTrue(workflow.contains("function Resolve-SemanticProvider"));
         assertTrue(workflow.contains("Allowed: disabled, local-hash"));
         assertTrue(workflow.contains("MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider"));

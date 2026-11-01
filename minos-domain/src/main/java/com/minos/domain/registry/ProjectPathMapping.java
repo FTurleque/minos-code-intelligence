@@ -140,7 +140,7 @@ public record ProjectPathMapping(String hostRoot, String containerRoot, List<Pro
         String candidate = normalizeCandidate(physicalPath.toAbsolutePath().normalize().toString());
         if (runtimeLocation == RuntimeLocation.NATIVE && mountTable()) {
             return relativeForHostPath(candidate).orElseThrow(
-                    () -> new IllegalArgumentException("project path is outside every project mount: " + candidate));
+                    () -> new IllegalArgumentException("project path is outside every project mount"));
         }
         return relativeFrom(rootFor(runtimeLocation), candidate);
     }

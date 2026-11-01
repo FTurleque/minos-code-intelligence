@@ -62,7 +62,7 @@ Si la racine a été déplacée, si une lettre de lecteur a changé ou si un vol
 
 Réenregistrer le bon projet ou rétablir exactement la racine attendue.
 
-Avec le backend MCP Docker, un projet est indisponible quand son montage a été retiré (`RemoveProject`), quand son dossier a été supprimé ou déplacé (le montage est alors omis au démarrage, avec un avertissement qui le nomme), ou quand la migration d'une ancienne racine ne l'a pas monté (projet inscrit à la racine elle-même, isolé, ou dossier refusé). Il garde son identité et son index ; l'exposer de nouveau avec `minos-docker.ps1 -Action AddProject -ProjectPath <dossier> -Name <nom>` ([Projets exposés au runtime Docker](docker-runtime.md#projets-exposés-au-runtime-docker)).
+Avec le backend MCP Docker, un projet est indisponible quand son montage a été retiré (`RemoveProject`), quand son dossier a été supprimé ou déplacé (le montage est alors omis au démarrage, avec un avertissement qui le nomme), ou quand la migration d'une ancienne racine ne l'a pas monté (projet inscrit à la racine elle-même, isolé, ou dossier refusé). Il garde son identité et son index ; l'exposer de nouveau avec `prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier> -Name <nom>` ([Projets exposés au runtime Docker](docker-runtime.md#projets-exposés-au-runtime-docker)).
 
 ## `index` échoue avant de lancer le provider
 
@@ -189,7 +189,7 @@ Remède : choisir un `MINOS_HOME` dédié (par défaut `%USERPROFILE%\.minos`) ;
 
 ## Docker : « This folder cannot be exposed to the MINOS Docker runtime »
 
-`minos-docker.ps1 -Action AddProject` contrôle le dossier sur le poste avant toute écriture. Le message nomme la cause, sans chemin :
+`prod-mcp-release.ps1 -Action AddProject` contrôle le dossier sur le poste avant toute écriture. Le message nomme la cause, sans chemin :
 
 - « does not exist », « is not an absolute path » : donner le chemin complet d'un dossier existant ;
 - « is a junction or a symbolic link » : Docker Desktop ne suit pas les liens ; donner le dossier réel ;

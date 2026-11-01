@@ -61,13 +61,13 @@ Le lanceur de développement (`docker/scripts/prod-mcp.ps1`) construit une seule
 
 Le runtime Docker ne monte **aucune racine des projets**. `/workspace/projects` ne contient qu'un montage en lecture seule par projet que vous avez exposé, le même dans `minos-mcp` et dans `minos-admin`. Un dossier que vous n'avez pas exposé n'est visible d'aucun conteneur, y compris `minos-admin`, qui a une sortie réseau. Sans projet exposé, le serveur MCP démarre et `/workspace/projects` est vide.
 
-Les commandes ci-dessous sont celles de `docker\scripts\minos-docker.ps1` du dossier d'installation ; `prod-mcp-release.ps1` et `mcp-lifecycle.ps1` acceptent les mêmes actions.
+Les commandes ci-dessous sont celles de `docker\scripts\prod-mcp-release.ps1` du dossier d'installation (Windows PowerShell 5.1 ou PowerShell 7).
 
 ### Exposer un projet
 
 ```powershell
-.\minos-docker.ps1 -Action AddProject -ProjectPath D:\src\mon-projet
-.\minos-docker.ps1 -Action AddProject -ProjectPath D:\src\Mon Projet -Name mon-projet
+.\prod-mcp-release.ps1 -Action AddProject -ProjectPath D:\src\mon-projet
+.\prod-mcp-release.ps1 -Action AddProject -ProjectPath D:\src\Mon Projet -Name mon-projet
 ```
 
 L'action contrôle le dossier sur le poste, avant toute écriture : il doit exister, être donné par un chemin absolu, n'être ni une jonction ni un lien symbolique (ni se trouver sous un parent qui en est un), et ne pas être une racine de volume, le profil de l'utilisateur ou l'un de ses parents, ni être, contenir ou se trouver dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS. Un refus nomme la catégorie, jamais le chemin.
@@ -79,7 +79,7 @@ Sont refusés aussi : un dossier égal à un dossier déjà exposé, qui le cont
 ### Retirer un projet
 
 ```powershell
-.\minos-docker.ps1 -Action RemoveProject -Name mon-projet
+.\prod-mcp-release.ps1 -Action RemoveProject -Name mon-projet
 ```
 
 Le montage est retiré et `minos-mcp` est recréé. Les projets inscrits sous ce montage **restent inscrits avec leur index** et `project list` les signale `rootAvailable: false`. Exposer de nouveau le même dossier sous le même nom les rend disponibles. Un nom inconnu est refusé sans rien changer.
@@ -87,8 +87,8 @@ Le montage est retiré et `minos-mcp` est recréé. Les projets inscrits sous ce
 ### Voir les projets exposés
 
 ```powershell
-.\minos-docker.ps1 -Action Status
-.\minos-docker.ps1 -Action Status -ShowHostPaths
+.\prod-mcp-release.ps1 -Action Status
+.\prod-mcp-release.ps1 -Action Status -ShowHostPaths
 ```
 
 La liste donne chaque montage par son nom et dit s'il est monté. Les dossiers du poste ne sont affichés qu'avec `-ShowHostPaths`. `installation.json` (`projectMounts`) ne garde que le compte et les noms.

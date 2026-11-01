@@ -158,6 +158,10 @@ class ProjectPathMappingMountTableTest {
         assertThrows(IllegalArgumentException.class, () -> new ProjectMount(".", "D:/a"));
         assertThrows(IllegalArgumentException.class, () -> new ProjectMount("/abs", "D:/a"));
         assertThrows(IllegalArgumentException.class, () -> new ProjectMount("app", "relative"));
+        assertThrows(IllegalArgumentException.class, () -> new ProjectMount("app", "D:/src/${A:-..}/x"));
+        assertThrows(IllegalArgumentException.class, () -> new ProjectMount("a$b", "D:/src/a"));
+        assertThrows(IllegalArgumentException.class, () -> new ProjectMount("app", "D:/src/a/../b"));
+        assertThrows(IllegalArgumentException.class, () -> new ProjectMount("app", "D:/src/a\u0007b"));
         assertEquals("team/b", new ProjectMount("team\\b", "D:/b").path());
     }
 }
