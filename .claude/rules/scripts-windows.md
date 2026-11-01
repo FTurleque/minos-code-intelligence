@@ -10,6 +10,7 @@ paths:
 
 - **Windows PowerShell 5.1** est le runtime de l'installateur ; `pwsh` 7 sert au poste de développement et à la CI. Écrire pour les deux : pas d'API .NET 5+ seule (`RandomNumberGenerator.Fill` n'existe pas en 5.1 : `Create()` + `GetBytes`), pas de `&&`/`||` ni d'opérateurs de pipeline de PowerShell 7.
 - **Fins de ligne** : `.gitattributes` impose `*.ps1 text eol=crlf` (assemblage de lanceurs comparé octet pour octet par `WindowsContainmentScriptTest`). Garder CRLF dans l'arbre de travail.
+- **`$null` vers .NET** : passé à un paramètre `string` d'une méthode .NET, `$null` devient `""` (`[System.IO.File]::Replace($a, $b, $null)` échoue) ; passer `[NullString]::Value`.
 - **Erreurs** : sous 5.1, un écrit sur stderr d'une commande native peut être terminal ; tester `$LASTEXITCODE` après chaque exécutable (`icacls`, `docker`, `dotnet`).
 - **Secrets** (cible du changement OpenSpec `durcir-secret-postgres-et-lanceur-de-developpement`, à appliquer à tout nouveau script) : un fichier de secret est créé **vide**, restreint à l'utilisateur courant (`icacls /inheritance:r /grant:r *SID:F`) et vérifié **avant** d'y écrire ; il est supprimé si la restriction échoue ; un fichier existant est restreint de nouveau et vérifié.
 - **Lanceurs** : `cmd.exe` cherche d'abord dans le répertoire courant ; un lanceur n'appelle jamais `java` sans chemin sans `NoDefaultCurrentDirectoryInExePath=1` ou `%JAVA_HOME%\bin\java.exe`. Les arguments qu'un `.cmd` ne peut pas recevoir (`"`, `%`) sont refusés avant le démarrage.
