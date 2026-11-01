@@ -14,7 +14,7 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Constat : e
 
 ## 3. Preuve réelle
 
-- [ ] 3.1 **(manuelle)** Sur une installation Windows avec MCP Docker et PostgreSQL géré : `minos.cmd providers` réussit après réinstallation ; sur une configuration 1.3.0 non réinstallée, le refus nomme le runtime Docker.
+- [x] 3.1 **(manuelle)** Sur une installation Windows avec MCP Docker et PostgreSQL géré : `minos.cmd providers` réussit après réinstallation ; sur une configuration 1.3.0 non réinstallée, le refus nomme le runtime Docker. **Preuve (2026-11-01)**, poste Windows 10, installeur construit depuis `develop` (`98dfbcca`), MCP Docker avec PostgreSQL et Ollama gérés : après réinstallation, `config/minos.properties` du `MINOS_HOME` natif porte `minos.storage.backend=local` et `minos.cmd providers` sort en code 0 (il échouait sur `missing required PostgreSQL setting: MINOS_POSTGRES_URL` avec la 1.3.0 précédente) ; le serveur MCP Docker tourne sur `1.3.0-98dfbcca5009` avec PostgreSQL géré. Sur un `MINOS_HOME` de test dont la configuration est celle d'une installation non réinstallée (`minos.storage.backend=postgresql`, `minos.postgres.managed=true`), `minos.cmd providers` sort en code 1 sur « managed PostgreSQL storage is reachable only from the MINOS Docker runtime (MINOS_RUNTIME_LOCATION=docker) … rerun the MINOS installer) to use local storage ».
 
 ## 4. Clôture
 
