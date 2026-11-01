@@ -83,8 +83,13 @@ class ProjectPathMappingStoreTest {
 
     @Test
     void anUnknownKeyIsRefused() throws IOException {
-        write("formatVersion=2\ncontainerRoot=/workspace/projects\nmount.0.path=app\nmount.0.hostRoot=D\\:/a\n"
-                + "mount.0.extra=x\n");
+        write("""
+                formatVersion=2
+                containerRoot=/workspace/projects
+                mount.0.path=app
+                mount.0.hostRoot=D\\:/a
+                mount.0.extra=x
+                """);
 
         IOException failure = assertThrows(IOException.class, () -> new ProjectPathMappingStore(home).loadOptional());
         assertTrue(failure.getMessage().contains("unknown project path mapping property"), failure.getMessage());
@@ -95,8 +100,13 @@ class ProjectPathMappingStoreTest {
         write("formatVersion=2\ncontainerRoot=/workspace/projects\nhostRoot=N\\:/workspace-dev\n");
         assertThrows(IOException.class, () -> new ProjectPathMappingStore(home).loadOptional());
 
-        write("formatVersion=1\nhostRoot=N\\:/w\ncontainerRoot=/workspace/projects\nmount.0.path=app\n"
-                + "mount.0.hostRoot=D\\:/a\n");
+        write("""
+                formatVersion=1
+                hostRoot=N\\:/w
+                containerRoot=/workspace/projects
+                mount.0.path=app
+                mount.0.hostRoot=D\\:/a
+                """);
         assertThrows(IOException.class, () -> new ProjectPathMappingStore(home).loadOptional());
     }
 
@@ -111,8 +121,14 @@ class ProjectPathMappingStoreTest {
 
     @Test
     void anOverlappingTableOnDiskIsRefused() throws IOException {
-        write("formatVersion=2\ncontainerRoot=/workspace/projects\nmount.0.path=app\nmount.0.hostRoot=D\\:/a\n"
-                + "mount.1.path=lib\nmount.1.hostRoot=D\\:/a/lib\n");
+        write("""
+                formatVersion=2
+                containerRoot=/workspace/projects
+                mount.0.path=app
+                mount.0.hostRoot=D\\:/a
+                mount.1.path=lib
+                mount.1.hostRoot=D\\:/a/lib
+                """);
 
         assertThrows(IOException.class, () -> new ProjectPathMappingStore(home).loadOptional());
     }

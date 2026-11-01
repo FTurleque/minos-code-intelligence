@@ -107,18 +107,18 @@ class ProjectPathMappingMountTableTest {
         assertThrows(IllegalArgumentException.class, () -> mapping.withMount("App", "D:/other"));
         assertThrows(IllegalArgumentException.class, () -> mapping.withMount("Other", "D:/other"));
         assertThrows(IllegalArgumentException.class, () -> mapping.withMount("other", "relative/folder"));
-        assertThrows(IllegalStateException.class,
-                () -> ProjectPathMapping.singleRoot("N:/root", CONTAINER).withMount("app", "D:/src/app"));
+        ProjectPathMapping single = ProjectPathMapping.singleRoot("N:/root", CONTAINER);
+        assertThrows(IllegalStateException.class, () -> single.withMount("app", "D:/src/app"));
     }
 
     @Test
     void overlappingMountPathsAreRefused() {
-        assertThrows(IllegalArgumentException.class, () -> table(
-                new ProjectMount("team", "D:/a"),
-                new ProjectMount("team/b", "D:/b")));
-        assertThrows(IllegalArgumentException.class, () -> table(
-                new ProjectMount("app", "D:/a"),
-                new ProjectMount("APP", "D:/b")));
+        ProjectMount team = new ProjectMount("team", "D:/a");
+        ProjectMount teamB = new ProjectMount("team/b", "D:/b");
+        ProjectMount app = new ProjectMount("app", "D:/a");
+        ProjectMount upperApp = new ProjectMount("APP", "D:/b");
+        assertThrows(IllegalArgumentException.class, () -> table(team, teamB));
+        assertThrows(IllegalArgumentException.class, () -> table(app, upperApp));
     }
 
     @Test
