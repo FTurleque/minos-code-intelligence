@@ -40,6 +40,7 @@ Options écartées :
 - Docker est un backend autonome de premier rang, et non nécessairement un simple MCP en lecture seule non autonome (ADR 0037 § « Relation avec ADR-0021 »).
 - L'administration et l'indexation Docker forment un plan distinct, afin de ne pas affaiblir le serveur MCP en lecture seule (ADR 0037 § « Relation avec ADR-0021 »).
 - Le conteneur MCP est une surface de lecture sans chaîne de compilation. `docker/Dockerfile.mcp.release` construit deux cibles : `query` (JRE et jar), utilisée par `minos-mcp` et par les tâches qui n'exécutent que `java` ou `sh`, et `admin` (image complète), utilisée par les services qui lancent ou sondent des providers (ADR 0021 § « Mise en œuvre — image de requête séparée »).
+- Les projets de l'hôte sont montés en lecture seule, un montage par projet exposé, sans racine des projets montée (SEC-0075).
 - Le plan de requête lit sans écrire : les fichiers Compose montent le répertoire de données en lecture seule pour `minos-mcp` ; les lectures du registre et des observations runtime prennent un bail partagé sur le verrou existant, ouvert en lecture (`BoundedFileLease.acquireShared`), sans rien créer, durcir ni migrer ; les écritures gardent leur bail exclusif (ADR 0021 § « Mise en œuvre — le plan de requête lit sans écrire »).
 
 ### 3. Point d'entrée stable

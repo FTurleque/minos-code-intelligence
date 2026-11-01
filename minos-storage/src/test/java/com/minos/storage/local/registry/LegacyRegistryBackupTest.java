@@ -40,7 +40,7 @@ class LegacyRegistryBackupTest {
         LocalProjectRegistry legacy = new LocalProjectRegistry(home.resolve("registry"));
         RegisteredProject original = legacy.registerProject(projectRoot, "Legacy");
         Path record = home.resolve("registry/projects/" + original.id() + ".properties");
-        ProjectPathMapping mapping = new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString());
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(hostRoot.toString(), dockerRoot.toString());
         new ProjectPathMappingStore(home).save(mapping);
         LocalProjectRegistry migrated = new LocalProjectRegistry(
                 home.resolve("registry"), mapping, ProjectPathMapping.RuntimeLocation.NATIVE);

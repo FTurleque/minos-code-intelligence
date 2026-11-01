@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectPathMappingServiceTest {
 
-    private static final ProjectPathMapping MAPPING = new ProjectPathMapping("N:/workspace-dev", "/workspace/projects");
+    private static final ProjectPathMapping MAPPING = ProjectPathMapping.singleRoot("N:/workspace-dev", "/workspace/projects");
 
     @Test
     void createsTheMappingWhenNoneExists() throws Exception {
@@ -30,7 +30,7 @@ class ProjectPathMappingServiceTest {
         RecordingMappings store = new RecordingMappings(MAPPING);
 
         assertEquals(ProjectPathMappingService.Outcome.UNCHANGED, new ProjectPathMappingService(store)
-                .configure(new ProjectPathMapping("N:\\workspace-dev", "/workspace/projects/")));
+                .configure(ProjectPathMapping.singleRoot("N:\\workspace-dev", "/workspace/projects/")));
         assertTrue(store.saved.isEmpty());
     }
 
@@ -39,7 +39,7 @@ class ProjectPathMappingServiceTest {
         RecordingMappings store = new RecordingMappings(MAPPING);
 
         assertEquals(ProjectPathMappingService.Outcome.CONFLICT, new ProjectPathMappingService(store)
-                .configure(new ProjectPathMapping("D:/other-projects", "/workspace/projects")));
+                .configure(ProjectPathMapping.singleRoot("D:/other-projects", "/workspace/projects")));
         assertTrue(store.saved.isEmpty());
     }
 
@@ -58,7 +58,7 @@ class ProjectPathMappingServiceTest {
     @Test
     void replaceReplacesAnotherMappingAndReportsTheProjects() throws Exception {
         RecordingMappings store = new RecordingMappings(MAPPING);
-        ProjectPathMapping other = new ProjectPathMapping("D:/other-projects", "/workspace/projects");
+        ProjectPathMapping other = ProjectPathMapping.singleRoot("D:/other-projects", "/workspace/projects");
 
         ProjectPathMappingService.Result result = new ProjectPathMappingService(store).replace(other);
 

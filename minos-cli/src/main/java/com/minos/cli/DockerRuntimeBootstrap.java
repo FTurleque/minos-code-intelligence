@@ -50,7 +50,7 @@ public final class DockerRuntimeBootstrap {
 
         final ProjectPathMapping desired;
         try {
-            desired = new ProjectPathMapping(arguments[firstRoot], arguments[firstRoot + 1]);
+            desired = ProjectPathMapping.singleRoot(arguments[firstRoot], arguments[firstRoot + 1]);
         } catch (IllegalArgumentException exception) {
             error.append("error: invalid project path mapping: ")
                     .append(exception.getMessage())

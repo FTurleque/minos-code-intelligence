@@ -33,7 +33,7 @@ class PublicCliDiagnosticTest {
     @Test
     void aProjectRootReplacementRefusalReachesTheOperatorUnchanged(@TempDir Path home) throws Exception {
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
-        store.save(new ProjectPathMapping("N:/workspace-dev", "/workspace/projects"));
+        store.save(ProjectPathMapping.singleRoot("N:/workspace-dev", "/workspace/projects"));
         java.nio.file.Files.createDirectories(home.resolve("config"));
         java.nio.file.Files.writeString(home.resolve("config/minos.properties"), "minos.storage.backend=postgresql\n");
 
@@ -50,7 +50,7 @@ class PublicCliDiagnosticTest {
     @Test
     void dockerMappingConflictDoesNotPublishItsPrivateControlPlanePath(@TempDir Path home) throws Exception {
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
-        store.save(new ProjectPathMapping("N:/workspace-dev", "/workspace/projects"));
+        store.save(ProjectPathMapping.singleRoot("N:/workspace-dev", "/workspace/projects"));
         StringBuilder error = new StringBuilder();
 
         int exitCode = DockerRuntimeBootstrap.run(home,

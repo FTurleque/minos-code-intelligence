@@ -28,7 +28,7 @@ class ProjectPathMappingStoreSymlinkTest {
         Path hostRoot = Files.createDirectories(temp.resolve("host"));
         Path containerRoot = Files.createDirectories(temp.resolve("container"));
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
-        store.save(new ProjectPathMapping(hostRoot.toString(), containerRoot.toString()));
+        store.save(ProjectPathMapping.singleRoot(hostRoot.toString(), containerRoot.toString()));
         Path mapping = store.file();
         Path outside = temp.resolve("outside.properties");
         Files.move(mapping, outside, StandardCopyOption.REPLACE_EXISTING);

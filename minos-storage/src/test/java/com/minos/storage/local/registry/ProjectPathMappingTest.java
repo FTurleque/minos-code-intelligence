@@ -19,7 +19,7 @@ class ProjectPathMappingTest {
 
     @Test
     void translatesWindowsHostAndLinuxContainerPathsWithoutStringReplaceAtCallSites() {
-        ProjectPathMapping mapping = new ProjectPathMapping(
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(
                 "N:\\workspace-dev",
                 "/workspace/projects");
 
@@ -41,7 +41,7 @@ class ProjectPathMappingTest {
         Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects")).toRealPath();
         Path hostProject = Files.createDirectories(hostRoot.resolve("demo"));
         Path dockerProject = Files.createDirectories(dockerRoot.resolve("demo"));
-        ProjectPathMapping mapping = new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString());
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(hostRoot.toString(), dockerRoot.toString());
         new ProjectPathMappingStore(home).save(mapping);
 
         LocalProjectRegistry nativeRegistry = new LocalProjectRegistry(
@@ -76,7 +76,7 @@ class ProjectPathMappingTest {
         Path record = home.resolve("registry/projects/" + original.id() + ".properties");
         assertTrue(Files.readString(record).contains("rootPath="));
 
-        ProjectPathMapping mapping = new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString());
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(hostRoot.toString(), dockerRoot.toString());
         new ProjectPathMappingStore(home).save(mapping);
         LocalProjectRegistry migrated = new LocalProjectRegistry(
                 home.resolve("registry"), mapping, ProjectPathMapping.RuntimeLocation.NATIVE);
@@ -101,7 +101,7 @@ class ProjectPathMappingTest {
         Path hostRoot = Files.createDirectories(temp.resolve("host-projects"));
         Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects"));
         Path outside = Files.createDirectories(temp.resolve("outside/project"));
-        ProjectPathMapping mapping = new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString());
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(hostRoot.toString(), dockerRoot.toString());
         LocalProjectRegistry registry = new LocalProjectRegistry(
                 home.resolve("registry"), mapping, ProjectPathMapping.RuntimeLocation.NATIVE);
 

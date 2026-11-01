@@ -30,14 +30,14 @@ class DockerRuntimeBootstrapTest {
         assertEquals("", error.toString());
         assertTrue(output.toString().contains("mapping created"));
         assertTrue(output.toString().contains("already matches"));
-        assertEquals(new ProjectPathMapping("N:/workspace-dev", "/workspace/projects"),
+        assertEquals(ProjectPathMapping.singleRoot("N:/workspace-dev", "/workspace/projects"),
                 new ProjectPathMappingStore(home).loadOptional().orElseThrow());
     }
 
     @Test
     void refusesImplicitMappingReplacement(@TempDir Path home) throws Exception {
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
-        store.save(new ProjectPathMapping("N:/workspace-dev", "/workspace/projects"));
+        store.save(ProjectPathMapping.singleRoot("N:/workspace-dev", "/workspace/projects"));
         StringBuilder error = new StringBuilder();
 
         int exitCode = DockerRuntimeBootstrap.run(home,
@@ -53,7 +53,7 @@ class DockerRuntimeBootstrapTest {
     @Test
     void replacesTheMappingWhenAskedExplicitly(@TempDir Path home) throws Exception {
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
-        store.save(new ProjectPathMapping("N:/workspace-dev", "/workspace/projects"));
+        store.save(ProjectPathMapping.singleRoot("N:/workspace-dev", "/workspace/projects"));
         StringBuilder output = new StringBuilder();
         StringBuilder error = new StringBuilder();
 
