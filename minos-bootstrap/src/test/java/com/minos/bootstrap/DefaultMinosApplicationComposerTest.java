@@ -114,4 +114,35 @@ class DefaultMinosApplicationComposerTest {
         assertInstanceOf(com.minos.storage.local.registry.LocalProjectPathMappings.class,
                 new DefaultMinosApplicationComposer().projectPathMappings(home));
     }
+
+    /** ADR SEC-0075: the Maven repository designated in minos.properties reaches the scip-java runtime manager. */
+    @Test
+    @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.LINUX)
+    void theMavenRepositoryDesignatedInTheConfigurationReachesScipJava(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        Path absent = temp.resolve("absent-repository");
+        java.nio.file.Files.createDirectories(home.resolve("config"));
+        java.nio.file.Files.writeString(home.resolve("config").resolve("minos.properties"),
+                "minos.scip.java.maven-repository=" + absent + System.lineSeparator());
+
+        java.util.List<String> diagnostics = new DefaultMinosApplicationComposer().providerRuntimeManager(home)
+                .inspect("scip-java").diagnostics();
+
+        org.junit.jupiter.api.Assertions.assertTrue(diagnostics.stream().anyMatch(diagnostic ->
+                diagnostic.contains("minos.scip.java.maven-repository is refused")), diagnostics::toString);
+        org.junit.jupiter.api.Assertions.assertTrue(diagnostics.stream().noneMatch(diagnostic ->
+                diagnostic.contains(absent.toString())), diagnostics::toString);
+    }
+
+    /** An unreadable configuration is refused, never read as an absent designation. */
+    @Test
+    void anUnreadableConfigurationIsRefusedWhenTheRuntimeManagerIsComposed(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        java.nio.file.Files.createDirectories(home.resolve("config").resolve("minos.properties"));
+
+        IllegalStateException refused = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> new DefaultMinosApplicationComposer().providerRuntimeManager(home));
+
+        assertEquals("MINOS runtime configuration cannot be read", refused.getMessage());
+    }
 }

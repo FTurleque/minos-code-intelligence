@@ -249,6 +249,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements OsEnforced
     ) throws IOException {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(networkPolicy, "networkPolicy");
+        plan.requireNoSandboxMounts("the Windows AppContainer sandbox"); // before any plan file or grant exists
         Path run = runDirectory.toRealPath();
         Path working = plan.workingDirectory().toRealPath();
         Path artifact = plan.generatedArtifact().toAbsolutePath().normalize();
@@ -343,12 +344,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements OsEnforced
                 launcher.file().toString(),
                 "-Plan",
                 planFile.toString());
-        return new IndexerProcessPlan(
-                wrapper,
-                plan.workingDirectory(),
-                Map.of(),
-                plan.generatedArtifact(),
-                plan.timeout());
+        return plan.withCommand(wrapper).withEnvironment(Map.of());
     }
 
     /**

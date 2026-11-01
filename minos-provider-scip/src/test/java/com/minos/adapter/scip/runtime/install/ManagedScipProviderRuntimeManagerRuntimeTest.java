@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -178,7 +179,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
 
     @Test
     void listsScipJavaThenScipTypescriptUnderTheirPinnedVersions() {
-        List<ProviderRuntimeStatus> statuses = new ManagedScipProviderRuntimeManager(directory).list();
+        List<ProviderRuntimeStatus> statuses = manager(directory).list();
 
         assertEquals(List.of(ManagedScipProviderRuntimeManager.SCIP_JAVA_ID, ManagedScipProviderRuntimeManager.SCIP_TYPESCRIPT_ID),
                 statuses.stream().map(ProviderRuntimeStatus::providerId).toList());
@@ -188,7 +189,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
 
     @Test
     void scipTypescriptIsNotInstalledUntilItsPackageIsThere() {
-        ManagedScipProviderRuntimeManager manager = new ManagedScipProviderRuntimeManager(directory);
+        ManagedScipProviderRuntimeManager manager = manager(directory);
 
         ProviderRuntimeStatus status = manager.inspect(ManagedScipProviderRuntimeManager.SCIP_TYPESCRIPT_ID);
 
@@ -201,7 +202,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
 
     @Test
     void noExecutorIsHandedOutForARuntimeThatIsNotReady() {
-        ManagedScipProviderRuntimeManager manager = new ManagedScipProviderRuntimeManager(directory);
+        ManagedScipProviderRuntimeManager manager = manager(directory);
 
         IllegalStateException refusal = assertThrows(IllegalStateException.class,
                 () -> manager.executor(ManagedScipProviderRuntimeManager.SCIP_TYPESCRIPT_ID));
@@ -211,7 +212,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
 
     @Test
     void anUnknownProviderIsRefusedByEveryEntryPoint() {
-        ManagedScipProviderRuntimeManager manager = new ManagedScipProviderRuntimeManager(directory);
+        ManagedScipProviderRuntimeManager manager = manager(directory);
 
         assertThrows(IllegalArgumentException.class, () -> manager.inspect("scip-python"));
         assertThrows(IllegalArgumentException.class, () -> manager.install("scip-python"));
@@ -220,7 +221,7 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
 
     @Test
     void theManagedToolsLiveUnderTheToolsDirectoryOfTheHome() {
-        ManagedScipProviderRuntimeManager manager = new ManagedScipProviderRuntimeManager(directory);
+        ManagedScipProviderRuntimeManager manager = manager(directory);
         Path tools = directory.toAbsolutePath().normalize().resolve("tools");
 
         assertTrue(manager.mavenExecutable().startsWith(tools.resolve("maven")), manager.mavenExecutable().toString());
@@ -233,6 +234,11 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
 
     @Test
     void theManagerRequiresAHomeDirectory() {
-        assertThrows(NullPointerException.class, () -> new ManagedScipProviderRuntimeManager(null));
+        assertThrows(NullPointerException.class, () -> new ManagedScipProviderRuntimeManager(
+                null, ScipJavaMavenOfflineFixtures.unconfigured(Path.of("unused"))));
+    }
+
+    private static ManagedScipProviderRuntimeManager manager(Path directory) {
+        return new ManagedScipProviderRuntimeManager(directory, ScipJavaMavenOfflineFixtures.unconfigured(directory));
     }
 }

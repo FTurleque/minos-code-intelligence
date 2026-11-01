@@ -491,6 +491,14 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                 planFactory.create(request, runDirectory), "process plan");
         IndexerProcessPlan plan = Objects.requireNonNull(
                 transformer.transform(original, runDirectory), "transformed process plan");
+        // Only a boundary that announces it mounts the declared roots and masks may run such a plan; one that drops
+        // the declaration, or keeps it without mounting it, would run the provider without them.
+        if (original.declaresSandboxMounts() && !transformer.mountsDeclaredSandboxMounts()) {
+            throw new IllegalStateException("the process boundary cannot mount the sandbox mounts the provider plan declares");
+        }
+        if (!plan.readOnlyRoots().equals(original.readOnlyRoots()) || !plan.maskedFiles().equals(original.maskedFiles())) {
+            throw new IllegalStateException("the process boundary dropped the sandbox mounts the provider plan declares");
+        }
         if (plan.command().isEmpty() || plan.command().stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("provider command must contain non-null arguments");
         }
@@ -532,6 +540,14 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
          */
         default Optional<ProviderWriteQuota> providerWriteQuota() {
             return Optional.empty();
+        }
+
+        /**
+         * Whether this boundary mounts the read-only roots and masked files a plan declares exactly. Only the
+         * qualified Linux sandbox does; a plan that declares them is refused by every other boundary.
+         */
+        default boolean mountsDeclaredSandboxMounts() {
+            return false;
         }
 
         /** Destroys the whole OS job boundary so that no descendant can survive MINOS. */

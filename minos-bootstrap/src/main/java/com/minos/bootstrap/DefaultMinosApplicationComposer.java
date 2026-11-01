@@ -5,6 +5,7 @@ import com.minos.adapter.scip.ingestion.ScipSymbolSnapshotImporter;
 import com.minos.adapter.scip.runtime.install.ManagedPolyglotScipRuntimeManager;
 import com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager;
 import com.minos.adapter.scip.runtime.install.ManagedScipPythonRuntimeManager;
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.application.MinosApplicationComposer;
 import com.minos.git.GitIntelligence;
@@ -27,6 +28,7 @@ import com.minos.runtime.WorkerSandboxProbe;
 import com.minos.storage.local.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
+import com.minos.storage.MinosRuntimeSettings;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider;
 import com.minos.storage.local.store.FileHostedControlPlaneStore;
@@ -37,20 +39,18 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Racine de composition de MINOS (ADR 0042) : le seul module non adaptateur qui connaît les classes
- * concrètes des adaptateurs. Chaque méthode reprend telle quelle l'instanciation que faisaient
- * {@code MinosApplicationAssembler}, {@code StorageBackends} et {@code MinosApplicationRuntimeConfiguration}
- * dans minos-application ; l'assembleur l'appelle exactement au même point.
+ * Composition root of MINOS (ADR 0042): the only non-adapter module that knows the concrete adapter classes.
+ * The application assembler calls each method at the point where it needs that adapter.
  *
- * <p>Enregistré par {@code META-INF/services/com.minos.application.MinosApplicationComposer}. Le
- * constructeur n'a aucun effet de bord : la découverte peut l'instancier sans rien ouvrir.</p>
+ * <p>Registered by {@code META-INF/services/com.minos.application.MinosApplicationComposer}. The constructor has
+ * no side effect: discovery may instantiate it without opening anything.</p>
  */
 public final class DefaultMinosApplicationComposer implements MinosApplicationComposer {
 
     public DefaultMinosApplicationComposer() {
     }
 
-    /** Raccourci {@code local} exact, puis {@code ServiceLoader} : voir {@link StorageBackendSelection}. */
+    /** The exact {@code local} shortcut, then {@code ServiceLoader}: see {@link StorageBackendSelection}. */
     @Override
     public StorageBackend openStorageBackend(StorageBackendConfiguration configuration) throws IOException {
         return StorageBackendSelection.open(configuration);
@@ -66,19 +66,34 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
         return ScipIndexerCatalog.qualifiedDescriptors();
     }
 
-    /** Référence de méthode : le catalogue n'est lu qu'à la demande. */
+    /** Method reference: the catalog is read only on demand. */
     @Override
     public IndexerProviderCatalog providerCatalog() {
         return ScipIndexerCatalog::qualifiedProviders;
     }
 
-    /** Gestionnaires dans l'ordre scip-java, python, polyglotte. */
+    /**
+     * Managers in the order scip-java, python, polyglot. The Maven repository of scip-java comes from the MINOS
+     * settings (JVM property, environment, {@code MINOS_HOME/config/minos.properties}), never from the analysed project.
+     */
     @Override
     public ProviderRuntimeManager providerRuntimeManager(Path home) {
         return new CompositeProviderRuntimeManager(List.of(
-                new ManagedScipProviderRuntimeManager(home),
+                new ManagedScipProviderRuntimeManager(
+                        home, ScipJavaMavenOffline.configured(
+                                scipJavaMavenRepository(home), home, () -> hostCommandLocator().find("mvn"))),
                 new ManagedScipPythonRuntimeManager(home),
                 new ManagedPolyglotScipRuntimeManager(home)));
+    }
+
+    /** The designated Maven repository of scip-java; an unreadable configuration is refused, never ignored. */
+    private static String scipJavaMavenRepository(Path home) {
+        try {
+            return MinosRuntimeSettings.load(home).value(
+                    ScipJavaMavenOffline.REPOSITORY_SETTING, ScipJavaMavenOffline.REPOSITORY_ENVIRONMENT);
+        } catch (IOException unreadable) {
+            throw new IllegalStateException("MINOS runtime configuration cannot be read", unreadable);
+        }
     }
 
     @Override
@@ -97,7 +112,7 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
         return new GitIntelligenceService();
     }
 
-    /** Un importeur neuf par import, comme l'appel direct {@code new ScipSymbolSnapshotImporter()} d'origine. */
+    /** A new importer for each import. */
     @Override
     public ScipArtifactImporter scipArtifactImporter() {
         return (indexFile, request, snapshots) ->
@@ -115,13 +130,13 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
         return new EnvironmentHostedTenantKeyProvider();
     }
 
-    /** Déplacé de minos-cli (LocalAutonomousIndexOperations) : un adaptateur neuf à chaque demande. */
+    /** A new adapter for each request. */
     @Override
     public ResumableRunMarkers resumableRunMarkers(Path home) {
         return new RunDirectoryResumableRunMarkers(home);
     }
 
-    /** Sonde réelle de l'hôte : aucun paramètre, aucune substitution possible depuis la production. */
+    /** The real host probe: no parameter, no substitution possible from production. */
     @Override
     public WorkerSandboxProbe workerSandboxProbe() {
         return new LocalWorkerSandboxProbe();
@@ -132,19 +147,19 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
         return new LocalHostCommandLocator();
     }
 
-    /** Déplacé de minos-cli (LocalRemoteIndexOperations) : matérialisation JGit du MINOS_HOME. */
+    /** JGit materialization in MINOS_HOME. */
     @Override
     public RemoteRepositoryMaterializer remoteRepositoryMaterializer(Path home) throws IOException {
         return new JGitRemoteRepositoryMaterializer(home);
     }
 
-    /** Déplacé de minos-cli : magasin de bundles, worker isolé et sélection réelle de l'hôte. */
+    /** Bundle store, isolated worker and real host selection. */
     @Override
     public RemoteIndexingRuntime remoteIndexingRuntime(Path home) throws IOException {
         return LocalRemoteIndexingRuntime.production(home);
     }
 
-    /** Déplacé de minos-app (DockerRuntimeBootstrap) : le magasin fichier et le registre local du MINOS_HOME. */
+    /** The file store and local registry of MINOS_HOME. */
     @Override
     public ProjectPathMappings projectPathMappings(Path home) {
         return new LocalProjectPathMappings(home);

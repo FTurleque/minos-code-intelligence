@@ -63,6 +63,7 @@ public final class WindowsJobObjectProcessOwnership {
             @Override
             public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
                 Objects.requireNonNull(plan, "plan");
+                plan.requireNoSandboxMounts("Windows Job Object process ownership");
                 Path planFile = runDirectory.resolve("windows-job-object-plan.txt").toAbsolutePath().normalize();
                 List<String> command = resolveCommand(plan.command());
                 Map<String, String> environment = ProviderProcessEnvironment.sanitize(
