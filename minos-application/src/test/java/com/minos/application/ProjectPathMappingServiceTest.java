@@ -170,6 +170,18 @@ class ProjectPathMappingServiceTest {
     }
 
     @Test
+    void aNestedProjectInAnotherCaseSharesTheMountOfItsParent() throws Exception {
+        RecordingMappings store = new RecordingMappings(MAPPING);
+        store.roots.addAll(List.of(
+                new RegisteredRoot("Sub", Optional.of("A/b")),
+                new RegisteredRoot("Parent", Optional.of("a"))));
+
+        ProjectPathMappingService.Migration plan = service(store).migrate(Set.of(), true);
+
+        assertEquals(List.of(new ProjectMount("a", "N:/workspace-dev/a")), plan.table().mounts());
+    }
+
+    @Test
     void aDryRunWritesNothingAndARefusedFolderIsNotMounted() throws Exception {
         RecordingMappings store = new RecordingMappings(MAPPING);
         store.roots.addAll(List.of(

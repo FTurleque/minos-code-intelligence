@@ -222,7 +222,8 @@ public final class ProjectPathMappingService {
         if (saved.mountTable()) return new Migration(Outcome.UNCHANGED, saved, List.of());
 
         List<RegisteredRoot> roots = new ArrayList<>(registeredRoots.list());
-        roots.sort(Comparator.comparing(root -> root.relativeRoot().orElse("")));
+        // Without case, as nesting is judged: the shortest prefix comes first whatever its case.
+        roots.sort(Comparator.comparing(root -> root.relativeRoot().orElse("").toLowerCase(Locale.ROOT)));
         List<String> refused = refusedPaths.stream().map(path -> path.toLowerCase(Locale.ROOT)).toList();
         List<ProjectMount> mounts = new ArrayList<>();
         List<Skipped> skipped = new ArrayList<>();
