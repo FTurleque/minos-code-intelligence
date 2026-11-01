@@ -32,6 +32,10 @@ param(
 
     [switch] $ProvisionOllamaModel,
 
+    # Replaces another recorded projects root (configure-project-paths --replace); set by the switcher only
+    # after the user confirmed the change.
+    [switch] $ReplaceProjectsRoot,
+
     # Installer progress file; empty (the default) writes no progress.
     [string] $ProgressPath = ''
 )
@@ -174,13 +178,15 @@ try {
     ) | Set-Content -LiteralPath $BaseProperties -Encoding ascii
 
     Write-SetupProgress -Step 'docker-image' -State 'running'
-    Invoke-DockerWorkflow -Action Install -AdditionalParameters @{
+    $InstallParameters = @{
         Jar = $Jar
         Version = $Version
         Commit = $Commit
         ProjectsRoot = $ProjectsRoot
         SemanticProvider = $BaseSemanticProvider
     }
+    if ($ReplaceProjectsRoot) { $InstallParameters['ReplaceProjectsRoot'] = $true }
+    Invoke-DockerWorkflow -Action Install -AdditionalParameters $InstallParameters
     Write-SetupProgress -Step 'docker-image' -State 'done'
 
     $NeedsM30Services = $StorageBackend -eq 'postgresql' -or $SemanticProvider -eq 'ollama'

@@ -118,6 +118,7 @@ var
   DockerInstanceEdit: TNewEdit;
   DockerDataRootLabel: TNewStaticText;
   DockerDataRootEdit: TNewEdit;
+  ReplaceDockerProjectsRootConfirmed: Boolean;
   SummaryPage: TWizardPage;
   SummaryMemo: TNewMemo;
   DeleteUserDataOnUninstall: Boolean;
@@ -236,6 +237,13 @@ function EffectiveDockerDataRoot(): String;
 begin
   if AdvancedSetupSelected() then Result := DockerDataRootEdit.Text
   else Result := DefaultDockerDataRoot();
+end;
+
+{ Replacing the projects root recorded by the Docker runtime is confirmed on the Docker page, or by
+  /REPLACEDOCKERPROJECTSROOT=1 for a silent install; switch-mcp-backend.ps1 refuses an unconfirmed change. }
+function ReplaceDockerProjectsRootRequested(): Boolean;
+begin
+  Result := ReplaceDockerProjectsRootConfirmed or (ExpandConstant('{param:REPLACEDOCKERPROJECTSROOT|0}') = '1');
 end;
 
 function EffectiveMcpServerName(): String;
@@ -1037,6 +1045,8 @@ begin
       '" -DockerComposeProject "' + DockerInstanceEdit.Text +
       '" -StorageBackend ' + EffectiveStorageBackend() +
       ' -SemanticProvider ' + EffectiveSemanticProvider();
+    if ReplaceDockerProjectsRootRequested() then
+      Parameters := Parameters + ' -ReplaceDockerProjectsRoot';
     if OllamaSelected() then
     begin
       Parameters := Parameters +
@@ -1218,6 +1228,8 @@ begin
       'Racine projets Docker : ' + DockerProjectsPage.Values[0] + #13#10 +
       'Données Docker : ' + EffectiveDockerDataRoot() + #13#10 +
       'Instance Docker : ' + DockerInstanceEdit.Text;
+    if ReplaceDockerProjectsRootRequested() then
+      Text := Text + #13#10 + 'Racine projets Docker : remplace la racine enregistrée (projets hors racine conservés, signalés indisponibles)';
     if PostgreSqlSelected() then Text := Text + #13#10 + 'PostgreSQL : géré par MINOS dans Docker (pgvector)';
     if OllamaSelected() then
     begin
@@ -1430,6 +1442,39 @@ begin
     end;
 end;
 
+{ Host projects root of the mapping that minos-bootstrap saved in the Docker data root (a Java
+  properties file: ':' and '\' are escaped), or '' when there is none. Same reading as
+  Get-RecordedDockerProjectsRoot in switch-mcp-backend.ps1. }
+function RecordedDockerProjectsRoot(): String;
+var
+  Lines: TArrayOfString;
+  Line: String;
+  I: Integer;
+begin
+  Result := '';
+  if not LoadStringsFromFile(AddBackslash(EffectiveDockerDataRoot()) + 'runtime\project-paths.properties', Lines) then exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    Line := Trim(Lines[I]);
+    if Pos('hostRoot=', Line) = 1 then
+    begin
+      Result := Copy(Line, Length('hostRoot=') + 1, Length(Line));
+      StringChangeEx(Result, '\:', ':', True);
+      StringChangeEx(Result, '\\', '\', True);
+      Result := Trim(Result);
+      exit;
+    end;
+  end;
+end;
+
+function ComparableDockerProjectsRoot(Path: String): String;
+begin
+  Result := AnsiLowercase(Trim(Path));
+  StringChangeEx(Result, '\', '/', True);
+  while (Length(Result) > 0) and (Result[Length(Result)] = '/') do
+    Delete(Result, Length(Result), 1);
+end;
+
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
@@ -1456,6 +1501,7 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 var
   Dimensions: Integer;
   Reason: String;
+  RecordedRoot: String;
 begin
   Result := True;
 
@@ -1536,6 +1582,22 @@ begin
     begin MsgBox('Choisissez un chemin absolu valide pour les données Docker.', mbError, MB_OK); Result := False; exit; end;
     if not IsSafeDockerName(DockerInstanceEdit.Text) then
     begin MsgBox('Le nom de l''instance Docker contient un caractère non autorisé.', mbError, MB_OK); Result := False; exit; end;
+    ReplaceDockerProjectsRootConfirmed := False;
+    RecordedRoot := RecordedDockerProjectsRoot();
+    if (RecordedRoot <> '') and (not WizardSilent()) and
+       (ComparableDockerProjectsRoot(RecordedRoot) <> ComparableDockerProjectsRoot(DockerProjectsPage.Values[0])) then
+    begin
+      if MsgBox(
+        'Le runtime Docker MINOS utilise déjà une autre racine des projets :' + #13#10 + RecordedRoot + #13#10 + #13#10 +
+        'La remplacer par la racine choisie ? Chaque projet inscrit reste inscrit avec son index : ceux qui se trouvent ' +
+        'sous la nouvelle racine sont rebasés, les autres sont signalés indisponibles (rootAvailable: false). ' +
+        'Chaque inscription modifiée est sauvegardée, et tout est restauré si l''installation échoue.' + #13#10 + #13#10 +
+        'Choisissez Non pour revenir à la page et choisir une autre racine.',
+        mbConfirmation, MB_YESNO) = IDYES then
+        ReplaceDockerProjectsRootConfirmed := True
+      else
+      begin Result := False; exit; end;
+    end;
     if not DockerReady() then
     begin
       MsgBox(
