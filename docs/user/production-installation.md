@@ -488,14 +488,19 @@ Non / conserver → choix par défaut
 
 Le bouton par défaut est **Non / conserver**.
 
+Avec le backend MCP Docker, la désinstallation arrête puis retire, dans les deux cas, les conteneurs et les réseaux du projet Compose de l'instance (services PostgreSQL et Ollama compris). Sans purge, les volumes Docker restent : une réinstallation retrouve les données.
+
 La purge complète peut supprimer :
 
 - `%LOCALAPPDATA%\MINOS` ;
 - snapshots/index/logs/backups ;
 - runtime/data Docker MINOS ;
-- volumes PostgreSQL/Ollama gérés par MINOS.
+- volumes Docker de l'instance, dont les volumes PostgreSQL/Ollama gérés par MINOS ;
+- images Docker `minos-code-intelligence:*` qu'aucun conteneur n'utilise (celles d'une autre instance encore installée restent).
 
 Elle ne supprime jamais une base PostgreSQL externe.
+
+Le désinstalleur écrit toujours son journal dans le dossier temporaire de l'utilisateur (`%TEMP%`). Un retrait Docker qui échoue (Docker Desktop arrêté, objet refusé par le démon) y est détaillé, ligne `MINOS-DOCKER-REMOVAL` par ligne, et une fenêtre l'annonce : voir [Dépannage](troubleshooting.md#ressources-docker-restées-après-une-désinstallation).
 
 Les smoke/silent uninstall automatisés ne posent pas ce prompt et ne purgent pas les vraies données utilisateur.
 

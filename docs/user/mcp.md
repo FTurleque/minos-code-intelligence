@@ -192,7 +192,7 @@ Ils appliquent les règles suivantes :
 - les autres serveurs MCP et propriétés de configuration sont conservés ;
 - l'état des intégrations créées est enregistré ;
 - la réinstallation compatible est idempotente ;
-- la désinstallation retire uniquement les entrées correspondant encore à la configuration gérée ;
+- la désinstallation retire uniquement les entrées correspondant encore à la configuration gérée ; pour Codex, le bloc borné par `# BEGIN MINOS MANAGED MCP SERVER` et `# END MINOS MANAGED MCP SERVER` est retiré même si l'état d'intégration a disparu, et une section `[mcp_servers.minos]` sans ces marqueurs n'est jamais touchée ;
 - si une entrée gérée a été modifiée manuellement, elle est conservée ;
 - les chemins des CLI sont mémorisés afin qu'un changement ultérieur du `PATH` ne rende pas automatiquement le cleanup impossible.
 

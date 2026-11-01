@@ -272,6 +272,28 @@ vers un bac à sable moins isolant) et `doctor` le montre. Les causes, par messa
 Le désinstalleur ne supprime pas `%LOCALAPPDATA%\minos-launchers` (quelques dizaines de Ko par version du script) : supprimez-le à la
 main si vous désinstallez MINOS.
 
+## Ressources Docker restées après une désinstallation
+
+Message : « Certaines ressources Docker MINOS n'ont pas pu être retirées » ou « Docker Desktop est absent ou arrêté ».
+
+Le désinstalleur retire les conteneurs et réseaux du projet Compose de l'instance (et, en cas de purge, ses volumes et les images
+MINOS inutilisées) en les
+cherchant par étiquette. Le détail est dans le journal de désinstallation (dossier `%TEMP%`), lignes `MINOS-DOCKER-REMOVAL` :
+`result=failed` nomme l'objet refusé et reprend le message de Docker ; `result=unavailable` signale un Docker absent ou arrêté.
+
+Docker Desktop démarré, retrouver ce qui reste (remplacer `minos-mcp-prod` par le nom de l'instance) :
+
+```powershell
+docker ps -a --filter label=com.docker.compose.project=minos-mcp-prod
+docker network ls --filter label=com.docker.compose.project=minos-mcp-prod
+docker volume ls --filter label=io.minos.installation=minos-mcp-prod
+docker volume ls --filter name=minos-mcp-prod-
+docker image ls minos-code-intelligence
+```
+
+Puis `docker rm -f`, `docker network rm`, `docker image rm` et, seulement pour supprimer les données, `docker volume rm` sur les
+objets listés.
+
 ## `scip-typescript` est `BLOCKED`
 
 Vérifier :
