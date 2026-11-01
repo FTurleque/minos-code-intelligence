@@ -12,7 +12,9 @@ Set-StrictMode -Version Latest
 # GitHub-hosted ubuntu-24.04 runner (the default CI path, see .github/workflows/release-promotion-gate.yml)
 # or a Windows host with Docker Desktop Linux containers (for local/manual runs). Nothing below is
 # Windows-specific: the real product lifecycle logic lives in docker/scripts/mcp-lifecycle.ps1,
-# which this script calls directly with its own temporary install/data/projects roots.
+# which this script calls directly with its own temporary install/data roots. Projects live under a temporary
+# folder: the previous release mounts it whole when its recipe still mounts one projects root, and the candidate
+# migrates that runtime to one mount per registered project, which this qualification checks.
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $EvidenceRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $EvidenceRoot))
@@ -22,6 +24,8 @@ $InstallRoot = Join-Path $TempRoot 'install'
 $DataRoot = Join-Path $TempRoot 'data'
 $ProjectsRoot = Join-Path $TempRoot 'projects'
 $FixtureRoot = Join-Path $ProjectsRoot 'upgrade-fixture'
+# Never registered: it must not be visible to the candidate's containers.
+$UnregisteredRoot = Join-Path $ProjectsRoot 'not-registered'
 $Suffix = [Guid]::NewGuid().ToString('N').Substring(0, 8)
 $ContainerName = "minos-upgrade-$Suffix"
 $ComposeProject = "minos-upgrade-$Suffix"
@@ -101,6 +105,14 @@ function Build-ShadedJar([string] $Root) {
     return $Jars[0].FullName
 }
 
+# The -f arguments of the runtime: its compose file, then the generated project mounts override when it exists.
+function Get-ComposeFileArgumentsLocal([string] $RuntimeRootLocal, [string] $ComposeFileLocal) {
+    $Files = @('-f', $ComposeFileLocal)
+    $Override = Join-Path $RuntimeRootLocal 'compose-mcp.projects.yaml'
+    if (Test-Path -LiteralPath $Override -PathType Leaf) { $Files += @('-f', $Override) }
+    return , $Files
+}
+
 function Invoke-AdminCommandCapture([string[]] $MinosArgumentsToCapture) {
     # A dedicated, non-throwing capture path for admin commands we expect might fail, distinct from
     # Invoke-DockerWorkflow's Compose call (which throws on nonzero exit and, empirically, never
@@ -112,8 +124,8 @@ function Invoke-AdminCommandCapture([string[]] $MinosArgumentsToCapture) {
     $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose-mcp.prod.yaml'
     $EnvironmentFileLocal = Join-Path $RuntimeRootLocal '.env'
     $ComposeArguments = @(
-        'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal,
-        '-f', $ComposeFileLocal, 'run', '--rm', '--no-deps', 'minos-admin') + $MinosArgumentsToCapture
+        'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal) +
+        (Get-ComposeFileArgumentsLocal $RuntimeRootLocal $ComposeFileLocal) + @('run', '--rm', '--no-deps', 'minos-admin') + $MinosArgumentsToCapture
     $Output = (($null | & docker @ComposeArguments 2>&1) | Out-String).Trim()
     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $Output }
 }
@@ -130,8 +142,8 @@ function Invoke-AdminShellCommand([string] $ShellCommand) {
     $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose-mcp.prod.yaml'
     $EnvironmentFileLocal = Join-Path $RuntimeRootLocal '.env'
     $ComposeArguments = @(
-        'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal,
-        '-f', $ComposeFileLocal, 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'minos-admin', '-c', $ShellCommand)
+        'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal) +
+        (Get-ComposeFileArgumentsLocal $RuntimeRootLocal $ComposeFileLocal) + @('run', '--rm', '--no-deps', '--entrypoint', 'sh', 'minos-admin', '-c', $ShellCommand)
     $Output = (($null | & docker @ComposeArguments 2>&1) | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw "Admin shell command failed: $ShellCommand -- $Output" }
     return $Output
@@ -145,14 +157,17 @@ function Invoke-DockerWorkflow {
         [string] $Version = '',
         [string] $Commit = '',
         [string] $ImageTag = '',
-        [string[]] $MinosArguments = @()
+        [string[]] $MinosArguments = @(),
+        [string] $ProjectPath = '',
+        [string] $Name = '',
+        # Only for the recipe of a release that still mounts one projects root.
+        [switch] $WithProjectsRoot
     )
 
     $Arguments = @{
         Action = $Action
         InstallRoot = $InstallRoot
         DataRoot = $DataRoot
-        ProjectsRoot = $ProjectsRoot
         ContainerName = $ContainerName
         ComposeProject = $ComposeProject
     }
@@ -162,6 +177,9 @@ function Invoke-DockerWorkflow {
     if (-not [string]::IsNullOrWhiteSpace($Commit)) { $Arguments.Commit = $Commit }
     if (-not [string]::IsNullOrWhiteSpace($ImageTag)) { $Arguments.ImageTag = $ImageTag }
     if ($MinosArguments.Count -gt 0) { $Arguments.MinosArguments = $MinosArguments }
+    if (-not [string]::IsNullOrWhiteSpace($ProjectPath)) { $Arguments.ProjectPath = $ProjectPath }
+    if (-not [string]::IsNullOrWhiteSpace($Name)) { $Arguments.Name = $Name }
+    if ($WithProjectsRoot) { $Arguments.ProjectsRoot = $ProjectsRoot }
     # Always run this repo's OWN, current, portable mcp-lifecycle.ps1 as the driver - never a
     # candidate worktree's copy. An older candidate A predating this file's introduction has no
     # copy of it at all, and even when it does, the orchestration logic is qualification tooling,
@@ -233,7 +251,7 @@ function Assert-QueryPlaneOnQueryImage {
     if (-not [string]::IsNullOrWhiteSpace($Found)) { throw "The MCP query plane container holds build tools: $($Found -replace '\s+', ' ')" }
 }
 
-New-Item -ItemType Directory -Force -Path $TempRoot, $ProjectsRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $TempRoot, $ProjectsRoot, $UnregisteredRoot | Out-Null
 
 try {
     Invoke-NativeChecked -File 'docker' -Arguments @('version', '--format', '{{.Server.Version}}') `
@@ -285,6 +303,10 @@ try {
         throw "Missing real Docker release recipe: no compose file under $(Join-Path $PreviousWorktree 'docker')"
     }
     $PreviousPredatesComposeRename = -not $PreviousHasCurrentCompose
+    # A previous release whose recipe mounts one projects root: the candidate's Install must migrate it.
+    $PreviousComposeSource = Join-Path $PreviousWorktree (Join-Path 'docker' $(if ($PreviousHasCurrentCompose) { 'compose-mcp.prod.yaml' } else { 'compose.mcp.prod.yaml' }))
+    $PreviousMountsProjectsRoot = (Get-Content -Raw -LiteralPath $PreviousComposeSource) -match '\$\{MINOS_PROJECTS_DIR\b'
+    $ProjectMountMigration = 'not-applicable'
     $RuntimeComposeMigration = 'not-applicable'
 
     $VersionA = "qualification-a-$($PreviousSha.Substring(0, 12))"
@@ -322,7 +344,8 @@ public final class UpgradeFixture {
 '@ | Set-Content -LiteralPath (Join-Path $FixtureRoot 'src\main\java\UpgradeFixture.java') -Encoding utf8
 
     # Candidate A: real provider-complete image, real Compose, real admin plane and real MCP handshake.
-    Invoke-DockerWorkflow -SourceRoot $PreviousWorktree -Action Install -Jar $JarA -Version $VersionA -Commit $PreviousSha -ImageTag $TagA
+    Invoke-DockerWorkflow -SourceRoot $PreviousWorktree -Action Install -Jar $JarA -Version $VersionA -Commit $PreviousSha -ImageTag $TagA `
+        -WithProjectsRoot:$PreviousMountsProjectsRoot
     if (-not $PreviousHasQueryImage -and (Read-RuntimeEnvironmentValue 'MINOS_QUERY_IMAGE') -ne '') {
         # The starting point of the upgrade must be the real one: a runtime that names a single image.
         throw 'The previous release has a single image, but its installed runtime .env already defines MINOS_QUERY_IMAGE.'
@@ -346,9 +369,15 @@ public final class UpgradeFixture {
     Assert-RunningCandidate -ExpectedImage $RunningImageA -ExpectedCommit $PreviousSha
     Invoke-McpSmoke -SourceRoot $PreviousWorktree -Label 'a'
 
-    Invoke-DockerWorkflow -Action Admin -MinosArguments @(
-        'project', 'add', '/workspace/projects/upgrade-fixture', '--name', 'upgrade-fixture', '--format', 'json') `
-        6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'project-add-a.log') -Encoding utf8
+    if ($PreviousMountsProjectsRoot) {
+        Invoke-DockerWorkflow -Action Admin -MinosArguments @(
+            'project', 'add', '/workspace/projects/upgrade-fixture', '--name', 'upgrade-fixture', '--format', 'json') `
+            6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'project-add-a.log') -Encoding utf8
+    }
+    else {
+        Invoke-DockerWorkflow -Action AddProject -ProjectPath $FixtureRoot -Name 'upgrade-fixture' `
+            6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'project-add-a.log') -Encoding utf8
+    }
 
     # docs/developer/remote-worker-sandbox-disposition.md: the Docker admin plane cannot nest a
     # second OS sandbox inside its own already-hardened container, so a managed provider (scip-java,
@@ -410,10 +439,26 @@ public final class UpgradeFixture {
     $SentinelAfter = (Invoke-AdminShellCommand 'cat /var/lib/minos/upgrade-qualification.sentinel').Trim()
     if ($SentinelAfter -ne $Sentinel) { throw 'Persistent MINOS data sentinel was not preserved across Docker upgrade.' }
 
+    # Only the registered project is visible to the candidate, in the query plane and in the admin plane: the folder
+    # that sits beside it under the old projects root, never registered, is not.
+    $QueryListing = ((& docker exec $ContainerName ls -1 /workspace/projects) | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'The project mounts of the MCP query plane could not be listed.' }
+    $AdminListing = (Invoke-AdminShellCommand 'ls -1 /workspace/projects').Trim()
+    foreach ($Listing in @($QueryListing, $AdminListing)) {
+        $Entries = @($Listing -split '\s+' | Where-Object { $_ -ne '' })
+        if ($Entries.Count -ne 1 -or $Entries[0] -ne 'upgrade-fixture') {
+            throw "Candidate B exposes other folders than the registered project under /workspace/projects: $($Entries -join ', ')"
+        }
+    }
+    if ($PreviousMountsProjectsRoot) { $ProjectMountMigration = 'verified' }
+
     Invoke-DockerWorkflow -Action Admin -MinosArguments @('project', 'list', '--format', 'json') `
         6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'project-list-b.log') -Encoding utf8
     if (-not (Select-String -LiteralPath (Join-Path $EvidenceRoot 'project-list-b.log') -SimpleMatch 'upgrade-fixture' -Quiet)) {
         throw 'Registered project did not survive Docker A -> B upgrade.'
+    }
+    if (-not (Select-String -LiteralPath (Join-Path $EvidenceRoot 'project-list-b.log') -Pattern '"rootAvailable"\s*:\s*true' -Quiet)) {
+        throw 'The registered project is not available (rootAvailable) after the Docker A -> B upgrade.'
     }
     Invoke-DockerWorkflow -Action Admin -MinosArguments @(
         'index-status', 'upgrade-fixture', '--format', 'json') `
@@ -461,6 +506,8 @@ public final class UpgradeFixture {
         registeredProjectPreserved = $true
         failedNextCandidatePreservedB = $true
         runtimeComposeMigration = $RuntimeComposeMigration
+        projectMountMigration = $ProjectMountMigration
+        unregisteredFolderHidden = $true
         result = 'PASS'
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'qualification.json') -Encoding utf8
 

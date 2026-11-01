@@ -108,7 +108,6 @@ function Invoke-Workflow {
         $Parameters['Jar'] = $Jar
         $Parameters['Version'] = '1.0.1-SNAPSHOT'
         $Parameters['Commit'] = $Head
-        $Parameters['ProjectsRoot'] = $ProjectsRoot
         $Parameters['SemanticProvider'] = $SemanticProvider
     }
     if ($MinosArguments.Count -gt 0) { $Parameters['MinosArguments'] = $MinosArguments }

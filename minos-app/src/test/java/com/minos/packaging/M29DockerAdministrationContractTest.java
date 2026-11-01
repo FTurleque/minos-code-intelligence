@@ -28,7 +28,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(query.contains("io.minos.runtime-plane: query"));
         assertTrue(query.contains("target: /var/lib/minos\n        read_only: true"));
         assertTrue(query.contains("target: /var/lib/minos/tools\n        read_only: true"));
-        assertTrue(query.contains("target: /workspace/projects\n        read_only: true"));
+        assertFalse(query.contains("target: /workspace/projects"),
+                "no projects root is mounted: each exposed project has its own generated mount");
         assertTrue(query.contains("network_mode: none"));
         assertTrue(query.contains("MINOS_SEMANTIC_PROVIDER: \"${MINOS_SEMANTIC_PROVIDER:-disabled}\""),
                 "query and admin planes must reopen the same persisted semantic-provider selection");
@@ -41,7 +42,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(admin.contains("target: /var/lib/minos"));
         assertFalse(admin.contains("target: /var/lib/minos\n        read_only: true"));
         assertTrue(admin.contains("target: /var/lib/minos/tools\n        read_only: true"));
-        assertTrue(admin.contains("target: /workspace/projects\n        read_only: true"));
+        assertFalse(admin.contains("target: /workspace/projects"),
+                "no projects root is mounted: each exposed project has its own generated mount");
         assertTrue(admin.contains("com.minos.cli.MinosLauncher"));
         assertTrue(admin.contains("MINOS_SEMANTIC_PROVIDER: \"${MINOS_SEMANTIC_PROVIDER:-disabled}\""));
         assertFalse(admin.contains("network_mode: none"),
@@ -60,7 +62,8 @@ class M29DockerAdministrationContractTest {
                 "admin/indexing needs only a bounded exec tmpfs for provider native extraction");
 
         assertTrue(bootstrap.contains("com.minos.cli.DockerRuntimeBootstrap"));
-        assertTrue(bootstrap.contains("configure-project-paths"));
+        assertTrue(bootstrap.contains("command: [init-project-mounts, /workspace/projects]"));
+        assertFalse(bootstrap.contains("MINOS_HOST_PROJECTS_ROOT"));
         assertFalse(bootstrap.contains("/run/minos-native"));
         assertFalse(bootstrap.contains("COURSIER_CACHE:"));
         assertTrue(toolsBootstrap.contains("cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/"));
@@ -294,6 +297,18 @@ class M29DockerAdministrationContractTest {
     // service the base profile does; it only adds the managed PostgreSQL/Ollama sidecars.
     // minos-data-bootstrap was missing, and every install run after selecting managed
     // PostgreSQL/Ollama failed with "no such service: minos-data-bootstrap".
+    @Test
+    void noShippedComposeFileMountsAProjectsRoot() throws Exception {
+        for (String file : List.of("docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml")) {
+            String compose = normalizedText(repoRoot().resolve(file));
+
+            assertFalse(compose.contains("MINOS_PROJECTS_DIR"), file);
+            assertFalse(compose.contains("MINOS_HOST_PROJECTS_ROOT"), file);
+            assertFalse(compose.contains("target: /workspace/projects"), file);
+            assertFalse(compose.contains("configure-project-paths"), file);
+        }
+    }
+
     @Test
     void connectedProfileDefinesEveryBaseProfileService() throws Exception {
         String base = normalizedText(repoRoot().resolve("docker/compose-mcp.prod.yaml"));

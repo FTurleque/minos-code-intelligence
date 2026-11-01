@@ -97,7 +97,14 @@ def ps_literal(value: Path | str) -> str:
 class RuntimeEnvironmentTest(unittest.TestCase):
     def test_compose_declares_required_variables(self) -> None:
         # Guards the regex: an empty set would make the two cases below vacuous.
-        self.assertIn("MINOS_HOST_PROJECTS_ROOT", required_compose_variables())
+        self.assertIn("MINOS_DATA_DIR", required_compose_variables())
+
+    def test_no_projects_root_is_required_or_written(self) -> None:
+        # No projects root is mounted: the compose file requires none, and no launcher writes one in the .env.
+        for name in ("MINOS_PROJECTS_DIR", "MINOS_HOST_PROJECTS_ROOT"):
+            self.assertNotIn(name, required_compose_variables())
+            self.assertNotIn(name, runtime_env_variables(VERIFY_SCRIPT))
+            self.assertNotIn(name, runtime_env_variables(DEV_LAUNCHER))
 
     def test_verification_env_defines_every_required_variable(self) -> None:
         missing = required_compose_variables() - runtime_env_variables(VERIFY_SCRIPT)

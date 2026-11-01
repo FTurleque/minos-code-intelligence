@@ -146,8 +146,6 @@ MINOS_CONTAINER_NAME=minos-mcp-verify
 MINOS_IMAGE=minos-code-intelligence:verify
 MINOS_QUERY_IMAGE=minos-code-intelligence:verify-query
 MINOS_DATA_DIR=$($temporaryRoot.Replace('\', '/'))/data
-MINOS_PROJECTS_DIR=$($temporaryRoot.Replace('\', '/'))/projects
-MINOS_HOST_PROJECTS_ROOT=$($temporaryRoot.Replace('\', '/'))/projects
 MINOS_VERSION=verify
 MINOS_GIT_COMMIT=verify
 "@
