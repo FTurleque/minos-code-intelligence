@@ -1558,7 +1558,7 @@ begin
     'Supprimer également toutes les données MINOS locales ?' + #13#10 + #13#10 +
     'Données natives / contrôle :' + #13#10 + DataRoot + #13#10 + #13#10 +
     'Données Docker :' + #13#10 + DockerRoot + #13#10 + #13#10 +
-    'Oui supprime aussi les volumes PostgreSQL/Ollama gérés par MINOS. Une base PostgreSQL externe n''est jamais supprimée.' + #13#10 +
+    'Oui supprime aussi les volumes PostgreSQL/Ollama gérés par MINOS et les images Docker MINOS (minos-code-intelligence) qu''aucun conteneur n''utilise. Une base PostgreSQL externe n''est jamais supprimée.' + #13#10 +
     'Dans tous les cas, les conteneurs et réseaux Docker de l''instance MINOS sont arrêtés et retirés.' + #13#10 + #13#10 +
     'Cette opération est irréversible. Choisissez Non pour conserver les données.';
   DeleteUserDataOnUninstall := MsgBox(MessageText, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
@@ -1585,7 +1585,8 @@ begin
 end;
 
 // Stops and removes the containers of the Compose project of the Docker instance, the PostgreSQL and
-// Ollama profile services included, and its networks; on purge, its volumes too. The script finds them
+// Ollama profile services included, and its networks; on purge, its volumes and every MINOS image no
+// container uses too. The script finds them
 // by label, so it works whatever state the Docker runtime folder is in. It must run before
 // RemoveMinosProgramPayload deletes {app}\docker. Every outcome reaches the uninstall log; a failure is
 // also reported to the user.
@@ -1620,7 +1621,7 @@ begin
     Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Remover + '"' +
       ' -ComposeProject "' + InstanceName + '" -LogPath "' + LogFile + '"';
     if DeleteUserDataOnUninstall then
-      Parameters := Parameters + ' -Purge';
+      Parameters := Parameters + ' -Purge -RemoveImages';
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
       ResultCode := -1;
     LogScriptOutput(LogFile);
@@ -1636,7 +1637,7 @@ begin
   else
     Notice := 'Certaines ressources Docker MINOS n''ont pas pu être retirées';
   if DeleteUserDataOnUninstall then
-    Notice := Notice + ', et les volumes de données sont restés.'
+    Notice := Notice + ' ; des volumes de données ou des images peuvent être restés.'
   else
     Notice := Notice + '.';
   SuppressibleMsgBox(
@@ -1645,7 +1646,8 @@ begin
     'Le détail figure dans le journal de désinstallation, dans votre dossier temporaire (%TEMP%).' + #13#10 + #13#10 +
     'Pour les retrouver une fois Docker Desktop démarré :' + #13#10 +
     'docker ps -a --filter label=com.docker.compose.project=' + InstanceName + #13#10 +
-    'docker volume ls --filter label=io.minos.installation=' + InstanceName,
+    'docker volume ls --filter label=io.minos.installation=' + InstanceName + #13#10 +
+    'docker image ls minos-code-intelligence',
     mbError, MB_OK, IDOK);
 end;
 

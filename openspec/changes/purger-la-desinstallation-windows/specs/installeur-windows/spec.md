@@ -52,6 +52,19 @@ Chaque appel Docker du retrait SHALL être vérifié par son code de sortie. Un 
 - **WHEN** l'action `Uninstall` est exécutée
 - **THEN** le fichier est inchangé
 
+### Requirement: La purge retire les images MINOS inutilisées
+Avec la purge, la désinstallation SHALL retirer toutes les images `minos-code-intelligence:*` qu'aucun conteneur n'utilise, et la question de purge SHALL l'annoncer. Une image utilisée par un conteneur SHALL être gardée et journalisée, sans échec. Sans purge, le désinstalleur SHALL NOT demander le retrait des images. Une image d'un autre dépôt SHALL NOT être retirée.
+
+#### Scenario: Images de plusieurs installations
+- **GIVEN** un démon simulé portant trois images MINOS inutilisées, une image MINOS utilisée par une autre instance et une image d'un autre dépôt
+- **WHEN** `verify-docker-instance-removal.ps1` appelle le script de retrait avec `-Purge -RemoveImages`
+- **THEN** les trois images inutilisées sont retirées, l'image utilisée reste avec `result=kept-in-use`, l'autre dépôt reste, et le code de sortie est 0
+
+#### Scenario: Paramètres du désinstalleur
+- **GIVEN** le gabarit de l'installeur
+- **WHEN** `UninstallCleanupContractTest` est exécuté
+- **THEN** `-RemoveImages` n'est passé qu'avec `-Purge`, et la question de purge nomme les images Docker MINOS
+
 ### Requirement: Le dossier vide du menu Démarrer est retiré
 La désinstallation SHALL retirer le dossier `{userprograms}\MINOS` une fois vide.
 

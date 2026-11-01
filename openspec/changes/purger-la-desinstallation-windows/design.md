@@ -40,13 +40,13 @@ Les conteneurs du projet sont arrêtés (`docker stop --time 10`, PostgreSQL ter
 - Le désinstalleur recopie ces lignes dans son journal (`LogScriptOutput`), désormais toujours écrit (`UninstallLogging=yes`, dossier temporaire de l'utilisateur). Un code non nul est annoncé par une boîte de message qui nomme l'instance et donne deux commandes de recherche ; pas de boîte en mode silencieux. Code 3 sur un poste dont le backend enregistré n'est pas Docker : journalisé seulement (aucune ressource à retirer).
 - Le script de retrait des clients MCP recopie avertissements et erreurs dans le même journal et sort en code 1.
 
-### D4 — Images `minos-code-intelligence:*` (décision du propriétaire, en attente)
+### D4 — Images `minos-code-intelligence:*` (décision du propriétaire du 1er novembre 2026 : option A)
 
-- **A. (recommandée)** La purge retire toutes les images `minos-code-intelligence:*` qu'aucun conteneur n'utilise ; la boîte de confirmation de purge l'annonce. Une image utilisée par une autre instance est gardée et journalisée.
-- **B.** Une seconde question explicite après le « Oui » (« Non » par défaut).
-- **C.** Statu quo : seules les images de l'installation courante sont retirées (`LC:681-689`, déjà fait même sans purge).
+- **A. (retenue)** La purge retire toutes les images `minos-code-intelligence:*` qu'aucun conteneur n'utilise ; la boîte de confirmation de purge l'annonce. Une image utilisée par une autre instance est gardée et journalisée (`result=kept-in-use`), ce qui n'est pas un échec.
+- **B.** Une seconde question explicite après le « Oui » (« Non » par défaut). Écartée : une question de plus pour un choix que la purge implique déjà.
+- **C.** Statu quo : seules les images de l'installation courante sont retirées (`LC:681-689`, même sans purge). Écartée : les images des installations précédentes, plusieurs fois 5,8 Go, restent.
 
-Le script expose `-RemoveImages` (testé) ; le désinstalleur ne le passe qu'une fois la décision prise.
+Le désinstalleur passe `-Purge -RemoveImages` ensemble, et rien sans purge.
 
 ### D5 — Codex : les marqueurs font la propriété
 

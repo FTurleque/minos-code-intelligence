@@ -495,7 +495,8 @@ La purge complète peut supprimer :
 - `%LOCALAPPDATA%\MINOS` ;
 - snapshots/index/logs/backups ;
 - runtime/data Docker MINOS ;
-- volumes Docker de l'instance, dont les volumes PostgreSQL/Ollama gérés par MINOS.
+- volumes Docker de l'instance, dont les volumes PostgreSQL/Ollama gérés par MINOS ;
+- images Docker `minos-code-intelligence:*` qu'aucun conteneur n'utilise (celles d'une autre instance encore installée restent).
 
 Elle ne supprime jamais une base PostgreSQL externe.
 

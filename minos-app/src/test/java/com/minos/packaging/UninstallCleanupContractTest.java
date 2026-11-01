@@ -45,7 +45,12 @@ class UninstallCleanupContractTest {
         assertTrue(removal.contains("' -ComposeProject \"' + InstanceName"), "the removal must name the instance");
         assertTrue(removal.contains("if DeleteUserDataOnUninstall then"),
                 "volumes may only be removed when the user chose the purge");
-        assertTrue(removal.contains("' -Purge'"), "the purge must reach the removal script");
+        assertTrue(removal.contains("Parameters := Parameters + ' -Purge -RemoveImages';"),
+                "the purge must remove the volumes and the unused MINOS images");
+        assertFalse(removal.replace("' -Purge -RemoveImages'", "").contains("-RemoveImages"),
+                "images may only be removed on purge");
+        String prompt = between(installer, "procedure PromptForUserDataRemoval;", "\nend;\n");
+        assertTrue(prompt.contains("images Docker MINOS"), "the purge confirmation must announce the image removal");
         assertTrue(removal.contains("LogScriptOutput("), "the removal output must reach the uninstall log");
         assertTrue(removal.contains("if ResultCode = 0 then exit;"), "a failed removal must be detected by its exit code");
         assertFalse(removal.contains(">NUL"), "no Docker failure may be masked by a redirection");

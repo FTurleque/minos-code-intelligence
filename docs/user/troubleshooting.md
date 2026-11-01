@@ -263,7 +263,8 @@ main si vous désinstallez MINOS.
 
 Message : « Certaines ressources Docker MINOS n'ont pas pu être retirées » ou « Docker Desktop est absent ou arrêté ».
 
-Le désinstalleur retire les conteneurs et réseaux du projet Compose de l'instance (et ses volumes en cas de purge) en les
+Le désinstalleur retire les conteneurs et réseaux du projet Compose de l'instance (et, en cas de purge, ses volumes et les images
+MINOS inutilisées) en les
 cherchant par étiquette. Le détail est dans le journal de désinstallation (dossier `%TEMP%`), lignes `MINOS-DOCKER-REMOVAL` :
 `result=failed` nomme l'objet refusé et reprend le message de Docker ; `result=unavailable` signale un Docker absent ou arrêté.
 
@@ -274,9 +275,11 @@ docker ps -a --filter label=com.docker.compose.project=minos-mcp-prod
 docker network ls --filter label=com.docker.compose.project=minos-mcp-prod
 docker volume ls --filter label=io.minos.installation=minos-mcp-prod
 docker volume ls --filter name=minos-mcp-prod-
+docker image ls minos-code-intelligence
 ```
 
-Puis `docker rm -f`, `docker network rm` et, seulement pour supprimer les données, `docker volume rm` sur les objets listés.
+Puis `docker rm -f`, `docker network rm`, `docker image rm` et, seulement pour supprimer les données, `docker volume rm` sur les
+objets listés.
 
 ## `scip-typescript` est `BLOCKED`
 

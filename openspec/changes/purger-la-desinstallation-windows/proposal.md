@@ -21,7 +21,7 @@ Aucun de ces échecs n'a été signalé : la suppression des volumes masquait so
 - **Codex** : `configure-codex-mcp.ps1 -Action Uninstall` retire le bloc borné par les marqueurs MINOS même sans fichier d'état, ou quand il avait été adopté (`ownership=preexisting`), après sauvegarde, sans toucher au reste du fichier ni à une section `[mcp_servers.minos]` sans marqueurs. Un bloc modifié par l'utilisateur après l'installation reste préservé, avec un avertissement.
 - **Avertissements des retraits de clients** : le script temporaire de `RemoveMcpClientIntegrations` recopie avertissements et erreurs dans le journal de désinstallation et sort en code 1.
 - **Menu Démarrer** : `[UninstallDelete] Type: dirifempty` sur `{userprograms}\MINOS`.
-- **Images** : décision du propriétaire en attente (voir `design.md`, D4).
+- **Images** : la purge retire aussi toutes les images `minos-code-intelligence:*` qu'aucun conteneur n'utilise, et la boîte de confirmation l'annonce (décision du propriétaire, `design.md` D4).
 
 ## Capabilities
 
