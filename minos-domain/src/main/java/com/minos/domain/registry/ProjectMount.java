@@ -9,6 +9,11 @@ public record ProjectMount(String path, String hostRoot) {
     public ProjectMount {
         path = ProjectPathMapping.normalizeRelative(path);
         if (".".equals(path)) throw new IllegalArgumentException("a project mount cannot be the container root");
-        hostRoot = ProjectPathMapping.normalizeAbsoluteRoot(hostRoot, "mount hostRoot");
+        try {
+            hostRoot = ProjectPathMapping.normalizeAbsoluteRoot(hostRoot, "mount hostRoot");
+        } catch (IllegalArgumentException exception) {
+            // The folder is the user's: the message names the rule, never the value.
+            throw new IllegalArgumentException("a project mount folder must be an absolute host path", exception);
+        }
     }
 }

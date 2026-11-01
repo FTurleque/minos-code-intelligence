@@ -154,6 +154,15 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
         return withLock(() -> new ProjectRootReplacement(projectsDirectory, store).replace(desired));
     }
 
+    /**
+     * Every project entry by its root relative to the container root of {@code existing}, read under the exclusive
+     * registry lease and written nowhere ({@link RegisteredRootInventory}).
+     */
+    public List<ProjectPathMappings.RegisteredRoot> registeredRoots(ProjectPathMapping existing) throws IOException {
+        Objects.requireNonNull(existing, "existing");
+        return withLock(() -> new RegisteredRootInventory(projectsDirectory).list(existing));
+    }
+
     private <T> T withLock(IoOperation<T> operation) throws IOException {
         Objects.requireNonNull(operation, "operation");
         try (BoundedFileLease ignored = BoundedFileLease.acquire(

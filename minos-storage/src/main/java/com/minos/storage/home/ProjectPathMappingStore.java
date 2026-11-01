@@ -3,12 +3,14 @@ package com.minos.storage.home;
 import java.io.OutputStreamWriter;
 import java.io.ByteArrayOutputStream;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.domain.registry.ProjectMount;
 import com.minos.domain.registry.ProjectPathMapping;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -110,6 +112,32 @@ public final class ProjectPathMappingStore {
         } finally {
             Files.deleteIfExists(temporary);
         }
+    }
+
+    /**
+     * Saves the mapping file beside itself, under {@code <file name>.<epoch millis><suffix>}, without replacing an
+     * existing file, and returns the backup. Refused when no mapping file exists.
+     */
+    public Path backupBeside(String suffix) throws IOException {
+        Objects.requireNonNull(suffix, "suffix");
+        validateExistingContainer(home, "MINOS home");
+        validateExistingContainer(runtimeDirectory, "project path mapping directory");
+        byte[] content;
+        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(file)) {
+            content = input.readNBytes((int) MAX_MAPPING_BYTES + 1);
+        }
+        if (content.length > MAX_MAPPING_BYTES) {
+            throw new IOException("project path mapping exceeds the backup byte limit");
+        }
+        Path backup = runtimeDirectory.resolve(FILE_NAME + "." + System.currentTimeMillis() + suffix);
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(runtimeDirectory, FILE_NAME + ".", ".tmp");
+        try {
+            PrivateLocalStorage.writePrivateFile(temporary, content);
+            DurableAtomicFile.publish(temporary, backup, "project path mapping backup");
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+        return backup;
     }
 
     public Path file() {
