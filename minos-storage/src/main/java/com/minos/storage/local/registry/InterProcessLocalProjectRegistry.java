@@ -2,7 +2,10 @@ package com.minos.storage.local.registry;
 
 import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;
+import com.minos.domain.registry.ProjectPathMapping;
+import com.minos.registry.ProjectPathMappings;
 import com.minos.registry.ProjectRegistry;
+import com.minos.storage.home.ProjectPathMappingStore;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 
@@ -29,6 +32,8 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  */
 public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
+    /** Folder of the local registry under a MINOS home. */
+    public static final String NAMESPACE = "registry";
     private static final String LOCK_FILE = ".registry.lock";
     private static final int JVM_LOCK_STRIPES = 64;
     private static final Duration LOCK_TIMEOUT = Duration.ofSeconds(10);
@@ -136,6 +141,17 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
             }
             return Files.deleteIfExists(target);
         });
+    }
+
+    /**
+     * Replaces the project path mapping saved in {@code store} by {@code desired} and re-expresses every project entry
+     * against it, under the exclusive registry lease ({@link ProjectRootReplacement}).
+     */
+    public ProjectPathMappings.Replacement replaceRoot(ProjectPathMappingStore store, ProjectPathMapping desired)
+            throws IOException {
+        Objects.requireNonNull(store, "store");
+        Objects.requireNonNull(desired, "desired");
+        return withLock(() -> new ProjectRootReplacement(projectsDirectory, store).replace(desired));
     }
 
     private <T> T withLock(IoOperation<T> operation) throws IOException {

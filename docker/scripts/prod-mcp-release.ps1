@@ -14,6 +14,9 @@ param(
     [string] $SemanticProvider = '',
     [string[]] $MinosArguments = @(),
 
+    # Install only: replaces another recorded projects root (configure-project-paths --replace).
+    [switch] $ReplaceProjectsRoot,
+
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $ContainerName = 'minos-mcp-prod',
 
@@ -58,5 +61,6 @@ if (-not [string]::IsNullOrWhiteSpace($Commit)) { $LifecycleArguments.Commit = $
 if (-not [string]::IsNullOrWhiteSpace($ImageTag)) { $LifecycleArguments.ImageTag = $ImageTag }
 if (-not [string]::IsNullOrWhiteSpace($SemanticProvider)) { $LifecycleArguments.SemanticProvider = $SemanticProvider }
 if ($MinosArguments.Count -gt 0) { $LifecycleArguments.MinosArguments = $MinosArguments }
+if ($ReplaceProjectsRoot) { $LifecycleArguments.ReplaceProjectsRoot = $true }
 
 & $LifecycleScript @LifecycleArguments

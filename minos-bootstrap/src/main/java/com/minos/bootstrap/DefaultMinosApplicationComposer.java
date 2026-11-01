@@ -16,7 +16,7 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
-import com.minos.storage.home.ProjectPathMappingStore;
+import com.minos.storage.local.registry.LocalProjectPathMappings;
 import com.minos.registry.ProjectPathMappings;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.RemoteRepositoryMaterializer;
@@ -144,9 +144,9 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
         return LocalRemoteIndexingRuntime.production(home);
     }
 
-    /** Déplacé de minos-app (DockerRuntimeBootstrap) : le magasin fichier du MINOS_HOME. */
+    /** Déplacé de minos-app (DockerRuntimeBootstrap) : le magasin fichier et le registre local du MINOS_HOME. */
     @Override
     public ProjectPathMappings projectPathMappings(Path home) {
-        return new ProjectPathMappingStore(home);
+        return new LocalProjectPathMappings(home);
     }
 }

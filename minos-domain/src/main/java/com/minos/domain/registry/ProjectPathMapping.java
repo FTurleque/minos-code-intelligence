@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 
 /**
@@ -78,6 +79,20 @@ public record ProjectPathMapping(String hostRoot, String containerRoot) {
             }
         }
         return resolved.toAbsolutePath().normalize();
+    }
+
+    /** The absolute host path of {@code relativeProjectRoot}, as a string: valid in any runtime, never resolved. */
+    public String hostPathOf(String relativeProjectRoot) {
+        return join(hostRoot, normalizeRelative(relativeProjectRoot));
+    }
+
+    /** The root of {@code hostPath} relative to the host root, or empty when the path is outside it. */
+    public Optional<String> relativeForHostPath(String hostPath) {
+        try {
+            return Optional.of(relativeFrom(hostRoot, normalizeCandidate(hostPath)));
+        } catch (IllegalArgumentException _) {
+            return Optional.empty();
+        }
     }
 
     public String hostToContainer(String hostPath) {

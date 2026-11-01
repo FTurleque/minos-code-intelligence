@@ -28,6 +28,10 @@ param(
     [string] $SemanticProvider = '',
     [string[]] $MinosArguments = @(),
 
+    # Install only: replaces another recorded projects root (configure-project-paths --replace): projects outside
+    # the new root stay registered with their index and are reported rootAvailable: false.
+    [switch] $ReplaceProjectsRoot,
+
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $ContainerName = 'minos-mcp-prod',
 
@@ -578,7 +582,14 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
 
         Compose @('run', '--rm', '--no-deps', 'minos-data-bootstrap')
         Initialize-And-VerifyProviderTools
-        Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
+        if ($ReplaceProjectsRoot) {
+            # Same entry point and arguments as the composed command, plus the explicit replacement.
+            Compose @('run', '--rm', '--no-deps', 'minos-bootstrap', 'configure-project-paths', '--replace',
+                (ConvertTo-DockerPath $ProjectsRoot), '/workspace/projects')
+        }
+        else {
+            Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
+        }
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
 
         [ordered]@{

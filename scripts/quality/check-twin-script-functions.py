@@ -69,6 +69,9 @@ TWINS = (
     # Docker projects root refusal: the ZIP install refuses before extracting the package, which ships the switcher.
     ("Get-UnsafeDockerProjectsRootReason", ("scripts/install/install-windows.ps1",
                                             "scripts/install/switch-mcp-backend.ps1")),
+    # Recorded Docker projects root: the ZIP install compares it before extracting the package, which ships the switcher.
+    ("Get-RecordedDockerProjectsRoot", ("scripts/install/install-windows.ps1",
+                                        "scripts/install/switch-mcp-backend.ps1")),
     # MCP client detection and configuration, both shipped.
     ("Get-UserFolderPath", ("scripts/install/configure-mcp-clients.ps1", "scripts/install/detect-mcp-clients.ps1")),
     # Installer progress protocol, written by each configuration script the installer runs with -ProgressPath.

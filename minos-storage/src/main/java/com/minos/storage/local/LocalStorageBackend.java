@@ -35,7 +35,7 @@ public final class LocalStorageBackend implements StorageBackend {
         Path root = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         DurableAtomicFile.ensureDirectory(root, "local storage home");
 
-        Path registryRoot = namespace(root, "registry");
+        Path registryRoot = namespace(root, InterProcessLocalProjectRegistry.NAMESPACE);
         Path knowledgeRoot = namespace(root, "symbol-snapshots");
         Path indexRoot = namespace(root, "index-state");
         Path fingerprintRoot = namespace(root, "fingerprint-snapshots");
