@@ -125,11 +125,15 @@ function ConvertTo-MinosEnvValue {
 function Get-MinosComposeArguments {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
 
+    $files = @('-f', $composeFile)
+    # The project mounts override that mcp-lifecycle.ps1 generates in the same runtime directory takes part in every
+    # Compose call: without it, recreating minos-mcp would drop every exposed project.
+    $projectMounts = Join-Path $runtimeDirectory 'compose-mcp.projects.yaml'
+    if (Test-Path -LiteralPath $projectMounts -PathType Leaf) { $files += @('-f', $projectMounts) }
     return @(
         'compose', '--project-directory', $runtimeDirectory,
-        '--env-file', $environmentFile,
-        '-f', $composeFile
-    ) + $Arguments
+        '--env-file', $environmentFile
+    ) + $files + $Arguments
 }
 
 function Invoke-MinosCompose {

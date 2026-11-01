@@ -99,6 +99,14 @@ class RuntimeEnvironmentTest(unittest.TestCase):
         # Guards the regex: an empty set would make the two cases below vacuous.
         self.assertIn("MINOS_DATA_DIR", required_compose_variables())
 
+    def test_every_script_that_runs_compose_on_the_runtime_passes_the_project_mounts(self) -> None:
+        # Without the generated override, recreating minos-mcp drops every exposed project (SEC-0075).
+        for relative in ("docker/scripts/mcp-lifecycle.ps1", "docker/scripts/prod-mcp.ps1",
+                         "docker/scripts/configure-m30-docker-services.ps1", "scripts/ci/qualify-docker-upgrade.ps1"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            self.assertIn("compose-mcp.projects.yaml", text, relative)
+            self.assertNotRegex(text, r"'-f',\s*\$[Cc]omposeFile\s*,\s*'(run|up|ps|--profile)'", relative)
+
     def test_no_projects_root_is_required_or_written(self) -> None:
         # No projects root is mounted: the compose file requires none, and no launcher writes one in the .env.
         for name in ("MINOS_PROJECTS_DIR", "MINOS_HOST_PROJECTS_ROOT"):
