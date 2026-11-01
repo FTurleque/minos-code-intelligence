@@ -170,7 +170,7 @@ try {
     $BaseProperties = Join-Path $DockerDataRoot 'config\minos.properties'
     # A runtime that still mounts one projects root migrates to one mount per registered project during the base
     # Install, which reads the registry. With PostgreSQL storage, the registry is only reachable once the connected
-    # services run, after that Install: the migration would see no project. It is refused before anything changes.
+    # services run, after that Install: this migration is a declared limit, refused before anything changes.
     $MappingFile = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
     $PreviousPostgresql = (Test-Path -LiteralPath $BaseProperties -PathType Leaf) -and
         (@(Get-Content -LiteralPath $BaseProperties) -match '^\s*minos\.storage\.backend\s*[=:]\s*postgresql\s*$').Count -gt 0
@@ -178,7 +178,9 @@ try {
         (@(Get-Content -LiteralPath $MappingFile) -match '^\s*formatVersion\s*[=:]\s*1\s*$').Count -gt 0
     if ($PreviousPostgresql -and $SingleRootMapping) {
         Fail-Or-Warn ('This MINOS Docker runtime stores its projects in PostgreSQL and still mounts one projects root: ' +
-            'its migration to one mount per registered project is not supported by this installer. Nothing was changed.')
+            'its migration to one mount per registered project is not supported. Nothing was changed and the installed ' +
+            'runtime is kept. Remedy: uninstall the MINOS Docker runtime together with its data, install this release ' +
+            'again, then expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.')
         return
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $BaseProperties) | Out-Null

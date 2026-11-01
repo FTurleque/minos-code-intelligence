@@ -116,7 +116,7 @@ Ne sont **pas** montés, avec un avertissement qui nomme le projet :
 
 Ils restent inscrits avec leur index (`rootAvailable: false`) ; les exposer avec `AddProject` si besoin. Un dossier de l'ancienne racine qui n'était inscrit dans aucun registre **n'est plus visible** des conteneurs : c'est le but du changement.
 
-L'ancienne correspondance est sauvegardée à côté (`project-paths.properties.<horodatage>.format1.bak`). Une inscription illisible arrête la migration avant toute écriture ; l'installation échoue et l'ancien runtime est conservé. Une installation dont les projets sont stockés dans PostgreSQL et qui montait encore une racine est refusée par l'installeur, sans rien changer : cette migration n'est pas prise en charge.
+L'ancienne correspondance est sauvegardée à côté (`project-paths.properties.<horodatage>.format1.bak`). Une inscription illisible arrête la migration avant toute écriture ; l'installation échoue et l'ancien runtime est conservé. **Limite : stockage PostgreSQL.** Une installation dont les projets sont stockés dans PostgreSQL et qui montait encore une racine n'est pas migrée : l'installation échoue avant toute modification et l'ancien runtime reste en place. Remède : désinstaller le runtime Docker avec ses données, réinstaller cette version, puis exposer chaque projet par `AddProject`.
 
 Une version antérieure de MINOS refuse le format 2 (`unsupported project path mapping format`) sans le modifier.
 

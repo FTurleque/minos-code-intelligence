@@ -48,7 +48,7 @@
 | [ARCH-0072](../adr/ARCH-0072-graphe-de-programme-honnete-sur-ses-capacites.md) | Graphe de programme honnête sur ses capacités | Accepted | 2026-10-23 | Remplace ADR-0028, ADR-0036 |
 | [GEN-0073](../adr/GEN-0073-tenir-le-registre-d-adr-au-format-archgate.md) | Tenir le registre d'ADR au format Archgate, à l'emplacement arc42 | Accepted | 2026-10-23 | Remplace ADR-0063 |
 | [SEC-0074](../adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) | scip-java sous Windows : bloqué en natif, aucune voie d'indexation Java, WSL2 retenu pour la suite | Accepted | 2026-10-31 | Remplace ADR-0060 |
-| [SEC-0075](../adr/SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md) | Le runtime Docker n'expose que les projets inscrits | Proposed | 2026-11-01 | — |
+| [SEC-0075](../adr/SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md) | Le runtime Docker n'expose que les projets inscrits | Accepted | 2026-11-01 | — |
 
 ## ADR archivés
 

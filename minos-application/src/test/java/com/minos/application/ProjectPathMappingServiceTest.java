@@ -5,8 +5,11 @@ import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.ProjectPathMappings;
 import com.minos.registry.ProjectPathMappings.RegisteredRoot;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +17,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -231,6 +235,32 @@ class ProjectPathMappingServiceTest {
 
         assertEquals(List.of("App", "App core"), service(store).projectsUnder("app"));
         assertEquals(List.of(), service(store).projectsUnder("lib"));
+    }
+
+    @Test
+    void aHomeWhoseProjectsAreInPostgresqlIsNotMigratedAndTheRefusalGivesTheRemedy(@TempDir Path home) throws Exception {
+        Path config = Files.createDirectories(home.resolve("config"));
+        Files.writeString(config.resolve("minos.properties"), "minos.storage.backend=postgresql\n", StandardCharsets.UTF_8);
+        RecordingMappings store = new RecordingMappings(MAPPING);
+        ProjectPathMappingService service =
+                new ProjectPathMappingService(store, ProjectPathMappingService.registeredRootsOf(home, store));
+
+        IOException refusal = assertThrows(IOException.class, () -> service.migrate(Set.of(), false));
+
+        assertEquals(ProjectPathMappingService.POSTGRESQL_MIGRATION_REFUSED, refusal.getMessage());
+        assertTrue(refusal.getMessage().contains("AddProject"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(home.toString()), refusal.getMessage());
+        assertTrue(store.migrated.isEmpty());
+        assertTrue(store.saved.isEmpty());
+    }
+
+    @Test
+    void aLocalHomeListsTheLocalRegistry(@TempDir Path home) throws Exception {
+        RecordingMappings store = new RecordingMappings(MAPPING);
+        store.roots.add(new RegisteredRoot("A", Optional.of("a")));
+
+        assertEquals(List.of(new RegisteredRoot("A", Optional.of("a"))),
+                ProjectPathMappingService.registeredRootsOf(home, store).list());
     }
 
     @Test

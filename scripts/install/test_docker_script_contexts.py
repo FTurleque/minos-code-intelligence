@@ -195,5 +195,67 @@ class VerificationScriptTest(unittest.TestCase):
                 self.assertIn("MINOS launch configurations SUCCESS", result.stdout)
 
 
+CONFIGURATOR = ROOT / "docker" / "scripts" / "configure-docker-mcp.ps1"
+
+
+class PostgresqlMigrationRefusalTest(unittest.TestCase):
+    """A single-root Docker runtime whose projects live in PostgreSQL is not migrated (declared limit)."""
+
+    def run_configurator(self, executable: str, directory: Path) -> tuple[int, str]:
+        install = directory / "install"
+        (install / "docker" / "scripts").mkdir(parents=True)
+        (install / "lib").mkdir()
+        # The workflow records any call: the refusal must come before it.
+        (install / "docker" / "scripts" / "prod-mcp-release.ps1").write_text(
+            "Set-Content -LiteralPath (Join-Path $PSScriptRoot 'called.txt') -Value 'called'\n", encoding="ascii")
+        (install / "VERSION").write_text("version=1.3.0\ncommit=test\n", encoding="ascii")
+        (install / "lib" / "minos.jar").write_bytes(b"jar")
+        data = directory / "docker-data"
+        (data / "config").mkdir(parents=True)
+        (data / "runtime").mkdir()
+        (data / "config" / "minos.properties").write_text("minos.storage.backend=postgresql\n", encoding="ascii")
+        (data / "runtime" / "project-paths.properties").write_text(
+            "formatVersion=1\nhostRoot=N\\:/workspace-dev\ncontainerRoot=/workspace/projects\n", encoding="ascii")
+        bin_directory = directory / "bin"
+        bin_directory.mkdir()
+        if os.name == "nt":
+            (bin_directory / "docker.cmd").write_text("@echo off\r\nexit /b 0\r\n", encoding="ascii")
+        else:
+            fake = bin_directory / "docker"
+            fake.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+            fake.chmod(0o755)
+        environment = dict(os.environ, PATH=str(bin_directory) + os.pathsep + os.environ.get("PATH", ""))
+        completed = subprocess.run(
+            [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(CONFIGURATOR),
+             "-InstallRoot", str(install), "-DockerInstallRoot", str(directory / "docker"),
+             "-DockerDataRoot", str(data), "-LogPath", str(directory / "setup.log"), "-Strict"],
+            capture_output=True, timeout=180, check=False, env=environment, stdin=subprocess.DEVNULL,
+            encoding="utf-8", errors="replace")
+        return completed.returncode, completed.stdout + completed.stderr
+
+    def test_the_migration_is_refused_before_any_change_with_the_remedy(self) -> None:
+        found = runtimes()
+        if not found:
+            self.skipTest("PowerShell is not installed")
+        for label, executable in found:
+            with tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                code, output = self.run_configurator(executable, directory)
+                data = directory / "docker-data"
+                flat = " ".join(output.split())
+                self.assertNotEqual(0, code, (label, output))
+                self.assertIn("stores its projects in PostgreSQL", flat, label)
+                self.assertIn("Remedy:", flat, label)
+                self.assertIn("-Action AddProject", flat, label)
+                message = flat[flat.index("stores its projects in PostgreSQL"):]
+                message = message[:message.index("<folder>")]
+                self.assertNotIn(str(directory), message, (label, "the refusal names no path"))
+                self.assertFalse((directory / "install" / "docker" / "scripts" / "called.txt").exists(), label)
+                self.assertEqual("minos.storage.backend=postgresql\n",
+                                 (data / "config" / "minos.properties").read_text(encoding="ascii"), label)
+                self.assertTrue((data / "runtime" / "project-paths.properties").read_text(encoding="ascii")
+                                .startswith("formatVersion=1"), label)
+
+
 if __name__ == "__main__":
     unittest.main()

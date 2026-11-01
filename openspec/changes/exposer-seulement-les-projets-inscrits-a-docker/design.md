@@ -67,7 +67,8 @@ Côté hôte, `MAP` gagne la résolution d'un chemin relatif par la table : le m
 
 Au premier `Install` de cette version sur des données Docker en format 1 (racine hôte `R`) :
 
-1. **Inventaire** : `BOOT migrate-project-mounts --dry-run` liste les projets du registre par leur chemin relatif. Le registre local est lu par `minos-bootstrap` ; PostgreSQL n'étant joignable que par le réseau du runtime, l'inventaire est fait par le même point d'entrée lancé dans un conteneur `minos-admin` (`--entrypoint`) quand le stockage est PostgreSQL. Une inscription illisible arrête la migration avant toute écriture, l'ancien runtime est conservé et le message compte les inscriptions concernées.
+1. **Inventaire** : `BOOT migrate-project-mounts --dry-run` liste les projets du registre local par leur chemin relatif, lu par `minos-bootstrap` sans réseau. Une inscription illisible arrête la migration avant toute écriture, l'ancien runtime est conservé et le message compte les inscriptions concernées.
+   **Limite déclarée — stockage PostgreSQL** : une installation à racine unique dont les projets sont stockés dans PostgreSQL n'est pas migrée. Le registre PostgreSQL n'est joignable qu'une fois les services connectés démarrés, après l'`Install` de base qui migre. La migration est refusée avant toute modification, l'ancien runtime est conservé, et le message, sans chemin, donne le remède : désinstaller le runtime Docker avec ses données, réinstaller, puis exposer chaque projet par `AddProject`. Décision du propriétaire du 2026-11-01 (option A).
 2. **Calcul** : chaque chemin relatif `p` donne le montage `p ↔ R/p` ; des chemins imbriqués (un monorepo `a` et son sous-projet `a/b`) donnent un seul montage, le plus court. Ne sont **pas** montés, avec un avertissement par cas : un projet inscrit à `.` (la racine elle-même — le monter reproduirait l'exposition supprimée), une inscription isolée par #632 (`detachedHostRoot`), un dossier refusé par D4.
 3. **Écriture** : la table format 2 remplace le format 1 (publication atomique, sauvegarde `project-paths.properties.<horodatage>.format1.bak` à côté). Le registre n'est pas réécrit : chaque projet monté garde le même chemin conteneur qu'avant.
 4. **Retour arrière** : si l'`Install` échoue ensuite, `SW` restaure la sauvegarde (instantané de `runtime\` des données Docker, comme #632) avant de redémarrer l'ancien runtime.
@@ -100,7 +101,7 @@ La page Docker ne contient pas de champ « Racine des projets » ; elle indique 
 | Override généré, quoting, source omise | qualifiée | test Python/PowerShell de `LC` sur arbre temporaire ; `qualify-docker-upgrade.ps1` sous Linux |
 | Montage par projet dans `minos-mcp` et `minos-admin` | qualifiée sous Linux (CI), **partielle** sous Windows | `qualify-docker-release.sh` et `qualify-docker-upgrade.ps1` (Linux) ; Docker Desktop : tâche manuelle |
 | Migration format 1 → 2, stockage local | qualifiée | `qualify-docker-upgrade.ps1` (installation de la version précédente, projet inscrit, mise à jour) |
-| Migration avec PostgreSQL géré | **partielle** | tests Java ; parcours réel manuel (aucune CI ne lance le profil connecté) |
+| Migration avec PostgreSQL géré | **non prise en charge** (limite déclarée) | refus testé : `test_docker_script_contexts.py` (installeur), `ProjectPathMappingServiceTest` (bootstrap) |
 | Point de montage imbriqué (`a/b`) sous Docker Desktop | **non vérifiée** | tâche manuelle 3.3 ; si elle échoue, D5 monte le premier segment et le signale |
 | Page Docker de l'installeur | **partielle** | contrat textuel, compilation ISCC ; parcours manuel |
 

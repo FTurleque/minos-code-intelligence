@@ -202,7 +202,7 @@ Remède : choisir un `MINOS_HOME` dédié (par défaut `%USERPROFILE%\.minos`) ;
 À la première installation de cette version, un runtime qui montait une racine des projets migre vers un montage par projet inscrit ([Mise à jour d'une installation qui montait une racine](docker-runtime.md#mise-à-jour-dune-installation-qui-montait-une-racine)). La migration est refusée, sans rien écrire, et l'ancien runtime est conservé :
 
 - « … registry entry is unreadable » : `project list` signale l'inscription illisible ; la réparer ou la retirer, puis relancer l'installation ;
-- « … stores its projects in PostgreSQL and still mounts one projects root » : cette migration n'est pas prise en charge ; garder la version installée, ou désinstaller MINOS en supprimant ses données puis réinstaller et exposer les projets un par un.
+- « … stores its projects in PostgreSQL and still mounts one projects root » : limite déclarée, cette migration n'est pas prise en charge et l'ancien runtime reste en place. Remède (donné par le message) : désinstaller le runtime Docker avec ses données, réinstaller cette version, puis exposer chaque projet par `prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier>`.
 
 Un avertissement « Project '<nom>' is not mounted after the migration » signale un projet resté inscrit sans montage ; l'exposer avec `AddProject` si besoin.
 

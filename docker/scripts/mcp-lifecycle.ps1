@@ -217,17 +217,10 @@ function Write-ProjectMountsOverride([object[]] $Mounts) {
     [System.IO.File]::WriteAllText($ProjectMountsFile, $Text, (New-Object System.Text.UTF8Encoding $false))
 }
 
-# Runs one subcommand of com.minos.cli.DockerRuntimeBootstrap and returns its standard output. The bootstrap runs in
-# minos-bootstrap (no network); -InAdmin runs the same entry point in minos-admin, the only plane that reaches a
-# managed PostgreSQL. A non-zero exit fails with the bootstrap's own message, which names no host path.
-function Invoke-ProjectMountBootstrap([string[]] $Arguments, [switch] $InAdmin) {
-    if ($InAdmin) {
-        $RunArguments = @('run', '-T', '--rm', '--no-deps', '--entrypoint', 'java', 'minos-admin',
-            '-cp', '/opt/minos/minos.jar', 'com.minos.cli.DockerRuntimeBootstrap') + $Arguments
-    }
-    else {
-        $RunArguments = @('run', '-T', '--rm', '--no-deps', 'minos-bootstrap') + $Arguments
-    }
+# Runs one subcommand of com.minos.cli.DockerRuntimeBootstrap in minos-bootstrap (no network) and returns its standard
+# output. A non-zero exit fails with the bootstrap's own message, which names no host path.
+function Invoke-ProjectMountBootstrap([string[]] $Arguments) {
+    $RunArguments = @('run', '-T', '--rm', '--no-deps', 'minos-bootstrap') + $Arguments
     $AmbientQueryImage = $env:MINOS_QUERY_IMAGE
     try {
         Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue
@@ -413,10 +406,11 @@ function Get-DefaultProjectMountName([string] $Folder) {
 # Migration of a runtime that mounted one projects root (mapping format 1): one mount per registered project on its
 # current container path, so that no registry entry is rewritten. The plan is computed first, each folder is checked
 # on the host, then the table is written with the refused folders skipped. An unreadable registry entry refuses the
-# migration before anything is written; the caller's runtime snapshot is then restored.
+# migration before anything is written; the caller's runtime snapshot is then restored. A runtime whose projects are
+# stored in PostgreSQL is not migrated (declared limit): its registry is not reachable from the bootstrap.
 function Invoke-ProjectMountMigration {
-    $InAdmin = Test-PostgresqlStorage
-    $Plan = ConvertFrom-BootstrapJson (Invoke-ProjectMountBootstrap -Arguments @('migrate-project-mounts', '--dry-run') -InAdmin:$InAdmin)
+    if (Test-PostgresqlStorage) { throw 'This MINOS Docker runtime stores its projects in PostgreSQL and still mounts one projects root: its migration to one mount per registered project is not supported. Nothing was changed and the installed runtime is kept. Remedy: uninstall the MINOS Docker runtime together with its data, install this release again, then expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.' }
+    $Plan = ConvertFrom-BootstrapJson (Invoke-ProjectMountBootstrap -Arguments @('migrate-project-mounts', '--dry-run'))
     $Arguments = @('migrate-project-mounts')
     foreach ($Mount in @($Plan.mounts)) {
         $Refusal = Get-ProjectFolderRefusal ([string] $Mount.hostRoot)
@@ -425,7 +419,7 @@ function Invoke-ProjectMountMigration {
             $Arguments += @('--skip', [string] $Mount.path)
         }
     }
-    $Result = ConvertFrom-BootstrapJson (Invoke-ProjectMountBootstrap -Arguments $Arguments -InAdmin:$InAdmin)
+    $Result = ConvertFrom-BootstrapJson (Invoke-ProjectMountBootstrap -Arguments $Arguments)
     foreach ($Skipped in @($Result.skipped)) {
         $Why = switch ([string] $Skipped.reason) {
             'ROOT' { 'it is registered at the old projects root itself, which is no longer mounted' }
@@ -1038,7 +1032,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Assert-QueryImagePlane
         $null = Update-ProjectMountsOverride
         # An unknown name is refused by the bootstrap before anything is written or recreated.
-        Write-Host (Invoke-ProjectMountBootstrap -Arguments @('remove-project-mount', $Name) -InAdmin:(Test-PostgresqlStorage)).TrimEnd()
+        Write-Host (Invoke-ProjectMountBootstrap -Arguments @('remove-project-mount', $Name)).TrimEnd()
         $null = Update-ProjectMountsOverride
         Write-Host 'Recreating minos-mcp to unmount the project: attached MCP sessions are interrupted and must reconnect.' -ForegroundColor Cyan
         Compose @('up', '-d', '--force-recreate', 'minos-mcp')

@@ -7,9 +7,9 @@ rules: false
 
 # Le runtime Docker n'expose que les projets inscrits
 
-- **Statut** : Proposed
+- **Statut** : Accepted
 - **Date** : 2026-11-01
-- **Origine** : changement OpenSpec `exposer-seulement-les-projets-inscrits-a-docker` (décision D12)
+- **Origine** : changement OpenSpec `exposer-seulement-les-projets-inscrits-a-docker` (décision D12) ; accepté par le propriétaire le 2026-11-01
 
 ## Context
 
@@ -25,7 +25,7 @@ Options pesées : montage par projet (retenu) ; racine conservée avec un filtra
 2. **La table des montages est la seule source de ces montages.** Elle est tenue dans `<données Docker>/runtime/project-paths.properties` (format 2), écrite seulement par le bootstrap Docker (E/S privées), qui refuse sans écrire un nom hors de `[a-z0-9][a-z0-9._-]{0,62}`, un doublon sans tenir compte de la casse, un chemin de montage qui en préfixe un autre, un dossier hôte égal à un autre ou qui le contient, un dossier hôte relatif et plus de 64 montages.
 3. **Le fichier Compose des montages est généré**, depuis la table, avant chaque démarrage de `minos-mcp`, chaque `minos-admin` et chaque validation ; il n'est jamais édité à la main. Chaque scalaire y est une chaîne JSON, `$` doublé. Un dossier hôte disparu est omis avec un avertissement qui nomme le montage.
 4. **Un dossier exposé est contrôlé côté hôte à l'ajout et avant chaque montage** : absolu, existant, sans `$`, ni point de reparse ni sous un parent qui en est un, refusé s'il est une racine de volume, le profil ou l'un de ses parents, ou s'il est, contient ou se trouve dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS.
-5. **Une racine unique migre sans élargir l'exposition** : chaque projet inscrit garde son chemin conteneur ; un projet inscrit à la racine elle-même, isolé ou dont le dossier est refusé n'est pas monté. Le registre n'est pas réécrit.
+5. **Une racine unique migre sans élargir l'exposition** : chaque projet inscrit garde son chemin conteneur ; un projet inscrit à la racine elle-même, isolé ou dont le dossier est refusé n'est pas monté. Le registre n'est pas réécrit. Une installation dont les projets sont stockés dans PostgreSQL n'est pas migrée (limite déclarée) : refus avant toute modification.
 6. **Les paramètres hérités de racine ne montent rien** : `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` enregistrée sont ignorés avec un avertissement.
 
 Exclu : le retrait de l'inscription d'un projet (le retrait d'un montage retire son exposition, pas son inscription ni son index) ; l'ajout d'un montage à chaud (`minos-mcp` est recréé).

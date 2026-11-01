@@ -4,9 +4,7 @@ import com.minos.domain.registry.ProjectMount;
 import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.registry.ProjectPathMappings;
 import com.minos.registry.ProjectPathMappings.RegisteredRoot;
-import com.minos.registry.RegisteredProject;
 import com.minos.storage.MinosRuntimeSettings;
-import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 
 import java.io.IOException;
@@ -103,16 +101,27 @@ public final class ProjectPathMappingService {
         this.registeredRoots = Objects.requireNonNull(registeredRoots, "registeredRoots");
     }
 
+    /** Refusal of a migration whose projects are stored in PostgreSQL (declared limit): names no path. */
+    static final String POSTGRESQL_MIGRATION_REFUSED = "project mount migration refused: the projects are stored in "
+            + "PostgreSQL, which the Docker bootstrap cannot reach; nothing was changed. Uninstall the MINOS Docker "
+            + "runtime together with its data, install this release again, then expose each project with AddProject";
+
     /**
      * The service of {@code home}, its store supplied by the composition root. The registered projects are read from
-     * the local registry, or from the storage backend of {@code home} when it is PostgreSQL.
+     * the local registry; a home whose projects are stored in PostgreSQL has none to list here.
      */
     public static ProjectPathMappingService forHome(Path home) {
         Objects.requireNonNull(home, "home");
         ProjectPathMappings store = MinosApplicationComposers.resolve().projectPathMappings(home);
-        return new ProjectPathMappingService(store, () -> postgresqlBackend(home)
-                ? storageBackendRoots(home, store)
-                : store.registeredRoots());
+        return new ProjectPathMappingService(store, registeredRootsOf(home, store));
+    }
+
+    /** The registered projects of {@code home}: those of the local registry, refused when PostgreSQL holds them. */
+    static RegisteredRoots registeredRootsOf(Path home, ProjectPathMappings store) {
+        return () -> {
+            if (postgresqlBackend(home)) throw new IOException(POSTGRESQL_MIGRATION_REFUSED);
+            return store.registeredRoots();
+        };
     }
 
     /** Saves {@code desired} when no mapping exists, and never replaces a different one. */
@@ -264,28 +273,4 @@ public final class ProjectPathMappingService {
         return backend != null && "postgresql".equals(backend.toLowerCase(Locale.ROOT));
     }
 
-    /** The projects of the storage backend of {@code home}, relative to the container root of the saved mapping. */
-    private static List<RegisteredRoot> storageBackendRoots(Path home, ProjectPathMappings store) throws IOException {
-        ProjectPathMapping saved = store.loadOptional().orElseThrow(
-                () -> new IOException("no project path mapping is saved"));
-        ProjectPathMapping.RuntimeLocation location =
-                ProjectPathMapping.resolveRuntimeLocation(System.getenv(), System.getProperties());
-        List<RegisteredRoot> roots = new ArrayList<>();
-        try (StorageBackend backend = StorageBackends.open(StorageBackendConfiguration.resolve(home))) {
-            for (RegisteredProject project : backend.projectRegistry().listProjects()) {
-                Optional<String> relative;
-                try {
-                    relative = Optional.of(saved.relativeForPhysical(project.rootPath(), location));
-                } catch (IllegalArgumentException _) {
-                    relative = Optional.empty();
-                }
-                roots.add(new RegisteredRoot(project.displayName(), relative));
-            }
-        } catch (IOException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new IOException("storage backend could not be closed", exception);
-        }
-        return roots;
-    }
 }

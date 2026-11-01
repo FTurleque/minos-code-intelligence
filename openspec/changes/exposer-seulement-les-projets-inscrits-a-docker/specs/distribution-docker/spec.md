@@ -98,6 +98,14 @@ Avant chaque démarrage de `minos-mcp`, chaque `minos-admin` et chaque validatio
 - **WHEN** l'installation de cette version est exécutée
 - **THEN** elle échoue, le fichier de correspondance reste au format 1 et l'ancien runtime est conservé
 
+### Requirement: La migration d'une racine unique stockée dans PostgreSQL est refusée
+Une installation Docker à racine unique dont les projets sont stockés dans PostgreSQL SHALL NOT être migrée : l'installation SHALL échouer avant toute modification, conserver l'ancien runtime, et afficher un message sans chemin qui donne le remède (désinstaller le runtime Docker avec ses données, réinstaller, exposer chaque projet par `AddProject`).
+
+#### Scenario: Runtime PostgreSQL à racine unique
+- **GIVEN** des données Docker au format 1 dont `minos.storage.backend` vaut `postgresql`
+- **WHEN** l'installation de cette version configure le runtime Docker
+- **THEN** elle échoue avec le remède, la configuration et la correspondance sont inchangées et aucune action du cycle de vie n'est lancée
+
 ### Requirement: L'installeur Windows ne demande aucune racine des projets Docker
 La page Docker de l'installeur Windows SHALL NOT présenter de champ de racine des projets. `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` enregistrée SHALL NOT entraîner de montage ; leur présence SHALL être signalée par un avertissement dans le journal d'installation.
 

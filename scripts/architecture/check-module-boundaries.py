@@ -1197,6 +1197,8 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
         "public Java API entry point (docs/user/java-api.md, ADR 0042): its callers are outside the reactor",
     "minos-api/com.minos.api.LocalSemanticCodeIntelligenceApi":
         "public Java API entry point (docs/user/java-api.md): its callers are outside the reactor",
+    "minos-application/com.minos.application.StorageBackends":
+        "public storage facade kept by ADR 0042 and ADR 0068 (signature unchanged for external callers)",
     "minos-application/com.minos.program.analysis.ProgramGraphEvaluator":
         "ground-truth evaluation tool of the program-graph tests of two modules and of "
         "check-java-ast-provider-consistency.py; a test-jar would cost more (retirer-les-services-sans-appelant, D1)",
