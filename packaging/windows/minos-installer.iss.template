@@ -46,6 +46,14 @@ VersionInfoProductName={#MinosName}
 VersionInfoProductVersion={#MinosAppVersion}
 VersionInfoProductTextVersion={#MinosVersion}
 
+; The wizard pages of MINOS are French: Inno Setup's own buttons and built-in checks follow.
+[Languages]
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+
+; Shown by Inno Setup itself, before NextButtonClick, for an empty or relative directory field.
+[Messages]
+InvalidPath=Indiquez un chemin complet, avec la lettre du lecteur (par exemple N:\workspace-dev), ou un chemin réseau (\\serveur\partage).
+
 [Tasks]
 Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
 

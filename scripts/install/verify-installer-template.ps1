@@ -128,6 +128,7 @@ Forbid 'ExecAndLogOutput' 'Installer must not pipe configuration-script output (
 Require 'if not DockerReady() then' 'Installer does not block an explicitly selected unavailable Docker backend.'
 Require 'Result := False;' 'Installer Docker prerequisite failure does not block wizard progression.'
 Require 'aucun fallback silencieux' 'Installer does not explain fail-closed backend selection.'
+Require 'MessagesFile: "compiler:Languages\French.isl"' 'Installer runs with the English Inno Setup messages next to French pages.'
 Require "'Cause : ' + ReadRuntimeSettingsFailure('ConfigureRuntimeSettings')" 'Installer does not show the cause of a configure-runtime-settings.ps1 failure.'
 Forbid 'configuration du MCP Docker sera ignoree' 'Installer must not silently ignore an explicitly selected Docker backend.'
 Forbid 'configuration du MCP Docker sera ignor' 'Installer must not silently ignore an explicitly selected Docker backend.'
