@@ -72,9 +72,9 @@ if [[ -z "$COURSIER_COMMIT" || -z "$COURSIER_SHA256" ]]; then
   exit 1
 fi
 mkdir -p "$WORK/bin"
-curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "$WORK/cs.gz"   "https://raw.githubusercontent.com/coursier/launchers/${COURSIER_COMMIT}/cs-x86_64-pc-linux.gz"
-printf '%s  %s
-' "$COURSIER_SHA256" "$WORK/cs.gz" | sha256sum -c -
+COURSIER_URL="https://raw.githubusercontent.com/coursier/launchers/${COURSIER_COMMIT}/cs-x86_64-pc-linux.gz"
+curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "$WORK/cs.gz" "$COURSIER_URL"
+printf '%s  %s\n' "$COURSIER_SHA256" "$WORK/cs.gz" | sha256sum -c -
 gunzip -c "$WORK/cs.gz" > "$WORK/bin/cs"
 chmod 755 "$WORK/bin/cs"
 export PATH="$WORK/bin:$PATH"
