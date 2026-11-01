@@ -264,14 +264,14 @@ class CheckTwinScriptFunctionsTest(unittest.TestCase):
         failures, entries, compared, scripts = gate.check(REAL_ROOT)
         self.assertEqual([], failures)
         self.assertEqual(14, entries)
-        self.assertEqual(31, compared)
+        self.assertEqual(32, compared)
         self.assertGreaterEqual(scripts, 39)
 
     def test_the_command_line_reports_the_counts(self):
         result = subprocess.run([sys.executable, str(_MODULE_PATH), "--root", str(REAL_ROOT)],
                                 capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("entries=14, copies compared=31", result.stdout)
+        self.assertIn("entries=14, copies compared=32", result.stdout)
 
 
 if __name__ == "__main__":

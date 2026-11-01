@@ -35,6 +35,9 @@ UsePreviousAppDir=yes
 ; instead), so the log is kept fresh on every install rather than appended,
 ; and CurUninstallStepChanged removes the managed directories itself.
 UninstallLogMode=overwrite
+; The uninstaller always writes its log (the user's temporary folder): the outcome of every Docker
+; and MCP client removal is recorded there, failures included.
+UninstallLogging=yes
 UninstallDisplayName={#MinosName}
 VersionInfoVersion={#MinosAppVersion}
 VersionInfoCompany=FTurleque
@@ -63,6 +66,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 
 [UninstallDelete]
 Type: files; Name: "{app}\.docker-mcp-managed"
+Type: dirifempty; Name: "{userprograms}\MINOS"
 
 [Code]
 var
@@ -1554,20 +1558,95 @@ begin
     'Supprimer également toutes les données MINOS locales ?' + #13#10 + #13#10 +
     'Données natives / contrôle :' + #13#10 + DataRoot + #13#10 + #13#10 +
     'Données Docker :' + #13#10 + DockerRoot + #13#10 + #13#10 +
-    'Oui supprime aussi les volumes PostgreSQL/Ollama gérés par MINOS. Une base PostgreSQL externe n''est jamais supprimée.' + #13#10 + #13#10 +
+    'Oui supprime aussi les volumes PostgreSQL/Ollama gérés par MINOS. Une base PostgreSQL externe n''est jamais supprimée.' + #13#10 +
+    'Dans tous les cas, les conteneurs et réseaux Docker de l''instance MINOS sont arrêtés et retirés.' + #13#10 + #13#10 +
     'Cette opération est irréversible. Choisissez Non pour conserver les données.';
   DeleteUserDataOnUninstall := MsgBox(MessageText, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
 end;
 
-procedure PurgeManagedDockerVolumes;
+// Copies the lines a cleanup script wrote to its own log file into the uninstall log.
+procedure LogScriptOutput(LogFile: String);
+var
+  Lines: TArrayOfString;
+  Index: Integer;
+begin
+  if not FileExists(LogFile) then
+  begin
+    Log('Cleanup script wrote no log: ' + ExtractFileName(LogFile));
+    exit;
+  end;
+  if not LoadStringsFromFile(LogFile, Lines) then
+  begin
+    Log('Cleanup script log could not be read: ' + ExtractFileName(LogFile));
+    exit;
+  end;
+  for Index := 0 to GetArrayLength(Lines) - 1 do
+    Log(Lines[Index]);
+end;
+
+// Stops and removes the containers of the Compose project of the Docker instance, the PostgreSQL and
+// Ollama profile services included, and its networks; on purge, its volumes too. The script finds them
+// by label, so it works whatever state the Docker runtime folder is in. It must run before
+// RemoveMinosProgramPayload deletes {app}\docker. Every outcome reaches the uninstall log; a failure is
+// also reported to the user.
+procedure RemoveManagedDockerInstance;
 var
   InstanceName: String;
+  Backend: String;
+  Remover: String;
+  LogFile: String;
+  Parameters: String;
+  Notice: String;
   ResultCode: Integer;
 begin
-  if IsSmokeBuild() or (not DeleteUserDataOnUninstall) then exit;
+  if IsSmokeBuild() then exit;
+  Backend := ReadInstallerValue('McpBackend', '');
   InstanceName := ReadInstallerValue('DockerInstanceName', 'minos-mcp-prod');
-  if not IsSafeDockerName(InstanceName) then exit;
-  Exec(ExpandConstant('{cmd}'), '/C docker volume rm "' + InstanceName + '-postgres-data" "' + InstanceName + '-ollama-models" >NUL 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if not IsSafeDockerName(InstanceName) then
+  begin
+    Log('RemoveManagedDockerInstance: the recorded Docker instance name is invalid; nothing was removed.');
+    exit;
+  end;
+  Remover := ExpandConstant('{app}\docker\scripts\remove-docker-instance.ps1');
+  LogFile := ExpandConstant('{tmp}\remove-docker-instance.log');
+  DeleteFile(LogFile);
+  if not FileExists(Remover) then
+  begin
+    Log('RemoveManagedDockerInstance: remove-docker-instance.ps1 is missing from the installation.');
+    ResultCode := 2;
+  end
+  else
+  begin
+    Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Remover + '"' +
+      ' -ComposeProject "' + InstanceName + '" -LogPath "' + LogFile + '"';
+    if DeleteUserDataOnUninstall then
+      Parameters := Parameters + ' -Purge';
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      ResultCode := -1;
+    LogScriptOutput(LogFile);
+  end;
+  Log('RemoveManagedDockerInstance: instance ' + InstanceName + ', ResultCode=' + IntToStr(ResultCode) + '.');
+  if ResultCode = 0 then exit;
+  // Docker absent or stopped on a machine that never used the Docker backend: nothing to remove.
+  if (ResultCode = 3) and (Backend <> 'docker') then exit;
+  if UninstallSilent() then exit;
+
+  if ResultCode = 3 then
+    Notice := 'Docker Desktop est absent ou arrêté : les conteneurs MINOS n''ont pas été arrêtés'
+  else
+    Notice := 'Certaines ressources Docker MINOS n''ont pas pu être retirées';
+  if DeleteUserDataOnUninstall then
+    Notice := Notice + ', et les volumes de données sont restés.'
+  else
+    Notice := Notice + '.';
+  SuppressibleMsgBox(
+    Notice + #13#10 + #13#10 +
+    'Instance Docker : ' + InstanceName + #13#10 +
+    'Le détail figure dans le journal de désinstallation, dans votre dossier temporaire (%TEMP%).' + #13#10 + #13#10 +
+    'Pour les retrouver une fois Docker Desktop démarré :' + #13#10 +
+    'docker ps -a --filter label=com.docker.compose.project=' + InstanceName + #13#10 +
+    'docker volume ls --filter label=io.minos.installation=' + InstanceName,
+    mbError, MB_OK, IDOK);
 end;
 
 procedure DeleteRootIfPresent(PathValue: String);
@@ -1585,7 +1664,6 @@ begin
   UserDataRoot := ReadInstallerValue('DataRoot', DefaultDataRoot());
   DockerRoot := ReadInstallerValue('DockerDataRoot', DefaultDockerDataRoot());
   DefaultRoot := ExpandConstant('{localappdata}\MINOS');
-  PurgeManagedDockerVolumes;
   if (UserDataRoot <> '') and DirExists(UserDataRoot) then DelTree(UserDataRoot, True, True, True);
   if (CompareText(DockerRoot, UserDataRoot) <> 0) then DeleteRootIfPresent(DockerRoot);
   DeleteRootIfPresent(DefaultRoot);
@@ -1682,14 +1760,15 @@ var
   ResultCode: Integer;
   DataRoot: String;
   McpServerName: String;
+  LogFile: String;
 begin
   // Must run before RemoveMinosProgramPayload deletes {app}\integration -- this
   // still calls the live copies there, exactly like ConfigureMcpClients does at
-  // install time. configure-mcp-clients.ps1/configure-codex-mcp.ps1's Uninstall
-  // action is driven entirely by their own state file (mcp-client-integrations.json
-  // / codex-mcp-integration.json under %LOCALAPPDATA%\MINOS), so it removes only
-  // the entries MINOS itself added and correctly leaves any preexisting entry
-  // (ownership=preexisting) untouched -- no client-selection switches needed here.
+  // install time. configure-mcp-clients.ps1's Uninstall action is driven by its
+  // state file (mcp-client-integrations.json under %LOCALAPPDATA%\MINOS) and
+  // leaves any preexisting entry untouched. configure-codex-mcp.ps1 removes the
+  // Codex block bounded by the MINOS markers, with or without its state file, and
+  // never an unmanaged entry -- no client-selection switches needed here.
   // Routed through invoke-named-mcp-script.ps1 so a custom -McpServerName from
   // Advanced Setup is honored symmetrically with the install-time call.
   if IsSmokeBuild() then exit;
@@ -1697,29 +1776,50 @@ begin
   DataRoot := ReadInstallerValue('DataRoot', DefaultDataRoot());
   McpServerName := ReadInstallerValue('McpServerName', 'minos');
 
+  // Each manager reports a preserved or failed removal as a warning: every warning, error and output
+  // line is written to LogFile, copied into the uninstall log, and makes the script exit 1.
   ScriptText :=
-    'param([Parameter(Mandatory = $true)][string] $InstallRoot, [string] $DataRoot, [string] $McpServerName)' + #13#10 +
+    'param([Parameter(Mandatory = $true)][string] $InstallRoot, [string] $DataRoot, [string] $McpServerName, [Parameter(Mandatory = $true)][string] $LogFile)' + #13#10 +
     '$ErrorActionPreference = ''Stop''' + #13#10 +
+    '$script:Failed = $false' + #13#10 +
+    'function Invoke-Removal([string] $Label, [scriptblock] $Action) {' + #13#10 +
+    '    try { $Records = @(& $Action 3>&1 2>&1) } catch { $Records = @($_) }' + #13#10 +
+    '    foreach ($Record in $Records) {' + #13#10 +
+    '        if ($Record -is [System.Management.Automation.WarningRecord]) { $script:Failed = $true; $Line = "WARNING $Label " + $Record.Message }' + #13#10 +
+    '        elseif ($Record -is [System.Management.Automation.ErrorRecord]) { $script:Failed = $true; $Line = "ERROR $Label " + $Record.Exception.Message }' + #13#10 +
+    '        else { $Line = "$Label " + [string]$Record }' + #13#10 +
+    '        [System.IO.File]::AppendAllText($LogFile, $Line + [Environment]::NewLine, [System.Text.Encoding]::UTF8)' + #13#10 +
+    '    }' + #13#10 +
+    '}' + #13#10 +
     '$Manager = Join-Path $InstallRoot ''integration\configure-mcp-clients.ps1''' + #13#10 +
     '$CodexManager = Join-Path $InstallRoot ''integration\configure-codex-mcp.ps1''' + #13#10 +
     '$NamedInvoker = Join-Path $InstallRoot ''integration\invoke-named-mcp-script.ps1''' + #13#10 +
     'if (Test-Path -LiteralPath $Manager -PathType Leaf) {' + #13#10 +
-    '    try { & $NamedInvoker -SourcePath $Manager -McpServerName $McpServerName -Parameters @{ InstallRoot = $InstallRoot; Action = ''Uninstall''; DataRoot = $DataRoot } }' + #13#10 +
-    '    catch { Write-Warning "MINOS MCP client integration removal failed: $($_.Exception.Message)" }' + #13#10 +
+    '    Invoke-Removal ''mcp-clients'' { & $NamedInvoker -SourcePath $Manager -McpServerName $McpServerName -Parameters @{ InstallRoot = $InstallRoot; Action = ''Uninstall''; DataRoot = $DataRoot } }' + #13#10 +
     '}' + #13#10 +
     'if (Test-Path -LiteralPath $CodexManager -PathType Leaf) {' + #13#10 +
-    '    try { & $NamedInvoker -SourcePath $CodexManager -McpServerName $McpServerName -Parameters @{ InstallRoot = $InstallRoot; Action = ''Uninstall''; DataRoot = $DataRoot } -CodexScript }' + #13#10 +
-    '    catch { Write-Warning "MINOS Codex MCP integration removal failed: $($_.Exception.Message)" }' + #13#10 +
-    '}' + #13#10;
+    '    Invoke-Removal ''codex'' { & $NamedInvoker -SourcePath $CodexManager -McpServerName $McpServerName -Parameters @{ InstallRoot = $InstallRoot; Action = ''Uninstall''; DataRoot = $DataRoot } -CodexScript }' + #13#10 +
+    '}' + #13#10 +
+    'if ($script:Failed) { exit 1 }' + #13#10;
   ScriptPath := ExpandConstant('{tmp}\remove-mcp-client-integrations.ps1');
-  if not SaveStringToFile(ScriptPath, ScriptText, False) then exit;
+  LogFile := ExpandConstant('{tmp}\remove-mcp-client-integrations.log');
+  DeleteFile(LogFile);
+  if not SaveStringToFile(ScriptPath, ScriptText, False) then
+  begin
+    Log('RemoveMcpClientIntegrations: the cleanup script could not be written; MCP client entries were not removed.');
+    exit;
+  end;
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath +
     '" -InstallRoot "' + ExpandConstant('{app}') +
     '" -DataRoot "' + DataRoot +
-    '" -McpServerName "' + McpServerName + '"';
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    '" -McpServerName "' + McpServerName +
+    '" -LogFile "' + LogFile + '"';
+  if not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    ResultCode := -1;
+  LogScriptOutput(LogFile);
+  if ResultCode <> 0 then
     Log('RemoveMcpClientIntegrations: cleanup did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
 end;
 
@@ -1806,6 +1906,7 @@ begin
   end
   else if CurUninstallStep = usPostUninstall then
   begin
+    RemoveManagedDockerInstance;
     RemoveMinosProgramPayload;
     DeleteMinosUserData;
   end;

@@ -215,8 +215,21 @@ function Install-Toml {
     Write-Host 'MINOS MCP configured for Codex Desktop' -ForegroundColor Green
 }
 
+# Only MINOS writes the BEGIN/END MINOS markers: the block they bound is MINOS's, whether it was written
+# by this installation or adopted from an earlier one (ownership=preexisting). An unmanaged
+# [mcp_servers.minos] section has no markers and is never touched.
+function Remove-ManagedTomlBlock([string] $Path, [string] $Reason) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    if ([string]::IsNullOrWhiteSpace((Get-ManagedBlock $Text))) { return }
+    Backup-File $Path | Out-Null
+    $NewText = [regex]::Replace($Text, '(?ms)^\s*' + [regex]::Escape($BeginMarker) + '.*?' + [regex]::Escape($EndMarker) + '[^\S\r\n]*(\r?\n)?', '')
+    if ([string]::IsNullOrWhiteSpace($NewText)) { [System.IO.File]::WriteAllText($Path, '', [System.Text.UTF8Encoding]::new($false)) }
+    else { [System.IO.File]::WriteAllText($Path, $NewText.TrimEnd() + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false)) }
+    Write-Log "UNINSTALL client=codex mode=toml reason=$Reason path='$Path'"
+}
+
 function Uninstall-Toml([object] $State) {
-    if ([string]$State.ownership -eq 'preexisting') { Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue; return }
     $Path = [string]$State.configPath
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue; return }
     $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
@@ -226,12 +239,8 @@ function Uninstall-Toml([object] $State) {
         Fail-Or-Warn 'Codex MINOS block was modified after installation; preserving the current user configuration.'
         return
     }
-    Backup-File $Path | Out-Null
-    $NewText = [regex]::Replace($Text, '(?ms)^\s*' + [regex]::Escape($BeginMarker) + '.*?' + [regex]::Escape($EndMarker) + '\s*', '').TrimEnd()
-    if ([string]::IsNullOrWhiteSpace($NewText)) { [System.IO.File]::WriteAllText($Path, '', [System.Text.UTF8Encoding]::new($false)) }
-    else { [System.IO.File]::WriteAllText($Path, $NewText + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false)) }
+    Remove-ManagedTomlBlock -Path $Path -Reason ([string]$State.ownership)
     Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
-    Write-Log "UNINSTALL client=codex mode=toml path='$Path'"
 }
 
 function Test-CliMatches([object] $Probe) {
@@ -291,8 +300,8 @@ try {
         }
     } else {
         $State = Read-State
-        if ($null -eq $State) { return }
-        if ([string]$State.mode -eq 'cli') { Uninstall-Cli $State }
+        if ($null -eq $State) { Remove-ManagedTomlBlock -Path $ConfigPath -Reason 'missing-state' }
+        elseif ([string]$State.mode -eq 'cli') { Uninstall-Cli $State; Remove-ManagedTomlBlock -Path $ConfigPath -Reason 'cli-mode-leftover' }
         elseif ([string]$State.mode -eq 'toml') { Uninstall-Toml $State }
         else { Fail-Or-Warn "Unknown Codex MCP integration mode '$($State.mode)'." }
     }
