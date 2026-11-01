@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -130,7 +129,7 @@ class DockerProjectsRootContractTest {
         Path harness = work.resolve("harness.ps1");
         Files.writeString(harness, harnessText(), StandardCharsets.UTF_8);
 
-        String output = runWindowsPowerShell(work, harness, "-ScriptPath", repoRoot().resolve(script).toString(),
+        String output = WindowsPowerShellHarness.run(work, harness, "-ScriptPath", repoRoot().resolve(script).toString(),
                 "-CasesPath", casesFile.toString(), "-Protected", PROTECTED, "-Temporary", TEMPORARY);
         Map<String, String> reasons = new LinkedHashMap<>();
         for (String line : output.split("\\R")) {
@@ -162,34 +161,6 @@ class DockerProjectsRootContractTest {
                     [Console]::Out.WriteLine($parts[0] + '=' + $reason)
                 }
                 """.formatted(FUNCTION);
-    }
-
-    /** Windows PowerShell 5.1 (the installer's runtime) by absolute path, with an allow-listed environment. */
-    private static String runWindowsPowerShell(Path work, Path harness, String... arguments) throws Exception {
-        String systemRoot = System.getenv().getOrDefault("SystemRoot", "C:\\Windows");
-        Path powershell = Path.of(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-        List<String> command = new java.util.ArrayList<>(List.of(powershell.toString(), "-NoProfile",
-                "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", harness.toString()));
-        command.addAll(List.of(arguments));
-        ProcessBuilder builder = new ProcessBuilder(command);
-        Map<String, String> environment = builder.environment();
-        Map<String, String> inherited = Map.copyOf(environment);
-        environment.clear();
-        for (String name : List.of("SystemRoot", "windir", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA",
-                "APPDATA", "ComSpec")) {
-            String value = inherited.get(name);
-            if (value != null) environment.put(name, value);
-        }
-        Path outputFile = work.resolve("harness-output.txt");
-        builder.directory(work.toFile()).redirectErrorStream(true).redirectOutput(outputFile.toFile());
-        Process process = builder.start();
-        if (!process.waitFor(60, TimeUnit.SECONDS)) {
-            process.destroyForcibly();
-            throw new AssertionError("PowerShell harness timed out");
-        }
-        String output = Files.readString(outputFile, StandardCharsets.UTF_8);
-        assertEquals(0, process.exitValue(), "PowerShell harness failed:\n" + output);
-        return output;
     }
 
     private static Map<String, String> cases(String... labelsAndValues) {

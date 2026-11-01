@@ -6,7 +6,6 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
 import com.minos.domain.registry.ProjectPathMapping;
-import com.minos.registry.ProjectPathMappings;
 
 import java.io.IOException;
 import java.io.Writer;
@@ -21,7 +20,7 @@ import java.util.Set;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Versioned runtime-only persistence for host/container physical project roots. */
-public final class ProjectPathMappingStore implements ProjectPathMappings {
+public final class ProjectPathMappingStore {
 
     public static final int CURRENT_FORMAT_VERSION = 1;
     public static final String RUNTIME_DIRECTORY = "runtime";
