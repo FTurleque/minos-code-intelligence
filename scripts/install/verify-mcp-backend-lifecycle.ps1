@@ -55,8 +55,17 @@ if ($env:MINOS_S7_FAIL_PROBE -eq $backend) { throw ("forced probe failure:" + $b
 param(
  [string]$InstallRoot,[string]$ProjectsRoot,[switch]$Start,[switch]$Strict,
  [string]$DockerInstallRoot,[string]$DockerDataRoot,[string]$DockerImageTag,
- [string]$DockerContainerName,[string]$DockerComposeProject)
+ [string]$DockerContainerName,[string]$DockerComposeProject,[switch]$ReplaceProjectsRoot)
 Add-Content -LiteralPath $env:MINOS_S7_FAKE_LOG -Value 'configure:docker' -Encoding ascii
+if ($ReplaceProjectsRoot) {
+    # Stands for minos-bootstrap configure-project-paths --replace: new mapping, rewritten registry entries.
+    Add-Content -LiteralPath $env:MINOS_S7_FAKE_LOG -Value 'configure:replace' -Encoding ascii
+    $mapping = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
+    @('formatVersion=1', ('hostRoot=' + $ProjectsRoot.Replace('\', '/').Replace(':', '\:')),
+      'containerRoot=/workspace/projects') | Set-Content -LiteralPath $mapping -Encoding ascii
+    Get-ChildItem -LiteralPath (Join-Path $DockerDataRoot 'registry\projects') -Filter '*.properties' |
+        ForEach-Object { Set-Content -LiteralPath $_.FullName -Value 'detachedHostRoot=rewritten' -Encoding ascii }
+}
 $runtime = Join-Path $DockerInstallRoot 'runtime'
 New-Item -ItemType Directory -Force -Path $runtime | Out-Null
 $generation = if (Test-Path -LiteralPath (Join-Path $runtime 'generation.txt')) {
@@ -200,12 +209,52 @@ try {
     $Actions = [System.IO.File]::ReadAllLines($FakeLog)
     Assert-True ($Actions -contains 'workflow:Start') 'Failed Docker upgrade did not restart the restored Docker runtime.'
 
+    # The Docker runtime recorded another projects root (minos-bootstrap mapping, one registered project).
+    $OtherRoot = Join-Path $Root 'other-projects'
+    $Mapping = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
+    $Entry = Join-Path $DockerDataRoot ('registry\projects\' + [Guid]::NewGuid() + '.properties')
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Mapping), (Split-Path -Parent $Entry) | Out-Null
+    @('formatVersion=1', ('hostRoot=' + $OtherRoot.Replace('\', '/').Replace(':', '\:')),
+      'containerRoot=/workspace/projects') | Set-Content -LiteralPath $Mapping -Encoding ascii
+    @('id=fixture', 'rootRelativePath=app') | Set-Content -LiteralPath $Entry -Encoding ascii
+    $MappingHash = (Get-FileHash -LiteralPath $Mapping -Algorithm SHA256).Hash
+    $EntryHash = (Get-FileHash -LiteralPath $Entry -Algorithm SHA256).Hash
+
+    # Unconfirmed change: refused before preparing anything, with the confirmations named.
+    $ConfiguresBefore = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:docker' }).Count
+    $Refusal = ''
+    try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot } catch { $Refusal = $_.Exception.Message }
+    $NamesConfirmations = $Refusal.Contains('/REPLACEDOCKERPROJECTSROOT=1') -and $Refusal.Contains('-ReplaceDockerProjectsRoot')
+    Assert-True $NamesConfirmations "An unconfirmed projects root change was not refused with its confirmations: $Refusal"
+    $ConfiguresAfter = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:docker' }).Count
+    Assert-True ($ConfiguresAfter -eq $ConfiguresBefore) 'An unconfirmed projects root change prepared the Docker runtime.'
+    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'An unconfirmed projects root change changed the active backend.'
+
+    # Confirmed change whose handshake fails: the mapping and the registry are written back.
+    $env:MINOS_S7_FAIL_PROBE = 'docker'
+    $FailedAsExpected = $false
+    try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot -ReplaceDockerProjectsRoot } catch { $FailedAsExpected = $true }
+    $env:MINOS_S7_FAIL_PROBE = ''
+    Assert-True $FailedAsExpected 'Forced handshake failure did not fail the projects root change.'
+    Assert-True (([System.IO.File]::ReadAllLines($FakeLog)) -contains 'configure:replace') 'The confirmed projects root change was not forwarded to the configurator.'
+    Assert-True (((Get-FileHash -LiteralPath $Mapping -Algorithm SHA256).Hash) -eq $MappingHash) 'A failed projects root change did not restore the recorded mapping.'
+    Assert-True (((Get-FileHash -LiteralPath $Entry -Algorithm SHA256).Hash) -eq $EntryHash) 'A failed projects root change did not restore the registry entries.'
+
+    # Confirmed change: committed; the next switch with the same root needs no confirmation.
+    & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot -ReplaceDockerProjectsRoot
+    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'The confirmed projects root change was not committed.'
+    Assert-True (((Get-FileHash -LiteralPath $Mapping -Algorithm SHA256).Hash) -ne $MappingHash) 'The confirmed projects root change left the old mapping.'
+    $ReplacesBefore = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:replace' }).Count
+    & $Switcher @Common -TargetBackend docker -ProjectsRoot ($ProjectsRoot.ToUpperInvariant() + '\')
+    $ReplacesAfter = @([System.IO.File]::ReadAllLines($FakeLog) | Where-Object { $_ -eq 'configure:replace' }).Count
+    Assert-True ($ReplacesAfter -eq $ReplacesBefore) 'The same projects root (case and trailing separator aside) asked for a replacement.'
+
     # Third-party client configuration is outside backend transaction and must
     # remain byte-identical through every switch/rollback/upgrade case.
     Assert-True (((Get-FileHash -LiteralPath $ThirdParty -Algorithm SHA256).Hash) -eq $ThirdPartyHash) 'Backend lifecycle modified unrelated third-party client configuration.'
 
     Write-Host 'MINOS MCP BACKEND TRANSACTIONAL LIFECYCLE VERIFICATION SUCCESS' -ForegroundColor Green
-    Write-Host 'Cases: native install, Docker install, reuse, native<->Docker, rollback, Docker upgrade + upgrade rollback'
+    Write-Host 'Cases: native install, Docker install, reuse, native<->Docker, rollback, Docker upgrade + upgrade rollback, projects root change (refused, restored, confirmed, same root)'
 }
 finally {
     $env:MINOS_S7_FAIL_PROBE = $OldFailProbe

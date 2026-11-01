@@ -19,6 +19,10 @@ param(
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $DockerComposeProject = 'minos-mcp-prod',
 
+    # Confirms that -ProjectsRoot replaces another projects root recorded by the Docker runtime: projects outside
+    # the new root stay registered with their index and are reported rootAvailable: false.
+    [switch] $ReplaceDockerProjectsRoot,
+
     [switch] $AddToPath
 )
 
@@ -96,6 +100,26 @@ function Get-UnsafeDockerProjectsRootReason(
     return ''
 }
 
+function Get-RecordedDockerProjectsRoot([string] $DockerDataRoot, [string] $ProjectsRoot) {
+    # The host root of the project path mapping that minos-bootstrap saved in the Docker data root (a Java
+    # properties file) when it differs from $ProjectsRoot; an empty string when there is none or when it is the
+    # same root, separators, trailing separator and case ignored. Reads only.
+    $MappingFile = Join-Path (Join-Path $DockerDataRoot 'runtime') 'project-paths.properties'
+    if (-not (Test-Path -LiteralPath $MappingFile -PathType Leaf)) { return '' }
+    $Recorded = ''
+    foreach ($Line in [System.IO.File]::ReadAllLines($MappingFile, [System.Text.Encoding]::UTF8)) {
+        if ($Line -match '^\s*hostRoot\s*[=:]\s*(.*)$') {
+            $Recorded = [regex]::Replace($Matches[1].Trim(), '\\(.)', '$1')
+            break
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($Recorded)) { return '' }
+    $RecordedComparable = $Recorded.Replace('\', '/').TrimEnd('/')
+    $ChosenComparable = $ProjectsRoot.Replace('\', '/').TrimEnd('/')
+    if ($RecordedComparable.Equals($ChosenComparable, [System.StringComparison]::OrdinalIgnoreCase)) { return '' }
+    return $Recorded
+}
+
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS Windows installer can only run on Windows.'
 }
@@ -135,6 +159,13 @@ if ($McpBackend -eq 'docker') {
     }
     if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
         throw "Docker projects root does not exist: $ProjectsRoot"
+    }
+    $RecordedProjectsRoot = Get-RecordedDockerProjectsRoot -DockerDataRoot $DockerDataRoot -ProjectsRoot $ProjectsRoot
+    if (-not [string]::IsNullOrEmpty($RecordedProjectsRoot) -and -not $ReplaceDockerProjectsRoot) {
+        throw ("The MINOS Docker runtime already uses another projects root ($RecordedProjectsRoot). Replacing it " +
+            'keeps every registered project and its index: projects under the new root are rebased, the others ' +
+            'are reported rootAvailable: false. Confirm the change with -ReplaceDockerProjectsRoot ' +
+            '(/REPLACEDOCKERPROJECTSROOT=1 for a silent run of the Windows installer).')
     }
 }
 
@@ -227,6 +258,7 @@ try {
             }
             if ($McpBackend -eq 'docker') {
                 $SwitchParameters['ProjectsRoot'] = $ProjectsRoot
+                if ($ReplaceDockerProjectsRoot) { $SwitchParameters['ReplaceDockerProjectsRoot'] = $true }
             }
             & $Switcher @SwitchParameters
         }

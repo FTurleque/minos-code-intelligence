@@ -32,6 +32,10 @@ param(
 
     [switch] $ProvisionOllamaModel,
 
+    # Confirms that -ProjectsRoot replaces another projects root recorded by the Docker runtime: projects outside
+    # the new root stay registered with their index and are reported rootAvailable: false.
+    [switch] $ReplaceDockerProjectsRoot,
+
     [ValidateRange(1, 120)]
     [int] $ProbeTimeoutSeconds = 20,
 
@@ -86,6 +90,26 @@ function Get-UnsafeDockerProjectsRootReason(
         }
     }
     return ''
+}
+
+function Get-RecordedDockerProjectsRoot([string] $DockerDataRoot, [string] $ProjectsRoot) {
+    # The host root of the project path mapping that minos-bootstrap saved in the Docker data root (a Java
+    # properties file) when it differs from $ProjectsRoot; an empty string when there is none or when it is the
+    # same root, separators, trailing separator and case ignored. Reads only.
+    $MappingFile = Join-Path (Join-Path $DockerDataRoot 'runtime') 'project-paths.properties'
+    if (-not (Test-Path -LiteralPath $MappingFile -PathType Leaf)) { return '' }
+    $Recorded = ''
+    foreach ($Line in [System.IO.File]::ReadAllLines($MappingFile, [System.Text.Encoding]::UTF8)) {
+        if ($Line -match '^\s*hostRoot\s*[=:]\s*(.*)$') {
+            $Recorded = [regex]::Replace($Matches[1].Trim(), '\\(.)', '$1')
+            break
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($Recorded)) { return '' }
+    $RecordedComparable = $Recorded.Replace('\', '/').TrimEnd('/')
+    $ChosenComparable = $ProjectsRoot.Replace('\', '/').TrimEnd('/')
+    if ($RecordedComparable.Equals($ChosenComparable, [System.StringComparison]::OrdinalIgnoreCase)) { return '' }
+    return $Recorded
 }
 
 # Installer progress protocol, read by the Windows installer while this script runs (-ProgressPath).
@@ -150,6 +174,7 @@ foreach ($Required in @($LauncherPath, $HandshakeProbePath)) {
         throw "MINOS backend switching helper is missing: $Required"
     }
 }
+$ReplaceProjectsRoot = $false
 if ($TargetBackend -eq 'docker') {
     foreach ($Required in @($DockerConfiguratorPath, $DockerWorkflowPath)) {
         if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) {
@@ -170,6 +195,24 @@ if ($TargetBackend -eq 'docker') {
     }
     if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
         throw "MINOS Docker projects root does not exist: $ProjectsRoot"
+    }
+    $RecordedProjectsRoot = Get-RecordedDockerProjectsRoot -DockerDataRoot $DockerDataRoot -ProjectsRoot $ProjectsRoot
+    if (-not [string]::IsNullOrEmpty($RecordedProjectsRoot)) {
+        if (-not $ReplaceDockerProjectsRoot) {
+            throw ("The MINOS Docker runtime already uses another projects root ($RecordedProjectsRoot). Replacing it " +
+                'keeps every registered project and its index: projects under the new root are rebased, the others ' +
+                'are reported rootAvailable: false. Confirm the change in the installer wizard, with ' +
+                '/REPLACEDOCKERPROJECTSROOT=1 for a silent install, or with -ReplaceDockerProjectsRoot.')
+        }
+        # The bootstrap cannot reach PostgreSQL, whose project roots are also relative to the recorded root.
+        $PreviousMarker = Join-Path $InstallRoot '.docker-mcp-managed'
+        $PreviousPostgres = (Test-Path -LiteralPath $PreviousMarker -PathType Leaf) -and
+            (@(Get-Content -LiteralPath $PreviousMarker) -contains 'storageBackend=postgresql')
+        if ($StorageBackend -eq 'postgresql' -or $PreviousPostgres) {
+            throw ('MINOS cannot replace the projects root of a Docker runtime that stores its projects in PostgreSQL. ' +
+                'Choose the recorded projects root again, or uninstall MINOS with its data and install it again.')
+        }
+        $ReplaceProjectsRoot = $true
     }
 }
 
@@ -372,10 +415,44 @@ function Restore-DockerRuntimeSnapshot([object] $Snapshot) {
     }
 }
 
+function New-ProjectRootSnapshot {
+    # The project path mapping and the registry entries that configure-project-paths --replace rewrites, kept in
+    # memory: a failed switch writes them back over the same files, which keeps their access rules.
+    $Files = @(Join-Path $DockerDataRoot 'runtime\project-paths.properties')
+    $Projects = Join-Path $DockerDataRoot 'registry\projects'
+    if (Test-Path -LiteralPath $Projects -PathType Container) {
+        $Files += @(Get-ChildItem -LiteralPath $Projects -File |
+            Where-Object { $_.Name -like '*.properties' } | ForEach-Object { $_.FullName })
+    }
+    $Snapshot = @{}
+    foreach ($File in $Files) {
+        if (Test-Path -LiteralPath $File -PathType Leaf) { $Snapshot[$File] = [System.IO.File]::ReadAllBytes($File) }
+    }
+    return $Snapshot
+}
+
+function Restore-ProjectRootSnapshot([hashtable] $Snapshot) {
+    # Each file is written to a temporary of its folder, then swapped in by File.Replace, which keeps the access
+    # rules of the file it replaces: a failure leaves every file either restored or as the bootstrap left it.
+    foreach ($File in @($Snapshot.Keys)) {
+        $Temporary = $File + '.' + [Guid]::NewGuid().ToString('N') + '.restore.tmp'
+        try {
+            [System.IO.File]::WriteAllBytes($Temporary, $Snapshot[$File])
+            if (Test-Path -LiteralPath $File -PathType Leaf) { [System.IO.File]::Replace($Temporary, $File, [NullString]::Value) }
+            else { [System.IO.File]::Move($Temporary, $File) }
+        }
+        finally {
+            Remove-Item -LiteralPath $Temporary -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 $PreviousBackend = Read-CurrentBackend
 $BackendFileExisted = Test-Path -LiteralPath $BackendFile -PathType Leaf
 $BackendFileBytes = if ($BackendFileExisted) { [System.IO.File]::ReadAllBytes($BackendFile) } else { [byte[]]@() }
-$ReuseDockerRuntime = $TargetBackend -eq 'docker' -and (Test-ReusableDockerRuntime)
+# A projects root change goes through the installation, whose bootstrap replaces the recorded mapping.
+$ReuseDockerRuntime = $TargetBackend -eq 'docker' -and (Test-ReusableDockerRuntime) -and -not $ReplaceProjectsRoot
+$ProjectRootSnapshot = $null
 $PreviousDockerRuntime = if ($PreviousBackend -eq 'docker') { Resolve-DockerRuntimeParameters } else { $null }
 $DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker' -and -not $ReuseDockerRuntime) {
     New-DockerRuntimeSnapshot -Runtime $PreviousDockerRuntime
@@ -426,6 +503,11 @@ try {
             # Passed only when set, so an injected test configurator without the parameter stays callable.
             if (-not [string]::IsNullOrWhiteSpace($ProgressPath)) {
                 $DockerParameters['ProgressPath'] = $ProgressPath
+            }
+            if ($ReplaceProjectsRoot) {
+                $ProjectRootSnapshot = New-ProjectRootSnapshot
+                $DockerParameters['ReplaceProjectsRoot'] = $true
+                Write-SwitchLog 'PREPARE target=docker projectsRoot=replace'
             }
             & $DockerConfiguratorPath @DockerParameters
             Write-SwitchLog 'PREPARE target=docker mode=install result=success'
@@ -498,6 +580,19 @@ catch {
         catch {
             Write-SwitchLog ("ROLLBACK config=$PreviousBackend result=failure message='" + $_.Exception.Message.Replace("'", "''") + "'")
             throw "MINOS backend switch failed and backend configuration rollback also failed: $($Failure.Exception.Message); rollback: $($_.Exception.Message)"
+        }
+    }
+
+    # Before any previous runtime starts again: it reads the mapping and the registry it was installed with.
+    if ($null -ne $ProjectRootSnapshot) {
+        try {
+            Restore-ProjectRootSnapshot -Snapshot $ProjectRootSnapshot
+            Write-SwitchLog 'ROLLBACK projectsRoot=restored result=success'
+        }
+        catch {
+            Write-SwitchLog ("ROLLBACK projectsRoot=restored result=failure message='" + $_.Exception.Message.Replace("'", "''") + "'")
+            throw ('MINOS backend switch failed and the Docker projects root mapping could not be restored: ' +
+                "$($Failure.Exception.Message); restore: $($_.Exception.Message)")
         }
     }
 
