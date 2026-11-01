@@ -68,6 +68,29 @@ N:/workspace-dev <-> /workspace/projects
 
 Le registre persiste `rootRelativePath`, pas le chemin physique host/container. Dans Docker, les commandes utilisent `/workspace/projects/...`.
 
+### Changer la racine des projets
+
+La correspondance est créée une fois, par le conteneur `minos-bootstrap` (`configure-project-paths <racine-hôte> /workspace/projects`). Une autre racine n'est jamais appliquée implicitement : sans confirmation, l'installation échoue avant toute modification avec « The MINOS Docker runtime already uses another projects root ».
+
+Pour changer de racine, confirmer le remplacement :
+
+| Porte d'entrée | Confirmation |
+|---|---|
+| Assistant de l'installeur | question Oui/Non sur la page Docker, qui affiche la racine enregistrée |
+| Installeur silencieux | `/REPLACEDOCKERPROJECTSROOT=1` |
+| `install-windows.ps1`, `switch-mcp-backend.ps1` | `-ReplaceDockerProjectsRoot` |
+| Bootstrap appelé à la main | `configure-project-paths --replace <racine-hôte> /workspace/projects` |
+
+Effet sur les projets inscrits (registre local) :
+
+- un projet situé sous la nouvelle racine est **rebasé** : même identifiant, même index ;
+- un autre projet est **isolé** : il reste inscrit avec son identifiant et son index, `project list` le signale `rootAvailable: false`, et il n'est jamais rattaché à un dossier de la nouvelle racine, même si un dossier du même nom y existe. Le réinscrire sous la nouvelle racine (`project add`), ou le retirer (`project remove`) ;
+- un projet isolé est rattaché de nouveau si une racine ultérieure le contient (retour à l'ancienne racine) ;
+- chaque inscription modifiée est sauvegardée à côté d'elle (`registry/projects/<id>.properties.<horodatage>.root-replacement.bak`). Si l'installation échoue après le remplacement, la correspondance et les inscriptions précédentes sont restaurées.
+- une version de MINOS antérieure à cette option ne sait pas lire une inscription isolée : elle la signale illisible (code 3) sans la supprimer. Revenir à une telle version après un remplacement laisse donc ces projets inutilisables jusqu'à la réinstallation d'une version récente.
+
+Le remplacement est refusé, sans rien écrire, si une inscription du registre est illisible (la réparer ou la retirer d'abord) ou si le runtime stocke ses projets dans PostgreSQL : le bootstrap n'a pas de réseau et ne peut pas rebaser ce registre. Dans ce cas, garder la racine enregistrée, ou désinstaller MINOS en supprimant ses données puis réinstaller avec la nouvelle racine.
+
 ## Image provider-complete
 
 C'est l'image d'**administration** (`MINOS_IMAGE`, cible `admin`). Elle prépare au BUILD :

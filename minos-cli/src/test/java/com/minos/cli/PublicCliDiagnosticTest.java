@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PublicCliDiagnosticTest {
 
@@ -30,6 +31,23 @@ class PublicCliDiagnosticTest {
     }
 
     @Test
+    void aProjectRootReplacementRefusalReachesTheOperatorUnchanged(@TempDir Path home) throws Exception {
+        ProjectPathMappingStore store = new ProjectPathMappingStore(home);
+        store.save(new ProjectPathMapping("N:/workspace-dev", "/workspace/projects"));
+        java.nio.file.Files.createDirectories(home.resolve("config"));
+        java.nio.file.Files.writeString(home.resolve("config/minos.properties"), "minos.storage.backend=postgresql\n");
+
+        IOException refusal = org.junit.jupiter.api.Assertions.assertThrows(IOException.class,
+                () -> DockerRuntimeBootstrap.run(home,
+                        new String[]{"configure-project-paths", "--replace", "D:/other-projects", "/workspace/projects"},
+                        new StringBuilder(), new StringBuilder()));
+
+        assertEquals(refusal.getMessage(), DockerRuntimeBootstrap.failureMessage(refusal));
+        assertTrue(refusal.getMessage().contains("PostgreSQL"), refusal.getMessage());
+        assertEquals("N:/workspace-dev", store.loadOptional().orElseThrow().hostRoot());
+    }
+
+    @Test
     void dockerMappingConflictDoesNotPublishItsPrivateControlPlanePath(@TempDir Path home) throws Exception {
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
         store.save(new ProjectPathMapping("N:/workspace-dev", "/workspace/projects"));
@@ -40,7 +58,8 @@ class PublicCliDiagnosticTest {
                 new StringBuilder(), error);
 
         assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
-        assertEquals("error: refusing to replace an existing project path mapping implicitly\n", error.toString());
+        assertTrue(error.toString().startsWith("error: refusing to replace an existing project path mapping implicitly; "
+                + "run configure-project-paths --replace"), error.toString());
         assertFalse(error.toString().contains(store.file().toString()));
     }
 }

@@ -43,9 +43,13 @@ public final class LocalProjectRegistry implements ProjectRegistry {
 
     private static final String PROJECTS_DIRECTORY = "projects";
     private static final String WORKSPACES_DIRECTORY = "workspaces";
-    private static final String PROPERTIES_SUFFIX = ".properties";
-    private static final String LEGACY_ROOT_PATH = "rootPath";
-    private static final String PORTABLE_ROOT_PATH = "rootRelativePath";
+    static final String PROPERTIES_SUFFIX = ".properties";
+    static final String LEGACY_ROOT_PATH = "rootPath";
+    static final String PORTABLE_ROOT_PATH = "rootRelativePath";
+    /** The absolute host root of a project detached by a project root replacement ({@link ProjectRootReplacement}). */
+    static final String DETACHED_HOST_ROOT = "detachedHostRoot";
+    /** Parent of the root a detached project resolves to: MINOS never creates it, so the root is never available. */
+    private static final String DETACHED_ROOTS_DIRECTORY = "detached-roots";
     private static final long MAX_METADATA_BYTES = 128L * 1024L;
     private static final int MAX_METADATA_ENTRIES = 16;
 
@@ -301,10 +305,23 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return runtimeLocation;
     }
 
+    /** The root a detached project resolves to: under the registry, in a folder MINOS never creates. */
+    Path detachedRootPath(UUID projectId) {
+        return storageRoot.resolve(DETACHED_ROOTS_DIRECTORY).resolve(projectId.toString());
+    }
+
     private void writeProject(RegisteredProject project) throws IOException {
         Properties properties = new Properties();
         properties.setProperty("id", project.id().toString());
-        if (pathMapping.isPresent()) {
+        Path entry = projectsDirectory.resolve(project.id() + PROPERTIES_SUFFIX);
+        if (project.rootPath().equals(detachedRootPath(project.id()))) {
+            // A detached project keeps the host root it was detached from: it is never re-expressed under the new root.
+            String detachedRoot = readProperties(entry).getProperty(DETACHED_HOST_ROOT, "").trim();
+            if (detachedRoot.isEmpty()) {
+                throw new IOException("detached project entry lost its host root: " + leafName(entry));
+            }
+            properties.setProperty(DETACHED_HOST_ROOT, detachedRoot);
+        } else if (pathMapping.isPresent()) {
             try {
                 properties.setProperty(
                         PORTABLE_ROOT_PATH,
@@ -320,7 +337,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         properties.setProperty("workspaceId", project.workspaceId().map(UUID::toString).orElse(""));
         properties.setProperty("createdAt", project.createdAt().toString());
         properties.setProperty("updatedAt", project.updatedAt().toString());
-        writePropertiesAtomically(projectsDirectory.resolve(project.id() + PROPERTIES_SUFFIX), properties);
+        writePropertiesAtomically(entry, properties);
     }
 
     private void writeWorkspace(RegisteredWorkspace workspace) throws IOException {
@@ -336,38 +353,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Properties properties = readProperties(file);
         UUID id = UUID.fromString(required(properties, "id", file));
         requireIdentity(expectedId, id, file, "project");
-        String relativeRoot = properties.getProperty(PORTABLE_ROOT_PATH, "").trim();
-        String legacyRoot = properties.getProperty(LEGACY_ROOT_PATH, "").trim();
-        if (!relativeRoot.isEmpty() && !legacyRoot.isEmpty()) {
-            throw new IOException("registry project contains both legacy and portable roots: " + leafName(file));
-        }
-
-        Path rootPath;
-        boolean migrateLegacy = false;
-        if (!relativeRoot.isEmpty()) {
-            ProjectPathMapping mapping = pathMapping.orElseThrow(() ->
-                    new IOException("portable project registry requires runtime path mapping: " + leafName(file)));
-            try {
-                rootPath = mapping.resolve(relativeRoot, runtimeLocation);
-            } catch (IllegalArgumentException exception) {
-                throw new IOException("invalid portable project root in " + leafName(file), exception);
-            }
-        } else {
-            if (legacyRoot.isEmpty()) throw new IOException("missing registry project root in " + leafName(file));
-            if (pathMapping.isPresent()) {
-                try {
-                    String migratedRelative = pathMapping.orElseThrow().relativeForLegacyPath(legacyRoot);
-                    rootPath = pathMapping.orElseThrow().resolve(migratedRelative, runtimeLocation);
-                    relativeRoot = migratedRelative;
-                    migrateLegacy = true;
-                } catch (IllegalArgumentException exception) {
-                    throw new IOException("legacy project root cannot be migrated with configured mapping: "
-                            + legacyRoot, exception);
-                }
-            } else {
-                rootPath = Path.of(legacyRoot).toAbsolutePath().normalize();
-            }
-        }
+        ResolvedRoot root = resolveRoot(file, id, properties);
 
         String displayName = required(properties, "displayName", file);
         String rawWorkspaceId = properties.getProperty("workspaceId", "").trim();
@@ -376,9 +362,48 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Instant createdAt = Instant.parse(required(properties, "createdAt", file));
         Instant updatedAt = Instant.parse(required(properties, "updatedAt", file));
         RegisteredProject project = new RegisteredProject(
-                id, rootPath, displayName, workspaceId, createdAt, updatedAt);
-        if (migrateLegacy && migrateLegacyEntriesOnRead) migrateLegacyProject(file, project, relativeRoot);
+                id, root.path(), displayName, workspaceId, createdAt, updatedAt);
+        if (root.migratedRelative() != null && migrateLegacyEntriesOnRead) {
+            migrateLegacyProject(file, project, root.migratedRelative());
+        }
         return project;
+    }
+
+    /** The root of an entry, which holds exactly one of a detached, a portable or a legacy root. */
+    private ResolvedRoot resolveRoot(Path file, UUID id, Properties properties) throws IOException {
+        String relativeRoot = properties.getProperty(PORTABLE_ROOT_PATH, "").trim();
+        String legacyRoot = properties.getProperty(LEGACY_ROOT_PATH, "").trim();
+        String detachedRoot = properties.getProperty(DETACHED_HOST_ROOT, "").trim();
+        int roots = (relativeRoot.isEmpty() ? 0 : 1) + (legacyRoot.isEmpty() ? 0 : 1) + (detachedRoot.isEmpty() ? 0 : 1);
+        if (roots > 1) throw new IOException("registry project contains more than one root: " + leafName(file));
+        if (!detachedRoot.isEmpty()) return new ResolvedRoot(detachedRootPath(id), null);
+        if (!relativeRoot.isEmpty()) {
+            ProjectPathMapping mapping = pathMapping.orElseThrow(() ->
+                    new IOException("portable project registry requires runtime path mapping: " + leafName(file)));
+            try {
+                return new ResolvedRoot(mapping.resolve(relativeRoot, runtimeLocation), null);
+            } catch (IllegalArgumentException exception) {
+                throw new IOException("invalid portable project root in " + leafName(file), exception);
+            }
+        }
+        if (legacyRoot.isEmpty()) throw new IOException("missing registry project root in " + leafName(file));
+        return resolveLegacyRoot(legacyRoot);
+    }
+
+    /** A legacy absolute root: migrated to a portable one when a mapping is configured, kept as is otherwise. */
+    private ResolvedRoot resolveLegacyRoot(String legacyRoot) throws IOException {
+        if (pathMapping.isEmpty()) return new ResolvedRoot(Path.of(legacyRoot).toAbsolutePath().normalize(), null);
+        try {
+            String migratedRelative = pathMapping.orElseThrow().relativeForLegacyPath(legacyRoot);
+            return new ResolvedRoot(pathMapping.orElseThrow().resolve(migratedRelative, runtimeLocation), migratedRelative);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("legacy project root cannot be migrated with configured mapping: "
+                    + legacyRoot, exception);
+        }
+    }
+
+    /** {@code migratedRelative} is the portable root a legacy entry is rewritten with, or null when none is due. */
+    private record ResolvedRoot(Path path, String migratedRelative) {
     }
 
     /**
@@ -387,7 +412,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
      * never replaced. A lost race (another process saved it first) is the same outcome as finding it saved. The
      * modification date of the entry is not copied: nothing reads it.
      */
-    private static void backupOnce(Path file, Path backup) throws IOException {
+    static void backupOnce(Path file, Path backup) throws IOException {
         backupOnce(file, backup, MAX_LEGACY_ENTRY_BYTES);
     }
 
@@ -458,7 +483,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         }
     }
 
-    private static Properties readProperties(Path file) throws IOException {
+    static Properties readProperties(Path file) throws IOException {
         return BoundedProperties.load(
                 file,
                 MAX_METADATA_BYTES,
@@ -478,7 +503,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     /** Every entry named {@code *.properties}, whatever it is: what is not a regular file is reported, not skipped. */
-    private static List<Path> propertyEntries(Path directory) throws IOException {
+    static List<Path> propertyEntries(Path directory) throws IOException {
         try (var paths = Files.list(directory)) {
             return paths.filter(path -> path.getFileName().toString().endsWith(PROPERTIES_SUFFIX))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
@@ -515,7 +540,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return new Scan(List.copyOf(projects), List.copyOf(failures));
     }
 
-    private static void writePropertiesAtomically(Path target, Properties properties) throws IOException {
+    static void writePropertiesAtomically(Path target, Properties properties) throws IOException {
         DurableAtomicFile.ensureDirectory(target.getParent(), "local registry metadata directory");
         Path temporary = PrivateLocalStorage.createPrivateTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
         try {

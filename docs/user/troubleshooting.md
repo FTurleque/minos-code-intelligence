@@ -62,6 +62,8 @@ Si la racine a été déplacée, si une lettre de lecteur a changé ou si un vol
 
 Réenregistrer le bon projet ou rétablir exactement la racine attendue.
 
+Avec le backend MCP Docker, un projet situé hors de la racine des projets après un changement de racine est isolé : il garde son identité et son index, et reste indisponible tant qu'il n'est pas réinscrit sous la nouvelle racine ou que l'ancienne racine n'est pas rétablie ([Changer la racine des projets](docker-runtime.md#changer-la-racine-des-projets)).
+
 ## `index` échoue avant de lancer le provider
 
 Exécuter :
@@ -191,7 +193,18 @@ La racine des projets du backend MCP Docker est montée dans les conteneurs MINO
 
 Remède : choisir un dossier dédié à vos projets, par exemple `%USERPROFILE%\source\repos` ou un dossier d'un autre volume.
 
-Une installation qui monte déjà le profil (`MINOS_PROJECTS_DIR` dans `%LOCALAPPDATA%\MINOS\docker\runtime\.env`) le garde tant qu'une autre racine n'est pas appliquée. Changer de racine sur un runtime existant est refusé par la correspondance de chemins enregistrée (« refusing to replace ») : désinstaller MINOS en acceptant la suppression des données, puis réinstaller en choisissant un dossier dédié.
+Une installation qui monte déjà le profil (`MINOS_PROJECTS_DIR` dans `%LOCALAPPDATA%\MINOS\docker\runtime\.env`) le garde tant qu'une autre racine n'est pas appliquée. Pour appliquer un dossier dédié, réinstaller en le choisissant et confirmer le remplacement de la racine enregistrée (section suivante).
+
+## Windows : « The MINOS Docker runtime already uses another projects root » ou « refusing to replace an existing project path mapping implicitly »
+
+Le runtime Docker a enregistré une autre racine des projets (`%LOCALAPPDATA%\MINOS\docker-data\runtime\project-paths.properties`), et la racine choisie en diffère. L'installeur, `install-windows.ps1` et `switch-mcp-backend.ps1` refusent ce changement s'il n'est pas confirmé, avant toute modification ; le backend précédent reste actif. Le message du conteneur `minos-bootstrap` (« refusing to replace… implicitly ») a la même cause.
+
+Remède : confirmer le remplacement — répondre Oui à la question de la page Docker de l'assistant, passer `/REPLACEDOCKERPROJECTSROOT=1` à un installeur silencieux, ou `-ReplaceDockerProjectsRoot` aux scripts. Les projets inscrits sous la nouvelle racine sont rebasés ; les autres restent inscrits avec leur index et sont signalés `rootAvailable: false` (voir [Changer la racine des projets](docker-runtime.md#changer-la-racine-des-projets)). Pour ne rien changer, choisir de nouveau la racine enregistrée, si elle n'est pas refusée.
+
+Le remplacement confirmé échoue encore dans deux cas, sans rien écrire :
+
+- « project root replacement refused: … registry entry is unreadable » : `project list` signale l'inscription illisible ; la réparer ou la retirer, puis relancer l'installation ;
+- « … stores its projects in PostgreSQL » : le bootstrap ne peut pas rebaser ce registre ; garder la racine enregistrée, ou désinstaller MINOS en supprimant ses données puis réinstaller avec la nouvelle racine.
 
 ## Espace disque dans `MINOS_HOME`
 

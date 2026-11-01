@@ -103,4 +103,20 @@ class ProjectPathMappingTest {
                     () -> WINDOWS_HOST.resolve(unsafe, ProjectPathMapping.RuntimeLocation.DOCKER), unsafe);
         }
     }
+    @Test
+    void theHostPathOfARelativeRootIsJoinedToTheHostRoot() {
+        assertEquals("C:/Users/me/code/team/app", WINDOWS_HOST.hostPathOf("team\\app"));
+        assertEquals("C:/Users/me/code", WINDOWS_HOST.hostPathOf("."));
+        assertThrows(IllegalArgumentException.class, () -> WINDOWS_HOST.hostPathOf("../escape"));
+    }
+
+    @Test
+    void aHostPathIsRelativeOnlyUnderTheHostRoot() {
+        assertEquals(java.util.Optional.of("team/app"), WINDOWS_HOST.relativeForHostPath("c:\\users\\ME\\code\\team\\app"));
+        assertEquals(java.util.Optional.of("."), WINDOWS_HOST.relativeForHostPath("C:/Users/me/code/"));
+        assertEquals(java.util.Optional.empty(), WINDOWS_HOST.relativeForHostPath("C:/Users/me/code-other/app"));
+        assertEquals(java.util.Optional.empty(), WINDOWS_HOST.relativeForHostPath("D:/elsewhere"));
+        assertEquals(java.util.Optional.empty(),
+                new ProjectPathMapping("/srv/projects", "/workspace").relativeForHostPath("/SRV/projects/app"));
+    }
 }
