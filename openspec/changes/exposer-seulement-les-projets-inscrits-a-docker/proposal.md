@@ -16,7 +16,7 @@ Le backend natif n'est pas concerné : il lit les projets là où ils sont et n'
 - **Inscription d'un projet Docker** (côté hôte) : nouvelle action du cycle de vie (`-Action AddProject -ProjectPath <dossier> [-Name <nom>]`, relayée par `minos-docker.ps1`) qui valide le dossier (règle de #627 appliquée **au projet**, point de reparse refusé), ajoute le montage, recrée `minos-mcp`, puis inscrit le projet par `minos-admin project add /workspace/projects/<nom>`. L'indexation suit ensuite la voie existante du runtime Docker, inchangée.
 - **Retrait d'un projet Docker** : `-Action RemoveProject -Name <nom>` retire le montage et recrée `minos-mcp` ; l'inscription et l'index restent, le projet passe à `rootAvailable: false`.
 - **Migration** d'une installation à racine unique (format 1), au premier `Install` de cette version : un montage par projet inscrit, sur **le même chemin conteneur qu'avant** (`/workspace/projects/<chemin relatif>`), donc sans réécrire le registre, local ou PostgreSQL. Un projet inscrit à la racine elle-même, isolé par #632 ou dont le dossier est dangereux n'est pas monté (avertissement). Une inscription illisible fait échouer la migration avant toute écriture et l'ancien runtime est conservé.
-- **Installeur Windows** : la page Docker ne demande plus de racine. `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` enregistrée ne montent plus rien ; ils sont ignorés avec un avertissement (décision ouverte D7 du design).
+- **Installeur Windows** : la page Docker ne demande plus de racine. `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` enregistrée ne montent plus rien ; ils sont ignorés avec un avertissement (D7 du design).
 - **ADR** : nouvel ADR de sécurité proposé (`SEC-0075`, statut Proposed) : « le runtime Docker n'expose que les projets inscrits ».
 - Documentation : `docs/user/docker-runtime.md`, `docs/user/mcp.md`, `docs/user/troubleshooting.md`.
 
@@ -32,7 +32,7 @@ Le backend natif n'est pas concerné : il lit les projets là où ils sont et n'
 
 ## Hors périmètre
 
-- **Désinscription d'un projet** (`project remove`) : aucune commande CLI ne retire une inscription au HEAD (`ProjectRegistry.deleteProject` n'est appelé que par un retour arrière, `RemoteIndexingUseCase.java:231`). Le retrait d'un projet Docker retire son exposition, pas son inscription ni son index. Une commande `project remove` est un changement séparé (décision ouverte D6).
+- **Désinscription d'un projet** (`project remove`) : aucune commande CLI ne retire une inscription au HEAD (`ProjectRegistry.deleteProject` n'est appelé que par un retour arrière, `RemoteIndexingUseCase.java:231`). Le retrait d'un projet Docker retire son exposition, pas son inscription ni son index. Une commande `project remove` est un changement séparé (D6).
 - **Indexation dans le conteneur** : le plan d'administration ne lance aucun provider (SEC-0070, SEC-0074, `docs/user/docker-runtime.md:286`) ; ce changement ne modifie pas la voie d'indexation, il exige seulement que le projet soit monté.
 - **Ajout à chaud d'un montage** : Docker ne sait pas ajouter un montage à un conteneur en cours d'exécution ; `minos-mcp` est recréé et les sessions MCP attachées sont interrompues.
 - Backend natif, plugin IntelliJ, NEXUS : inchangés.

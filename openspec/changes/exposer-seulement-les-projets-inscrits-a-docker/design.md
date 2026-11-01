@@ -59,7 +59,7 @@ Côté hôte, `MAP` gagne la résolution d'un chemin relatif par la table : le m
 - **Nom d'un nouveau montage** : `[a-z0-9][a-z0-9._-]{0,62}`, ni `.` ni `..`, unique sans tenir compte de la casse. Par défaut, dérivé du nom du dossier (minuscules, caractères hors jeu remplacés par `-`) ; si le résultat est invalide ou déjà pris, refus qui demande `-Name`.
 - **Chemins de montage migrés** (D5) : segments sûrs (règle `normalizeRelative` de `MAP`), plusieurs segments admis.
 - **Chevauchements refusés** : aucun chemin de montage ne préfixe un autre ; aucun dossier hôte n'est égal à un autre, ni ne le contient (un même dossier sous deux noms, ou un projet exposé deux fois).
-- **Plafond** : 64 montages (décision ouverte D9). Au-delà, refus sans écriture.
+- **Plafond** : 64 montages (D9). Au-delà, refus sans écriture.
 - **Dossier hôte** (contrôle côté hôte, dans `LC`, avant d'appeler `BOOT`) : absolu, existant, pas un point de reparse (jonction, lien symbolique) ni sous un parent qui en est un, et accepté par la règle de #627 appliquée au projet (`Get-UnsafeDockerProjectsRootReason` : racine de volume, profil et ses parents, `%LOCALAPPDATA%`, `%APPDATA%`, dossiers de MINOS). Sous Linux, la même fonction refuse `/`, le dossier personnel et ses parents, et les dossiers de MINOS. Le message ne contient aucun chemin (`.claude/rules/securite.md`, point 7).
 - `BOOT` revalide ce qu'il peut sans l'hôte (chemin absolu, noms, chevauchements, plafond) : un appel direct du bootstrap ne contourne que le contrôle propre à l'hôte, et `BOOT` n'est appelé que par `LC`.
 
@@ -78,15 +78,15 @@ Lien avec #632 : son option `--replace` porte sur une racine unique ; avec une t
 
 ### D6 — Retrait d'un projet
 
-`-Action RemoveProject -Name <nom>` retire le montage de la table (BOOT), régénère l'override et recrée `minos-mcp`. Les projets inscrits sous ce montage restent inscrits avec leur index (`rootAvailable: false`) ; la sortie les nomme. Un nouvel `AddProject` du même dossier sous le même nom les rend de nouveau disponibles. **Recommandation** : s'en tenir là ; une commande CLI `project remove` (retrait de l'inscription et sort de l'index) est un changement séparé, qui touche la surface CLI publique et la rétention des index.
+`-Action RemoveProject -Name <nom>` retire le montage de la table (BOOT), régénère l'override et recrée `minos-mcp`. Les projets inscrits sous ce montage restent inscrits avec leur index (`rootAvailable: false`) ; la sortie les nomme. Un nouvel `AddProject` du même dossier sous le même nom les rend de nouveau disponibles. Une commande CLI `project remove` (retrait de l'inscription et sort de l'index) est un changement séparé, qui touche la surface CLI publique et la rétention des index.
 
 ### D7 — Installeur Windows et paramètres hérités
 
-La page Docker ne contient plus le champ « Racine des projets » ; elle indique la commande d'inscription d'un projet. `SW` et `ZIP` n'exigent plus `-ProjectsRoot` ; `SW:249` ne compare plus de racine. **Recommandation** : `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` du registre Windows sont **ignorés avec un avertissement** dans le journal d'installation (aucun dossier n'est monté du seul fait de ce paramètre). Alternative : les refuser, ce qui casse les installations scriptées existantes sans gain de sécurité supplémentaire. La valeur `ProjectsRoot` du registre Windows est supprimée par l'installation.
+La page Docker ne contient pas de champ « Racine des projets » ; elle indique la commande d'inscription d'un projet. `SW` et `ZIP` n'exigent pas `-ProjectsRoot` ; `SW:249` ne compare pas de racine. `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` du registre Windows sont **ignorés avec un avertissement** dans le journal d'installation : aucun dossier n'est monté du seul fait de ce paramètre. Option écartée : les refuser, ce qui casse les installations scriptées existantes sans gain de sécurité. La valeur `ProjectsRoot` du registre Windows est supprimée par l'installation.
 
 ### D8 — Diagnostic honnête
 
-`-Action Status` liste les montages (nom, disponible ou omis) sans chemin hôte absolu dans la sortie publique — décision ouverte D10 : le chemin hôte aide l'utilisateur sur son propre poste mais la règle 7 l'exclut des sorties publiques ; recommandation : nom seul, chemin hôte uniquement avec `-ShowHostPaths`. `installation.json` remplace `projectsRoot` par `projectMounts` (compte et noms). `docs/user/docker-runtime.md` décrit le modèle, la migration et ses avertissements.
+`-Action Status` liste les montages (nom, disponible ou omis) par leur nom, sans chemin hôte absolu (`.claude/rules/securite.md`, point 7) ; `-ShowHostPaths` ajoute les chemins hôte pour l'utilisateur de son propre poste (D10). `installation.json` remplace `projectsRoot` par `projectMounts` (compte et noms). `docs/user/docker-runtime.md` décrit le modèle, la migration et ses avertissements.
 
 ## Direction des dépendances
 
@@ -111,11 +111,11 @@ La page Docker ne contient plus le champ « Racine des projets » ; elle indique
 - Un dossier hôte supprimé puis recréé par un autre outil au même chemin est remonté : même comportement que la racine actuelle, limité désormais à ce dossier.
 - Docker Desktop partage chaque dossier monté avec la VM : 64 montages restent sous les limites connues, non mesurées pour cette spécification.
 
-## Décisions ouvertes (propriétaire)
+## Décisions du propriétaire (validées le 2026-11-01)
 
-- **D6** : retrait = exposition seulement (recommandé) ou ajout d'une commande `project remove` dans ce changement.
-- **D7** : paramètres hérités ignorés avec avertissement (recommandé) ou refusés.
-- **D9** : plafond de 64 montages (recommandé) ou autre valeur.
-- **D10** : diagnostic par nom seul, chemins hôte sur option (recommandé).
-- **D11** : ordre avec #632 et la branche `fix/proposer-de-creer-la-racine-des-projets` — recommandé : fusionner #632 (débloque les installations 1.3.x actuelles), ne pas ouvrir la PR de création proposée de la racine (rendue sans objet), puis implémenter ce changement.
-- **D12** : ADR `SEC-0075` « Le runtime Docker n'expose que les projets inscrits » (à rédiger en tâche 1.2, statut Proposed, acceptation par le propriétaire).
+- **D6** : le retrait retire l'exposition seulement ; une commande `project remove` est un changement séparé.
+- **D7** : `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` enregistrée sont ignorés avec un avertissement.
+- **D9** : plafond de 64 montages.
+- **D10** : diagnostic par nom de montage ; chemins hôte seulement avec `-ShowHostPaths`.
+- **D11** : #632 est fusionnée avant l'implémentation ; la branche `fix/proposer-de-creer-la-racine-des-projets` ne donne pas de PR ; ce changement est implémenté ensuite.
+- **D12** : ADR `SEC-0075` « Le runtime Docker n'expose que les projets inscrits », rédigé en tâche 1.2 au statut Proposed, accepté par le propriétaire avant la section 6.
