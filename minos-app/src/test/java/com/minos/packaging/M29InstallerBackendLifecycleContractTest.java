@@ -191,6 +191,18 @@ class M29InstallerBackendLifecycleContractTest {
         assertFalse(configure.contains("validation/handshake"), "message claims the handshake failed");
     }
 
+    // The wizard pages and messages of MINOS are French; without a [Languages] section Inno Setup runs in English, so
+    // its own buttons and built-in checks (an empty or relative directory, before NextButtonClick) answered in English
+    // in the middle of French pages.
+    @Test
+    void installerRunsInFrenchIncludingInnoBuiltInMessages() throws Exception {
+        String installer = text(repoRoot().resolve("packaging/windows/minos-installer.iss.template"));
+        assertTrue(installer.contains("[Languages]\nName: \"french\"; MessagesFile: \"compiler:Languages\\French.isl\""),
+                "installer does not declare the French Inno Setup messages");
+        String messages = section(installer, "[Messages]\n", "\n\n");
+        assertTrue(messages.contains("InvalidPath=Indiquez un chemin complet"), "the built-in path check keeps the stock text");
+    }
+
     private static String section(String text, String start, String end) {
         int from = text.indexOf(start);
         assertTrue(from >= 0, "missing section: " + start);
