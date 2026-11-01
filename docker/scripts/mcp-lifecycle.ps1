@@ -691,7 +691,10 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         $QueryImageProperty = $Metadata.PSObject.Properties['queryImage']
         if ($null -ne $QueryImageProperty) { $ManagedImages += [string] $QueryImageProperty.Value }
         Set-QueryImagePlaceholder
-        Compose @('down', '--timeout', '10', '--remove-orphans', '--volumes')
+        # Compose only acts on the services of the active profiles: without these two, the PostgreSQL and
+        # Ollama services of the connected profile keep running and their network cannot be removed. Their
+        # data volumes are external, so --volumes never removes them.
+        Compose @('--profile', 'postgresql', '--profile', 'ollama', 'down', '--timeout', '10', '--remove-orphans', '--volumes')
         foreach ($ManagedImage in $ManagedImages) {
             if ([string]::IsNullOrWhiteSpace($ManagedImage)) { continue }
             $ImageRemoval = Invoke-DockerAllowFailure -Arguments @('image', 'rm', $ManagedImage)

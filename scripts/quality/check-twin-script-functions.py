@@ -83,7 +83,8 @@ TWINS = (
                               "scripts/release/publish-windows-release.ps1")),
     # Assertions of the test scripts.
     ("Test-Case", ("scripts/release/test-iscc-provenance.ps1", "scripts/release/test-release-signature.ps1")),
-    ("Assert-True", ("scripts/install/verify-mcp-backend-lifecycle.ps1",
+    ("Assert-True", ("scripts/install/verify-docker-instance-removal.ps1",
+                     "scripts/install/verify-mcp-backend-lifecycle.ps1",
                      "scripts/install/verify-mcp-client-backend-routing.ps1",
                      "scripts/install/verify-mcp-client-preflight.ps1")),
 )

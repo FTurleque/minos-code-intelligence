@@ -119,11 +119,11 @@ exit /b 1
     $NoMcpCliText = [System.IO.File]::ReadAllText($NoMcpCliConfig, [System.Text.Encoding]::UTF8)
     Assert-True ($NoMcpCliText.Contains('[mcp_servers.minos]')) 'Codex auto-mode TOML fallback did not write the managed block.'
 
-    # Preexisting: a TOML block matching exactly what MINOS would generate
-    # exists, but has no prior state file (state lost, or hand-authored to
-    # match) -- must be adopted as ownership=preexisting rather than
-    # duplicated or rewritten, and must never be removed on uninstall since
-    # MINOS did not create it.
+    # Adopted block: a TOML block matching exactly what MINOS would generate
+    # exists, with no state file (a purge deleted the state and left the
+    # block) -- it is adopted as ownership=preexisting rather than duplicated
+    # or rewritten. Only MINOS writes the BEGIN/END MINOS markers, so the
+    # block bounded by them is removed on uninstall like any managed block.
     $PreexistingConfig = Join-Path $Root 'preexisting\.codex\config.toml'
     $PreexistingState = Join-Path $Root 'preexisting\state\codex.json'
     $PreexistingLog = Join-Path $Root 'preexisting\logs\mcp.log'
@@ -147,8 +147,45 @@ exit /b 1
     & $Manager -InstallRoot $InstallRoot -Action Uninstall -Strict `
         -DataRoot $DataRoot -ConfigPath $PreexistingConfig -StatePath $PreexistingState -LogPath $PreexistingLog -BackupRoot $PreexistingBackups
     $PreexistingAfterUninstall = [System.IO.File]::ReadAllText($PreexistingConfig, [System.Text.Encoding]::UTF8)
-    Assert-True ($PreexistingAfterUninstall.Contains('[mcp_servers.minos]')) 'Preexisting-compatible Codex TOML block was removed during uninstall even though MINOS did not create it.'
+    Assert-True (-not $PreexistingAfterUninstall.Contains('# BEGIN MINOS MANAGED MCP SERVER')) 'Adopted Codex TOML block bounded by the MINOS markers remained after uninstall.'
+    Assert-True (-not $PreexistingAfterUninstall.Contains('[mcp_servers.minos]')) 'Adopted Codex MINOS MCP section remained after uninstall.'
+    Assert-True ($PreexistingAfterUninstall.Contains('model = "gpt-5.6"')) 'Uninstall of an adopted Codex block changed unrelated TOML content.'
     Assert-True (-not (Test-Path -LiteralPath $PreexistingState -PathType Leaf)) 'Preexisting integration tracking state remained after uninstall.'
+
+    # Orphan block: the state file is missing at uninstall (deleted by a purge,
+    # or never written). The block bounded by the MINOS markers still points to
+    # the minos.exe being removed: it is removed, after a backup, and nothing
+    # outside the markers changes.
+    $OrphanConfig = Join-Path $Root 'orphan\.codex\config.toml'
+    $OrphanState = Join-Path $Root 'orphan\state\codex.json'
+    $OrphanLog = Join-Path $Root 'orphan\logs\mcp.log'
+    $OrphanBackups = Join-Path $Root 'orphan\backups'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $OrphanConfig) | Out-Null
+    [System.IO.File]::WriteAllText($OrphanConfig, "model = `"gpt-5.6`"`r`n`r`n[mcp_servers.other]`r`ncommand = `"other.exe`"`r`n", [System.Text.UTF8Encoding]::new($false))
+    & $Manager -InstallRoot $InstallRoot -Action Install -Mode desktop -Strict `
+        -DataRoot $DataRoot -ConfigPath $OrphanConfig -StatePath $OrphanState -LogPath $OrphanLog -BackupRoot $OrphanBackups
+    Add-Content -LiteralPath $OrphanConfig -Value "`r`n[profiles.after]`r`nmodel = `"o4`"" -Encoding UTF8
+    Remove-Item -LiteralPath $OrphanState -Force
+    & $Manager -InstallRoot $InstallRoot -Action Uninstall -Strict `
+        -DataRoot $DataRoot -ConfigPath $OrphanConfig -StatePath $OrphanState -LogPath $OrphanLog -BackupRoot $OrphanBackups
+    $OrphanAfter = [System.IO.File]::ReadAllText($OrphanConfig, [System.Text.Encoding]::UTF8)
+    Assert-True (-not $OrphanAfter.Contains('# BEGIN MINOS MANAGED MCP SERVER')) 'Codex block bounded by the MINOS markers remained after an uninstall without state file.'
+    Assert-True (-not $OrphanAfter.Contains('[mcp_servers.minos]')) 'Codex MINOS MCP section remained after an uninstall without state file.'
+    Assert-True ($OrphanAfter.Contains('[mcp_servers.other]') -and $OrphanAfter.Contains('command = "other.exe"')) 'Uninstall without state file changed another MCP server.'
+    Assert-True ($OrphanAfter.Contains('[profiles.after]') -and $OrphanAfter.Contains('model = "o4"')) 'Uninstall without state file changed the content after the MINOS block.'
+    Assert-True ((Get-ChildItem -LiteralPath $OrphanBackups -File -Recurse -ErrorAction SilentlyContinue).Count -ge 2) 'Uninstall without state file did not back up the Codex configuration first.'
+
+    # Unmanaged section without markers and no state file: never touched.
+    $UnmanagedConfig = Join-Path $Root 'unmanaged\.codex\config.toml'
+    $UnmanagedState = Join-Path $Root 'unmanaged\state\codex.json'
+    $UnmanagedLog = Join-Path $Root 'unmanaged\logs\mcp.log'
+    $UnmanagedBackups = Join-Path $Root 'unmanaged\backups'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $UnmanagedConfig) | Out-Null
+    $UnmanagedText = "[mcp_servers.minos]`r`ncommand = `"C:\\tools\\minos.exe`"`r`nargs = [`"mcp`"]`r`n"
+    [System.IO.File]::WriteAllText($UnmanagedConfig, $UnmanagedText, [System.Text.UTF8Encoding]::new($false))
+    & $Manager -InstallRoot $InstallRoot -Action Uninstall -Strict `
+        -DataRoot $DataRoot -ConfigPath $UnmanagedConfig -StatePath $UnmanagedState -LogPath $UnmanagedLog -BackupRoot $UnmanagedBackups
+    Assert-True (([System.IO.File]::ReadAllText($UnmanagedConfig, [System.Text.Encoding]::UTF8)) -eq $UnmanagedText) 'Uninstall changed an unmanaged [mcp_servers.minos] section.'
 
     # Malformed TOML outside the managed markers: configure-codex-mcp.ps1 never
     # parses TOML, it only regex-matches its own marker pair, so genuinely

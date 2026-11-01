@@ -209,6 +209,18 @@ Require 'procedure DeleteMinosUserData;' 'Uninstaller is missing the guarded use
 Require 'DelTree(UserDataRoot, True, True, True)' 'User-data purge does not remove the full MINOS local-data tree.'
 Require 'CurUninstallStep = usPostUninstall' 'User-data purge must run only after normal uninstall cleanup.'
 Require 'RegDeleteKeyIncludingSubkeys' 'Full user-data purge must also remove the MINOS per-user registry state.'
+# The Docker instance is removed by label, profile services included, before {app}\docker goes;
+# volumes only on purge; every outcome reaches the uninstall log, which is always written.
+Require 'UninstallLogging=yes' 'The uninstaller must always write its log.'
+Require 'procedure RemoveManagedDockerInstance;' 'Uninstaller does not remove the Docker Compose project of the instance.'
+Require 'docker\scripts\remove-docker-instance.ps1' 'Uninstaller does not call the shipped Docker instance removal script.'
+Require "    RemoveManagedDockerInstance;`n    RemoveMinosProgramPayload;" 'Docker instance removal must run before the program files (and its script) are deleted.'
+Require "if DeleteUserDataOnUninstall then`n      Parameters := Parameters + ' -Purge -RemoveImages';" 'Docker volumes and unused MINOS images must only be removed when the user chose the purge.'
+Require 'procedure LogScriptOutput(LogFile: String);' 'Cleanup script output does not reach the uninstall log.'
+Require 'System.Management.Automation.WarningRecord' 'MCP client removal warnings are swallowed instead of being logged.'
+Require 'Type: dirifempty; Name: "{userprograms}\MINOS"' 'The empty Start menu group folder is left behind.'
+Forbid 'docker volume rm' 'Docker volumes must not be removed by a bare call while containers still mount them.'
+Forbid 'PurgeManagedDockerVolumes' 'Docker volumes must be removed by the removal script, which checks every exit code.'
 
 Forbid 'Name: "docker"' 'Docker MCP must be selected on the explicit MCP mode page, not as a generic Inno task.'
 Forbid 'Name: "mcp_copilot_jetbrains"' 'MCP clients must not be static Inno [Tasks] entries.'
