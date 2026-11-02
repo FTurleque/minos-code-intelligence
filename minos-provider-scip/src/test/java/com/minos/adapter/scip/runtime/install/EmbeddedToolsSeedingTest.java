@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import com.minos.adapter.scip.runtime.TestLinks;
 import com.minos.io.Sha256;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -93,7 +94,7 @@ class EmbeddedToolsSeedingTest {
     }
 
     private ProviderRuntimeStatus inspect() {
-        return new ManagedScipProviderRuntimeManager(home).inspect("scip-typescript");
+        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home)).inspect("scip-typescript");
     }
 
     @Test

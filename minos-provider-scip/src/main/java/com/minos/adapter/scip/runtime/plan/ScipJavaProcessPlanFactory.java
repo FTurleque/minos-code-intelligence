@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,6 +38,10 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  * Nothing is resolved by coordinate at indexing time. The only exception, outside Windows and without an installed
  * classpath: a standalone {@code scip-java} launcher found in the {@code PATH} (the one the Docker image builds, or a
  * tool chosen by the operator, like {@code node} for the other providers).</p>
+ *
+ * <p>Outside Windows the build runs offline ({@link ScipJavaMavenOffline}, ADR SEC-0076): the designated Maven
+ * repository is a read-only root of the plan, the global settings of the host Maven are masked, and the plan is
+ * refused before the project is staged when the repository or a qualified Maven is missing.</p>
  */
 public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFactory {
     private static final String REPAIR = "run `minos tools install scip-java`";
@@ -52,6 +57,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     private final Path windowsManagedMaven;
     private final Path classpathFile;
     private final ScipJavaClasspath.Verifier classpathVerifier;
+    private final ScipJavaMavenOffline mavenOffline;
 
     /**
      * @param coursier Coursier, handed to the Windows runner; unused off Windows.
@@ -62,6 +68,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
      *     ({@value ScipJavaClasspath#LISTING}); null when it is not installed, which refuses the plan
      *     unless a standalone launcher is on the {@code PATH} off Windows.
      * @param classpathVerifier compares the jars of the listing with the pinned lock before every plan.
+     * @param mavenOffline the offline Maven build outside Windows: designated repository and qualified Maven.
      */
     public ScipJavaProcessPlanFactory(
             Path coursier,
@@ -69,7 +76,8 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             Path windowsRunner,
             Path windowsManagedMaven,
             Path classpathFile,
-            ScipJavaClasspath.Verifier classpathVerifier
+            ScipJavaClasspath.Verifier classpathVerifier,
+            ScipJavaMavenOffline mavenOffline
     ) {
         this.coursier = Objects.requireNonNull(coursier, "coursier").toAbsolutePath().normalize();
         if (coordinate == null || coordinate.isBlank()) {
@@ -81,6 +89,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         this.windowsManagedMaven = windowsManagedMaven == null ? null : windowsManagedMaven.toAbsolutePath().normalize();
         this.classpathFile = classpathFile == null ? null : classpathFile.toAbsolutePath().normalize();
         this.classpathVerifier = Objects.requireNonNull(classpathVerifier, "classpathVerifier");
+        this.mavenOffline = Objects.requireNonNull(mavenOffline, "mavenOffline");
     }
 
     @Override
@@ -146,6 +155,9 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
 
     /** Linux and macOS: the launcher runs against a writable staging copy of the project. */
     private IndexerProcessPlan portablePlan(Path root, Path normalizedRunDirectory, Path output) throws IOException {
+        // Refused here, before anything is staged, when the build cannot run offline: no designated repository,
+        // a refused designation, or no qualified Maven visible from the sandbox.
+        ScipJavaMavenOffline.RunConfiguration maven = mavenOffline.prepare(root, normalizedRunDirectory);
         // The installed classpath comes first and is verified again, before anything is staged. Only without it
         // does a standalone launcher on the PATH run: the one the Docker image builds, or one the operator chose.
         boolean classpathInstalled = classpathFile != null && Files.isRegularFile(classpathFile, LinkOption.NOFOLLOW_LINKS);
@@ -159,15 +171,19 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         // Maven wrappers.
         Path executionRoot = prepareWritableWorkspace(root, normalizedRunDirectory);
         Path targetRoot = targetRoot(output);
-        List<String> command = launcher == null
+        List<String> command = new ArrayList<>(launcher == null
                 ? standaloneCommand(standalone.orElseThrow(), output, targetRoot)
-                : classpathCommand(projectJava(), launcher, output, targetRoot);
+                : classpathCommand(projectJava(), launcher, output, targetRoot));
+        command.add("--");
+        command.addAll(maven.mavenArguments());
         return new IndexerProcessPlan(
                 command,
                 executionRoot,
                 Map.of(),
                 output,
-                Duration.ofHours(1)
+                Duration.ofHours(1),
+                maven.readOnlyRoots(),
+                maven.maskedFiles()
         );
     }
 

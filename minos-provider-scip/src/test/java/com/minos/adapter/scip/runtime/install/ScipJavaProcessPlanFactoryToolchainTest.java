@@ -1,6 +1,7 @@
 package com.minos.adapter.scip.runtime.install;
 
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -25,6 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * package-private.
  */
 class ScipJavaProcessPlanFactoryToolchainTest {
+
+    /** {@code --} and the eleven arguments of the offline Maven line that follow the scip-java arguments. */
+    private static final int OFFLINE_MAVEN_LINE = 12;
 
     @TempDir
     Path temp;
@@ -112,7 +116,7 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
         assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
         List<String> command = List.of(outcome.get("plan.command").split(" \\| "));
-        assertEquals(6, command.size(), command.toString());
+        assertEquals(6 + OFFLINE_MAVEN_LINE, command.size(), command.toString());
         assertTrue(command.get(0).endsWith("/scip-java"), command.get(0));
         assertEquals(List.of("index", "--output"), command.subList(1, 3));
         assertTrue(command.get(3).endsWith("index.scip"), command.get(3));
@@ -124,6 +128,29 @@ class ScipJavaProcessPlanFactoryToolchainTest {
         assertTrue(Files.isRegularFile(workspace.resolve("pom.xml")), "the provider works on a staged copy");
         assertTrue(Files.isRegularFile(workspace.resolve("src").resolve("Main.java")));
         assertEquals("PT1H", outcome.get("plan.timeout"));
+        assertEquals("--", command.get(6), "the offline Maven line follows the scip-java arguments");
+        assertEquals(List.of("--batch-mode", "--offline"), command.subList(7, 9));
+        Path repository = temp.resolve("maven-fixture").resolve("repository").toRealPath();
+        assertEquals("[" + repository + "]", outcome.get("plan.readOnlyRoots"),
+                "the standalone launcher reads the designated repository as its only read-only root");
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxWithoutADesignatedMavenRepositoryThePlanIsRefusedBeforeTheProjectIsStaged() throws Exception {
+        Path listing = installedClasspath();
+        String paths = String.join(";", temp.resolve("cs").toString(), temp.resolve("runner.ps1").toString(), "-",
+                listing.toString(), "accept", "JAVA", "unset");
+
+        ChildJvm.Outcome outcome = ChildJvm.run(tools, scratch, Map.of(), "javaplan", project().toString(),
+                run().toString(), paths);
+
+        String failure = outcome.get("plan.failure");
+        assertTrue(failure != null && failure.startsWith("IllegalStateException: ")
+                && failure.contains(ScipJavaMavenOffline.REPOSITORY_SETTING), outcome.values().toString());
+        assertFalse(failure.contains(temp.toString()), failure);
+        assertNull(outcome.get("plan.command"));
+        assertFalse(Files.exists(run().resolve("workspace")), "a refused plan stages nothing");
     }
 
     @Test
@@ -136,7 +163,7 @@ class ScipJavaProcessPlanFactoryToolchainTest {
 
         assertNull(outcome.get("plan.failure"), outcome.get("plan.failure"));
         List<String> command = List.of(outcome.get("plan.command").split(" \\| "));
-        assertEquals(8, command.size(), command.toString());
+        assertEquals(8 + OFFLINE_MAVEN_LINE, command.size(), command.toString());
         assertEquals(Path.of(System.getProperty("java.home"), "bin", "java").toAbsolutePath().normalize().toString(),
                 command.get(0));
         assertEquals("-jar", command.get(1));
@@ -146,6 +173,8 @@ class ScipJavaProcessPlanFactoryToolchainTest {
         assertEquals("--targetroot", command.get(6));
         assertTrue(command.get(7).endsWith("scip-java-targetroot"), command.get(7));
         assertFalse(command.contains(coursier.toString()), "nothing is resolved by coordinate at index time");
+        assertEquals(List.of("--", "--batch-mode", "--offline"), command.subList(8, 11),
+                "the offline Maven line follows the scip-java arguments");
         assertFalse(command.contains("launch"));
         assertTrue(Files.isRegularFile(run().resolve("workspace").resolve("pom.xml")));
     }

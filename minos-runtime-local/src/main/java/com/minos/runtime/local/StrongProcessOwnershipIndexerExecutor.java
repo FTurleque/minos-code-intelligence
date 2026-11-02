@@ -221,13 +221,9 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
             @Override
             public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
                 if (job != null) throw new IllegalStateException("process ownership transformer is single-use");
+                plan.requireNoSandboxMounts("Linux cgroup process ownership without an OS sandbox");
                 job = LinuxCgroupJob.createOwnershipOnly(root, jobName);
-                return new IndexerProcessPlan(
-                        job.enterThenExec(shell, plan.command()),
-                        plan.workingDirectory(),
-                        plan.environment(),
-                        plan.generatedArtifact(),
-                        plan.timeout());
+                return plan.withCommand(job.enterThenExec(shell, plan.command()));
             }
 
             @Override
