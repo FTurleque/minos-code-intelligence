@@ -124,9 +124,35 @@ echo "$JAVA_HOME"
 "$JAVA_HOME/bin/javac" -version
 ```
 
-**Maven** est cherché dans le `PATH` du provider, et le bac à sable n'en monte que ce qui est sous `/usr` : installer une **archive Apache Maven sous `/usr`** (par exemple `/usr/local/apache-maven-3.9.x`, avec un lien `/usr/local/bin/mvn`). Le paquet `apt install maven` n'est **pas pris en charge** : il lie sa configuration vers `/etc/maven`, que le bac à sable ne monte pas, et un Maven installé hors de `/usr` (profil, `/opt`) n'y est pas visible.
+**Maven** est cherché dans le `PATH` du provider, et le bac à sable n'en monte que ce qui est sous `/usr`, `/bin`, `/lib`, `/lib64` ou `/sbin` : installer une **archive Apache Maven 3.9.x sous `/usr`** (par exemple `/usr/local/apache-maven-3.9.x`, avec un lien `/usr/local/bin/mvn`). MINOS lit la version sur le nom de `lib/maven-core-<version>.jar`, sans lancer Maven ; une autre version (Maven 4, Maven 3.8) ou un Maven hors de ces répertoires rend `scip-java` `BLOCKED` (« outside the qualified range 3.9.x », « installed outside the system directories the Linux sandbox mounts »). Le paquet `apt install maven` n'est **pas pris en charge** : il lie sa configuration vers `/etc/maven`, que le bac à sable ne monte pas. Les réglages globaux du Maven de l'hôte (`conf/settings.xml`, `conf/toolchains.xml`) apparaissent vides dans le bac à sable.
 
-**Limite actuelle** : sous Linux natif, l'indexation d'un projet Maven par `scip-java` échoue encore à la résolution des greffons Maven (`Plugin org.apache.maven.plugins:maven-clean-plugin:… could not be resolved`). L'egress est `DENY` et le bac à sable ne montre aucun dépôt Maven local (`~/.m2` n'y est pas visible) : le build ne peut ni télécharger ni retrouver ses greffons. Un JDK correct fait passer le lancement de la JVM et de Maven, pas cette étape.
+## Linux : dépôt Maven désigné, build hors ligne
+
+Le build Maven d'un projet analysé exécute du code que contrôle ce projet (greffons, extensions de `.mvn/extensions.xml`, options de `.mvn/jvm.config`). Sous Linux il tourne dans le bac à sable, **sans réseau** ([ADR SEC-0076](../architecture/adr/SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md)) : ses greffons et dépendances viennent d'un **dépôt Maven que vous désignez**, monté en lecture seule. MINOS lance alors Maven avec `--offline`, ses propres réglages (aucun serveur, miroir ni proxy) et un dépôt de tête vide créé pour le run ; le dépôt désigné n'est jamais écrit.
+
+Le réglage `minos.scip.java.maven-repository` n'a **pas de valeur par défaut**. Le définir, au choix :
+
+```bash
+# MINOS_HOME/config/minos.properties
+minos.scip.java.maven-repository=/srv/maven-minos/repository
+# ou dans l'environnement de MINOS
+export MINOS_SCIP_JAVA_MAVEN_REPOSITORY=/srv/maven-minos/repository
+```
+
+Sans lui, `minos doctor` rapporte `scip-java` `BLOCKED` (« minos.scip.java.maven-repository is not set ») et `minos index` d'un projet Maven est refusé avant toute copie du projet. Une désignation est **refusée** (« … is refused: <raison> ») quand elle est relative, absente, un lien ; quand elle est, ou contient, le répertoire personnel, `/`, `/home`, `/mnt`, `/mnt/<lecteur>`, `/mnt/<lecteur>/Users` ou un profil Windows `/mnt/<lecteur>/Users/<compte>`, `MINOS_HOME`, `/etc`, `/proc`, `/sys`, `/dev`, `/root` ou `/run` ; quand elle est sous `MINOS_HOME` ou un répertoire système ; quand elle s'appelle `.m2` (désigner `~/.m2/repository`, jamais `~/.m2`) ; quand sa racine contient `settings.xml`, `settings-security.xml`, `toolchains.xml`, une entrée cachée ou un fichier qui n'est pas une métadonnée Maven. Le bac à sable revérifie le répertoire juste avant de le monter : chaque composant de son chemin doit appartenir à vous ou à root et n'être inscriptible par aucun autre compte. Les messages, `doctor` et `tools verify` nomment le réglage et son état, jamais le chemin.
+
+**Peupler le dépôt sans exécuter le projet.** Ne lancez **jamais** Maven dans un projet que vous ne maîtrisez pas pour remplir le dépôt (`mvn dependency:go-offline` dans le projet) : Maven y chargerait `.mvn/extensions.xml` et `.mvn/jvm.config` sur votre machine, avec le réseau et vos réglages. Procédures sûres :
+
+- dépôt **dédié** peuplé par un projet de confiance qui déclare les mêmes greffons et dépendances : `mvn -Dmaven.repo.local=/srv/maven-minos/repository clean verify -DskipTests` dans ce projet de confiance ;
+- ou, depuis un dossier vide, chaque artefact lu dans le `pom.xml` : `mvn -Dmaven.repo.local=/srv/maven-minos/repository dependency:get -Dartifact=groupe:artefact:version`.
+
+Puis retirer de la racine du dépôt tout fichier qui n'est pas une métadonnée Maven.
+
+**Un artefact manque** : le build échoue hors ligne (« Cannot access … in offline mode », « … has not been downloaded from it before ») ; la cause est dans les journaux du run (voir [Échec d'indexation](#échec-dindexation--lire-la-cause-dun-run)). Ajouter l'artefact au dépôt désigné par une procédure sûre, puis relancer. MINOS n'ouvre jamais le réseau pour le récupérer.
+
+**Ce que le build peut lire finit peut-être dans l'index.** Tout ce que le bac à sable rend lisible, dont le dépôt désigné, peut être recopié par le build dans l'artefact SCIP, que MCP sert ensuite à son client. Un dépôt `~/.m2/repository` partagé contient souvent des artefacts privés d'autres projets : préférez un **dépôt dédié**.
+
+**WSL2** : un dépôt sous `/mnt/c/Users/<compte>/.m2/repository` est accepté comme sous-dossier exact, monté seul. Par défaut, DrvFs présente les fichiers Windows avec les droits `777` : le bac à sable les refuse (« writable by other accounts »). Monter le lecteur avec l'option `metadata` et un `umask` qui retire l'écriture du groupe et des autres (`/etc/wsl.conf`, section `[automount]`, `options = "metadata,umask=022"`), ou garder le dépôt dans le système de fichiers Linux de la distribution.
 
 ## Windows : « cannot grant AppContainer read access … without administrator privileges »
 

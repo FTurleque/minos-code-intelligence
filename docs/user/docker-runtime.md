@@ -204,12 +204,7 @@ mvnw
 mvnw.cmd
 ```
 
-`.mvn` reste disponible. Docker utilise le Maven 3.9.16 qualifié de l'image. Son état writable est confiné :
-
-```text
-HOME=/var/lib/minos/cache/home
-MAVEN_OPTS=-Dmaven.repo.local=/var/lib/minos/cache/maven/repository
-```
+`.mvn` reste disponible. L'image contient le Maven 3.9.16 qualifié. Le plan d'administration ne lance aucun provider ([ADR SEC-0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)) : les variables `HOME` et `MAVEN_OPTS` que posent les fichiers Compose sur ce conteneur n'atteignent aucun build Maven et ne confinent rien.
 
 Le checkpoint historique `45536e2fc7d32ed67932e2715e458fa26a8239b1` avait précisément exposé `workspace/mvnw` / `error=2, No such file or directory`; ce défaut est corrigé.
 

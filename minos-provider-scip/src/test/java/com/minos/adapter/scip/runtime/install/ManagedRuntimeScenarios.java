@@ -1,6 +1,8 @@
 package com.minos.adapter.scip.runtime.install;
 
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerDescriptor;
@@ -11,6 +13,8 @@ import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.runtime.local.process.IndexerProcessPlan;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -37,7 +41,7 @@ public final class ManagedRuntimeScenarios {
     private ManagedRuntimeScenarios() {
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         if ("javaplan".equals(args[0])) {
             javaPlan(Path.of(args[1]), Path.of(args[2]), args[3].split(";"));
             return;
@@ -49,7 +53,7 @@ public final class ManagedRuntimeScenarios {
         ProviderRuntimeManager runtime = switch (manager) {
             case "python" -> new ManagedScipPythonRuntimeManager(home);
             case "polyglot" -> new ManagedPolyglotScipRuntimeManager(home);
-            case "provider" -> new ManagedScipProviderRuntimeManager(home);
+            case "provider" -> new ManagedScipProviderRuntimeManager(home, mavenOffline(home));
             default -> throw new IllegalArgumentException("unknown manager: " + manager);
         };
         if (actions.contains("inspect")) {
@@ -76,7 +80,23 @@ public final class ManagedRuntimeScenarios {
         }
     }
 
-    private static void javaPlan(Path project, Path runDirectory, String[] paths) {
+    /**
+     * The offline Maven build of the child: a qualified fixture under {@value #MAVEN_FIXTURE_ENVIRONMENT} when the
+     * test sets it, otherwise the unconfigured build of the host.
+     */
+    private static ScipJavaMavenOffline mavenOffline(Path home) {
+        String fixture = System.getenv(MAVEN_FIXTURE_ENVIRONMENT);
+        if (fixture == null || fixture.isBlank()) return ScipJavaMavenOfflineFixtures.unconfigured(home);
+        try {
+            return ScipJavaMavenOfflineFixtures.qualified(Path.of(fixture));
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+    }
+
+    static final String MAVEN_FIXTURE_ENVIRONMENT = "MINOS_TEST_MAVEN_OFFLINE_FIXTURE";
+
+    private static void javaPlan(Path project, Path runDirectory, String[] paths) throws IOException {
         boolean refuse = paths.length > 4 && "refuse".equals(paths[4]);
         Language language = paths.length > 5 ? Language.valueOf(paths[5]) : Language.JAVA;
         ScipJavaClasspath.Verifier verifier = jars -> {
@@ -88,7 +108,10 @@ public final class ManagedRuntimeScenarios {
         ScipJavaProcessPlanFactory factory = new ScipJavaProcessPlanFactory(
                 Path.of(paths[0]), "org.scip-code:scip-java:0.13.1", Path.of(paths[1]),
                 "-".equals(paths[2]) ? null : Path.of(paths[2]),
-                "-".equals(paths[3]) ? null : Path.of(paths[3]), verifier);
+                "-".equals(paths[3]) ? null : Path.of(paths[3]), verifier,
+                paths.length > 6 && "unset".equals(paths[6])
+                        ? ScipJavaMavenOfflineFixtures.designating(runDirectory.resolveSibling("maven-fixture"), null)
+                        : ScipJavaMavenOfflineFixtures.qualified(runDirectory.resolveSibling("maven-fixture")));
         IndexerDescriptor descriptor = new IndexerDescriptor(
                 "scip-java", "0.13.1", "scip-java", Set.of(language), Set.of(), Set.of(),
                 IndexerQualification.QUALIFIED, 1, List.of());
@@ -100,6 +123,8 @@ public final class ManagedRuntimeScenarios {
             print("plan.workingDirectory", plan.workingDirectory().toString());
             print("plan.artifact", plan.generatedArtifact().toString());
             print("plan.timeout", plan.timeout().toString());
+            print("plan.readOnlyRoots", plan.readOnlyRoots().toString());
+            print("plan.maskedFiles", plan.maskedFiles().toString());
         } catch (Exception failure) {
             failure("plan", failure);
         }
