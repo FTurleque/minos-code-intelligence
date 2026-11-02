@@ -1,6 +1,6 @@
 # <image>:<tag>@sha256:<index digest>: see Dockerfile.mcp and scripts/quality/check-image-pins.py.
-FROM rust:1.99.1-bookworm@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8 AS rust-toolchain
-FROM golang:1.27.3-bookworm@sha256:972b4110ba0f47539a975c31e52c64765e1ff19f2d74469ae4a595c6676e80a5 AS go-toolchain
+FROM rust:1.99.1-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS rust-toolchain
+FROM golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS go-toolchain
 FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS dotnet-toolchain
 
 # AUD-DEP-15: this file builds TWO images, one per `--target`.
@@ -23,7 +23,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769
 # tests fail the build instead. Nothing else of this stage reaches an image. Tools installed
 # outside Maven (Node, Go, Rust, .NET, indexers) are not covered here, see
 # docs/developer/supply-chain.md.
-FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e AS licenses
+FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:a9c5ddd386f629518bd500ecfabf7d1e5d32d7ffed735d5c3b1604ae92c830f4 AS licenses
 COPY minos.jar /tmp/minos.jar
 RUN mkdir -p /licenses \
     && cd /licenses \
@@ -34,7 +34,7 @@ RUN mkdir -p /licenses \
     && chmod -R a+rX /licenses
 
 # The JRE reference is the one of docker/Dockerfile.mcp (M29DockerQueryImageContractTest compares them).
-FROM eclipse-temurin:25.0.4.1_1-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5 AS query
+FROM eclipse-temurin:25.0.4.1_1-jre-noble@sha256:ce8543ddd3070ccbeaac2106a74c9387ddeb8d47a1c43348345715c1ef245c7f AS query
 
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
@@ -66,7 +66,7 @@ LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP query plane" \
 USER 10001:10001
 ENTRYPOINT ["java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"]
 
-FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e AS admin
+FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:a9c5ddd386f629518bd500ecfabf7d1e5d32d7ffed735d5c3b1604ae92c830f4 AS admin
 
 ARG TARGETARCH
 ARG MINOS_VERSION=dev
