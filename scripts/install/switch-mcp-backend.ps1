@@ -7,6 +7,8 @@ param(
     [ValidateSet('native', 'docker')]
     [string] $TargetBackend,
 
+    # Ignored with a warning: the Docker runtime mounts no projects root, only the projects exposed with
+    # prod-mcp-release.ps1 -Action AddProject. Kept so that scripted installs of earlier releases still run.
     [string] $ProjectsRoot = '',
     [string] $DataRoot = '',
     [string] $DockerInstallRoot = '',
@@ -32,8 +34,7 @@ param(
 
     [switch] $ProvisionOllamaModel,
 
-    # Confirms that -ProjectsRoot replaces another projects root recorded by the Docker runtime: projects outside
-    # the new root stay registered with their index and are reported rootAvailable: false.
+    # Ignored with a warning: there is no projects root to replace.
     [switch] $ReplaceDockerProjectsRoot,
 
     [ValidateRange(1, 120)]
@@ -51,66 +52,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-
-function Get-UnsafeDockerProjectsRootReason(
-    [string] $ProjectsRoot, [string] $UserProfile, [string[]] $ProtectedRoots, [string] $TemporaryRoot) {
-    # The projects root is bind-mounted into the MINOS containers. Returns why it must be refused, or an empty
-    # string when it may be mounted. The reason carries no path. A strict subfolder of the temporary folder is
-    # not refused for lying inside a protected folder that holds the temporary folder (application data, where
-    # qualification runs place their roots); it is refused when it lies inside or contains any other one.
-    function ConvertTo-ComparableRoot([string] $Path) {
-        return [System.IO.Path]::GetFullPath($Path).TrimEnd([char[]] @('\', '/'))
-    }
-    function Test-SameOrInside([string] $Child, [string] $Parent) {
-        return $Child.Equals($Parent, [System.StringComparison]::OrdinalIgnoreCase) -or
-            $Child.StartsWith($Parent + '\', [System.StringComparison]::OrdinalIgnoreCase)
-    }
-    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { return 'empty' }
-    if ([string]::IsNullOrWhiteSpace($UserProfile)) { return 'not verifiable because the user profile is unknown' }
-    $Candidate = ConvertTo-ComparableRoot $ProjectsRoot
-    $VolumeRoot = [System.IO.Path]::GetPathRoot($Candidate)
-    if ([string]::IsNullOrEmpty($VolumeRoot) -or $Candidate.Length -le $VolumeRoot.TrimEnd([char[]] @('\', '/')).Length) {
-        return 'a volume root'
-    }
-    if (Test-SameOrInside (ConvertTo-ComparableRoot $UserProfile) $Candidate) {
-        return 'the user profile or one of its parents'
-    }
-    $Temporary = ''
-    if (-not [string]::IsNullOrWhiteSpace($TemporaryRoot)) {
-        $Temporary = ConvertTo-ComparableRoot $TemporaryRoot
-        if (-not $Candidate.StartsWith($Temporary + '\', [System.StringComparison]::OrdinalIgnoreCase)) { $Temporary = '' }
-    }
-    foreach ($Protected in @($ProtectedRoots)) {
-        if ([string]::IsNullOrWhiteSpace($Protected)) { continue }
-        $ProtectedRoot = ConvertTo-ComparableRoot $Protected
-        $HoldsTemporary = ($Temporary -ne '') -and (Test-SameOrInside $Temporary $ProtectedRoot)
-        $Inside = (Test-SameOrInside $Candidate $ProtectedRoot) -and -not $HoldsTemporary
-        if ($Inside -or (Test-SameOrInside $ProtectedRoot $Candidate)) {
-            return 'an application data or MINOS folder, one of its parents or one of its subfolders'
-        }
-    }
-    return ''
-}
-
-function Get-RecordedDockerProjectsRoot([string] $DockerDataRoot, [string] $ProjectsRoot) {
-    # The host root of the project path mapping that minos-bootstrap saved in the Docker data root (a Java
-    # properties file) when it differs from $ProjectsRoot; an empty string when there is none or when it is the
-    # same root, separators, trailing separator and case ignored. Reads only.
-    $MappingFile = Join-Path (Join-Path $DockerDataRoot 'runtime') 'project-paths.properties'
-    if (-not (Test-Path -LiteralPath $MappingFile -PathType Leaf)) { return '' }
-    $Recorded = ''
-    foreach ($Line in [System.IO.File]::ReadAllLines($MappingFile, [System.Text.Encoding]::UTF8)) {
-        if ($Line -match '^\s*hostRoot\s*[=:]\s*(.*)$') {
-            $Recorded = [regex]::Replace($Matches[1].Trim(), '\\(.)', '$1')
-            break
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($Recorded)) { return '' }
-    $RecordedComparable = $Recorded.Replace('\', '/').TrimEnd('/')
-    $ChosenComparable = $ProjectsRoot.Replace('\', '/').TrimEnd('/')
-    if ($RecordedComparable.Equals($ChosenComparable, [System.StringComparison]::OrdinalIgnoreCase)) { return '' }
-    return $Recorded
-}
 
 # Installer progress protocol, read by the Windows installer while this script runs (-ProgressPath).
 # A line carries only a step id, a state and a number: no path, URL, model name or secret can reach it.
@@ -148,9 +89,6 @@ if ([string]::IsNullOrWhiteSpace($DockerDataRoot)) {
     $DockerDataRoot = Join-Path $LocalAppData 'MINOS\docker-data'
 }
 $DockerDataRoot = [System.IO.Path]::GetFullPath($DockerDataRoot)
-if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-    $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
-}
 
 if ([string]::IsNullOrWhiteSpace($LauncherPath)) {
     $LauncherPath = Join-Path $InstallRoot 'app\minos.exe'
@@ -174,45 +112,11 @@ foreach ($Required in @($LauncherPath, $HandshakeProbePath)) {
         throw "MINOS backend switching helper is missing: $Required"
     }
 }
-$ReplaceProjectsRoot = $false
 if ($TargetBackend -eq 'docker') {
     foreach ($Required in @($DockerConfiguratorPath, $DockerWorkflowPath)) {
         if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) {
             throw "MINOS Docker backend switching helper is missing: $Required"
         }
-    }
-    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-        throw '-ProjectsRoot is required when switching to the Docker backend.'
-    }
-    $UnsafeProjectsRoot = Get-UnsafeDockerProjectsRootReason -ProjectsRoot $ProjectsRoot `
-        -UserProfile ([Environment]::GetFolderPath('UserProfile')) `
-        -TemporaryRoot ([System.IO.Path]::GetTempPath()) `
-        -ProtectedRoots @([Environment]::GetFolderPath('LocalApplicationData'), [Environment]::GetFolderPath('ApplicationData'),
-            $InstallRoot, $DataRoot, $DockerInstallRoot, $DockerDataRoot)
-    if (-not [string]::IsNullOrEmpty($UnsafeProjectsRoot)) {
-        throw ("MINOS refuses this Docker projects root: it is $UnsafeProjectsRoot. It is mounted into " +
-            'the MINOS containers; choose a folder dedicated to your projects.')
-    }
-    if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
-        throw "MINOS Docker projects root does not exist: $ProjectsRoot"
-    }
-    $RecordedProjectsRoot = Get-RecordedDockerProjectsRoot -DockerDataRoot $DockerDataRoot -ProjectsRoot $ProjectsRoot
-    if (-not [string]::IsNullOrEmpty($RecordedProjectsRoot)) {
-        if (-not $ReplaceDockerProjectsRoot) {
-            throw ("The MINOS Docker runtime already uses another projects root ($RecordedProjectsRoot). Replacing it " +
-                'keeps every registered project and its index: projects under the new root are rebased, the others ' +
-                'are reported rootAvailable: false. Confirm the change in the installer wizard, with ' +
-                '/REPLACEDOCKERPROJECTSROOT=1 for a silent install, or with -ReplaceDockerProjectsRoot.')
-        }
-        # The bootstrap cannot reach PostgreSQL, whose project roots are also relative to the recorded root.
-        $PreviousMarker = Join-Path $InstallRoot '.docker-mcp-managed'
-        $PreviousPostgres = (Test-Path -LiteralPath $PreviousMarker -PathType Leaf) -and
-            (@(Get-Content -LiteralPath $PreviousMarker) -contains 'storageBackend=postgresql')
-        if ($StorageBackend -eq 'postgresql' -or $PreviousPostgres) {
-            throw ('MINOS cannot replace the projects root of a Docker runtime that stores its projects in PostgreSQL. ' +
-                'Choose the recorded projects root again, or uninstall MINOS with its data and install it again.')
-        }
-        $ReplaceProjectsRoot = $true
     }
 }
 
@@ -280,8 +184,8 @@ function Test-ReusableDockerRuntime {
     $ExpectedCommit = [string]$Identity['commit']
     if ([string]::IsNullOrWhiteSpace($ExpectedVersion) -or [string]::IsNullOrWhiteSpace($ExpectedCommit)) { return $false }
 
+    # A marker written by an earlier release also carries projectsRoot: it is no longer read.
     try {
-        $MarkerProjects = [System.IO.Path]::GetFullPath([string]$Marker['projectsRoot'])
         $MarkerInstall = [System.IO.Path]::GetFullPath([string]$Marker['dockerInstallRoot'])
         $MarkerData = [System.IO.Path]::GetFullPath([string]$Marker['dockerDataRoot'])
     }
@@ -289,7 +193,6 @@ function Test-ReusableDockerRuntime {
 
     return [string]$Marker['version'] -eq $ExpectedVersion -and
         [string]$Marker['commit'] -eq $ExpectedCommit -and
-        $MarkerProjects -eq $ProjectsRoot -and
         $MarkerInstall -eq $DockerInstallRoot -and
         $MarkerData -eq $DockerDataRoot -and
         [string]$Marker['containerName'] -eq $DockerContainerName -and
@@ -416,9 +319,12 @@ function Restore-DockerRuntimeSnapshot([object] $Snapshot) {
 }
 
 function New-ProjectRootSnapshot {
-    # The project path mapping and the registry entries that configure-project-paths --replace rewrites, kept in
-    # memory: a failed switch writes them back over the same files, which keeps their access rules.
-    $Files = @(Join-Path $DockerDataRoot 'runtime\project-paths.properties')
+    # The project mapping of the Docker data root (format 1: one projects root; format 2: the mount table) and the
+    # registry entries, kept in memory: the install migrates a format 1 mapping to the mount table, and a failed
+    # switch writes them back over the same files, which keeps their access rules. A mapping that did not exist is
+    # recorded as $null, so that the one a failed install created is removed.
+    $Mapping = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
+    $Files = @($Mapping)
     $Projects = Join-Path $DockerDataRoot 'registry\projects'
     if (Test-Path -LiteralPath $Projects -PathType Container) {
         $Files += @(Get-ChildItem -LiteralPath $Projects -File |
@@ -428,13 +334,18 @@ function New-ProjectRootSnapshot {
     foreach ($File in $Files) {
         if (Test-Path -LiteralPath $File -PathType Leaf) { $Snapshot[$File] = [System.IO.File]::ReadAllBytes($File) }
     }
+    if (-not $Snapshot.ContainsKey($Mapping)) { $Snapshot[$Mapping] = $null }
     return $Snapshot
 }
 
 function Restore-ProjectRootSnapshot([hashtable] $Snapshot) {
     # Each file is written to a temporary of its folder, then swapped in by File.Replace, which keeps the access
-    # rules of the file it replaces: a failure leaves every file either restored or as the bootstrap left it.
+    # rules of the file it replaces: a failure leaves every file either restored or as the install left it.
     foreach ($File in @($Snapshot.Keys)) {
+        if ($null -eq $Snapshot[$File]) {
+            if (Test-Path -LiteralPath $File -PathType Leaf) { Remove-Item -LiteralPath $File -Force }
+            continue
+        }
         $Temporary = $File + '.' + [Guid]::NewGuid().ToString('N') + '.restore.tmp'
         try {
             [System.IO.File]::WriteAllBytes($Temporary, $Snapshot[$File])
@@ -450,8 +361,7 @@ function Restore-ProjectRootSnapshot([hashtable] $Snapshot) {
 $PreviousBackend = Read-CurrentBackend
 $BackendFileExisted = Test-Path -LiteralPath $BackendFile -PathType Leaf
 $BackendFileBytes = if ($BackendFileExisted) { [System.IO.File]::ReadAllBytes($BackendFile) } else { [byte[]]@() }
-# A projects root change goes through the installation, whose bootstrap replaces the recorded mapping.
-$ReuseDockerRuntime = $TargetBackend -eq 'docker' -and (Test-ReusableDockerRuntime) -and -not $ReplaceProjectsRoot
+$ReuseDockerRuntime = $TargetBackend -eq 'docker' -and (Test-ReusableDockerRuntime)
 $ProjectRootSnapshot = $null
 $PreviousDockerRuntime = if ($PreviousBackend -eq 'docker') { Resolve-DockerRuntimeParameters } else { $null }
 $DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker' -and -not $ReuseDockerRuntime) {
@@ -464,6 +374,19 @@ Assert-RuntimeFileWritable -Path $SwitchLog
 Assert-RuntimeFileWritable -Path $BackendFile
 Assert-RuntimeFileWritable -Path $SwitchStateFile
 Write-SwitchLog "BEGIN previous=$PreviousBackend target=$TargetBackend reuseDocker=$ReuseDockerRuntime"
+# The legacy parameters are reported, never refused: neither mounts a folder nor reaches the Docker configurator.
+# The warning carries no path.
+if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    $IgnoredWarning = 'The -ProjectsRoot parameter is ignored: the MINOS Docker runtime mounts no projects root. ' +
+        'Expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.'
+    Write-Warning $IgnoredWarning
+    Write-SwitchLog ("WARNING ignored=ProjectsRoot message='" + $IgnoredWarning + "'")
+}
+if ($ReplaceDockerProjectsRoot) {
+    $IgnoredWarning = 'The -ReplaceDockerProjectsRoot switch is ignored: the MINOS Docker runtime has no projects root to replace.'
+    Write-Warning $IgnoredWarning
+    Write-SwitchLog ("WARNING ignored=ReplaceDockerProjectsRoot message='" + $IgnoredWarning + "'")
+}
 try {
     # PREPARE + VALIDATE. Reuse a same-version managed Docker runtime when
     # switching back to it; only a new/mismatched release goes through install.
@@ -482,7 +405,6 @@ try {
         else {
             $DockerParameters = @{
                 InstallRoot = $InstallRoot
-                ProjectsRoot = $ProjectsRoot
                 Start = $true
                 Strict = $true
                 DockerInstallRoot = $DockerInstallRoot
@@ -504,11 +426,9 @@ try {
             if (-not [string]::IsNullOrWhiteSpace($ProgressPath)) {
                 $DockerParameters['ProgressPath'] = $ProgressPath
             }
-            if ($ReplaceProjectsRoot) {
-                $ProjectRootSnapshot = New-ProjectRootSnapshot
-                $DockerParameters['ReplaceProjectsRoot'] = $true
-                Write-SwitchLog 'PREPARE target=docker projectsRoot=replace'
-            }
+            # Every install or upgrade may migrate a format 1 mapping (one projects root) to the mount table.
+            $ProjectRootSnapshot = New-ProjectRootSnapshot
+            Write-SwitchLog 'PREPARE target=docker projectMounts=saved'
             & $DockerConfiguratorPath @DockerParameters
             Write-SwitchLog 'PREPARE target=docker mode=install result=success'
         }
@@ -559,7 +479,6 @@ try {
         dockerDataRoot = $DockerDataRoot
         dockerContainerName = $DockerContainerName
         dockerComposeProject = $DockerComposeProject
-        projectsRoot = $ProjectsRoot
         reusedDockerRuntime = $ReuseDockerRuntime
         transaction = 'prepare -> validate -> handshake -> commit -> retire'
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $SwitchStateFile -Encoding utf8
@@ -587,11 +506,11 @@ catch {
     if ($null -ne $ProjectRootSnapshot) {
         try {
             Restore-ProjectRootSnapshot -Snapshot $ProjectRootSnapshot
-            Write-SwitchLog 'ROLLBACK projectsRoot=restored result=success'
+            Write-SwitchLog 'ROLLBACK projectMounts=restored result=success'
         }
         catch {
-            Write-SwitchLog ("ROLLBACK projectsRoot=restored result=failure message='" + $_.Exception.Message.Replace("'", "''") + "'")
-            throw ('MINOS backend switch failed and the Docker projects root mapping could not be restored: ' +
+            Write-SwitchLog ("ROLLBACK projectMounts=restored result=failure message='" + $_.Exception.Message.Replace("'", "''") + "'")
+            throw ('MINOS backend switch failed and the Docker project mapping could not be restored: ' +
                 "$($Failure.Exception.Message); restore: $($_.Exception.Message)")
         }
     }

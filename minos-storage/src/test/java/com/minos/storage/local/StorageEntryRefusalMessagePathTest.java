@@ -63,7 +63,7 @@ class StorageEntryRefusalMessagePathTest {
         Path hostRoot = Files.createDirectories(temp.resolve("host-projects")).toRealPath();
         Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects")).toRealPath();
         LocalProjectRegistry registry = new LocalProjectRegistry(temp.resolve("registry"),
-                new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString()),
+                ProjectPathMapping.singleRoot(hostRoot.toString(), dockerRoot.toString()),
                 ProjectPathMapping.RuntimeLocation.NATIVE);
         UUID id = UUID.randomUUID();
         writeEntry(id, "rootRelativePath=../escape\n");

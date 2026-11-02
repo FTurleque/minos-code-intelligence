@@ -57,39 +57,72 @@ La qualification de release (`scripts/ci/qualify-docker-release.sh`) construit l
 
 Le lanceur de développement (`docker/scripts/prod-mcp.ps1`) construit une seule image, celle de `docker/Dockerfile.mcp` (JRE et jar) : c'est déjà une image de requête, qu'il déclare sous les deux variables.
 
-## Mapping des projets
+## Projets exposés au runtime Docker
 
-Configuration runtime versionnée :
+Le runtime Docker ne monte **aucune racine des projets**. `/workspace/projects` ne contient qu'un montage en lecture seule par projet que vous avez exposé, le même dans `minos-mcp` et dans `minos-admin`. Un dossier que vous n'avez pas exposé n'est visible d'aucun conteneur, y compris `minos-admin`, qui a une sortie réseau. Sans projet exposé, le serveur MCP démarre et `/workspace/projects` est vide.
 
-```text
-<MINOS_HOME>/runtime/project-paths.properties
-N:/workspace-dev <-> /workspace/projects
+Les commandes ci-dessous sont celles de `docker\scripts\prod-mcp-release.ps1` du dossier d'installation (Windows PowerShell 5.1 ou PowerShell 7).
+
+### Exposer un projet
+
+```powershell
+.\prod-mcp-release.ps1 -Action AddProject -ProjectPath D:\src\mon-projet
+.\prod-mcp-release.ps1 -Action AddProject -ProjectPath D:\src\Mon Projet -Name mon-projet
 ```
 
-Le registre persiste `rootRelativePath`, pas le chemin physique host/container. Dans Docker, les commandes utilisent `/workspace/projects/...`.
+L'action contrôle le dossier sur le poste, avant toute écriture : il doit exister, être donné par un chemin absolu, n'être ni une jonction ni un lien symbolique (ni se trouver sous un parent qui en est un), et ne pas être une racine de volume, le profil de l'utilisateur ou l'un de ses parents, ni être, contenir ou se trouver dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS. Un refus nomme la catégorie, jamais le chemin.
 
-### Changer la racine des projets
+Le montage est nommé `-Name`, ou, à défaut, d'après le nom du dossier (minuscules, tout caractère hors de `a-z`, `0-9`, `.`, `_`, `-` remplacé par `-`). Un nom valide suit `[a-z0-9][a-z0-9._-]{0,62}` et n'est pas déjà pris (sans tenir compte de la casse). L'action ajoute le montage `/workspace/projects/<nom>`, **recrée `minos-mcp`** (les sessions MCP attachées sont interrompues : relancer le client), puis inscrit le projet par `project add /workspace/projects/<nom>`.
 
-La correspondance est créée une fois, par le conteneur `minos-bootstrap` (`configure-project-paths <racine-hôte> /workspace/projects`). Une autre racine n'est jamais appliquée implicitement : sans confirmation, l'installation échoue avant toute modification avec « The MINOS Docker runtime already uses another projects root ».
+Sont refusés aussi : un dossier égal à un dossier déjà exposé, qui le contient ou qui s'y trouve, et un 65e montage (64 au plus).
 
-Pour changer de racine, confirmer le remplacement :
+### Retirer un projet
 
-| Porte d'entrée | Confirmation |
-|---|---|
-| Assistant de l'installeur | question Oui/Non sur la page Docker, qui affiche la racine enregistrée |
-| Installeur silencieux | `/REPLACEDOCKERPROJECTSROOT=1` |
-| `install-windows.ps1`, `switch-mcp-backend.ps1` | `-ReplaceDockerProjectsRoot` |
-| Bootstrap appelé à la main | `configure-project-paths --replace <racine-hôte> /workspace/projects` |
+```powershell
+.\prod-mcp-release.ps1 -Action RemoveProject -Name mon-projet
+```
 
-Effet sur les projets inscrits (registre local) :
+Le montage est retiré et `minos-mcp` est recréé. Les projets inscrits sous ce montage **restent inscrits avec leur index** et `project list` les signale `rootAvailable: false`. Exposer de nouveau le même dossier sous le même nom les rend disponibles. Un nom inconnu est refusé sans rien changer.
 
-- un projet situé sous la nouvelle racine est **rebasé** : même identifiant, même index ;
-- un autre projet est **isolé** : il reste inscrit avec son identifiant et son index, `project list` le signale `rootAvailable: false`, et il n'est jamais rattaché à un dossier de la nouvelle racine, même si un dossier du même nom y existe. Le réinscrire sous la nouvelle racine (`project add`), ou le retirer (`project remove`) ;
-- un projet isolé est rattaché de nouveau si une racine ultérieure le contient (retour à l'ancienne racine) ;
-- chaque inscription modifiée est sauvegardée à côté d'elle (`registry/projects/<id>.properties.<horodatage>.root-replacement.bak`). Si l'installation échoue après le remplacement, la correspondance et les inscriptions précédentes sont restaurées.
-- une version de MINOS antérieure à cette option ne sait pas lire une inscription isolée : elle la signale illisible (code 3) sans la supprimer. Revenir à une telle version après un remplacement laisse donc ces projets inutilisables jusqu'à la réinstallation d'une version récente.
+### Voir les projets exposés
 
-Le remplacement est refusé, sans rien écrire, si une inscription du registre est illisible (la réparer ou la retirer d'abord) ou si le runtime stocke ses projets dans PostgreSQL : le bootstrap n'a pas de réseau et ne peut pas rebaser ce registre. Dans ce cas, garder la racine enregistrée, ou désinstaller MINOS en supprimant ses données puis réinstaller avec la nouvelle racine.
+```powershell
+.\prod-mcp-release.ps1 -Action Status
+.\prod-mcp-release.ps1 -Action Status -ShowHostPaths
+```
+
+La liste donne chaque montage par son nom et dit s'il est monté. Les dossiers du poste ne sont affichés qu'avec `-ShowHostPaths`. `installation.json` (`projectMounts`) ne garde que le compte et les noms.
+
+### Table des montages
+
+```text
+<données Docker>/runtime/project-paths.properties   table des montages (format 2)
+<installation Docker>/runtime/compose-mcp.projects.yaml   fichier Compose généré
+```
+
+La table est écrite seulement par le bootstrap Docker. Le fichier Compose des montages en est **régénéré** avant chaque démarrage de `minos-mcp`, chaque commande `minos-admin` et chaque validation : une modification à la main est écrasée. Un dossier exposé qui n'existe plus est omis, avec un avertissement qui nomme le montage, et ses projets répondent `rootAvailable: false` ; le serveur MCP démarre quand même.
+
+Le registre garde `rootRelativePath`, relatif à `/workspace/projects`, jamais le chemin du poste.
+
+### Mise à jour d'une installation qui montait une racine
+
+À la première installation de cette version sur des données Docker qui montaient une racine des projets (format 1 de `project-paths.properties`), chaque projet inscrit reçoit un montage sur **son chemin conteneur actuel** (`/workspace/projects/<chemin relatif>`) : aucune inscription n'est réécrite. Un projet et ses sous-projets inscrits partagent un seul montage, celui du plus court.
+
+Ne sont **pas** montés, avec un avertissement qui nomme le projet :
+
+- un projet inscrit à la racine elle-même (le monter exposerait de nouveau toute la racine) ;
+- un projet isolé par un ancien remplacement de racine ;
+- un projet dont le dossier est refusé par le contrôle ci-dessus.
+
+Ils restent inscrits avec leur index (`rootAvailable: false`) ; les exposer avec `AddProject` si besoin. Un dossier de l'ancienne racine qui n'était inscrit dans aucun registre **n'est plus visible** des conteneurs : c'est le but du changement.
+
+L'ancienne correspondance est sauvegardée à côté (`project-paths.properties.<horodatage>.format1.bak`). Une inscription illisible arrête la migration avant toute écriture ; l'installation échoue et l'ancien runtime est conservé. **Limite : stockage PostgreSQL.** Une installation dont les projets sont stockés dans PostgreSQL et qui montait encore une racine n'est pas migrée : l'installation échoue avant toute modification et l'ancien runtime reste en place. Remède : désinstaller le runtime Docker avec ses données, réinstaller cette version, puis exposer chaque projet par `AddProject`.
+
+Une version antérieure de MINOS refuse le format 2 (`unsupported project path mapping format`) sans le modifier.
+
+### Paramètres hérités
+
+`/DOCKERPROJECTSROOT` (installeur), `-ProjectsRoot` (scripts) et la valeur `ProjectsRoot` enregistrée par une installation antérieure ne montent plus rien : ils sont ignorés avec un avertissement dans le journal.
 
 ## Image provider-complete
 
@@ -300,7 +333,7 @@ Workflow :
 $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 & $Docker -Action Admin -MinosArguments @('doctor', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('tools', 'verify', '--all', '--format', 'json')
-& $Docker -Action Admin -MinosArguments @('project', 'add', '/workspace/projects/my-project', '--name', 'my-project', '--format', 'json')
+& $Docker -Action AddProject -ProjectPath D:\src\my-project -Name my-project
 # `index` est refusé dans ce plan (aucun provider n'y tourne) : indexer sur l'hôte natif.
 & $Docker -Action Admin -MinosArguments @('index-status', 'my-project', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('semantic', 'status', 'my-project', '--format', 'json')

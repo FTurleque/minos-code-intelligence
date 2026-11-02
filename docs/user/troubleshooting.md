@@ -62,7 +62,7 @@ Si la racine a été déplacée, si une lettre de lecteur a changé ou si un vol
 
 Réenregistrer le bon projet ou rétablir exactement la racine attendue.
 
-Avec le backend MCP Docker, un projet situé hors de la racine des projets après un changement de racine est isolé : il garde son identité et son index, et reste indisponible tant qu'il n'est pas réinscrit sous la nouvelle racine ou que l'ancienne racine n'est pas rétablie ([Changer la racine des projets](docker-runtime.md#changer-la-racine-des-projets)).
+Avec le backend MCP Docker, un projet est indisponible quand son montage a été retiré (`RemoveProject`), quand son dossier a été supprimé ou déplacé (le montage est alors omis au démarrage, avec un avertissement qui le nomme), ou quand la migration d'une ancienne racine ne l'a pas monté (projet inscrit à la racine elle-même, isolé, ou dossier refusé). Il garde son identité et son index ; l'exposer de nouveau avec `prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier> -Name <nom>` ([Projets exposés au runtime Docker](docker-runtime.md#projets-exposés-au-runtime-docker)).
 
 ## `index` échoue avant de lancer le provider
 
@@ -213,24 +213,24 @@ MINOS réserve à son propriétaire chaque dossier privé qu'il utilise, à comm
 
 Remède : choisir un `MINOS_HOME` dédié (par défaut `%USERPROFILE%\.minos`) ; pour un dossier créé par une exécution en administrateur, en reprendre la propriété (`takeown /F <dossier>` puis `icacls <dossier> /setowner <compte>`) ou le recréer. Le plugin IntelliJ applique la même règle à son dossier MINOS.
 
-## Windows : « MINOS refuses this Docker projects root » ou « Cette racine des projets est refusée »
+## Docker : « This folder cannot be exposed to the MINOS Docker runtime »
 
-La racine des projets du backend MCP Docker est montée dans les conteneurs MINOS, dont `minos-admin` accède au réseau. L'installeur, `install-windows.ps1` et `switch-mcp-backend.ps1` refusent, avant toute modification, une racine de volume, le profil de l'utilisateur ou l'un de ses parents, et tout dossier qui est, contient ou se trouve dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS (installation, données, runtime Docker, données Docker). Le message nomme la catégorie refusée, sans chemin.
+`prod-mcp-release.ps1 -Action AddProject` contrôle le dossier sur le poste avant toute écriture. Le message nomme la cause, sans chemin :
 
-Remède : choisir un dossier dédié à vos projets, par exemple `%USERPROFILE%\source\repos` ou un dossier d'un autre volume.
+- « does not exist », « is not an absolute path » : donner le chemin complet d'un dossier existant ;
+- « is a junction or a symbolic link » : Docker Desktop ne suit pas les liens ; donner le dossier réel ;
+- « a volume root », « the user profile or one of its parents », « an application data or MINOS folder… » : choisir le dossier du projet lui-même, par exemple `%USERPROFILE%\source\repos\mon-projet`, jamais un dossier qui en contient beaucoup d'autres.
 
-Une installation qui monte déjà le profil (`MINOS_PROJECTS_DIR` dans `%LOCALAPPDATA%\MINOS\docker\runtime\.env`) le garde tant qu'une autre racine n'est pas appliquée. Pour appliquer un dossier dédié, réinstaller en le choisissant et confirmer le remplacement de la racine enregistrée (section suivante).
+« No valid mount name » : le nom dérivé du dossier n'est pas valide ; passer `-Name` (minuscules, chiffres, `.`, `_`, `-`). Un nom déjà pris, un dossier déjà exposé (ou qui en contient un, ou s'y trouve) et un 65e montage sont refusés par le bootstrap, sans rien changer.
 
-## Windows : « The MINOS Docker runtime already uses another projects root » ou « refusing to replace an existing project path mapping implicitly »
+## Docker : « project mount migration refused » ou installation refusée après une mise à jour
 
-Le runtime Docker a enregistré une autre racine des projets (`%LOCALAPPDATA%\MINOS\docker-data\runtime\project-paths.properties`), et la racine choisie en diffère. L'installeur, `install-windows.ps1` et `switch-mcp-backend.ps1` refusent ce changement s'il n'est pas confirmé, avant toute modification ; le backend précédent reste actif. Le message du conteneur `minos-bootstrap` (« refusing to replace… implicitly ») a la même cause.
+À la première installation de cette version, un runtime qui montait une racine des projets migre vers un montage par projet inscrit ([Mise à jour d'une installation qui montait une racine](docker-runtime.md#mise-à-jour-dune-installation-qui-montait-une-racine)). La migration est refusée, sans rien écrire, et l'ancien runtime est conservé :
 
-Remède : confirmer le remplacement — répondre Oui à la question de la page Docker de l'assistant, passer `/REPLACEDOCKERPROJECTSROOT=1` à un installeur silencieux, ou `-ReplaceDockerProjectsRoot` aux scripts. Les projets inscrits sous la nouvelle racine sont rebasés ; les autres restent inscrits avec leur index et sont signalés `rootAvailable: false` (voir [Changer la racine des projets](docker-runtime.md#changer-la-racine-des-projets)). Pour ne rien changer, choisir de nouveau la racine enregistrée, si elle n'est pas refusée.
+- « … registry entry is unreadable » : `project list` signale l'inscription illisible ; la réparer ou la retirer, puis relancer l'installation ;
+- « … stores its projects in PostgreSQL and still mounts one projects root » : limite déclarée, cette migration n'est pas prise en charge et l'ancien runtime reste en place. Remède (donné par le message) : désinstaller le runtime Docker avec ses données, réinstaller cette version, puis exposer chaque projet par `prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier>`.
 
-Le remplacement confirmé échoue encore dans deux cas, sans rien écrire :
-
-- « project root replacement refused: … registry entry is unreadable » : `project list` signale l'inscription illisible ; la réparer ou la retirer, puis relancer l'installation ;
-- « … stores its projects in PostgreSQL » : le bootstrap ne peut pas rebaser ce registre ; garder la racine enregistrée, ou désinstaller MINOS en supprimant ses données puis réinstaller avec la nouvelle racine.
+Un avertissement « Project '<nom>' is not mounted after the migration » signale un projet resté inscrit sans montage ; l'exposer avec `AddProject` si besoin.
 
 ## Espace disque dans `MINOS_HOME`
 

@@ -36,6 +36,7 @@ QUERY_REFERENCE = "${MINOS_QUERY_IMAGE:?MINOS_QUERY_IMAGE is required}"
 ADMIN_REFERENCE = "${MINOS_IMAGE:?MINOS_IMAGE is required}"
 FUNCTIONS = ("Get-ReleaseImageTargets", "Resolve-QueryImage", "Read-EnvironmentValue", "Test-ComposeUsesQueryImage",
              "Assert-QueryImageConfigured")
+EMPTY_TABLE = '{"formatVersion":2,"containerRoot":"/workspace/projects","mounts":[]}'
 BASE_ENVIRONMENT = (
     "MINOS_COMPOSE_PROJECT=minos-test\n"
     "MINOS_CONTAINER_NAME=minos-test\n"
@@ -242,7 +243,8 @@ def flatten(output: str) -> str:
 
 
 def fake_docker(directory: Path) -> Path:
-    """A ``docker`` that records each invocation in $FAKE_DOCKER_LOG and answers ``image inspect`` from a file.
+    """A ``docker`` that records each invocation in $FAKE_DOCKER_LOG and answers ``image inspect`` and
+    ``list-project-mounts`` from files.
 
     Each recorded line ends with ``[query-image=<value>]``: the MINOS_QUERY_IMAGE the process received.
     """
@@ -250,11 +252,14 @@ def fake_docker(directory: Path) -> Path:
     if os.name == "nt":
         path = directory / "docker.cmd"
         path.write_text('@echo off\r\necho %* [query-image=%MINOS_QUERY_IMAGE%]>>"%FAKE_DOCKER_LOG%"\r\n'
-                        'if "%1 %2"=="image inspect" type "%FAKE_DOCKER_INSPECT%"\r\nexit /b 0\r\n', encoding="ascii")
+                        'if "%1 %2"=="image inspect" type "%FAKE_DOCKER_INSPECT%"\r\n'
+                        'echo %* | findstr /C:"list-project-mounts" >nul && type "%FAKE_DOCKER_TABLE%"\r\n'
+                        'exit /b 0\r\n', encoding="ascii")
     else:
         path = directory / "docker"
         path.write_text('#!/bin/sh\nprintf \'%s [query-image=%s]\\n\' "$*" "${MINOS_QUERY_IMAGE:-}" >> "$FAKE_DOCKER_LOG"\n'
-                        'if [ "$1 $2" = "image inspect" ]; then cat "$FAKE_DOCKER_INSPECT"; fi\nexit 0\n', encoding="ascii")
+                        'if [ "$1 $2" = "image inspect" ]; then cat "$FAKE_DOCKER_INSPECT"; fi\n'
+                        'case "$*" in *list-project-mounts*) cat "$FAKE_DOCKER_TABLE";; esac\nexit 0\n', encoding="ascii")
         path.chmod(path.stat().st_mode | stat.S_IEXEC)
     return path
 
@@ -262,9 +267,12 @@ def fake_docker(directory: Path) -> Path:
 # Calls the lifecycle script IN-PROCESS, as scripts/ci/qualify-docker-upgrade.ps1 and the installer scripts do, then
 # prints the MINOS_QUERY_IMAGE left in the environment of the caller.
 WRAPPER = r"""
-param([string] $Script, [string] $Action, [string] $Root)
+param([string] $Script, [string] $Action, [string] $Root, [string] $ProjectPath = '', [string] $Name = '')
 $ErrorActionPreference = 'Stop'
-& $Script -Action $Action -InstallRoot (Join-Path $Root 'install') -DataRoot (Join-Path $Root 'data') -ProjectsRoot (Join-Path $Root 'projects')
+$Extra = @{}
+if ($ProjectPath -ne '') { $Extra['ProjectPath'] = $ProjectPath }
+if ($Name -ne '') { $Extra['Name'] = $Name }
+& $Script -Action $Action -InstallRoot (Join-Path $Root 'install') -DataRoot (Join-Path $Root 'data') @Extra
 Write-Output "CALLER-QUERY-IMAGE=[$env:MINOS_QUERY_IMAGE]"
 """
 
@@ -273,7 +281,8 @@ class WholeScriptTests(PowerShellCase):
     """The real script, action Start, with a recording docker: nothing is started on a refusal."""
 
     def start(self, executable: str, compose_text: str, environment_text: str, plane: str = "query",
-              action: str = "Start", ambient_query_image: str | None = None) -> tuple[int, str, list[str]]:
+              action: str = "Start", ambient_query_image: str | None = None, table: str = EMPTY_TABLE,
+              extra: tuple[str, ...] = (), prepare=None) -> tuple[int, str, list[str]]:
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             runtime = directory / "install" / "runtime"
@@ -290,7 +299,12 @@ class WholeScriptTests(PowerShellCase):
             inspect = directory / "inspect.json"
             inspect.write_text(json.dumps([{"Config": {"Labels": {"io.minos.image.plane": plane}}}]), encoding="ascii")
             fake = fake_docker(directory / "bin")
+            table_file = directory / "table.json"
+            table_file.write_text(table.replace("%ROOT%", str(directory).replace("\\", "/")), encoding="ascii")
+            if prepare is not None:
+                prepare(directory)
             environment = dict(os.environ, FAKE_DOCKER_LOG=str(log), FAKE_DOCKER_INSPECT=str(inspect),
+                               FAKE_DOCKER_TABLE=str(table_file),
                                PATH=str(fake.parent) + os.pathsep + os.environ.get("PATH", ""))
             environment.pop("MINOS_QUERY_IMAGE", None)
             if ambient_query_image is not None:
@@ -299,9 +313,12 @@ class WholeScriptTests(PowerShellCase):
             wrapper.write_text(WRAPPER, encoding="utf-8-sig")
             completed = subprocess.run(
                 [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(wrapper),
-                 "-Script", str(LIFECYCLE), "-Action", action, "-Root", str(directory)],
+                 "-Script", str(LIFECYCLE), "-Action", action, "-Root", str(directory),
+                 *(value.replace("%ROOT%", str(directory)) for value in extra)],
                 capture_output=True, timeout=180, check=False, env=environment, stdin=subprocess.DEVNULL, **DECODING)
             calls = log.read_text(encoding="utf-8", errors="replace").splitlines() if log.is_file() else []
+            override = runtime / "compose-mcp.projects.yaml"
+            self.last_override = override.read_text(encoding="utf-8") if override.is_file() else None
             return completed.returncode, completed.stdout + completed.stderr, calls
 
     def test_start_without_the_query_image_fails_before_any_docker_call(self):
@@ -374,6 +391,252 @@ class WholeScriptTests(PowerShellCase):
             self.assertNotEqual(0, code, (label, output))
             self.assertEqual([], calls, label)
             self.assertIn("-Action Install", flatten(output), label)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Project mounts: no projects root is mounted; one generated read-only mount per exposed project.
+# ---------------------------------------------------------------------------------------------------------------
+
+MOUNT_FUNCTIONS = ("ConvertTo-YamlString", "Format-ProjectMountsOverride")
+SPECIAL_SOURCE = "D:/src/it's #1: app\\x\"y"
+
+
+def run_mount_functions(executable: str, directory: Path, call: str) -> dict:
+    body = (HARNESS.replace("%SCRIPT%", str(LIFECYCLE))
+            .replace("%NAMES%", ",".join(f"'{name}'" for name in MOUNT_FUNCTIONS))
+            .replace("%COMPOSE%", str(directory / "absent-compose.yaml"))
+            .replace("%ENVIRONMENT%", str(directory / "absent.env"))
+            .replace("%CALL%", "$ContainerProjectsRoot = '/workspace/projects'; " + call))
+    script = directory / "case.ps1"
+    script.write_text(body, encoding="utf-8-sig")
+    completed = subprocess.run([executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+                               capture_output=True, timeout=180, check=False, **DECODING)
+    return last_json(completed)
+
+
+def override_mounts(text: str) -> list[dict]:
+    """The mounts of a generated override, by service: each mount line is a JSON object."""
+    mounts, service = [], None
+    for line in text.splitlines():
+        if line.startswith("  ") and not line.startswith("   ") and line.strip().endswith(":"):
+            service = line.strip()[:-1]
+        elif line.startswith("      - "):
+            mounts.append(dict(json.loads(line[len("      - "):]), service=service))
+    return mounts
+
+
+def compose_available() -> bool:
+    if shutil.which("docker") is None:
+        return False
+    return subprocess.run(["docker", "compose", "version"], capture_output=True, check=False).returncode == 0
+
+
+class ProjectMountsOverrideTests(PowerShellCase):
+    """The override text, from the real functions: every scalar is an escaped string."""
+
+    def generate(self, executable: str, mounts: str) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = run_mount_functions(executable, Path(tmp), f"Format-ProjectMountsOverride -Mounts @({mounts})")
+        self.assertEqual("RETURNED", result["outcome"], result)
+        return "".join(result["value"])
+
+    def test_a_dollar_sign_is_doubled_so_that_compose_never_interpolates_it(self):
+        for label, executable in self.runtimes:
+            text = self.generate(executable, "[pscustomobject]@{ Name = 'app'; HostRoot = 'D:/src/p/${A:-..}' }")
+            sources = {mount["source"] for mount in override_mounts(text)}
+            self.assertEqual({"D:/src/p/$${A:-..}"}, sources, (label, text))
+
+    def test_an_empty_table_mounts_nothing(self):
+        for label, executable in self.runtimes:
+            text = self.generate(executable, "")
+            self.assertIn("services: {}", text, label)
+            self.assertEqual([], override_mounts(text), label)
+
+    def test_each_mount_is_read_only_and_the_same_in_both_planes(self):
+        source = SPECIAL_SOURCE.replace("'", "''")
+        for label, executable in self.runtimes:
+            text = self.generate(executable, f"[pscustomobject]@{{ Name = 'app'; HostRoot = '{source}' }}, "
+                                             "[pscustomobject]@{ Name = 'team/b'; HostRoot = 'N:/w/team/b' }")
+            mounts = override_mounts(text)
+            self.assertEqual({"minos-mcp", "minos-admin"}, {mount["service"] for mount in mounts}, label)
+            self.assertEqual(4, len(mounts), (label, text))
+            for mount in mounts:
+                self.assertEqual("bind", mount["type"], label)
+                self.assertTrue(mount["read_only"], label)
+                self.assertFalse(mount["bind"]["create_host_path"], label)
+            app = [mount for mount in mounts if mount["target"] == "/workspace/projects/app"]
+            self.assertEqual([SPECIAL_SOURCE] * 2, [mount["source"] for mount in app], label)
+            self.assertTrue(all(ord(character) < 128 for character in text), (label, "the override is ASCII"))
+
+    @unittest.skipUnless(compose_available(), "docker compose is not installed")
+    def test_docker_compose_accepts_the_override_with_special_characters(self):
+        executable = self.runtimes[0][1]
+        source = SPECIAL_SOURCE.replace("'", "''")
+        text = self.generate(executable, f"[pscustomobject]@{{ Name = 'app'; HostRoot = '{source}' }}")
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "data").mkdir()
+            override = directory / "compose-mcp.projects.yaml"
+            override.write_text(text, encoding="ascii")
+            environment = directory / ".env"
+            environment.write_text(BASE_ENVIRONMENT + "MINOS_QUERY_IMAGE=minos-code-intelligence:test-query\n"
+                                   + f"MINOS_DATA_DIR={(directory / 'data').as_posix()}\n", encoding="ascii")
+            completed = subprocess.run(
+                ["docker", "compose", "--project-directory", str(directory), "--env-file", str(environment),
+                 "-f", str(ROOT / "docker" / "compose-mcp.prod.yaml"), "-f", str(override), "config", "--format", "json"],
+                capture_output=True, check=False, **DECODING)
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            config = json.loads(completed.stdout)
+            for service in ("minos-mcp", "minos-admin"):
+                mounts = [volume for volume in config["services"][service]["volumes"]
+                          if volume["target"] == "/workspace/projects/app"]
+                self.assertEqual(1, len(mounts), (service, config["services"][service]["volumes"]))
+                self.assertTrue(mounts[0]["read_only"], service)
+                self.assertTrue(mounts[0]["source"].replace("\\", "/").endswith("it's #1: app\\x\"y".replace("\\", "/"))
+                                or mounts[0]["source"] == SPECIAL_SOURCE, mounts[0])
+
+
+QUERY_ENVIRONMENT = BASE_ENVIRONMENT + "MINOS_QUERY_IMAGE=minos-code-intelligence:test-query\n"
+
+
+def table_of(*mounts: tuple[str, str]) -> str:
+    return json.dumps({"formatVersion": 2, "containerRoot": "/workspace/projects",
+                       "mounts": [{"name": name, "path": name, "hostRoot": host} for name, host in mounts]})
+
+
+class ProjectMountLifecycleTests(PowerShellCase):
+    """The real script with a recording docker: override regenerated, folder checked before the bootstrap."""
+
+    start = WholeScriptTests.start
+
+    compose = (ROOT / "docker" / "compose-mcp.prod.yaml").read_text(encoding="utf-8")
+
+    def test_every_compose_call_passes_the_regenerated_override(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.start(executable, self.compose, QUERY_ENVIRONMENT)
+            self.assertEqual(0, code, (label, output))
+            composes = [call for call in calls if call.startswith("compose")]
+            self.assertTrue(composes, (label, calls))
+            self.assertTrue(all("compose-mcp.projects.yaml" in call for call in composes), (label, composes))
+            listing = next(index for index, call in enumerate(composes) if "list-project-mounts" in call)
+            up = next(index for index, call in enumerate(composes) if "up -d --force-recreate minos-mcp" in call)
+            self.assertLess(listing, up, (label, composes))
+
+    def test_a_missing_folder_is_omitted_with_a_warning_and_the_start_goes_on(self):
+        for label, executable in self.runtimes:
+            table = table_of(("app", "%ROOT%/projects/app"), ("gone", "%ROOT%/projects/gone"))
+            code, output, calls = self.start(executable, self.compose, QUERY_ENVIRONMENT, table=table,
+                                             prepare=lambda root: (root / "projects" / "app").mkdir())
+            self.assertEqual(0, code, (label, output))
+            self.assertTrue(any("up -d --force-recreate minos-mcp" in call for call in calls), (label, calls))
+            targets = {mount["target"] for mount in override_mounts(self.last_override)}
+            self.assertEqual({"/workspace/projects/app"}, targets, (label, self.last_override))
+            self.assertIn("'gone' is not mounted", flatten(output), label)
+
+    def test_an_override_edited_by_hand_is_rewritten(self):
+        def edit(root: Path) -> None:
+            (root / "install" / "runtime" / "compose-mcp.projects.yaml").write_text(
+                'services:\n  minos-mcp:\n    volumes:\n      - {"type": "bind", "source": "/", '
+                '"target": "/workspace/projects/everything", "read_only": true}\n', encoding="ascii")
+        for label, executable in self.runtimes:
+            code, output, _ = self.start(executable, self.compose, QUERY_ENVIRONMENT, prepare=edit)
+            self.assertEqual(0, code, (label, output))
+            self.assertNotIn("everything", self.last_override, label)
+            self.assertIn("services: {}", self.last_override, label)
+
+    def add(self, executable: str, folder: str, prepare=None, name: str = "") -> tuple[int, str, list[str]]:
+        extra = ("-ProjectPath", folder) + (("-Name", name) if name else ())
+        return self.start(executable, self.compose, QUERY_ENVIRONMENT, action="AddProject", extra=extra,
+                          prepare=prepare)
+
+    def test_the_profile_is_refused_before_the_bootstrap(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.add(executable, str(Path.home()))
+            self.assertNotEqual(0, code, (label, output))
+            self.assertFalse(any("add-project-mount" in call or "up -d" in call for call in calls), (label, calls))
+            flat = flatten(output)
+            self.assertIn("user profile", flat, label)
+            # The refusal itself names no path (PowerShell's error record adds the script location around it).
+            refusal = re.search(r"cannot be exposed to the MINOS Docker runtime:(.*?)Nothing was changed", flat)
+            self.assertIsNotNone(refusal, (label, flat))
+            self.assertNotIn(str(Path.home()), refusal.group(1), (label, "the refusal names no path"))
+
+    def test_a_folder_with_a_dollar_sign_is_refused_before_the_bootstrap(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.add(executable, "%ROOT%/projects/p$x",
+                                           prepare=lambda root: (root / "projects" / "p$x").mkdir())
+            self.assertNotEqual(0, code, (label, output))
+            self.assertFalse(any("add-project-mount" in call for call in calls), (label, calls))
+            self.assertIn("dollar sign", flatten(output), label)
+
+    def test_a_mounted_folder_that_became_a_link_is_omitted_at_start(self):
+        def link(root: Path) -> None:
+            target = root / "projects" / "real"
+            target.mkdir()
+            if os.name == "nt":
+                subprocess.run(["cmd", "/c", "mklink", "/J", str(root / "projects" / "app"), str(target)],
+                               capture_output=True, check=True)
+            else:
+                os.symlink(target, root / "projects" / "app")
+        for label, executable in self.runtimes:
+            code, output, _ = self.start(executable, self.compose, QUERY_ENVIRONMENT, prepare=link,
+                                         table=table_of(("app", "%ROOT%/projects/app")))
+            self.assertEqual(0, code, (label, output))
+            self.assertEqual([], override_mounts(self.last_override), (label, self.last_override))
+            self.assertIn("junction or a symbolic link", flatten(output), label)
+
+    def test_a_missing_folder_is_refused_before_the_bootstrap(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.add(executable, str(Path(tempfile.gettempdir()) / "minos-absent-project-folder"))
+            self.assertNotEqual(0, code, (label, output))
+            self.assertFalse(any("add-project-mount" in call for call in calls), (label, calls))
+
+    def test_a_link_to_a_project_folder_is_refused_before_the_bootstrap(self):
+        def link(root: Path) -> None:
+            target = root / "projects" / "real"
+            target.mkdir()
+            if os.name == "nt":
+                subprocess.run(["cmd", "/c", "mklink", "/J", str(root / "projects" / "link"), str(target)],
+                               capture_output=True, check=True)
+            else:
+                os.symlink(target, root / "projects" / "link")
+        for label, executable in self.runtimes:
+            # The link is created by prepare under the case root: %ROOT% is replaced by that root.
+            code, output, calls = self.start(
+                executable, self.compose, QUERY_ENVIRONMENT, action="AddProject", prepare=link,
+                extra=("-ProjectPath", "%ROOT%/projects/link"))
+            self.assertNotEqual(0, code, (label, output))
+            self.assertFalse(any("add-project-mount" in call for call in calls), (label, calls))
+            self.assertIn("junction or a symbolic link", flatten(output), label)
+
+    def test_a_dedicated_folder_is_mounted_then_registered(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.add(executable, "%ROOT%/projects/app", name="app",
+                                           prepare=lambda root: (root / "projects" / "app").mkdir())
+            self.assertEqual(0, code, (label, output))
+            order = [next(index for index, call in enumerate(calls) if marker in call)
+                     for marker in ("add-project-mount app", "up -d --force-recreate minos-mcp",
+                                    "project add /workspace/projects/app")]
+            self.assertEqual(sorted(order), order, (label, calls))
+
+    def test_an_invalid_name_is_refused_before_the_bootstrap(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.add(executable, "%ROOT%/projects/app", name="App",
+                                           prepare=lambda root: (root / "projects" / "app").mkdir())
+            self.assertNotEqual(0, code, (label, output))
+            self.assertFalse(any("add-project-mount" in call for call in calls), (label, calls))
+
+    def test_remove_project_needs_a_name_and_recreates_the_query_plane(self):
+        for label, executable in self.runtimes:
+            code, output, calls = self.start(executable, self.compose, QUERY_ENVIRONMENT, action="RemoveProject")
+            self.assertNotEqual(0, code, (label, output))
+            self.assertFalse(any(call.startswith("compose") for call in calls), (label, calls))
+            code, output, calls = self.start(executable, self.compose, QUERY_ENVIRONMENT, action="RemoveProject",
+                                             extra=("-Name", "app"))
+            self.assertEqual(0, code, (label, output))
+            removal = next(index for index, call in enumerate(calls) if "remove-project-mount app" in call)
+            up = next(index for index, call in enumerate(calls) if "up -d --force-recreate minos-mcp" in call)
+            self.assertLess(removal, up, (label, calls))
 
 
 if __name__ == "__main__":

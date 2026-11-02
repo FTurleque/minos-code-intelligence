@@ -8,6 +8,8 @@ param(
     [ValidateSet('none', 'native', 'docker')]
     [string] $McpBackend = 'none',
 
+    # Ignored with a warning: the Docker runtime mounts no projects root, only the projects exposed with
+    # prod-mcp-release.ps1 -Action AddProject. Kept so that scripted installs of earlier releases still run.
     [string] $ProjectsRoot = '',
     [string] $DataRoot = '',
     [string] $DockerInstallRoot = '',
@@ -19,8 +21,7 @@ param(
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $DockerComposeProject = 'minos-mcp-prod',
 
-    # Confirms that -ProjectsRoot replaces another projects root recorded by the Docker runtime: projects outside
-    # the new root stay registered with their index and are reported rootAvailable: false.
+    # Ignored with a warning: there is no projects root to replace.
     [switch] $ReplaceDockerProjectsRoot,
 
     [switch] $AddToPath
@@ -60,66 +61,6 @@ function Invoke-MinosVersion([string] $Launcher) {
     }
 }
 
-function Get-UnsafeDockerProjectsRootReason(
-    [string] $ProjectsRoot, [string] $UserProfile, [string[]] $ProtectedRoots, [string] $TemporaryRoot) {
-    # The projects root is bind-mounted into the MINOS containers. Returns why it must be refused, or an empty
-    # string when it may be mounted. The reason carries no path. A strict subfolder of the temporary folder is
-    # not refused for lying inside a protected folder that holds the temporary folder (application data, where
-    # qualification runs place their roots); it is refused when it lies inside or contains any other one.
-    function ConvertTo-ComparableRoot([string] $Path) {
-        return [System.IO.Path]::GetFullPath($Path).TrimEnd([char[]] @('\', '/'))
-    }
-    function Test-SameOrInside([string] $Child, [string] $Parent) {
-        return $Child.Equals($Parent, [System.StringComparison]::OrdinalIgnoreCase) -or
-            $Child.StartsWith($Parent + '\', [System.StringComparison]::OrdinalIgnoreCase)
-    }
-    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { return 'empty' }
-    if ([string]::IsNullOrWhiteSpace($UserProfile)) { return 'not verifiable because the user profile is unknown' }
-    $Candidate = ConvertTo-ComparableRoot $ProjectsRoot
-    $VolumeRoot = [System.IO.Path]::GetPathRoot($Candidate)
-    if ([string]::IsNullOrEmpty($VolumeRoot) -or $Candidate.Length -le $VolumeRoot.TrimEnd([char[]] @('\', '/')).Length) {
-        return 'a volume root'
-    }
-    if (Test-SameOrInside (ConvertTo-ComparableRoot $UserProfile) $Candidate) {
-        return 'the user profile or one of its parents'
-    }
-    $Temporary = ''
-    if (-not [string]::IsNullOrWhiteSpace($TemporaryRoot)) {
-        $Temporary = ConvertTo-ComparableRoot $TemporaryRoot
-        if (-not $Candidate.StartsWith($Temporary + '\', [System.StringComparison]::OrdinalIgnoreCase)) { $Temporary = '' }
-    }
-    foreach ($Protected in @($ProtectedRoots)) {
-        if ([string]::IsNullOrWhiteSpace($Protected)) { continue }
-        $ProtectedRoot = ConvertTo-ComparableRoot $Protected
-        $HoldsTemporary = ($Temporary -ne '') -and (Test-SameOrInside $Temporary $ProtectedRoot)
-        $Inside = (Test-SameOrInside $Candidate $ProtectedRoot) -and -not $HoldsTemporary
-        if ($Inside -or (Test-SameOrInside $ProtectedRoot $Candidate)) {
-            return 'an application data or MINOS folder, one of its parents or one of its subfolders'
-        }
-    }
-    return ''
-}
-
-function Get-RecordedDockerProjectsRoot([string] $DockerDataRoot, [string] $ProjectsRoot) {
-    # The host root of the project path mapping that minos-bootstrap saved in the Docker data root (a Java
-    # properties file) when it differs from $ProjectsRoot; an empty string when there is none or when it is the
-    # same root, separators, trailing separator and case ignored. Reads only.
-    $MappingFile = Join-Path (Join-Path $DockerDataRoot 'runtime') 'project-paths.properties'
-    if (-not (Test-Path -LiteralPath $MappingFile -PathType Leaf)) { return '' }
-    $Recorded = ''
-    foreach ($Line in [System.IO.File]::ReadAllLines($MappingFile, [System.Text.Encoding]::UTF8)) {
-        if ($Line -match '^\s*hostRoot\s*[=:]\s*(.*)$') {
-            $Recorded = [regex]::Replace($Matches[1].Trim(), '\\(.)', '$1')
-            break
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($Recorded)) { return '' }
-    $RecordedComparable = $Recorded.Replace('\', '/').TrimEnd('/')
-    $ChosenComparable = $ProjectsRoot.Replace('\', '/').TrimEnd('/')
-    if ($RecordedComparable.Equals($ChosenComparable, [System.StringComparison]::OrdinalIgnoreCase)) { return '' }
-    return $Recorded
-}
-
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS Windows installer can only run on Windows.'
 }
@@ -143,30 +84,14 @@ if ([string]::IsNullOrWhiteSpace($DockerDataRoot)) {
 }
 $DockerDataRoot = [System.IO.Path]::GetFullPath($DockerDataRoot)
 
-if ($McpBackend -eq 'docker') {
-    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-        throw '-ProjectsRoot is required when -McpBackend docker is selected.'
-    }
-    $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
-    $UnsafeProjectsRoot = Get-UnsafeDockerProjectsRootReason -ProjectsRoot $ProjectsRoot `
-        -UserProfile ([Environment]::GetFolderPath('UserProfile')) `
-        -TemporaryRoot ([System.IO.Path]::GetTempPath()) `
-        -ProtectedRoots @([Environment]::GetFolderPath('LocalApplicationData'), [Environment]::GetFolderPath('ApplicationData'),
-            $InstallRoot, $DataRoot, $DockerInstallRoot, $DockerDataRoot)
-    if (-not [string]::IsNullOrEmpty($UnsafeProjectsRoot)) {
-        throw ("MINOS refuses this Docker projects root: it is $UnsafeProjectsRoot. It is mounted into " +
-            'the MINOS containers; choose a folder dedicated to your projects.')
-    }
-    if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
-        throw "Docker projects root does not exist: $ProjectsRoot"
-    }
-    $RecordedProjectsRoot = Get-RecordedDockerProjectsRoot -DockerDataRoot $DockerDataRoot -ProjectsRoot $ProjectsRoot
-    if (-not [string]::IsNullOrEmpty($RecordedProjectsRoot) -and -not $ReplaceDockerProjectsRoot) {
-        throw ("The MINOS Docker runtime already uses another projects root ($RecordedProjectsRoot). Replacing it " +
-            'keeps every registered project and its index: projects under the new root are rebased, the others ' +
-            'are reported rootAvailable: false. Confirm the change with -ReplaceDockerProjectsRoot ' +
-            '(/REPLACEDOCKERPROJECTSROOT=1 for a silent run of the Windows installer).')
-    }
+# The legacy parameters are reported, never refused: neither mounts a folder nor reaches the backend switcher.
+# The warning carries no path.
+if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    Write-Warning ('The -ProjectsRoot parameter is ignored: the MINOS Docker runtime mounts no projects root. ' +
+        'Expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.')
+}
+if ($ReplaceDockerProjectsRoot) {
+    Write-Warning 'The -ReplaceDockerProjectsRoot switch is ignored: the MINOS Docker runtime has no projects root to replace.'
 }
 
 $Temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-install-" + [Guid]::NewGuid())
@@ -256,10 +181,6 @@ try {
                 DockerContainerName = $DockerContainerName
                 DockerComposeProject = $DockerComposeProject
             }
-            if ($McpBackend -eq 'docker') {
-                $SwitchParameters['ProjectsRoot'] = $ProjectsRoot
-                if ($ReplaceDockerProjectsRoot) { $SwitchParameters['ReplaceDockerProjectsRoot'] = $true }
-            }
             & $Switcher @SwitchParameters
         }
     }
@@ -288,7 +209,7 @@ try {
     Write-Host "MCP     : $McpBackend"
     Write-Host "Switch  : $(Join-Path $InstallRoot 'integration\switch-mcp-backend.ps1')"
     if ($McpBackend -eq 'docker') {
-        Write-Host "Projects: $ProjectsRoot"
+        Write-Host 'Projects: exposed one by one with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder> (listed by -Action Status)'
         Write-Host "Docker  : $DockerInstallRoot"
     }
     if ($AddToPath) {
