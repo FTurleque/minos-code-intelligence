@@ -252,7 +252,7 @@ public final class ScipJavaMavenOffline {
         return new RunConfiguration(
                 mavenArguments(settings, head, designated),
                 List.of(designated),
-                List.of(mavenHome.resolve("conf").resolve("settings.xml"),
+                List.of(mavenHome.resolve("conf").resolve(SETTINGS_FILE),
                         mavenHome.resolve("conf").resolve("toolchains.xml")));
     }
 
