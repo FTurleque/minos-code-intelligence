@@ -37,7 +37,11 @@ class ScipJavaProcessPlanFactoryRefusalTest {
 
     private ScipJavaProcessPlanFactory factory(Path coursier, String coordinate, Path runner, ScipJavaClasspath.Verifier verifier) {
         return new ScipJavaProcessPlanFactory(coursier, coordinate, runner, temporaryDirectory.resolve("mvn"),
-                temporaryDirectory.resolve("classpath.txt"), verifier);
+                temporaryDirectory.resolve("classpath.txt"), verifier, unconfigured());
+    }
+
+    private ScipJavaMavenOffline unconfigured() {
+        return ScipJavaMavenOfflineFixtures.unconfigured(temporaryDirectory.resolve("home"));
     }
 
     private static IndexingExecutionRequest request(Path project, IndexingMode mode, List<String> changedFiles) {
@@ -55,7 +59,7 @@ class ScipJavaProcessPlanFactoryRefusalTest {
         Path runner = temporaryDirectory.resolve("runner.ps1");
 
         assertDoesNotThrow(() -> factory(coursier, COORDINATE, runner, ACCEPT));
-        assertDoesNotThrow(() -> new ScipJavaProcessPlanFactory(coursier, COORDINATE, runner, null, null, ACCEPT));
+        assertDoesNotThrow(() -> new ScipJavaProcessPlanFactory(coursier, COORDINATE, runner, null, null, ACCEPT, unconfigured()));
     }
 
     @Test

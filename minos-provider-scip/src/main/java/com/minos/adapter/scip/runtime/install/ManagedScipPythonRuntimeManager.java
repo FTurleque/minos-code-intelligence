@@ -240,8 +240,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     private static IndexerProcessPlan withEnvironment(IndexerProcessPlan plan, Map<String, String> providerEnvironment) {
         Map<String, String> environment = new LinkedHashMap<>(plan.environment());
         environment.putAll(providerEnvironment);
-        return new IndexerProcessPlan(plan.command(), plan.workingDirectory(), environment,
-                plan.generatedArtifact(), plan.timeout());
+        return plan.withEnvironment(environment);
     }
 
     private static void requireProvider(String providerId) {

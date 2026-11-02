@@ -40,7 +40,8 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  * {@code JDK_HOME} in the provider environment is mounted read-only as a whole real root, with only the
  * exact allow-listed Java configuration under /etc its links reach; an over-broad root is refused before
  * launch. The workspace, artifact and MINOS
- * run roots are writable. DENY keeps bubblewrap's isolated network namespace; ALLOW explicitly
+ * run roots are writable. Read-only roots a plan declares are checked again and mounted exactly, after the
+ * writable roots; files a plan masks are presented empty. DENY keeps bubblewrap's isolated network namespace; ALLOW explicitly
  * shares the host network namespace.</p>
  *
  * <p>Resource containment is aggregate and lives in {@link LinuxCgroupJob}: {@code memory.max},
@@ -71,7 +72,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
     static final long MAX_CPU_MICROS_PER_PERIOD = 8L * LinuxCgroupJob.CPU_PERIOD_MICROS;
 
     private static final String PROC = "/proc";
-    private static final String RO_BIND = "--ro-bind";
+    static final String RO_BIND = "--ro-bind";
     private static final String TOOLS_DIRECTORY = "tools";
 
     private static final Path POSIX_SHELL = Path.of("/bin/sh");
@@ -180,7 +181,8 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
                         "LINUX_RUNTIME_CAPABILITY_PROBE_REQUIRED",
                         "MINOS_SUPERVISED_PROVIDER_WRITE_QUOTA_BYTES_AND_ENTRIES",
                         "MINOS_WALL_CLOCK_TIMEOUT_AND_RUN_RESIDUE_RECLAMATION",
-                        "LINUX_TOOLCHAIN_HOME_READ_ONLY_ROOT_AND_ALLOWLISTED_ETC_LINK_TARGETS"));
+                        "LINUX_TOOLCHAIN_HOME_READ_ONLY_ROOT_AND_ALLOWLISTED_ETC_LINK_TARGETS",
+                        "LINUX_PLAN_DECLARED_READ_ONLY_ROOTS_MOUNTED_EXACTLY_AFTER_WRITABLE_ROOTS"));
     }
 
     /** Aggregate containment this backend really enforces once the cgroup boundary exists. */
@@ -256,6 +258,11 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         }
 
         @Override
+        public boolean mountsDeclaredSandboxMounts() {
+            return true;
+        }
+
+        @Override
         public void killContainedJob() {
             LinuxCgroupJob current = job;
             if (current != null) current.kill();
@@ -313,18 +320,16 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         addWritableBind(sandbox, working);
         if (!artifactParent.startsWith(working)) addWritableBind(sandbox, artifactParent);
         if (!run.startsWith(working) && !run.startsWith(artifactParent)) addWritableBind(sandbox, run);
+        // Declared read-only roots come after every writable bind, so that no writable mount can cover them,
+        // and masked files come last, so that no later mount can expose them again.
+        LinuxSandboxReadOnlyRoots.addDeclaredMounts(sandbox, plan, List.of(working, artifactParent, run), minosHome, run);
         sandbox.add("--chdir");
         sandbox.add(working.toString());
         sandbox.add("--");
         sandbox.addAll(plan.command());
 
         List<String> command = job == null ? List.copyOf(sandbox) : job.enterThenExec(shell, sandbox);
-        return new IndexerProcessPlan(
-                command,
-                plan.workingDirectory(),
-                plan.environment(),
-                plan.generatedArtifact(),
-                plan.timeout());
+        return plan.withCommand(command);
     }
 
     private boolean probeOsIsolation() {
@@ -712,7 +717,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         command.add(directory.toString());
     }
 
-    private static void addDestinationParents(List<String> command, Path destination) {
+    static void addDestinationParents(List<String> command, Path destination) {
         Path absolute = destination.toAbsolutePath().normalize();
         Path parent = absolute.getParent();
         if (parent == null) return;

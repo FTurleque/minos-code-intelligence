@@ -81,6 +81,7 @@ Chaque ADR suit le format et la convention Archgate ([GEN-0073](GEN-0073-tenir-l
 | [GEN-0073](GEN-0073-tenir-le-registre-d-adr-au-format-archgate.md) | Tenir le registre d'ADR au format Archgate, à l'emplacement arc42 (convention d'identifiant, critères, cycle de vie) | Accepted | Décision du propriétaire, 2026-10-23 |
 | [SEC-0074](SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) | scip-java sous Windows : bloqué en natif, aucune voie d'indexation Java, WSL2 retenu pour la suite | Accepted | Décision du propriétaire, 2026-10-31 (remplace ADR-0060) |
 | [SEC-0075](SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md) | Le runtime Docker n'expose que les projets inscrits | Accepted | Décision du propriétaire, 2026-11-01 |
+| [SEC-0076](SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md) | scip-java sous Linux : dépôt Maven désigné en lecture seule, Maven hors ligne, réseau fermé | Accepted | Décision du propriétaire, 2026-10-31 (complète SEC-0074) |
 
 ## Archives
 
