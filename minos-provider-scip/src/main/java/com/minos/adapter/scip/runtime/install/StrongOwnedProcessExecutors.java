@@ -85,17 +85,42 @@ final class StrongOwnedProcessExecutors {
     ) {
         Objects.requireNonNull(status, "status");
         Objects.requireNonNull(sandbox, "sandbox");
-        if (!status.ready()) return status;
+        boolean dockerNeverRuns = dockerBackend && !sandbox.supportsManagedLocalProvider();
+        if (!status.ready()) {
+            return dockerNeverRuns && blockedOnlyByMachinePrerequisites(status)
+                    ? unsupportedByBackend(status, dockerUnsupportedDiagnostic(sandbox))
+                    : status;
+        }
+        if (dockerNeverRuns) return unsupportedByBackend(status, dockerUnsupportedDiagnostic(sandbox));
         if (!sandbox.supportsManagedLocalProvider()) {
-            if (dockerBackend) {
-                return unsupportedByBackend(status,
-                        "managed local provider sandbox tier is not provided by the Docker MCP backend "
-                                + "(the container itself is the hardened boundary for this plane; this is "
-                                + "not a failure and does not block installation or use): " + sandbox.id());
-            }
             return blocked(status, "qualified managed local provider sandbox is unavailable: " + sandbox.id());
         }
         return status;
+    }
+
+    private static String dockerUnsupportedDiagnostic(WorkerSandboxBackend sandbox) {
+        return "managed local provider sandbox tier is not provided by the Docker MCP backend "
+                + "(the container itself is the hardened boundary for this plane; this is "
+                + "not a failure and does not block installation or use): " + sandbox.id();
+    }
+
+    /**
+     * A {@code BLOCKED} status whose diagnostics are only machine prerequisites of running the provider (a
+     * designated Maven repository, a project JDK) and the informational origin of its tools. The Docker
+     * plane runs no provider whose sandbox tier it lacks, so such prerequisites cannot block it there; any
+     * other diagnostic (integrity, a missing MINOS-owned component) keeps the status blocked.
+     */
+    private static boolean blockedOnlyByMachinePrerequisites(ProviderRuntimeStatus status) {
+        if (status.state() != ProviderRuntimeStatus.State.BLOCKED) return false;
+        boolean anyPrerequisite = false;
+        for (String diagnostic : status.diagnostics()) {
+            if (diagnostic.startsWith(ExternalPrerequisite.PREFIX)) {
+                anyPrerequisite = true;
+            } else if (!diagnostic.startsWith(ManagedScipProviderRuntimeManager.TOOLS_ORIGIN_PREFIX)) {
+                return false;
+            }
+        }
+        return anyPrerequisite;
     }
 
     /**

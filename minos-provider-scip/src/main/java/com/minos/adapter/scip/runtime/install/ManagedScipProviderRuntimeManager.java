@@ -41,6 +41,8 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
 /** Local manager for MINOS-qualified SCIP runtimes. */
 public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeManager {
 
+    /** Prefix of the informational diagnostic that names where the tools of a provider come from. */
+    static final String TOOLS_ORIGIN_PREFIX = "tools origin: ";
     private static final String NODE_MODULES_DIR = "node_modules";
     private static final String MINOS_USER_AGENT = "MINOS-Code-Intelligence";
 
@@ -704,7 +706,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         for (String component : CATALOG.provider(providerId).components()) {
             origins.origin(component).ifPresent(origin -> parts.add(component + "=" + origin));
         }
-        return parts.isEmpty() ? Optional.empty() : Optional.of("tools origin: " + String.join(", ", parts));
+        return parts.isEmpty() ? Optional.empty() : Optional.of(TOOLS_ORIGIN_PREFIX + String.join(", ", parts));
     }
 
     private Optional<Path> coursierExecutable() {

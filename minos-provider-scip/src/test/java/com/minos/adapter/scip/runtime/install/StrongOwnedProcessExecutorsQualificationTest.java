@@ -94,6 +94,82 @@ class StrongOwnedProcessExecutorsQualificationTest {
         assertTrue(qualified.ready());
     }
 
+    // The Docker plane runs no provider whose sandbox tier it lacks, so the machine prerequisites of
+    // running one (a designated Maven repository, a project JDK) cannot block it there. Its diagnostics
+    // are kept: the state says the backend does not run it, never that it is ready.
+    @Test
+    void machinePrerequisitesDoNotBlockAProviderTheDockerBackendNeverRuns() {
+        ProviderRuntimeStatus blocked = blockedStatus(List.of(
+                ExternalPrerequisite.of("minos.scip.java.maven-repository is not set"),
+                "tools origin: coursier=payload"));
+
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(
+                blocked, WorkerSandboxBackend.nativeEphemeralWorkspace(), true);
+
+        assertEquals(ProviderRuntimeStatus.State.UNSUPPORTED_BY_BACKEND, qualified.state());
+        assertTrue(qualified.diagnostics().containsAll(blocked.diagnostics()), qualified.diagnostics()::toString);
+        assertTrue(qualified.diagnostics().stream()
+                .anyMatch(value -> value.contains("not provided by the Docker MCP backend")));
+    }
+
+    @Test
+    void machinePrerequisitesStillBlockOnANativeHost() {
+        ProviderRuntimeStatus blocked = blockedStatus(List.of(
+                ExternalPrerequisite.of("minos.scip.java.maven-repository is not set")));
+
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(
+                blocked, WorkerSandboxBackend.nativeEphemeralWorkspace(), false);
+
+        assertEquals(ProviderRuntimeStatus.State.BLOCKED, qualified.state());
+    }
+
+    @Test
+    void anyOtherBlockingDiagnosticStillBlocksOnTheDockerBackend() {
+        ProviderRuntimeStatus blocked = blockedStatus(List.of(
+                ExternalPrerequisite.of("minos.scip.java.maven-repository is not set"),
+                "scip-java classpath does not match its pinned SHA-256"));
+
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(
+                blocked, WorkerSandboxBackend.nativeEphemeralWorkspace(), true);
+
+        assertEquals(ProviderRuntimeStatus.State.BLOCKED, qualified.state());
+        assertEquals(blocked.diagnostics(), qualified.diagnostics());
+    }
+
+    @Test
+    void otherNotReadyStatesAreKeptOnTheDockerBackend() {
+        for (ProviderRuntimeStatus.State state : List.of(
+                ProviderRuntimeStatus.State.NOT_INSTALLED, ProviderRuntimeStatus.State.INVALID)) {
+            ProviderRuntimeStatus status = new ProviderRuntimeStatus(
+                    "fixture-provider", "1.0.0", state, Optional.empty(),
+                    List.of(ExternalPrerequisite.of("minos.scip.java.maven-repository is not set")));
+
+            ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(
+                    status, WorkerSandboxBackend.nativeEphemeralWorkspace(), true);
+
+            assertEquals(state, qualified.state());
+        }
+    }
+
+    @Test
+    void machinePrerequisitesStillBlockWhenTheDockerBackendHasAQualifiedSandbox() {
+        WorkerSandboxBackend backend = qualifiedBackend(
+                "fixture-docker-qualified",
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED);
+        ProviderRuntimeStatus blocked = blockedStatus(List.of(
+                ExternalPrerequisite.of("minos.scip.java.maven-repository is not set")));
+
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(blocked, backend, true);
+
+        assertEquals(ProviderRuntimeStatus.State.BLOCKED, qualified.state());
+    }
+
+    private static ProviderRuntimeStatus blockedStatus(List<String> diagnostics) {
+        return new ProviderRuntimeStatus(
+                "fixture-provider", "1.0.0", ProviderRuntimeStatus.State.BLOCKED,
+                Optional.of(Path.of("fixture-provider")), diagnostics);
+    }
+
     private static ProviderRuntimeStatus readyStatus() {
         return new ProviderRuntimeStatus(
                 "fixture-provider", "1.0.0", ProviderRuntimeStatus.State.READY,
