@@ -71,8 +71,8 @@ final class StrongOwnedProcessExecutors {
 
     /**
      * Package-visible seam used to lock the production composition contract without OS assumptions.
-     * Defaults to the native disposition: a missing sandbox always {@link #blocked}. Existing callers
-     * (and every test written before the Docker MCP backend existed) keep exactly today's behavior.
+     * Applies the native disposition ({@code dockerBackend} false): a ready status without a qualified
+     * managed-local-provider sandbox is blocked, and a status that is not ready is returned unchanged.
      */
     static ProviderRuntimeStatus qualifySandbox(
             ProviderRuntimeStatus status,
