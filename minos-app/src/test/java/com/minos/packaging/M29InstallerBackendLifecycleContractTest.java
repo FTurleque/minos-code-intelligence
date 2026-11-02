@@ -191,6 +191,30 @@ class M29InstallerBackendLifecycleContractTest {
         assertFalse(configure.contains("validation/handshake"), "message claims the handshake failed");
     }
 
+    // A failed switch ends its log with ROLLBACK lines that report success; the cause is the FAIL line
+    // of the same run. The installer reads that line back, from the end of the log down to the BEGIN
+    // of the run, shows its message as the cause, and falls back to the last log line only without one.
+    @Test
+    void backendSwitchFailureShowsTheFailLineOfTheLastRun() throws Exception {
+        String installer = text(repoRoot().resolve("packaging/windows/minos-installer.iss.template"));
+        String reader = section(installer, "function BackendSwitchFailureCause(LogPath: String): String;", "\nend;\n");
+        assertOrdered(reader,
+                "downto 0 do",
+                "if Pos(' BEGIN ', Line) > 0 then exit;",
+                "if Pos(' FAIL ', Line) > 0 then",
+                "Pos('message=''', Line)",
+                "StringChangeEx(Result, '''''', '''', True);");
+
+        String configure = section(installer, "function ConfigureSelectedMcpBackend(): Boolean;", "\nend;\n");
+        assertOrdered(configure,
+                "Cause := BackendSwitchFailureCause(LogPath);",
+                "Log('ConfigureSelectedMcpBackend: backend switch failed: ' + Cause);",
+                "if Cause <> '' then",
+                "DiagnosticLine := 'Cause : ' + Cause",
+                "else if LastLogLine <> '' then",
+                "DiagnosticLine := 'Dernière ligne du journal : ' + LastLogLine");
+    }
+
     // The wizard pages and messages of MINOS are French; without a [Languages] section Inno Setup runs in English, so
     // its own buttons and built-in checks (an empty or relative directory, before NextButtonClick) answered in English
     // in the middle of French pages.
