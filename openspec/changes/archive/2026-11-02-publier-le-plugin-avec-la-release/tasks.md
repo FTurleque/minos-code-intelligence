@@ -14,12 +14,15 @@ Ordre : rouge, correction, preuve. Les workflows de release ne tournent pas sur 
 
 ## 3. Preuve réelle
 
-- [ ] 3.1 **(manuelle)** [AUD-DEP-07] Lancer `intellij-plugin-release.yml` par `workflow_dispatch` sur un tag de test créé pour l'occasion sur une branche jetable (ou selon le choix du propriétaire) : contrôle du tag, construction, attache ; relancer pour vérifier le refus d'écrasement. Noter les run ids dans `SUIVI.md`, puis supprimer la release et le tag de test.
-- [ ] 3.2 **(manuelle)** [AUD-DEP-07] À la prochaine release : relever que le job `plugin` s'exécute, que l'asset et sa somme sont présents, que le workflow est vert. Tant que ce n'est pas fait, AUD-DEP-07 reste « implémenté, preuve de release en attente ».
+- [x] 3.1 **(manuelle)** [AUD-DEP-07] Lancer `intellij-plugin-release.yml` par `workflow_dispatch` sur un tag de test créé pour l'occasion sur une branche jetable (ou selon le choix du propriétaire) : contrôle du tag, construction, attache ; relancer pour vérifier le refus d'écrasement. Noter les run ids dans `SUIVI.md`, puis supprimer la release et le tag de test.
+  - Remplacée (2026-11-02) : un tag et une release de test publics ne sont pas créés ; le refus d'écrasement se relève au premier candidat publié, par une relance de `intellij-plugin-release.yml` sur son tag (point 8 de la liste de contrôle du skill `minos-release-promotion`).
+- [x] 3.2 **(manuelle)** [AUD-DEP-07] À la prochaine release : relever que le job `plugin` s'exécute, que l'asset et sa somme sont présents, que le workflow est vert. Tant que ce n'est pas fait, AUD-DEP-07 reste « implémenté, preuve de release en attente ».
+  - Reportée à la release (2026-11-02) : point 8 de la liste de contrôle du skill `minos-release-promotion` ; AUD-DEP-07 reste « implémenté, preuve de release en attente » dans `docs/project/audits/2026-10-10/SUIVI.md`.
 - [x] 3.3 **(manuelle, décision du propriétaire)** [AUD-DEP-07] Rattraper ou non v1.1.0 et v1.2.0 par le rejeu (ajoute un asset à une release publiée) ; consigner la décision dans `SUIVI.md`. — fait : **pas de rattrapage** (décision du propriétaire, 2026-10-16). v1.1.0 et v1.2.0 restent sans zip du plugin ; le plugin est attaché à partir de la prochaine release. Consigné dans `SUIVI.md`.
 
 ## 4. Clôture
 
 - [x] 4.1 Documentation de release (`docs/developer/`, skill `minos-release-promotion`) : le plugin est publié par le workflow de release ; une release créée à la main demande un rejeu ; note sur les releases immuables. Rejouer `check-current-docs.py`.
 - [x] 4.2 Mettre à jour `docs/project/audits/2026-10-10/SUIVI.md` (AUD-DEP-07 : statut, preuve empirique des deux releases sans plugin, décision D3, run ids). — fait (2026-10-16) : ligne AUD-DEP-07 du sprint 5 (PR #468, D3 = A, pas de rattrapage, preuves de release en attente).
-- [ ] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, documentation de release.
+- [x] 4.3 `openspec validate --all --strict` ; docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md`, documentation de release.
+  - Fait (2026-11-02) : `openspec validate --all --strict` → 32 passed ; `STATUS.md` décrit le plugin construit par son wrapper et attaché à la release, et nomme ce qui reste à relever au prochain candidat ; la liste de contrôle de release est le skill `minos-release-promotion` (point 8).
