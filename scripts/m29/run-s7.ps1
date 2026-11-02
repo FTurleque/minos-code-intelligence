@@ -3,8 +3,6 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $ExpectedHead,
 
-    [string] $ProjectsRoot = '',
-
     [switch] $SkipMavenVerify
 )
 
@@ -16,13 +14,6 @@ if ($env:OS -ne 'Windows_NT') {
 }
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-    $ProjectsRoot = Split-Path -Parent $RepoRoot
-}
-$ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
-if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
-    throw "M29-S7 projects root does not exist: $ProjectsRoot"
-}
 
 function Invoke-NativeCapture {
     param(
@@ -221,7 +212,6 @@ try {
         -Package $Distribution `
         -InstallRoot $DockerAppRoot `
         -McpBackend docker `
-        -ProjectsRoot $ProjectsRoot `
         -DataRoot $DockerHome `
         -DockerInstallRoot $DockerRuntimeRoot `
         -DockerDataRoot $DockerDataRoot `
@@ -253,7 +243,7 @@ try {
 
     # 5) Native -> Docker must reuse the exact same managed runtime, proving
     # Start + Validate + MCP handshake without a second image build.
-    & $Switcher @SwitchCommon -TargetBackend docker -ProjectsRoot $ProjectsRoot
+    & $Switcher @SwitchCommon -TargetBackend docker
     Assert-Backend -DataRoot $DockerHome -Expected 'docker'
     $SwitchState = Get-Content -Raw -LiteralPath (Join-Path $DockerHome 'runtime\backend-switch.json') | ConvertFrom-Json
     if (-not [bool]$SwitchState.reusedDockerRuntime) {
@@ -317,7 +307,6 @@ finally {
         finishedAt = [DateTime]::UtcNow.ToString('o')
         result = if ($Passed) { 'PASS' } else { 'FAIL_OR_BLOCKED' }
         dockerServer = [string]$DockerServer.Output
-        projectsRoot = $ProjectsRoot
         windowsDistribution = $Distribution
         smokeSetup = $SmokeSetup
         nativeInstallRoot = $NativeInstallRoot

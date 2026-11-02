@@ -35,6 +35,11 @@ DEV_LAUNCHER = ROOT / "docker" / "scripts" / "prod-mcp.ps1"
 CANDIDATE_SCRIPT = ROOT / "scripts" / "release" / "build-local-windows-candidate.ps1"
 LOCK_DIRECTORY = ROOT / "minos-provider-scip" / "src" / "main" / "resources" / "com" / "minos" / "adapter" / "scip" / "runtime"
 CONTEXT_FUNCTION = "Copy-DockerBuildContext"
+QUALIFICATION_SCRIPTS = (
+    ROOT / "scripts" / "ci" / "qualify-docker-upgrade.ps1",
+    ROOT / "scripts" / "m14" / "validate-local.ps1",
+    *(ROOT / "scripts" / "m29" / f"run-s{step}.ps1" for step in (3, 4, 5, 7)),
+)
 
 DECODING = {"encoding": "utf-8", "errors": "replace"}
 
@@ -113,6 +118,29 @@ class RuntimeEnvironmentTest(unittest.TestCase):
             self.assertNotIn(name, required_compose_variables())
             self.assertNotIn(name, runtime_env_variables(VERIFY_SCRIPT))
             self.assertNotIn(name, runtime_env_variables(DEV_LAUNCHER))
+
+    def test_no_qualification_passes_a_projects_root(self) -> None:
+        # Installers ignore -ProjectsRoot: a qualification that still passes it would qualify a mount that no longer
+        # exists. Fixtures are exposed one by one through AddProject instead.
+        pattern = re.compile(r"(?<![\w$])-ProjectsRoot\b")
+        for script in QUALIFICATION_SCRIPTS:
+            offending = [f"{script.relative_to(ROOT).as_posix()}:{number}"
+                         for number, line in enumerate(script.read_text(encoding="utf-8-sig").splitlines(), 1)
+                         if pattern.search(line)]
+            self.assertEqual([], offending, "qualification passes the ignored -ProjectsRoot parameter")
+
+    def test_no_qualification_declares_a_projects_root_it_does_not_use(self) -> None:
+        for script in (ROOT / "scripts" / "m29" / "run-s4.ps1", ROOT / "scripts" / "m29" / "run-s7.ps1"):
+            self.assertNotIn("$ProjectsRoot", script.read_text(encoding="utf-8-sig"),
+                             f"{script.name} still declares a projects root")
+
+    def test_qualification_expects_the_installation_format_the_lifecycle_writes(self) -> None:
+        lifecycle = (ROOT / "docker" / "scripts" / "mcp-lifecycle.ps1").read_text(encoding="utf-8-sig")
+        written = set(re.findall(r"^\s*formatVersion = (\d+)\s*$", lifecycle, re.MULTILINE))
+        self.assertEqual(1, len(written), "mcp-lifecycle.ps1 writes one installation.json format")
+        runner = (ROOT / "scripts" / "m29" / "run-s4.ps1").read_text(encoding="utf-8-sig")
+        expected = re.findall(r"\$Metadata\.formatVersion -ne (\d+)", runner)
+        self.assertEqual(sorted(written), expected, "run-s4.ps1 expects another installation.json format")
 
     def test_verification_env_defines_every_required_variable(self) -> None:
         missing = required_compose_variables() - runtime_env_variables(VERIFY_SCRIPT)
