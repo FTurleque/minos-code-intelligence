@@ -98,6 +98,14 @@ Avant chaque démarrage de `minos-mcp`, chaque `minos-admin` et chaque validatio
 - **WHEN** l'installation de cette version est exécutée
 - **THEN** elle échoue, le fichier de correspondance reste au format 1 et l'ancien runtime est conservé
 
+### Requirement: La migration d'une racine unique stockée dans PostgreSQL est refusée
+Une installation Docker à racine unique dont les projets sont stockés dans PostgreSQL SHALL NOT être migrée : l'installation SHALL échouer avant toute modification, conserver l'ancien runtime, et afficher un message sans chemin qui donne le remède (désinstaller le runtime Docker avec ses données, réinstaller, exposer chaque projet par `AddProject`).
+
+#### Scenario: Runtime PostgreSQL à racine unique
+- **GIVEN** des données Docker au format 1 dont `minos.storage.backend` vaut `postgresql`
+- **WHEN** l'installation de cette version configure le runtime Docker
+- **THEN** elle échoue avec le remède, la configuration et la correspondance sont inchangées et aucune action du cycle de vie n'est lancée
+
 ### Requirement: L'installeur Windows ne demande aucune racine des projets Docker
 La page Docker de l'installeur Windows SHALL NOT présenter de champ de racine des projets. `/DOCKERPROJECTSROOT`, `-ProjectsRoot` et la valeur `ProjectsRoot` enregistrée SHALL NOT entraîner de montage ; leur présence SHALL être signalée par un avertissement dans le journal d'installation.
 
@@ -110,3 +118,31 @@ La page Docker de l'installeur Windows SHALL NOT présenter de champ de racine d
 - **GIVEN** une installation silencieuse lancée avec `/DOCKERPROJECTSROOT=<dossier>`
 - **WHEN** le commutateur de backend configure le runtime Docker
 - **THEN** la table des montages ne contient pas ce dossier et le journal contient l'avertissement
+
+### Requirement: Un dossier de projet dangereux est refusé avant tout montage
+Le cycle de vie Docker SHALL refuser, avant toute écriture, un dossier de projet à exposer qui est une racine de volume, le profil ou l'un de ses parents, ou qui est, contient ou se trouve dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS. La migration d'une racine unique SHALL NOT monter un tel dossier. Le message SHALL NOT contenir de chemin. Un profil introuvable SHALL entraîner le refus.
+
+#### Scenario: Profil passé à AddProject
+- **GIVEN** une installation Docker
+- **WHEN** `AddProject -ProjectPath` désigne le profil, l'un de ses parents ou une racine de volume
+- **THEN** l'action échoue avec un message qui nomme la catégorie refusée, et la table des montages est inchangée
+
+#### Scenario: Dossier de MINOS à migrer
+- **GIVEN** des données Docker au format 1 et un projet inscrit dont le dossier se trouve dans `%LOCALAPPDATA%`
+- **WHEN** la migration est exécutée
+- **THEN** ce projet n'est pas monté et un avertissement le nomme
+
+#### Scenario: Dossier de projets dédié
+- **GIVEN** un sous-dossier du profil hors AppData, ou un dossier d'un autre volume
+- **WHEN** il est passé à `AddProject`
+- **THEN** il est accepté
+
+## REMOVED Requirements
+
+### Requirement: L'installeur Windows ne propose aucune racine de projets par défaut
+**Reason**: la page Docker de l'installeur ne présente plus de champ de racine des projets ; aucune racine n'est montée.
+**Migration**: l'exigence « L'installeur Windows ne demande aucune racine des projets Docker » s'applique ; un projet s'expose par `-Action AddProject`.
+
+### Requirement: Une racine de projets dangereuse est refusée avant tout montage
+**Reason**: aucune racine des projets n'est plus montée ; le refus porte sur le dossier de chaque projet exposé.
+**Migration**: l'exigence « Un dossier de projet dangereux est refusé avant tout montage » s'applique à `AddProject` et à la migration.

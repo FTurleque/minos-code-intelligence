@@ -42,31 +42,29 @@ Require 'LoadStringFromFile(ConfigPath, ConfigText)' 'Installer does not inspect
 Require "ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties')" 'Installer does not read the canonical backend configuration.'
 Require "Result := 'docker'" 'Installer cannot restore a persisted Docker selection during upgrade.'
 Require 'McpClientsPage := CreateCustomPage(' 'Installer is missing the shared MCP client integration page.'
-Require 'DockerProjectsPage := CreateInputDirPage(' 'Installer is missing the Docker projects page.'
+Require 'DockerProjectsPage := CreateCustomPage(' 'Installer is missing the Docker projects page.'
 Require 'McpClientsPage.ID,' 'Docker projects page must follow client integration.'
 Require 'Result := NoMcpSelected()' 'Shared MCP client page must be skipped only when MCP configuration is disabled.'
 Require 'Result := not DockerMcpSelected()' 'Docker projects page is not conditional on Docker MCP mode.'
-# A previously customized Docker projects root must survive an upgrade: the fail-closed
-# project-path-mapping guard refuses to silently replace a differing on-disk mapping, so a reset
-# field would surface as a backend-switch failure on every future update.
-Require "ReadInstallerValue('ProjectsRoot'" 'Installer does not restore a previously configured Docker projects root on upgrade -- every upgrade will reset it and trip the project-path-mapping guard.'
-Require "RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot'" 'Installer does not persist the configured Docker projects root for the next upgrade.'
-# The projects root is bind-mounted into the MINOS containers: without a saved value the field
-# starts empty, and the Docker page refuses the user profile, its parents, a volume root and the
-# application data or MINOS folders before checking that the folder exists.
-Require "ReadInstallerValue('ProjectsRoot', '')" 'Installer must not propose a default Docker projects root.'
-Forbid "ReadInstallerValue('ProjectsRoot', ExpandConstant('{%USERPROFILE}'))" 'Installer proposes the user profile as the Docker projects root; the whole profile would be mounted into the MINOS containers.'
-Require 'function UnsafeDockerProjectsRootReason(Path: String): String;' 'Installer does not model the unsafe Docker projects root refusal.'
-Require "if Trim(DockerProjectsPage.Values[0]) = '' then" 'Docker page accepts an empty projects root.'
-Require 'Reason := UnsafeDockerProjectsRootReason(DockerProjectsPage.Values[0]);' 'Docker page does not refuse an unsafe projects root.'
-Require "IsSameOrInsideDirectory(UserProfile, Path)" 'Unsafe projects root refusal does not cover the user profile and its parents.'
-Require 'function RecordedDockerProjectsRoot(): String;' 'Installer does not read the projects root recorded by the Docker runtime.'
-Require 'RecordedRoot := RecordedDockerProjectsRoot();' 'Docker page does not compare the chosen projects root with the recorded one.'
-Require 'mbConfirmation, MB_YESNO) = IDYES then' 'Docker page replaces the recorded projects root without asking.'
-Require "{param:REPLACEDOCKERPROJECTSROOT|0}" 'A silent install cannot confirm a Docker projects root replacement.'
-Require "Parameters := Parameters + ' -ReplaceDockerProjectsRoot';" 'Installer does not forward the projects root replacement to the backend switcher.'
-Require "ExpandConstant('{localappdata}')" 'Unsafe projects root refusal does not cover the local application data folder.'
-Require "ExpandConstant('{userappdata}')" 'Unsafe projects root refusal does not cover the roaming application data folder.'
+# The Docker runtime mounts no projects root: each project is exposed by the user with
+# prod-mcp-release.ps1 -Action AddProject. The Docker page asks for no root, names that command, and
+# the installer forwards no root, no replacement and no root refusal to the backend switcher.
+Forbid 'Racine des projets' 'The Docker page still asks for a projects root; the Docker runtime mounts only the projects exposed with -Action AddProject.'
+Forbid '-ProjectsRoot' 'Installer still forwards a Docker projects root to the backend switcher.'
+Forbid '-ReplaceDockerProjectsRoot' 'Installer still forwards a Docker projects root replacement to the backend switcher.'
+Forbid 'UnsafeDockerProjectsRootReason' 'Installer still checks a Docker projects root that is no longer mounted.'
+Forbid 'RecordedDockerProjectsRoot' 'Installer still compares a Docker projects root that is no longer mounted.'
+Forbid "ReadInstallerValue('ProjectsRoot'" 'Installer still proposes the Docker projects root saved in the Windows registry.'
+Forbid "RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot'" 'Installer still saves a Docker projects root in the Windows registry.'
+Require 'prod-mcp-release.ps1 -Action AddProject -ProjectPath' 'The Docker page does not name the command that exposes a project.'
+# Legacy settings are ignored, never refused: each one present reaches the setup log as a warning,
+# and the value saved by earlier installers is removed from the Windows registry.
+Require 'procedure LogIgnoredDockerProjectsRootSettings;' 'Installer does not report the ignored legacy Docker projects root settings.'
+Require "{param:DOCKERPROJECTSROOT|}" 'Installer does not detect a legacy /DOCKERPROJECTSROOT parameter.'
+Require "{param:REPLACEDOCKERPROJECTSROOT|}" 'Installer does not detect a legacy /REPLACEDOCKERPROJECTSROOT parameter.'
+Require "Log('Warning: /DOCKERPROJECTSROOT" 'A legacy /DOCKERPROJECTSROOT parameter does not reach the setup log as a warning.'
+Require "RegDeleteValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot');" 'Installer does not remove the Docker projects root saved in the Windows registry.'
+Require "    LogIgnoredDockerProjectsRootSettings;`n    if not ConfigureRuntimeSettings() then" 'Legacy Docker projects root settings must be reported before any post-install configuration step.'
 Require 'McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot JetBrains MCP row.'
 Require 'McpCopilotCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot CLI MCP row.'
 Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude CLI / Code MCP row.'
@@ -102,7 +100,6 @@ Require 'SummaryMemo.Text := Text;' 'Installer summary is not rendered to the re
 Require 'function ConfigureSelectedMcpBackend(): Boolean;' 'Installer is missing the transactional backend setup function.'
 Require 'integration\switch-mcp-backend.ps1' 'Installer does not invoke the canonical backend switcher.'
 Require '-TargetBackend ' 'Installer does not pass the selected backend to the switcher.'
-Require '-ProjectsRoot ' 'Installer does not pass the Docker project root to the switcher.'
 Require 'if ConfigureSelectedMcpBackend() then' 'Installer does not gate client setup on backend validation success.'
 Require 'ConfigureMcpClients;' 'Installer does not configure shared clients after backend activation.'
 # A backend-switch failure must never leave the user unsure whether the update actually happened:

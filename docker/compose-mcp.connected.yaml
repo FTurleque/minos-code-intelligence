@@ -67,10 +67,6 @@ services:
         source: minos-provider-tools
         target: /var/lib/minos/tools
         read_only: true
-      - type: bind
-        source: "${MINOS_PROJECTS_DIR:?MINOS_PROJECTS_DIR is required}"
-        target: /workspace/projects
-        read_only: true
     networks: [minos-runtime]
     read_only: true
     tmpfs:
@@ -131,10 +127,6 @@ services:
         source: minos-provider-tools
         target: /var/lib/minos/tools
         read_only: true
-      - type: bind
-        source: "${MINOS_PROJECTS_DIR:?MINOS_PROJECTS_DIR is required}"
-        target: /workspace/projects
-        read_only: true
     networks: [minos-runtime, minos-admin-egress]
     read_only: true
     tmpfs:
@@ -151,10 +143,10 @@ services:
 
   minos-bootstrap:
     <<: *limits-job
-    # Query image: one java command of the MINOS jar (project path mapping); no provider, no embedded tool.
+    # Query image: one java command of the MINOS jar (project mount table); no provider, no embedded tool.
     image: "${MINOS_QUERY_IMAGE:?MINOS_QUERY_IMAGE is required}"
     entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.DockerRuntimeBootstrap]
-    command: [configure-project-paths, "${MINOS_HOST_PROJECTS_ROOT:?MINOS_HOST_PROJECTS_ROOT is required}", /workspace/projects]
+    command: [init-project-mounts, /workspace/projects]
     init: true
     network_mode: none
     environment:

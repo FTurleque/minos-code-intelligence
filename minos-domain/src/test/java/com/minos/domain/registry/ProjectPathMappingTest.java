@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ProjectPathMappingTest {
 
-    private static final ProjectPathMapping WINDOWS_HOST = new ProjectPathMapping("C:\\Users\\me\\code", "/workspace");
+    private static final ProjectPathMapping WINDOWS_HOST = ProjectPathMapping.singleRoot("C:\\Users\\me\\code", "/workspace");
 
     @TempDir
     Path temporary;
@@ -46,10 +46,10 @@ class ProjectPathMappingTest {
 
     @Test
     void rootsMustBeAbsoluteWindowsOrPosixPaths() {
-        assertThrows(IllegalArgumentException.class, () -> new ProjectPathMapping(" ", "/workspace"));
-        assertThrows(IllegalArgumentException.class, () -> new ProjectPathMapping("code", "/workspace"));
+        assertThrows(IllegalArgumentException.class, () -> ProjectPathMapping.singleRoot(" ", "/workspace"));
+        assertThrows(IllegalArgumentException.class, () -> ProjectPathMapping.singleRoot("code", "/workspace"));
         assertEquals("C:/Users/me/code", WINDOWS_HOST.hostRoot());
-        assertEquals("/workspace", new ProjectPathMapping("/srv/", "/workspace//").containerRoot());
+        assertEquals("/workspace", ProjectPathMapping.singleRoot("/srv/", "/workspace//").containerRoot());
     }
 
     @Test
@@ -78,7 +78,7 @@ class ProjectPathMappingTest {
 
     @Test
     void aPhysicalPathIsMadeRelativeToTheRootOfTheCurrentRuntime() {
-        ProjectPathMapping mapping = new ProjectPathMapping(temporary.toAbsolutePath().toString(), "/workspace");
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(temporary.toAbsolutePath().toString(), "/workspace");
 
         assertEquals("project/module",
                 mapping.relativeForPhysical(temporary.resolve("project").resolve("module"),
@@ -88,7 +88,7 @@ class ProjectPathMappingTest {
 
     @Test
     void aRelativeProjectRootResolvesUnderTheRootOfTheRuntime() {
-        ProjectPathMapping mapping = new ProjectPathMapping(temporary.toAbsolutePath().toString(), "/workspace");
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(temporary.toAbsolutePath().toString(), "/workspace");
 
         assertEquals(temporary.resolve("a").resolve("b").toAbsolutePath().normalize(),
                 mapping.resolve("a/b", ProjectPathMapping.RuntimeLocation.NATIVE));
@@ -117,6 +117,6 @@ class ProjectPathMappingTest {
         assertEquals(java.util.Optional.empty(), WINDOWS_HOST.relativeForHostPath("C:/Users/me/code-other/app"));
         assertEquals(java.util.Optional.empty(), WINDOWS_HOST.relativeForHostPath("D:/elsewhere"));
         assertEquals(java.util.Optional.empty(),
-                new ProjectPathMapping("/srv/projects", "/workspace").relativeForHostPath("/SRV/projects/app"));
+                ProjectPathMapping.singleRoot("/srv/projects", "/workspace").relativeForHostPath("/SRV/projects/app"));
     }
 }

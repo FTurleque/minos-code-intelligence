@@ -77,7 +77,7 @@ class InterProcessLocalProjectRegistryWriteProtectedStorageTest {
         Path entry = storage.resolve("projects").resolve(original.id() + ".properties");
         Path backup = entry.resolveSibling(entry.getFileName() + ".m29-v1.bak");
         assertTrue(Files.readString(entry).contains("rootPath="), "the fixture entry must be a legacy one");
-        new ProjectPathMappingStore(home).save(new ProjectPathMapping(hostRoot.toString(), "/workspace/projects"));
+        new ProjectPathMappingStore(home).save(ProjectPathMapping.singleRoot(hostRoot.toString(), "/workspace/projects"));
         InterProcessLocalProjectRegistry mapped = new InterProcessLocalProjectRegistry(storage);
 
         try (WriteProtectedTree protectedStorage = WriteProtectedTree.protect(storage)) {

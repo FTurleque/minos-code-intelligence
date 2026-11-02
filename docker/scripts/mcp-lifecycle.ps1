@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall')]
+    [ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall', 'AddProject', 'RemoveProject')]
     [string] $Action,
 
     [string] $Jar = '',
@@ -12,8 +12,17 @@ param(
     [string] $InstallRoot,
     [Parameter(Mandatory = $true)]
     [string] $DataRoot,
-    [Parameter(Mandatory = $true)]
-    [string] $ProjectsRoot,
+    # Accepted for the callers that still pass it, and ignored with a warning: no projects root is mounted. A project
+    # is exposed with -Action AddProject.
+    [string] $ProjectsRoot = '',
+
+    # AddProject: the host folder of the project to expose. AddProject and RemoveProject: -Name is the mount name,
+    # [a-z0-9][a-z0-9._-]{0,62}; AddProject derives it from the folder name when it is omitted.
+    [string] $ProjectPath = '',
+    [string] $Name = '',
+
+    # Status: adds the host folder of each project mount to the listing.
+    [switch] $ShowHostPaths,
 
     # Where docker/Dockerfile.mcp.release and docker/compose-mcp.prod.yaml are read from for this
     # Install. Defaults to this script's own repo (the normal case: installing whatever version of
@@ -28,8 +37,7 @@ param(
     [string] $SemanticProvider = '',
     [string[]] $MinosArguments = @(),
 
-    # Install only: replaces another recorded projects root (configure-project-paths --replace): projects outside
-    # the new root stay registered with their index and are reported rootAvailable: false.
+    # Accepted for the callers that still pass it, and ignored with a warning: there is no projects root to replace.
     [switch] $ReplaceProjectsRoot,
 
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
@@ -42,7 +50,13 @@ param(
 # Portable core of the packaged MINOS Docker MCP lifecycle (build/install/start/validate/stop/
 # uninstall). Nothing here is Windows-specific: it only shells out to git/docker/java, all of which
 # behave identically under PowerShell 7+ (pwsh) on Windows and Linux, and it never guesses a
-# platform default directory - InstallRoot/DataRoot/ProjectsRoot are always supplied by the caller.
+# platform default directory - InstallRoot/DataRoot are always supplied by the caller.
+#
+# Projects: no projects root is mounted. /workspace/projects holds one read-only bind mount per exposed project,
+# the same in minos-mcp and minos-admin. The mount table lives in the Docker data root
+# (runtime/project-paths.properties) and is written only by com.minos.cli.DockerRuntimeBootstrap; this script
+# regenerates the Compose override compose-mcp.projects.yaml from it before every start, admin run and validation,
+# and passes that override to every Compose call. AddProject checks the host folder before the bootstrap sees it.
 #
 # docker/scripts/prod-mcp-release.ps1 is the Windows PRODUCT entry point: it keeps the Windows-only
 # guard and the %LocalAppData%-based default paths real end users rely on, then delegates every
@@ -64,11 +78,13 @@ if ([string]::IsNullOrWhiteSpace($SourceRoot)) { $SourceRoot = $RepoRoot }
 else { $SourceRoot = [System.IO.Path]::GetFullPath($SourceRoot) }
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 $DataRoot = [System.IO.Path]::GetFullPath($DataRoot)
-$ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
 $BackupsRoot = Join-Path $InstallRoot 'backups'
 $ComposeFile = Join-Path $RuntimeRoot 'compose-mcp.prod.yaml'
+# Generated from the project mount table before every start, admin run and validation; never edited by hand.
+$ProjectMountsFile = Join-Path $RuntimeRoot 'compose-mcp.projects.yaml'
+$ContainerProjectsRoot = '/workspace/projects'
 # The runtime copy was named compose.mcp.prod.yaml until the compose files were renamed so that Dependabot's
 # docker-compose ecosystem can see them (audit S11). An installation made before that still holds the old name,
 # possibly with the connected profile swapped in by configure-m30-docker-services.ps1: see Move-LegacyRuntimeCompose.
@@ -135,13 +151,284 @@ function Compose([string[]] $Arguments, [int[]] $AcceptedExitCodes = @(0)) {
     try {
         if ($script:QueryImagePlaceholder -ne '') { $env:MINOS_QUERY_IMAGE = $script:QueryImagePlaceholder }
         else { Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue }
-        $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
+        $ComposeFiles = @(Get-ComposeFileArguments)
+        $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile @ComposeFiles @Arguments
         if ($LASTEXITCODE -notin $AcceptedExitCodes) { throw "docker compose failed (exit $LASTEXITCODE): $($Arguments -join ' ')" }
     }
     finally {
         if ($null -eq $AmbientQueryImage) { Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue }
         else { $env:MINOS_QUERY_IMAGE = $AmbientQueryImage }
     }
+}
+
+# The -f arguments of every Compose call: the runtime compose file, then the generated project mounts override
+# when it exists.
+function Get-ComposeFileArguments {
+    $Files = @('-f', $ComposeFile)
+    if (Test-Path -LiteralPath $ProjectMountsFile -PathType Leaf) { $Files += @('-f', $ProjectMountsFile) }
+    return , $Files
+}
+
+# A YAML scalar for any string: a JSON string (YAML is a superset of JSON) escaping the quote, the backslash, every
+# control character and every non-ASCII character, so that no folder name can end the scalar or inject a key. Compose
+# interpolates ${...} in every string of every file it reads: '$' is doubled, so that the mounted folder is exactly
+# the one that was checked.
+function ConvertTo-YamlString([string] $Value) {
+    $Builder = New-Object System.Text.StringBuilder
+    [void] $Builder.Append('"')
+    foreach ($Character in $Value.ToCharArray()) {
+        $Code = [int] $Character
+        if ($Character -eq '"') { [void] $Builder.Append('\"') }
+        elseif ($Character -eq '\') { [void] $Builder.Append('\\') }
+        elseif ($Character -eq '$') { [void] $Builder.Append('$$') }
+        elseif ($Code -lt 32 -or $Code -gt 126) { [void] $Builder.Append(('\u{0:x4}' -f $Code)) }
+        else { [void] $Builder.Append($Character) }
+    }
+    [void] $Builder.Append('"')
+    return $Builder.ToString()
+}
+
+# The text of the project mounts override for $Mounts (objects with Name and HostRoot): one read-only bind mount per
+# project, the same list for minos-mcp and minos-admin, the host folder never created by Docker.
+function Format-ProjectMountsOverride([object[]] $Mounts) {
+    $Lines = @(
+        '# Generated by mcp-lifecycle.ps1 from the MINOS project mount table. Do not edit: it is rewritten before',
+        '# every start, admin run and validation. Expose a project with -Action AddProject.')
+    if (@($Mounts).Count -eq 0) {
+        $Lines += 'services: {}'
+        return ($Lines -join "`n") + "`n"
+    }
+    $Lines += 'services:'
+    foreach ($Service in @('minos-mcp', 'minos-admin')) {
+        $Lines += "  ${Service}:"
+        $Lines += '    volumes:'
+        foreach ($Mount in @($Mounts)) {
+            $Target = ConvertTo-YamlString ($ContainerProjectsRoot + '/' + [string] $Mount.Name)
+            $Source = ConvertTo-YamlString ([string] $Mount.HostRoot)
+            $Lines += ('      - {"type": "bind", "source": ' + $Source + ', "target": ' + $Target +
+                ', "read_only": true, "bind": {"create_host_path": false}}')
+        }
+    }
+    return ($Lines -join "`n") + "`n"
+}
+
+function Write-ProjectMountsOverride([object[]] $Mounts) {
+    $Text = Format-ProjectMountsOverride -Mounts $Mounts
+    [System.IO.File]::WriteAllText($ProjectMountsFile, $Text, (New-Object System.Text.UTF8Encoding $false))
+}
+
+# Runs one subcommand of com.minos.cli.DockerRuntimeBootstrap in minos-bootstrap (no network) and returns its standard
+# output. A non-zero exit fails with the bootstrap's own message, which names no host path.
+function Invoke-ProjectMountBootstrap([string[]] $Arguments) {
+    $RunArguments = @('run', '-T', '--rm', '--no-deps', 'minos-bootstrap') + $Arguments
+    $AmbientQueryImage = $env:MINOS_QUERY_IMAGE
+    try {
+        Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue
+        $ComposeFiles = @(Get-ComposeFileArguments)
+        $Output = ($null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile @ComposeFiles @RunArguments | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "MINOS Docker project mount command failed (exit $LASTEXITCODE): $($Arguments[0])" }
+    }
+    finally {
+        if ($null -eq $AmbientQueryImage) { Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue }
+        else { $env:MINOS_QUERY_IMAGE = $AmbientQueryImage }
+    }
+    return $Output
+}
+
+# The saved project mapping as list-project-mounts prints it: formatVersion 0 (none), 1 (a single projects root,
+# not migrated yet) or 2 (the mount table).
+function Get-ProjectMountTable {
+    $Table = ConvertFrom-BootstrapJson (Invoke-ProjectMountBootstrap -Arguments @('list-project-mounts', '--format', 'json'))
+    if ($null -eq $Table.PSObject.Properties['formatVersion'] -or $null -eq $Table.PSObject.Properties['mounts']) {
+        throw 'The MINOS Docker bootstrap printed an unreadable project mount table; nothing was mounted.'
+    }
+    return $Table
+}
+
+# The JSON document a bootstrap subcommand printed: its last line that opens an object. Fails closed without one.
+function ConvertFrom-BootstrapJson([string] $Output) {
+    $Line = @($Output -split "`r?`n" | Where-Object { $_.TrimStart().StartsWith('{') }) | Select-Object -Last 1
+    if ($null -eq $Line) { throw 'The MINOS Docker bootstrap printed no project mount table; nothing was mounted.' }
+    return ($Line | ConvertFrom-Json)
+}
+
+# True when the MINOS data root selects the PostgreSQL storage backend (config/minos.properties).
+function Test-PostgresqlStorage {
+    $Settings = Join-Path (Join-Path $DataRoot 'config') 'minos.properties'
+    if (-not (Test-Path -LiteralPath $Settings -PathType Leaf)) { return $false }
+    foreach ($Line in @(Get-Content -LiteralPath $Settings)) {
+        if ($Line -match '^\s*minos\.storage\.backend\s*[=:]\s*postgresql\s*$') { return $true }
+    }
+    return $false
+}
+
+# Each mount of the table with whether its host folder still exists. A mount whose folder is gone is reported, not
+# mounted: Compose would otherwise refuse to start minos-mcp for one deleted folder.
+function Get-ProjectMountStates {
+    $States = @()
+    if (Test-ComposeMountsProjectsRoot $ComposeFile) { return , $States }
+    $Table = Get-ProjectMountTable
+    if ([int] $Table.formatVersion -ne 2) { return , $States }
+    foreach ($Mount in @($Table.mounts)) {
+        $States += [pscustomobject]@{
+            Name = [string] $Mount.name
+            HostRoot = [string] $Mount.hostRoot
+            Available = (Test-Path -LiteralPath ([string] $Mount.hostRoot) -PathType Container)
+        }
+    }
+    return , $States
+}
+
+# Whether a compose file mounts one projects root (MINOS_PROJECTS_DIR). Only the recipe of a release that predates
+# the project mounts does: the Docker A -> B upgrade qualification installs such a release with its own recipe, and
+# its runtime keeps running as that release left it until the next Install, which migrates it.
+function Test-ComposeMountsProjectsRoot([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    return ((Get-Content -Raw -LiteralPath $Path) -match '\$\{MINOS_PROJECTS_DIR\b')
+}
+
+# Regenerates the override from the table: written empty first, so that a stale or hand-edited override never
+# takes part in the Compose call that reads the table. A runtime that still mounts one projects root has no table
+# and gets an empty override.
+function Update-ProjectMountsOverride {
+    Write-ProjectMountsOverride -Mounts @()
+    if (Test-ComposeMountsProjectsRoot $ComposeFile) { return , @() }
+    $States = Get-ProjectMountStates
+    $Mounted = @()
+    foreach ($State in $States) {
+        if (-not $State.Available) {
+            Write-Warning "MINOS Docker project mount '$($State.Name)' is not mounted: its host folder no longer exists. Its projects are reported rootAvailable: false; expose the folder again, or remove the mount with -Action RemoveProject -Name $($State.Name)."
+            continue
+        }
+        # The folder may have changed since it was exposed (a link checked out in its place, for example): the host
+        # check of AddProject is replayed before every mount.
+        $Refusal = Get-ProjectFolderRefusal $State.HostRoot
+        if ($Refusal -ne '') {
+            Write-Warning "MINOS Docker project mount '$($State.Name)' is not mounted: $Refusal. Its projects are reported rootAvailable: false; remove the mount with -Action RemoveProject -Name $($State.Name)."
+            continue
+        }
+        $Mounted += $State
+    }
+    Write-ProjectMountsOverride -Mounts $Mounted
+    return , $States
+}
+
+function Get-UnsafeDockerProjectsRootReason(
+    [string] $ProjectsRoot, [string] $UserProfile, [string[]] $ProtectedRoots, [string] $TemporaryRoot) {
+    # A project folder is bind-mounted into the MINOS containers. Returns why it must be refused, or an empty
+    # string when it may be mounted. The reason carries no path. A strict subfolder of the temporary folder is
+    # not refused for lying inside a protected folder that holds the temporary folder (application data, where
+    # qualification runs place their folders); it is refused when it lies inside or contains any other one.
+    # Windows paths compare without case; the separator is the platform's, so the rule holds on Linux too.
+    $Separator = [string] [System.IO.Path]::DirectorySeparatorChar
+    function ConvertTo-ComparableRoot([string] $Path) {
+        $Full = [System.IO.Path]::GetFullPath($Path)
+        if ($Full.Length -gt 1) { $Full = $Full.TrimEnd([char[]] @('\', '/')) }
+        return $Full
+    }
+    function Test-SameOrInside([string] $Child, [string] $Parent) {
+        $Prefix = $Parent
+        if (-not $Prefix.EndsWith($Separator)) { $Prefix += $Separator }
+        return $Child.Equals($Parent, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $Child.StartsWith($Prefix, [System.StringComparison]::OrdinalIgnoreCase)
+    }
+    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { return 'empty' }
+    if ([string]::IsNullOrWhiteSpace($UserProfile)) { return 'not verifiable because the user profile is unknown' }
+    $Candidate = ConvertTo-ComparableRoot $ProjectsRoot
+    $VolumeRoot = [System.IO.Path]::GetPathRoot($Candidate)
+    if ([string]::IsNullOrEmpty($VolumeRoot) -or $Candidate.Length -le $VolumeRoot.TrimEnd([char[]] @('\', '/')).Length) {
+        return 'a volume root'
+    }
+    if (Test-SameOrInside (ConvertTo-ComparableRoot $UserProfile) $Candidate) {
+        return 'the user profile or one of its parents'
+    }
+    $Temporary = ''
+    if (-not [string]::IsNullOrWhiteSpace($TemporaryRoot)) {
+        $Temporary = ConvertTo-ComparableRoot $TemporaryRoot
+        if (-not $Candidate.StartsWith($Temporary + $Separator, [System.StringComparison]::OrdinalIgnoreCase)) { $Temporary = '' }
+    }
+    foreach ($Protected in @($ProtectedRoots)) {
+        if ([string]::IsNullOrWhiteSpace($Protected)) { continue }
+        $ProtectedRoot = ConvertTo-ComparableRoot $Protected
+        $HoldsTemporary = ($Temporary -ne '') -and (Test-SameOrInside $Temporary $ProtectedRoot)
+        $Inside = (Test-SameOrInside $Candidate $ProtectedRoot) -and -not $HoldsTemporary
+        if ($Inside -or (Test-SameOrInside $ProtectedRoot $Candidate)) {
+            return 'an application data or MINOS folder, one of its parents or one of its subfolders'
+        }
+    }
+    return ''
+}
+
+# True when $Path, or one of its existing parents, is a reparse point (junction, symbolic link). Docker Desktop does
+# not follow them, and a link would expose another folder than the one named.
+function Test-ReparsePointInPath([string] $Path) {
+    $Current = [System.IO.Path]::GetFullPath($Path)
+    while (-not [string]::IsNullOrEmpty($Current)) {
+        if (Test-Path -LiteralPath $Current) {
+            $Item = Get-Item -LiteralPath $Current -Force
+            if (($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { return $true }
+        }
+        $Parent = [System.IO.Path]::GetDirectoryName($Current)
+        if ($Parent -eq $Current) { break }
+        $Current = $Parent
+    }
+    return $false
+}
+
+# Why the host folder $Folder must not be exposed, or '' when it may be. Checked on the host, before the bootstrap
+# sees it. The reason carries no path.
+function Get-ProjectFolderRefusal([string] $Folder) {
+    if ([string]::IsNullOrWhiteSpace($Folder)) { return 'no folder was given' }
+    if (-not [System.IO.Path]::IsPathRooted($Folder)) { return 'the folder is not an absolute path' }
+    if ($Folder.Contains('$')) { return 'the folder path contains a dollar sign, which Docker Compose would interpret' }
+    if (-not (Test-Path -LiteralPath $Folder -PathType Container)) { return 'the folder does not exist' }
+    if (Test-ReparsePointInPath $Folder) {
+        return 'the folder or one of its parents is a junction or a symbolic link; give the real folder'
+    }
+    $Unsafe = Get-UnsafeDockerProjectsRootReason -ProjectsRoot $Folder `
+        -UserProfile ([Environment]::GetFolderPath('UserProfile')) `
+        -TemporaryRoot ([System.IO.Path]::GetTempPath()) `
+        -ProtectedRoots @([Environment]::GetFolderPath('LocalApplicationData'), [Environment]::GetFolderPath('ApplicationData'),
+            $InstallRoot, $DataRoot)
+    if ($Unsafe -ne '') { return "the folder is $Unsafe" }
+    return ''
+}
+
+# The default mount name of a folder, as the bootstrap validates it: the folder name in lower case, every character
+# outside [a-z0-9._-] replaced by '-'; '' when the result is not a valid name.
+function Get-DefaultProjectMountName([string] $Folder) {
+    $Leaf = [System.IO.Path]::GetFileName([System.IO.Path]::GetFullPath($Folder).TrimEnd([char[]] @('\', '/')))
+    $Candidate = [regex]::Replace($Leaf.ToLowerInvariant(), '[^a-z0-9._-]', '-')
+    if ($Candidate -cmatch '^[a-z0-9][a-z0-9._-]{0,62}$') { return $Candidate }
+    return ''
+}
+
+# Migration of a runtime that mounted one projects root (mapping format 1): one mount per registered project on its
+# current container path, so that no registry entry is rewritten. The plan is computed first, each folder is checked
+# on the host, then the table is written with the refused folders skipped. An unreadable registry entry refuses the
+# migration before anything is written; the caller's runtime snapshot is then restored. A runtime whose projects are
+# stored in PostgreSQL is not migrated (declared limit): its registry is not reachable from the bootstrap.
+function Invoke-ProjectMountMigration {
+    if (Test-PostgresqlStorage) { throw 'This MINOS Docker runtime stores its projects in PostgreSQL and still mounts one projects root: its migration to one mount per registered project is not supported. Nothing was changed and the installed runtime is kept. Remedy: uninstall the MINOS Docker runtime together with its data, install this release again, then expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.' }
+    $Plan = ConvertFrom-BootstrapJson (Invoke-ProjectMountBootstrap -Arguments @('migrate-project-mounts', '--dry-run'))
+    $Arguments = @('migrate-project-mounts')
+    foreach ($Mount in @($Plan.mounts)) {
+        $Refusal = Get-ProjectFolderRefusal ([string] $Mount.hostRoot)
+        if ($Refusal -ne '') {
+            Write-Warning "Project mount '$($Mount.name)' is not created by the migration: $Refusal."
+            $Arguments += @('--skip', [string] $Mount.path)
+        }
+    }
+    $Result = ConvertFrom-BootstrapJson (Invoke-ProjectMountBootstrap -Arguments $Arguments)
+    foreach ($Skipped in @($Result.skipped)) {
+        $Why = switch ([string] $Skipped.reason) {
+            'ROOT' { 'it is registered at the old projects root itself, which is no longer mounted' }
+            'DETACHED' { 'it is detached from every projects root' }
+            default { 'its folder is refused' }
+        }
+        Write-Warning "Project '$($Skipped.project)' is not mounted after the migration: $Why. It stays registered with its index (rootAvailable: false)."
+    }
+    Write-Host "MINOS Docker projects root migrated to $(@($Result.mounts).Count) project mount(s); a folder of the old root that was not registered is no longer visible to the containers." -ForegroundColor Cyan
 }
 
 # Resource ceilings (docker/compose-mcp.*.yaml, x-limits-<role>; defaults in docker/.env.example). Hitting
@@ -169,7 +456,8 @@ function Format-CeilingBytes($Bytes) {
 function Get-EffectiveCeilings([string] $Service) {
     $Json = $null
     try {
-        $Json = (& docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile config --format json 2>$null | Out-String)
+        $ComposeFiles = @(Get-ComposeFileArguments)
+        $Json = (& docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile @ComposeFiles config --format json 2>$null | Out-String)
         $Config = $Json | ConvertFrom-Json
         $Definition = $Config.services.$Service
         if ($null -ne $Definition) {
@@ -469,9 +757,23 @@ function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $E
 
 Move-LegacyRuntimeCompose
 
+# The recipe this action runs: the one about to be installed, or the installed runtime copy.
+$RecipeMountsProjectsRoot = $false
+if ($Action -eq 'Install') { $RecipeMountsProjectsRoot = Test-ComposeMountsProjectsRoot (Resolve-ComposeSource $SourceRoot) }
+else { $RecipeMountsProjectsRoot = Test-ComposeMountsProjectsRoot $ComposeFile }
+if (-not $RecipeMountsProjectsRoot -and -not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    Write-Warning 'The -ProjectsRoot parameter is ignored: the MINOS Docker runtime mounts no projects root, only the projects exposed with -Action AddProject.'
+}
+if (-not $RecipeMountsProjectsRoot -and $ReplaceProjectsRoot) {
+    Write-Warning 'The -ReplaceProjectsRoot switch is ignored: the MINOS Docker runtime has no projects root to replace.'
+}
+if ($RecipeMountsProjectsRoot -and $Action -in @('AddProject', 'RemoveProject')) {
+    throw 'This MINOS Docker runtime still mounts one projects root: run -Action Install of this release first, which migrates it to one mount per registered project. Nothing was changed.'
+}
+
 # Before any call to Docker (see Assert-QueryImageConfigured). Stop, Status, Attach and Uninstall are not
 # guarded: they start nothing, and a runtime that is not migrated must remain stoppable and removable.
-if ($Action -in @('Start', 'Validate', 'Admin')) { Assert-QueryImageConfigured }
+if ($Action -in @('Start', 'Validate', 'Admin', 'AddProject', 'RemoveProject')) { Assert-QueryImageConfigured }
 
 $DockerCommand = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $DockerCommand) { throw 'Docker is required.' }
@@ -483,7 +785,17 @@ switch ($Action) {
         if ([string]::IsNullOrWhiteSpace($Jar)) { throw '-Jar is required for Install. Use the shaded JAR from the same MINOS release.' }
         $Jar = (Resolve-Path -LiteralPath $Jar).Path
         if ([string]::IsNullOrWhiteSpace($Version)) { throw '-Version is required for Install.' }
-        if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) { throw "Projects root does not exist: $ProjectsRoot" }
+        if ($RecipeMountsProjectsRoot) {
+            # Only the recipe of a release that predates the project mounts gets here (see Test-ComposeMountsProjectsRoot).
+            if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { throw 'This release recipe mounts one projects root: -ProjectsRoot is required.' }
+            $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
+            if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) { throw 'The projects root of this release recipe does not exist.' }
+            $MappingFile = Join-Path (Join-Path $DataRoot 'runtime') 'project-paths.properties'
+            if ((Test-Path -LiteralPath $MappingFile -PathType Leaf) -and
+                (@(Get-Content -LiteralPath $MappingFile) -match '^\s*formatVersion\s*[=:]\s*2\s*$').Count -gt 0) {
+                throw 'This release recipe mounts one projects root, and this MINOS Docker data root exposes one mount per project: it is refused, so that no projects root is mounted again. Nothing was changed.'
+            }
+        }
         $ResolvedSemanticProvider = Resolve-SemanticProvider $SemanticProvider
 
         New-Item -ItemType Directory -Force -Path $RuntimeRoot, $DataRoot, $BackupsRoot | Out-Null
@@ -561,8 +873,6 @@ MINOS_COMPOSE_PROJECT=$ComposeProject
 MINOS_CONTAINER_NAME=$ContainerName
 MINOS_IMAGE=$Image
 MINOS_DATA_DIR="$(ConvertTo-DockerPath $DataRoot)"
-MINOS_PROJECTS_DIR="$(ConvertTo-DockerPath $ProjectsRoot)"
-MINOS_HOST_PROJECTS_ROOT="$(ConvertTo-DockerPath $ProjectsRoot)"
 MINOS_VERSION=$Version
 MINOS_GIT_COMMIT=$Commit
 MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
@@ -570,8 +880,15 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         # Written only by a recipe that has the query target: an installation made with a single image
         # receives the variable here, at the Install that follows the update of its program files.
         if ($QueryImage -ne '') { Add-Content -LiteralPath $EnvironmentFile -Value "MINOS_QUERY_IMAGE=$QueryImage" -Encoding ascii }
+        if ($RecipeMountsProjectsRoot) {
+            Add-Content -LiteralPath $EnvironmentFile -Encoding ascii -Value @(
+                "MINOS_PROJECTS_DIR=`"$(ConvertTo-DockerPath $ProjectsRoot)`"",
+                "MINOS_HOST_PROJECTS_ROOT=`"$(ConvertTo-DockerPath $ProjectsRoot)`"")
+        }
         if ($PreservedOverrides.Count -gt 0) { Add-Content -LiteralPath $EnvironmentFile -Value $PreservedOverrides -Encoding ascii }
 
+        # No project is mounted until the table is read below: a previous override is replaced by an empty one.
+        Write-ProjectMountsOverride -Mounts @()
         Compose @('config', '--quiet')
         Assert-DockerJavaRuntime -Image $Image -Failure 'The MINOS Docker image does not expose a valid Java runtime.'
         if ($QueryImage -ne '') {
@@ -582,18 +899,16 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
 
         Compose @('run', '--rm', '--no-deps', 'minos-data-bootstrap')
         Initialize-And-VerifyProviderTools
-        if ($ReplaceProjectsRoot) {
-            # Same entry point and arguments as the composed command, plus the explicit replacement.
-            Compose @('run', '--rm', '--no-deps', 'minos-bootstrap', 'configure-project-paths', '--replace',
-                (ConvertTo-DockerPath $ProjectsRoot), '/workspace/projects')
-        }
-        else {
-            Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
-        }
+        # A runtime that mounted one projects root (format 1) migrates to one mount per registered project; any other
+        # runtime gets its mount table from the composed bootstrap command (init-project-mounts).
+        if ($RecipeMountsProjectsRoot) { Compose @('run', '--rm', '--no-deps', 'minos-bootstrap') }
+        elseif ([int] (Get-ProjectMountTable).formatVersion -eq 1) { Invoke-ProjectMountMigration }
+        else { Compose @('run', '--rm', '--no-deps', 'minos-bootstrap') }
+        $MountStates = Update-ProjectMountsOverride
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
 
         [ordered]@{
-            formatVersion = 5
+            formatVersion = 6
             installedAt = $Timestamp
             image = $Image
             # Additive (AUD-DEP-15): '' when the recipe has a single image. Read with PSObject.Properties:
@@ -602,8 +917,8 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
             version = $Version
             gitCommit = $Commit
             dataRoot = $DataRoot
-            projectsRoot = $ProjectsRoot
-            containerProjectsRoot = '/workspace/projects'
+            # Names only: the host folder of a mount is listed by -Action Status -ShowHostPaths.
+            projectMounts = [ordered]@{ containerRoot = $ContainerProjectsRoot; count = @($MountStates).Count; names = @($MountStates | ForEach-Object { $_.Name }) }
             containerName = $ContainerName
             composeProject = $ComposeProject
             semanticProvider = $ResolvedSemanticProvider
@@ -619,7 +934,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Write-Host "Image     : $Image"
         if ($QueryImage -ne '') { Write-Host "Query img : $QueryImage (JRE and MINOS jar only)" }
         Write-Host "Data      : $DataRoot -> /var/lib/minos"
-        Write-Host "Projects  : $ProjectsRoot -> /workspace/projects (read-only)"
+        Write-Host "Projects  : $(@($MountStates).Count) exposed under $ContainerProjectsRoot (read-only, one mount per project); expose one with -Action AddProject -ProjectPath <folder>"
         Write-Host "Semantic  : $ResolvedSemanticProvider"
         Write-Host 'Network   : persistent query/bootstrap/provider-probe none; ephemeral admin has egress and launches no provider'
         Write-Host 'Providers : image-prepared, executable-probed offline, isolated named volume mounted read-only in query/admin planes'
@@ -632,6 +947,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         if (-not (Test-ComposeUsesQueryImage $ComposeFile)) {
             Write-Warning 'This MINOS Docker runtime was installed by a release with a single image: the MCP query plane still runs on the provider-complete image. Run the MINOS installer again (or prod-mcp-release.ps1 -Action Install) to give it the separate query image.'
         }
+        $null = Update-ProjectMountsOverride
         Compose @('up', '-d', '--force-recreate', 'minos-mcp')
         Write-Host 'MINOS Docker MCP query plane started.' -ForegroundColor Green
     }
@@ -643,6 +959,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
     'Admin' {
         Require-Installed
         if ($null -eq $MinosArguments -or $MinosArguments.Count -eq 0) { throw '-MinosArguments is required for Admin.' }
+        $null = Update-ProjectMountsOverride
         $ComposeArguments = @('run', '--rm', '--no-deps', 'minos-admin') + $MinosArguments
         # Exit 3 is a MINOS partial result (some registry entries are unreadable): the output printed above is valid
         # for the entries that could be read, so it is not a failure of the admin command. Every other Compose call
@@ -660,11 +977,22 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Require-Installed
         Get-Content -LiteralPath $MetadataFile
         Get-Content -LiteralPath $ProviderInventoryFile
+        # Mounts by name; a host folder is printed only on request, for the user of this machine.
+        $Mounts = @(Get-ProjectMountStates)
+        Write-Host "Project mounts ($($Mounts.Count) of 64) under ${ContainerProjectsRoot}:"
+        foreach ($Mount in $Mounts) {
+            $State = 'mounted'
+            if (-not $Mount.Available) { $State = 'not mounted: host folder missing' }
+            $Line = "  $($Mount.Name) ($State)"
+            if ($ShowHostPaths) { $Line += " <- $($Mount.HostRoot)" }
+            Write-Host $Line
+        }
         & docker ps -a --filter "name=^/$ContainerName$"
         Write-CeilingDiagnostics -Project $ComposeProject
     }
     'Validate' {
         Require-Installed
+        $null = Update-ProjectMountsOverride
         Compose @('config', '--quiet')
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         Assert-DockerJavaRuntime -Image $Metadata.image -Failure 'MINOS Docker validation failed.'
@@ -677,6 +1005,38 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
         Write-Host 'MINOS Docker query/admin/provider configuration validated.' -ForegroundColor Green
+    }
+    'AddProject' {
+        Require-Installed
+        # Every check happens on the host and before any write: the bootstrap only revalidates what it can see.
+        $Refusal = Get-ProjectFolderRefusal $ProjectPath
+        if ($Refusal -ne '') { throw "This folder cannot be exposed to the MINOS Docker runtime: $Refusal. Nothing was changed." }
+        $Folder = [System.IO.Path]::GetFullPath($ProjectPath)
+        $MountName = $Name
+        if ([string]::IsNullOrWhiteSpace($MountName)) { $MountName = Get-DefaultProjectMountName $Folder }
+        if ($MountName -cnotmatch '^[a-z0-9][a-z0-9._-]{0,62}$') {
+            throw 'No valid mount name: pass -Name with [a-z0-9][a-z0-9._-]{0,62} (lower case, digits, dot, dash, underscore). Nothing was changed.'
+        }
+        Assert-QueryImagePlane
+        $null = Update-ProjectMountsOverride
+        $null = Invoke-ProjectMountBootstrap -Arguments @('add-project-mount', $MountName, (ConvertTo-DockerPath $Folder))
+        $null = Update-ProjectMountsOverride
+        Write-Host 'Recreating minos-mcp to mount the project: attached MCP sessions are interrupted and must reconnect.' -ForegroundColor Cyan
+        Compose @('up', '-d', '--force-recreate', 'minos-mcp')
+        Compose @('run', '--rm', '--no-deps', 'minos-admin', 'project', 'add', "$ContainerProjectsRoot/$MountName")
+        Write-Host "MINOS Docker project exposed: $MountName -> $ContainerProjectsRoot/$MountName (read-only)." -ForegroundColor Green
+    }
+    'RemoveProject' {
+        Require-Installed
+        if ([string]::IsNullOrWhiteSpace($Name)) { throw '-Name is required for RemoveProject (see -Action Status).' }
+        Assert-QueryImagePlane
+        $null = Update-ProjectMountsOverride
+        # An unknown name is refused by the bootstrap before anything is written or recreated.
+        Write-Host (Invoke-ProjectMountBootstrap -Arguments @('remove-project-mount', $Name)).TrimEnd()
+        $null = Update-ProjectMountsOverride
+        Write-Host 'Recreating minos-mcp to unmount the project: attached MCP sessions are interrupted and must reconnect.' -ForegroundColor Cyan
+        Compose @('up', '-d', '--force-recreate', 'minos-mcp')
+        Write-Host "MINOS Docker project mount removed: $Name. Its projects stay registered with their index (rootAvailable: false)." -ForegroundColor Green
     }
     'Stop' {
         Require-Installed

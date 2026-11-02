@@ -235,8 +235,18 @@ function Ensure-ManagedVolume([string] $Name, [string] $Plane) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to create managed Docker volume: $Name" }
 }
 
+# The -f arguments of every Compose call: the runtime compose file, then the project mounts override that
+# mcp-lifecycle.ps1 generates (one read-only mount per exposed project) when it exists. Without it, minos-mcp would be
+# recreated with no project mounted.
+function Get-ComposeFileArguments {
+    $Files = @('-f', $ComposeFile)
+    $ProjectMounts = Join-Path $RuntimeRoot 'compose-mcp.projects.yaml'
+    if (Test-Path -LiteralPath $ProjectMounts -PathType Leaf) { $Files += @('-f', $ProjectMounts) }
+    return , $Files
+}
+
 function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
-    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile, '-f', $ComposeFile)
+    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile) + (Get-ComposeFileArguments)
     foreach ($Profile in $Profiles) { $Base += @('--profile', $Profile) }
     # Stdin MUST be a non-terminal pipe here, for the same reason as prod-mcp-release.ps1's
     # Compose helper: some invocation contexts (notably an installer's inherited console)
@@ -283,8 +293,8 @@ function Sync-ManagedPostgresPassword([string] $SecretFile) {
     $Password = (Read-BoundedUtf8 -Path $SecretFile -MaximumBytes 65536 -Label 'Managed PostgreSQL secret').Trim()
     if ([string]::IsNullOrWhiteSpace($Password)) { throw "Managed PostgreSQL secret is empty: $SecretFile" }
 
-    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile,
-        '-f', $ComposeFile, '--profile', 'postgresql', 'ps', '-q', 'minos-postgres')
+    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile) +
+        (Get-ComposeFileArguments) + @('--profile', 'postgresql', 'ps', '-q', 'minos-postgres')
     $Container = ((& docker @Base) | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Container)) {
         throw 'Unable to resolve the managed PostgreSQL container.'
@@ -489,8 +499,8 @@ if ($SemanticProvider -eq 'ollama') {
     Write-SetupProgress -Step 'ollama' -State 'done'
     if ($ProvisionOllamaModel) {
         Write-SetupProgress -Step 'ollama-model' -State 'running'
-        $ComposeBase = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile,
-            '-f', $ComposeFile, '--profile', 'ollama', 'ps', '-q', 'minos-ollama')
+        $ComposeBase = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile) +
+            (Get-ComposeFileArguments) + @('--profile', 'ollama', 'ps', '-q', 'minos-ollama')
         $OllamaContainer = ((& docker @ComposeBase) | Out-String).Trim()
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($OllamaContainer)) {
             throw 'Unable to resolve managed Ollama container.'

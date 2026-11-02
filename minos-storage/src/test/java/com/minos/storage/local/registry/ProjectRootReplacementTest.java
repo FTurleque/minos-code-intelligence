@@ -45,8 +45,8 @@ class ProjectRootReplacementTest {
         home = Files.createDirectories(temp.resolve("home"));
         oldRoot = Files.createDirectories(temp.resolve("old")).toRealPath();
         newRoot = Files.createDirectories(temp.resolve("new")).toRealPath();
-        oldMapping = new ProjectPathMapping(oldRoot.toString(), "/workspace/projects");
-        newMapping = new ProjectPathMapping(newRoot.toString(), "/workspace/projects");
+        oldMapping = ProjectPathMapping.singleRoot(oldRoot.toString(), "/workspace/projects");
+        newMapping = ProjectPathMapping.singleRoot(newRoot.toString(), "/workspace/projects");
         new ProjectPathMappingStore(home).save(oldMapping);
     }
 
@@ -72,7 +72,7 @@ class ProjectRootReplacementTest {
     void aProjectUnderTheNewRootIsRebased() throws Exception {
         Path team = Files.createDirectories(oldRoot.resolve("team"));
         RegisteredProject app = register(Files.createDirectories(team.resolve("app")), "App");
-        ProjectPathMapping teamMapping = new ProjectPathMapping(team.toString(), "/workspace/projects");
+        ProjectPathMapping teamMapping = ProjectPathMapping.singleRoot(team.toString(), "/workspace/projects");
 
         ProjectPathMappings.Replacement replacement = new LocalProjectPathMappings(home).replace(teamMapping);
 

@@ -166,7 +166,6 @@ function Invoke-Workflow {
         $Parameters['Jar'] = $Jar
         $Parameters['Version'] = '1.0.1-SNAPSHOT'
         $Parameters['Commit'] = $Head
-        $Parameters['ProjectsRoot'] = $ProjectsRoot
     }
     if ($MinosArguments.Count -gt 0) {
         $Parameters['MinosArguments'] = $MinosArguments
@@ -203,7 +202,10 @@ try {
     Invoke-Workflow -Action Validate
 
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'list', '--format', 'json')
-    $ContainerFixture = '/workspace/projects/' + ($FixtureRelativePath.Replace('\', '/').Trim('/'))
+    # The Docker runtime mounts only the projects exposed one by one: the fixture is exposed under its own mount.
+    & $Workflow -Action AddProject -InstallRoot $InstallRoot -DataRoot $DataRoot -ContainerName $ContainerName `
+        -ComposeProject $ComposeProject -ProjectPath $FixtureHostPath -Name 'm29-s3-fixture'
+    $ContainerFixture = '/workspace/projects/m29-s3-fixture'
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'add', $ContainerFixture, '--name', 'm29-s3-fixture', '--format', 'json')
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'inspect', 'm29-s3-fixture', '--format', 'json')
 

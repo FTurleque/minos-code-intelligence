@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $InstallRoot,
 
+    # Ignored with a warning: the Docker runtime mounts no projects root (see mcp-lifecycle.ps1 -Action AddProject).
     [string] $ProjectsRoot = '',
     [switch] $Start,
     [switch] $Stop,
@@ -32,8 +33,7 @@ param(
 
     [switch] $ProvisionOllamaModel,
 
-    # Replaces another recorded projects root (configure-project-paths --replace); set by the switcher only
-    # after the user confirmed the change.
+    # Ignored with a warning: there is no projects root to replace.
     [switch] $ReplaceProjectsRoot,
 
     # Installer progress file; empty (the default) writes no progress.
@@ -77,7 +77,6 @@ function Read-KeyValueFile([string] $Path) {
 }
 
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
-if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) { $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot) }
 $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
 if ([string]::IsNullOrWhiteSpace($DockerInstallRoot)) { $DockerInstallRoot = Join-Path $LocalAppData 'MINOS\docker' }
 if ([string]::IsNullOrWhiteSpace($DockerDataRoot)) { $DockerDataRoot = Join-Path $LocalAppData 'MINOS\docker-data' }
@@ -136,9 +135,8 @@ try {
         return
     }
 
-    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { Fail-Or-Warn '-ProjectsRoot is required when configuring Docker MCP.'; return }
-    if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
-        Fail-Or-Warn "MINOS Docker MCP projects root does not exist: $ProjectsRoot"; return
+    if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot) -or $ReplaceProjectsRoot) {
+        Write-Warning 'The projects root is ignored: the MINOS Docker runtime mounts no projects root, only the projects exposed with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.'
     }
 
     $VersionFile = Join-Path $InstallRoot 'VERSION'
@@ -170,6 +168,21 @@ try {
     # This mirrors the existing $BaseSemanticProvider handling, which already does exactly this
     # for the semantic side when passing SemanticProvider to the base workflow.
     $BaseProperties = Join-Path $DockerDataRoot 'config\minos.properties'
+    # A runtime that still mounts one projects root migrates to one mount per registered project during the base
+    # Install, which reads the registry. With PostgreSQL storage, the registry is only reachable once the connected
+    # services run, after that Install: this migration is a declared limit, refused before anything changes.
+    $MappingFile = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
+    $PreviousPostgresql = (Test-Path -LiteralPath $BaseProperties -PathType Leaf) -and
+        (@(Get-Content -LiteralPath $BaseProperties) -match '^\s*minos\.storage\.backend\s*[=:]\s*postgresql\s*$').Count -gt 0
+    $SingleRootMapping = (Test-Path -LiteralPath $MappingFile -PathType Leaf) -and
+        (@(Get-Content -LiteralPath $MappingFile) -match '^\s*formatVersion\s*[=:]\s*1\s*$').Count -gt 0
+    if ($PreviousPostgresql -and $SingleRootMapping) {
+        Fail-Or-Warn ('This MINOS Docker runtime stores its projects in PostgreSQL and still mounts one projects root: ' +
+            'its migration to one mount per registered project is not supported. Nothing was changed and the installed ' +
+            'runtime is kept. Remedy: uninstall the MINOS Docker runtime together with its data, install this release ' +
+            'again, then expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.')
+        return
+    }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $BaseProperties) | Out-Null
     @(
         '# MINOS runtime configuration managed by the Windows installer',
@@ -182,10 +195,8 @@ try {
         Jar = $Jar
         Version = $Version
         Commit = $Commit
-        ProjectsRoot = $ProjectsRoot
         SemanticProvider = $BaseSemanticProvider
     }
-    if ($ReplaceProjectsRoot) { $InstallParameters['ReplaceProjectsRoot'] = $true }
     Invoke-DockerWorkflow -Action Install -AdditionalParameters $InstallParameters
     Write-SetupProgress -Step 'docker-image' -State 'done'
 
@@ -211,7 +222,6 @@ try {
     @"
 version=$Version
 commit=$Commit
-projectsRoot=$ProjectsRoot
 dockerInstallRoot=$DockerInstallRoot
 dockerDataRoot=$DockerDataRoot
 containerName=$DockerContainerName
@@ -234,7 +244,7 @@ configuredAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
     }
 
     Write-Host 'MINOS Docker MCP setup SUCCESS' -ForegroundColor Green
-    Write-Host "Projects : $ProjectsRoot"
+    Write-Host 'Projects : none mounted until exposed with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>'
     Write-Host "Storage  : $StorageBackend"
     Write-Host "Semantic : $SemanticProvider"
     Write-Host "Log      : $LogPath"
