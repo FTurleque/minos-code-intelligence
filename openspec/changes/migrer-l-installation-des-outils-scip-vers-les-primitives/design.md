@@ -72,6 +72,13 @@ Les helpers `move` de `ManagedScipProviderRuntimeManager` (`:927`) et de `Manage
 
 (a) `forceFile` d'une archive Node de 30 à 40 Mo et d'un arbre `node_modules` déplacé (`moveDirectory`) sous Windows avec l'antivirus actif ; (b) l'installation puis l'indexation réelle de `scip-java` sous Windows (AppContainer) et sous Linux (bubblewrap) avec le résultat de la tâche 4.1. Seuil d'abandon : une installation qui dure plus de 25 % de plus, ou un échec d'accès du conteneur.
 
+**Mesure du 2026-11-02** (JAR ombré construit au HEAD de `develop` `4a92dd81`, Temurin 25) :
+
+- (a) Windows 10, Microsoft Defender actif (protection en temps réel). Banc Java, 9 itérations alternées, sur la vraie archive `node-v24.20.0-win-x64.zip` (37,5 Mo) et le vrai arbre `node_modules` de scip-typescript 0.4.0 (377 fichiers), source recopiée hors chronométrage : `DurableAtomicFile.replace` médiane 20,1 ms contre 3,2 ms pour `Files.move` atomique (+17 ms, fsync) ; `DurableAtomicFile.moveDirectory` médiane 2,3 ms contre 1,9 ms. Installation complète `minos tools install scip-typescript` (téléchargement de Node compris) : 8,4 s et 8,6 s. Le surcoût des primitives reste sous 1 % de l'installation.
+- (b) Linux, WSL2 Ubuntu 24.04 (bubblewrap 0.9.0, cgroup v2 délégué) : `minos tools install scip-java` → `READY`, arbre installé en `0600` / `0700` ; `minos index` de `fixtures/java/java-simple` → `SUCCEEDED` sous bubblewrap : le provider lit l'arbre `0600` du même utilisateur. Aucun échec d'accès. La durée d'installation n'a pas été comparée à une version antérieure à la migration.
+
+**Décision selon le seuil** : seuil non atteint (surcoût < 1 %, aucun échec d'accès) ; la migration est conservée.
+
 ## Direction des dépendances
 
 `adapters → engine` (ADR 0022) ; `com.minos.io` est déjà importé par les cinq fichiers. Aucun package nouveau, aucun cycle.
