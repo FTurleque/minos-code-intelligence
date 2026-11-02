@@ -220,13 +220,13 @@ try {
     Assert-True ($ClaudeState.Contains($ExpectedExe) -and $ClaudeState.Contains($DataRoot)) 'Claude Code did not receive the MINOS command/environment.'
     Assert-True ($ClaudeState -match 'mcp add minos .*--scope user') 'Claude Code server name must precede scope and env options.'
     Assert-True ($CodexState.Contains($ExpectedExe) -and $CodexState.Contains($DataRoot)) 'Codex did not receive the MINOS command/environment.'
-    Assert-True ((Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -ge 2) 'Expected JSON configuration backups.'
+    Assert-True (@(Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -ge 2) 'Expected JSON configuration backups.'
 
     # Re-running installation with the same selection must be idempotent: no
     # duplicate MINOS server, no rewrite and no additional JSON backup.
     $CopilotBeforeSecondInstall = [System.IO.File]::ReadAllText($CopilotConfig, [System.Text.Encoding]::UTF8)
     $ClaudeBeforeSecondInstall = [System.IO.File]::ReadAllText($ClaudeDesktopConfig, [System.Text.Encoding]::UTF8)
-    $BackupCountBeforeSecondInstall = (Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count
+    $BackupCountBeforeSecondInstall = @(Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count
 
     & $Manager `
         -InstallRoot $InstallRoot `
@@ -249,7 +249,7 @@ try {
     Assert-True (@($ClaudeAfterSecondInstall.mcpServers.PSObject.Properties | Where-Object { $_.Name -eq 'minos' }).Count -eq 1) 'Claude Desktop contains duplicate MINOS entries after reinstall.'
     Assert-True ([System.IO.File]::ReadAllText($CopilotConfig, [System.Text.Encoding]::UTF8) -eq $CopilotBeforeSecondInstall) 'Copilot configuration was unnecessarily rewritten on idempotent reinstall.'
     Assert-True ([System.IO.File]::ReadAllText($ClaudeDesktopConfig, [System.Text.Encoding]::UTF8) -eq $ClaudeBeforeSecondInstall) 'Claude Desktop configuration was unnecessarily rewritten on idempotent reinstall.'
-    Assert-True ((Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -eq $BackupCountBeforeSecondInstall) 'Idempotent reinstall created unnecessary JSON backups.'
+    Assert-True (@(Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -eq $BackupCountBeforeSecondInstall) 'Idempotent reinstall created unnecessary JSON backups.'
 
     & $Manager `
         -InstallRoot $InstallRoot `

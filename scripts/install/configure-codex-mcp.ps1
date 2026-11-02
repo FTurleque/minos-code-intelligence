@@ -128,12 +128,27 @@ function Write-State([object] $State) {
         [System.Text.UTF8Encoding]::new($false))
 }
 
+# A backup directory that no earlier backup owns: the timestamp keeps backups in chronological order and
+# the random suffix separates backups taken within one clock tick (about 15.6 ms on .NET Framework).
+function New-UniqueBackupDirectory([string] $Root) {
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    $Stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
+    for ($Attempt = 0; $Attempt -lt 16; $Attempt++) {
+        $Candidate = Join-Path $Root ($Stamp + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+        if (-not (Test-Path -LiteralPath $Candidate)) {
+            [System.IO.Directory]::CreateDirectory($Candidate) | Out-Null
+            return $Candidate
+        }
+    }
+    throw "No free backup directory under '$Root'."
+}
+
 function Backup-File([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
-    $Directory = Join-Path $BackupRoot ([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff'))
-    New-Item -ItemType Directory -Force -Path $Directory | Out-Null
+    $Directory = New-UniqueBackupDirectory $BackupRoot
     $Target = Join-Path $Directory ('codex-' + [System.IO.Path]::GetFileName($Path))
-    Copy-Item -LiteralPath $Path -Destination $Target -Force
+    # overwrite=false: a backup never replaces another file.
+    [System.IO.File]::Copy($Path, $Target, $false)
     Write-Log "BACKUP client=codex source='$Path' target='$Target'"
     return $Target
 }
