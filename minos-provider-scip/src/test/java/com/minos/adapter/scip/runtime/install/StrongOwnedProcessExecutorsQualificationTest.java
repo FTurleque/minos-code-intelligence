@@ -112,6 +112,24 @@ class StrongOwnedProcessExecutorsQualificationTest {
                 .anyMatch(value -> value.contains("not provided by the Docker MCP backend")));
     }
 
+    // The production entry point: a BLOCKED status reaches the Docker disposition, and a native host
+    // does not even select a sandbox for a status that is not ready.
+    @Test
+    void ownershipQualificationAppliesTheDockerDispositionToABlockedStatus() {
+        ProviderRuntimeStatus blocked = blockedStatus(List.of(
+                ExternalPrerequisite.of("minos.scip.java.maven-repository is not set")));
+
+        ProviderRuntimeStatus docker = StrongOwnedProcessExecutors.qualifyOwnership(
+                blocked, WorkerSandboxBackend::nativeEphemeralWorkspace, true);
+        ProviderRuntimeStatus nativeHost = StrongOwnedProcessExecutors.qualifyOwnership(
+                blocked, () -> {
+                    throw new AssertionError("no sandbox is selected for a status that is not ready");
+                }, false);
+
+        assertEquals(ProviderRuntimeStatus.State.UNSUPPORTED_BY_BACKEND, docker.state());
+        assertEquals(blocked, nativeHost);
+    }
+
     @Test
     void machinePrerequisitesStillBlockOnANativeHost() {
         ProviderRuntimeStatus blocked = blockedStatus(List.of(

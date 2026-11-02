@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /** Applies the fail-closed local isolation policy to every managed SCIP provider. */
 final class StrongOwnedProcessExecutors {
@@ -50,10 +51,22 @@ final class StrongOwnedProcessExecutors {
      * execution remains fail-closed on the stricter worker selector.</p>
      */
     static ProviderRuntimeStatus qualifyOwnership(ProviderRuntimeStatus status, Path minosHome) {
-        if (!status.ready()) return status;
-        WorkerSandboxBackend sandbox = WorkerSandboxBackends
-                .strongestAvailableForManagedLocalProvider(minosHome);
-        return qualifySandbox(status, sandbox, isDockerRuntimeLocation());
+        Supplier<WorkerSandboxBackend> sandbox =
+                () -> WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(minosHome);
+        return qualifyOwnership(status, sandbox, isDockerRuntimeLocation());
+    }
+
+    /**
+     * Selects the sandbox only for a status it can change: a ready one on any backend, and a not-ready one on
+     * the Docker backend, whose disposition of machine prerequisites depends on the sandbox tier.
+     */
+    static ProviderRuntimeStatus qualifyOwnership(
+            ProviderRuntimeStatus status,
+            Supplier<WorkerSandboxBackend> sandbox,
+            boolean dockerBackend
+    ) {
+        if (!status.ready() && !dockerBackend) return status;
+        return qualifySandbox(status, sandbox.get(), dockerBackend);
     }
 
     /**
