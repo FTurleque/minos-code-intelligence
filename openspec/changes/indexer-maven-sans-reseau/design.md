@@ -159,6 +159,27 @@ Un nouvel ADR du domaine sécurité (`SEC-0076`) fixe la voie A et écarte B et 
 - Suites distinctes : Maven géré sous Linux (version garantie, plus de dépendance au Maven de l'hôte) ; retrait de `MAVEN_OPTS` des fichiers Compose.
 - Suite possible, non retenue : un overlay bubblewrap (dépôt de tête au-dessus du dépôt désigné), `--overlay` arrivant avec bubblewrap 0.10 alors qu'Ubuntu 24.04 livre 0.9.
 
+### Mesure de la tâche 1.1 (2026-11-02)
+
+WSL2 Ubuntu 24.04, bubblewrap 0.9.0, Temurin 25 sous `/usr/lib/jvm`, Maven 3.9.16 sous `/usr/local`, umask 022. Dépôt désigné peuplé hors bac à sable depuis `fixtures/java/java-simple` (741 entrées). Ligne de D1 lancée à la main sous `bwrap --unshare-all --cap-drop ALL`, `/usr` en lecture seule, copie du projet et run inscriptibles, dépôt désigné par `--ro-bind`, environnement réduit à `PATH` et `JAVA_HOME`.
+
+- **Succès** : `BUILD SUCCESS` en 3 s ; aucun artefact manquant.
+- **Écritures dans le dépôt désigné** : aucune ; liste, tailles, horodatages et modes identiques avant et après, aucun message d'écriture refusée. Le dépôt de tête reste **vide** (aucun `_remote.repositories` ni `resolver-status.properties`). La décision 1 tient sans copie (C3).
+- **`maven.repo.local.tail.ignoreAvailability`** : inutile, la valeur par défaut suffit.
+- **`user.home`** : `HOME` absent, `user.home = ?` ; sans effet, `-Dmaven.repo.local` fixant le dépôt de tête.
+- **Masquage (décision 6)** : un fichier ordinaire vide lié sur `conf/toolchains.xml` fait échouer Maven (« Non-readable toolchains … input contained no data ») ; `/dev/null`, que monte `LinuxSandboxReadOnlyRoots`, est accepté.
+- **Arguments de scip-java** (relevés sur `minos index`, tâche 4.1) : scip-java place avant la ligne de MINOS `-Dmaven.compiler.useIncrementalCompilation=false -Dmaven.compiler.compilerId=javac -Dmaven.compiler.executable=<tmp>/bin/javac -Dmaven.compiler.fork=true` et transmet la ligne de MINOS telle quelle, élément par élément. Aucun repli de D4 (`MAVEN_ARGS`, `.mvn/maven.config`) n'est nécessaire ; `MAVEN_ARGS` n'a pas été essayé.
+- **Maven installé par `apt`** : non mesuré (paquet non installé, son installation exige les droits administrateur). Ubuntu 24.04 propose Maven 3.8.7, hors de la plage de la décision 7 : refus avant tout lancement.
+- **Dépôt sous `/mnt/c` (DrvFs)** : propriétaire `uid 1000`, mode `777` sur chaque composant, aucun lien dans la copie. Sous `bwrap` à la main, le build réussit en 7 à 8 s (3 s sur ext4) et le dépôt reste inchangé. Par `minos`, la revérification du bac à sable le refuse (`777`), alors que `minos doctor` déclare scip-java `READY` : écart de `doctor`, relevé par la revue de sécurité (ci-dessous).
+
+### Revues de la tâche 5.3 (2026-11-02)
+
+Aucun constat bloquant. `check-module-boundaries.py` vert (A8 : 0 cycle ; A13 : `IndexerProcessPlan` nommé par 4 fichiers de `minos-provider-scip`). Constats à traiter par le propriétaire :
+
+- **À corriger (sécurité)** : `ScipJavaMavenOffline.repository()` ne contrôle ni le propriétaire ni les droits des composants du chemin ; `doctor` annonce `READY` un dépôt que le bac à sable refuse.
+- **À corriger (sécurité et architecture)** : la revérification du bac à sable (`LinuxSandboxReadOnlyRoots`) protège workspace, artefact, run et `MINOS_HOME`, pas le projet source que D2 cite ; le contrôle du chevauchement avec le projet est fait par `ScipJavaMavenOffline.prepare`. Aligner le code ou D2.
+- **Remarques** : contenu du dépôt désigné non vérifié sous sa racine (sous-dossier inscriptible par le groupe sur un poste partagé) ; `PATH` hérité (une entrée relative ferait lancer un `mvn` de la copie, toujours confiné) ; l'instantané du script de CI ne compare pas les modes ; une `IOException` de `toRealPath` peut porter le chemin désigné (rendu non suivi) ; le constructeur public de `ManagedScipProviderRuntimeManager` a changé de signature (classe d'adaptateur, hors surface publique).
+
 ## Qualification
 
 | Capacité | État visé par ce changement |

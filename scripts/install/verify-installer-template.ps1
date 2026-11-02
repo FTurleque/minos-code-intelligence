@@ -108,6 +108,9 @@ Require 'ConfigureMcpClients;' 'Installer does not configure shared clients afte
 # validation/handshake" message that reads as if nothing happened at all.
 Require 'DiagnosticLine' 'Backend-switch failure dialog does not clarify that the MINOS program files were already installed successfully.'
 Require 'function LastBackendSwitchLogLine' 'Installer does not surface the actual backend-switch failure reason inline instead of only pointing at a log file.'
+# A failed switch ends its log with ROLLBACK lines; the cause is the FAIL line of the same run.
+Require 'function BackendSwitchFailureCause(LogPath: String): String;' 'Installer does not read the FAIL line of the last backend switch run.'
+Require "DiagnosticLine := 'Cause : ' + Cause" 'Backend-switch failure dialog does not show the FAIL message as the cause.'
 # Inno's own progress bar reflects file-copy progress only; the long-running Docker/MCP [Code]
 # steps that follow it give no visual feedback at all unless the script explicitly updates the
 # status text, which otherwise reads as a frozen/hung installer during a multi-minute Docker build.

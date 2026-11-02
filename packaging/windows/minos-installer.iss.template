@@ -1026,6 +1026,39 @@ begin
   end;
 end;
 
+{ The message of the FAIL line written by the last switch run, read from the end of the log down to
+  that run's BEGIN line. The ROLLBACK lines that follow a failure report the rollback, not its cause.
+  Empty when the last run wrote no FAIL line. }
+function BackendSwitchFailureCause(LogPath: String): String;
+var
+  LogText: AnsiString;
+  Lines: TArrayOfString;
+  Index: Integer;
+  Start: Integer;
+  Line: String;
+begin
+  Result := '';
+  if not (FileExists(LogPath) and LoadStringFromFile(LogPath, LogText)) then exit;
+  Lines := StringSplit(LogText, [#13#10], stExcludeEmpty);
+  for Index := GetArrayLength(Lines) - 1 downto 0 do
+  begin
+    Line := Trim(Lines[Index]);
+    if Pos(' BEGIN ', Line) > 0 then exit;
+    if Pos(' FAIL ', Line) > 0 then
+    begin
+      Start := Pos('message=''', Line);
+      if (Start > 0) and (Copy(Line, Length(Line), 1) = '''') then
+      begin
+        Result := Copy(Line, Start + 9, Length(Line) - Start - 9);
+        StringChangeEx(Result, '''''', '''', True);
+      end
+      else
+        Result := Line;
+      exit;
+    end;
+  end;
+end;
+
 function ConfigureSelectedMcpBackend(): Boolean;
 var
   ResultCode: Integer;
@@ -1033,6 +1066,7 @@ var
   PowerShell: String;
   TargetBackend: String;
   LogPath: String;
+  Cause: String;
   LastLogLine: String;
   DiagnosticLine: String;
   Succeeded: Boolean;
@@ -1077,8 +1111,12 @@ begin
   begin
     StopSetupProgress('backend', False);
     LogPath := EffectiveDataRoot() + '\runtime\backend-switch.log';
+    Cause := BackendSwitchFailureCause(LogPath);
+    if Cause <> '' then Log('ConfigureSelectedMcpBackend: backend switch failed: ' + Cause);
     LastLogLine := LastBackendSwitchLogLine(LogPath);
-    if LastLogLine <> '' then
+    if Cause <> '' then
+      DiagnosticLine := 'Cause : ' + Cause
+    else if LastLogLine <> '' then
       DiagnosticLine := 'Dernière ligne du journal : ' + LastLogLine
     else
       DiagnosticLine := 'Journal complet : ' + LogPath;
