@@ -20,7 +20,8 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Les scripts
 ## 4. Preuve sur un installeur construit
 
 - [x] 4.1 Construire `scripts/release/build-local-windows-candidate.ps1 -Version 1.3.0 -SkipMavenVerify` : SUCCESS au HEAD `f40fa3d0` (compilateur choisi automatiquement : Inno Setup 7). Le modèle compile aussi avec Inno Setup 6.7.3 (`build-windows-installer.ps1 -IsccPath`). La compilation en 6.7.1, version épinglée par la CI de release, n'a pas pu être faite sur le poste ; elle revient à `release-windows.yml`.
-- [ ] 4.2 **(manuelle)** Installation interactive du candidat, backend natif et au moins un client IA : une rangée par étape, chacune passe au vert. Noter le résultat dans la PR.
+- [x] 4.2 **(manuelle)** Installation interactive du candidat, backend natif et au moins un client IA : une rangée par étape, chacune passe au vert. Noter le résultat dans la PR.
+  - Preuve (2026-11-02, installation par le propriétaire) : candidat 1.3.0 (`9bd7d86f`), backend Docker avec PostgreSQL et Ollama gérés, clients Claude Code et Claude Desktop. Une rangée par étape ; toutes passent au vert et l'installation aboutit (`backend-switch.log` : `SUCCESS previous=native target=docker`, 2026-11-02T22:18:45Z). Les deux essais qui ont précédé ont montré l'échec en rouge sur la rangée « Image Docker MINOS » et la cause dans la boîte de dialogue. Écart : backend Docker au lieu du backend natif ; il affiche toutes les rangées du backend natif et celles de l'image, de PostgreSQL et d'Ollama.
 
 ## 5. Recette Docker
 
@@ -28,5 +29,7 @@ Ordre : rouge, correction, preuve. Tout `-pl` s'accompagne de `-am`. Les scripts
 
 ## 6. Clôture
 
-- [ ] 6.1 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict`.
-- [ ] 6.2 Docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md` (si l'installeur y est décrit), la page utilisateur de 3.1 ; réécrire le « Purpose » de `installeur-windows` après `openspec archive`.
+- [x] 6.1 `python .claude/scripts/run_gates.py --fast` ; `openspec validate --all --strict`.
+  - Preuve (2026-11-02, `develop` `f6018c5e`) : `python .claude/scripts/run_gates.py --fast` → 25/25 ; `openspec validate --all --strict` → 32 passed, 0 failed.
+- [x] 6.2 Docs à mettre à jour avant archivage : `docs/project/governance/STATUS.md` (si l'installeur y est décrit), la page utilisateur de 3.1 ; réécrire le « Purpose » de `installeur-windows` après `openspec archive`.
+  - Fait (2026-11-02) : `docs/project/governance/STATUS.md` ne décrit pas l'assistant d'installation ; la page utilisateur est `docs/user/production-installation.md` § 8 bis (tâche 3.1) ; le « Purpose » de `openspec/specs/installeur-windows/spec.md` est réécrit après `openspec archive`. `check-current-docs.py` et `product-facts.py --check` verts.
