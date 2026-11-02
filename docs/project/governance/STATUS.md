@@ -293,6 +293,7 @@ La **gate JaCoCo ciblée** de `PR Validation` (`scripts/quality/check-jacoco.py`
 - PostgreSQL distant exige la politique TLS qualifiée ;
 - indexation Windows non-admin et mutations ACL additives/ciblées ;
 - mise à jour Docker MCP non interactive et fail-fast ;
+- runtime Docker : aucune racine des projets montée ; `/workspace/projects` ne contient que les projets inscrits, chacun monté en lecture seule sur `/workspace/projects/<nom>` par `prod-mcp-release.ps1 -Action AddProject` et retiré par `RemoveProject` ; une installation à racine unique migre au premier `Install` vers un montage par projet inscrit, sans réécrire le registre (refusée avec PostgreSQL) ; l'installeur ne demande plus de racine ([ADR SEC-0075](../../architecture/adr/SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md), [`docs/user/docker-runtime.md`](../../user/docker-runtime.md)) ;
 - branches de promotion : `develop` doit contenir l'ascendance de `main` avant tout candidat, vérifié par CI ;
 - aucun cycle de packages dans le code de production ni dans le plugin (règle A8 de `check-module-boundaries.py`, table `KNOWN_PACKAGE_CYCLES` vide) ;
 - une qualification de confinement OS indisponible échoue dans la CI au lieu d'être sautée (`minos.sandbox.tests.required`).
