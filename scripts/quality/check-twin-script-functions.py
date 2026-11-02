@@ -68,6 +68,9 @@ TWINS = (
     ("Get-PreservedCeilingOverrides", ("docker/scripts/mcp-lifecycle.ps1", "docker/scripts/prod-mcp.ps1")),
     # MCP client detection and configuration, both shipped.
     ("Get-UserFolderPath", ("scripts/install/configure-mcp-clients.ps1", "scripts/install/detect-mcp-clients.ps1")),
+    # Backups of MCP client configurations, one directory per backup, shared backup root.
+    ("New-UniqueBackupDirectory", ("scripts/install/configure-codex-mcp.ps1",
+                                   "scripts/install/configure-mcp-clients.ps1")),
     # Installer progress protocol, written by each configuration script the installer runs with -ProgressPath.
     ("Write-SetupProgress", ("docker/scripts/configure-docker-mcp.ps1", _DOCKER_SERVICES,
                              "scripts/install/configure-mcp-clients-setup.ps1",

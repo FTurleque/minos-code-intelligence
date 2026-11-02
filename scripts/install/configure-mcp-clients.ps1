@@ -264,16 +264,30 @@ function Get-ObjectPropertyValue([object] $Root, [string] $Name) {
     return $Property.Value
 }
 
+# A backup directory that no earlier backup owns: the timestamp keeps backups in chronological order and
+# the random suffix separates backups taken within one clock tick (about 15.6 ms on .NET Framework).
+function New-UniqueBackupDirectory([string] $Root) {
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    $Stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
+    for ($Attempt = 0; $Attempt -lt 16; $Attempt++) {
+        $Candidate = Join-Path $Root ($Stamp + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+        if (-not (Test-Path -LiteralPath $Candidate)) {
+            [System.IO.Directory]::CreateDirectory($Candidate) | Out-Null
+            return $Candidate
+        }
+    }
+    throw "No free backup directory under '$Root'."
+}
+
 function Backup-Configuration([string] $ClientId, [string] $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         return ''
     }
-    $Stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
-    $Directory = Join-Path $BackupRoot $Stamp
-    New-Item -ItemType Directory -Force -Path $Directory | Out-Null
+    $Directory = New-UniqueBackupDirectory $BackupRoot
     $SafeName = ($ClientId -replace '[^A-Za-z0-9_.-]', '_') + '-' + [System.IO.Path]::GetFileName($Path)
     $Backup = Join-Path $Directory $SafeName
-    Copy-Item -LiteralPath $Path -Destination $Backup -Force
+    # overwrite=false: a backup never replaces another file.
+    [System.IO.File]::Copy($Path, $Backup, $false)
     Write-IntegrationLog "BACKUP client=$ClientId source='$Path' target='$Backup'"
     return $Backup
 }
