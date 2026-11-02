@@ -41,8 +41,8 @@ class WindowsSandboxMountsRefusalTest {
         Path run = Files.createDirectory(temporary.resolve("run"));
         WindowsAppContainerWorkerSandboxBackend backend = new WindowsAppContainerWorkerSandboxBackend(home, powershell());
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> backend.sandboxPlan(planWithRoot(), run));
+        IndexerProcessPlan plan = planWithRoot();
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> backend.sandboxPlan(plan, run));
 
         assertTrue(refused.getMessage().startsWith("the Windows AppContainer sandbox cannot mount"),
                 refused.getMessage());
@@ -61,8 +61,9 @@ class WindowsSandboxMountsRefusalTest {
                 .orElseThrow(() -> new AssertionError("Job Object ownership needs only Windows PowerShell"))
                 .transformer();
 
+        IndexingExecutionRequest request = request(project);
         IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> executor.executeSandboxed(request(project), transformer));
+                () -> executor.executeSandboxed(request, transformer));
 
         assertTrue(refused.getMessage().startsWith("Windows Job Object process ownership cannot mount"),
                 refused.getMessage());

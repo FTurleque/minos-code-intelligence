@@ -60,7 +60,7 @@ public final class ScipJavaMavenOffline {
     static final Set<String> REPOSITORY_ROOT_METADATA = Set.of(
             "resolver-status.properties", "maven-metadata-local.xml", "_remote.repositories");
     /** Root entries that hold user settings or credentials, never part of a repository. */
-    static final Set<String> USER_SETTINGS_FILES = Set.of("settings.xml", "settings-security.xml", "toolchains.xml");
+    static final Set<String> USER_SETTINGS_FILES = Set.of(SETTINGS_FILE, "settings-security.xml", "toolchains.xml");
     /** System directories a designation may be neither, nor contain, nor lie under. */
     static final List<Path> SYSTEM_DIRECTORIES = List.of(
             Path.of("/etc"), Path.of("/proc"), Path.of("/sys"), Path.of("/dev"), Path.of("/root"), Path.of("/run"));

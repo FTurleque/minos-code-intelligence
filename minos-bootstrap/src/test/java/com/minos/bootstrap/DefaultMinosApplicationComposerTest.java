@@ -140,8 +140,9 @@ class DefaultMinosApplicationComposerTest {
         Path home = temp.resolve("home");
         java.nio.file.Files.createDirectories(home.resolve("config").resolve("minos.properties"));
 
+        DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
         IllegalStateException refused = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
-                () -> new DefaultMinosApplicationComposer().providerRuntimeManager(home));
+                () -> composer.providerRuntimeManager(home));
 
         assertEquals("MINOS runtime configuration cannot be read", refused.getMessage());
     }

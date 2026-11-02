@@ -81,8 +81,9 @@ class ProcessPlanSandboxMountsPropagationTest {
                     plan.generatedArtifact(), plan.timeout());
         });
 
+        IndexingExecutionRequest request = request(project);
         IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> executor.executeSandboxed(request(project), dropping));
+                () -> executor.executeSandboxed(request, dropping));
 
         assertTrue(transformed.get());
         assertEquals("the process boundary dropped the sandbox mounts the provider plan declares",
@@ -114,8 +115,9 @@ class ProcessPlanSandboxMountsPropagationTest {
         ProcessIndexerExecutor.ProcessPlanTransformer silent =
                 (plan, runDirectory) -> plan.withCommand(List.of(missingExecutable()));
 
+        IndexingExecutionRequest request = request(project);
         IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> executor.executeSandboxed(request(project), silent));
+                () -> executor.executeSandboxed(request, silent));
 
         assertEquals("the process boundary cannot mount the sandbox mounts the provider plan declares",
                 refused.getMessage());

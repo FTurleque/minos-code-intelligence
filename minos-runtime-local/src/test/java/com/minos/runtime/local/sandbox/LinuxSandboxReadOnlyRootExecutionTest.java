@@ -87,8 +87,8 @@ class LinuxSandboxReadOnlyRootExecutionTest {
         StrongProcessOwnershipIndexerExecutor executor = OwnershipOnlyExecutorsForTests.ownershipOnly(delegate, home);
         SandboxTestSupport.requireStrongCapability(executor.capability().strong(), executor.capability().diagnostics());
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> executor.execute(request(project)));
+        IndexingExecutionRequest request = request(project);
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> executor.execute(request));
 
         assertTrue(refused.getMessage().contains("without an OS sandbox"), refused.getMessage());
         assertFalse(Files.exists(started), "no provider process was started");

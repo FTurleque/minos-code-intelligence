@@ -20,9 +20,10 @@ final class LinuxSandboxReadOnlyRoots {
 
     private static final String DEV_NULL = "/dev/null";
     private static final String REFUSED = "the Linux sandbox refuses a read-only root declared by the provider plan: ";
-    private static final int GROUP_WRITE = 0020;
-    private static final int OTHERS_WRITE = 0002;
-    private static final int STICKY = 01000;
+    /** POSIX mode bits, written in decimal: group write (octal 020), others write (octal 002), sticky (octal 1000). */
+    private static final int GROUP_WRITE = 16;
+    private static final int OTHERS_WRITE = 2;
+    private static final int STICKY = 512;
     private static final int ROOT_UID = 0;
 
     private LinuxSandboxReadOnlyRoots() {
