@@ -14,7 +14,7 @@ import java.util.ServiceLoader;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-/** A2 / ADR 0042 — minos-bootstrap enregistre exactement une racine de composition, utilisée par open(). */
+/** ADR 0042: minos-bootstrap registers exactly one composition root, the one open() uses. */
 class DefaultMinosApplicationComposerTest {
 
     @Test
@@ -24,9 +24,8 @@ class DefaultMinosApplicationComposerTest {
     }
 
     /**
-     * V48 (a) — un hôte embarqué peut exécuter MINOS avec un chargeur de contexte qui ne voit pas
-     * minos-bootstrap. Avant A2 l'ouverture locale ne dépendait d'aucun ServiceLoader : elle ne doit pas
-     * dépendre de ce chargeur-là.
+     * An embedding host may run MINOS with a context class loader that does not see minos-bootstrap: the local
+     * opening must not depend on that loader.
      */
     @Test
     void openDoesNotDependOnTheThreadContextClassLoader(@TempDir Path temp) throws Exception {
@@ -49,7 +48,7 @@ class DefaultMinosApplicationComposerTest {
         }
     }
 
-    /** L1 — les marqueurs de run reprenable fournis par la composition sont ceux du répertoire de run R1. */
+    /** The resumable run markers the composition provides are those of the run directory. */
     @Test
     void resumableRunMarkersAreTheRunDirectoryMarkersOfTheHome(@TempDir Path temp) throws Exception {
         Path home = temp.resolve("home");
@@ -65,7 +64,7 @@ class DefaultMinosApplicationComposerTest {
         }
     }
 
-    /** L2 — la sonde de production interroge l'hôte réel ; la cause « décision » suit l'énumération. */
+    /** The production probe queries the real host; the "decision" cause follows the enumeration. */
     @Test
     void productionWorkerSandboxProbeAndCommandLocatorAreTheRealHostOnes(@TempDir Path temp) {
         Path home = temp.resolve("home");
@@ -102,7 +101,7 @@ class DefaultMinosApplicationComposerTest {
                 composer.hostedControlPlaneStore(temp.resolve("hosted"), keys));
     }
 
-    /** Port de minos-app — la correspondance de chemins de production est le magasin fichier du home. */
+    /** The production path mapping is the file store of the home. */
     @Test
     void projectPathMappingsAreTheFileStoreOfTheHome(@TempDir Path temp) throws Exception {
         Path home = java.nio.file.Files.createDirectories(temp.resolve("home"));
