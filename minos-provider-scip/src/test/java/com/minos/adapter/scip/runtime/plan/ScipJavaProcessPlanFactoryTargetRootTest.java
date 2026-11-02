@@ -50,13 +50,14 @@ class ScipJavaProcessPlanFactoryTargetRootTest {
         Path run = temp.resolve("run");
         ScipJavaProcessPlanFactory factory = new ScipJavaProcessPlanFactory(
                 temp.resolve("cs"), "org.scip-code:scip-java:0.13.1", temp.resolve("runner.ps1"),
-                temp.resolve("mvn"), listing, jars -> { });
+                temp.resolve("mvn"), listing, jars -> { }, ScipJavaMavenOfflineFixtures.qualified(temp.resolve("maven")));
 
         IndexerProcessPlan plan = factory.create(request(project), run);
 
         List<String> command = plan.command();
         Path targetRoot = run.toAbsolutePath().normalize().resolve("scip-java-targetroot");
-        assertEquals(List.of("--targetroot", targetRoot.toString()), command.subList(command.size() - 2, command.size()));
+        int targetRootFlag = command.indexOf("--targetroot");
+        assertEquals(targetRoot.toString(), command.get(targetRootFlag + 1), command::toString);
         assertFalse(targetRoot.startsWith(plan.workingDirectory().toAbsolutePath().normalize()),
                 "the targetroot must be outside the staged project build tree");
     }

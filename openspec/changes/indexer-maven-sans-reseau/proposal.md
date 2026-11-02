@@ -17,7 +17,7 @@ Option A du design, retenue :
 - **Racines de lecture déclarées par le plan.** `IndexerProcessPlan` porte une liste de racines en lecture seule ; le backend Linux les monte telles quelles ; tout backend qui ne sait pas les honorer (Windows AppContainer, backend natif) refuse le plan avant tout lancement.
 - **État honnête.** Sous Linux, `doctor` rend scip-java `BLOCKED` sans Maven 3.9.x lisible du bac à sable (version lue sur disque, sans exécuter Maven) ou sans dépôt désigné valide.
 - **Refus actionnable.** Sans dépôt désigné, ou dépôt illisible, le plan scip-java d'un projet Maven est refusé avant toute copie du projet, par un message qui nomme le réglage, sans chemin absolu. Un artefact absent du dépôt donne l'échec Maven hors ligne, que la documentation explique.
-- **ADR** : un nouvel ADR du domaine sécurité (numéro attribué à la rédaction, `SEC-0075` si SEC-0074 est fusionné) fixe la voie retenue pour l'exigence de SEC-0074 décision 3 et confirme `DENY` de SEC-0070 pour scip-java  ; SEC-0074 reste actif. Planifié en tâche 0.2, rien n'est écrit pendant la spécification.
+- **ADR** : un nouvel ADR du domaine sécurité (`SEC-0076`) fixe la voie retenue pour l'exigence de SEC-0074 décision 3 et confirme `DENY` de SEC-0070 pour scip-java  ; SEC-0074 reste actif. Planifié en tâche 0.2, rien n'est écrit pendant la spécification.
 
 ## Capabilities
 

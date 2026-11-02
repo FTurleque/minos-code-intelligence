@@ -19,13 +19,13 @@
   "outOfLanguageMaximum": {
     "minos-app": 1,
     "minos-application": 48,
-    "minos-bootstrap": 5,
+    "minos-bootstrap": 4,
     "minos-cli": 13,
     "minos-domain": 21,
     "minos-engine": 52,
     "minos-intellij": 1,
     "minos-provider-scip": 10,
-    "minos-runtime-local": 3
+    "minos-runtime-local": 2
   },
   "milestoneCommentMaximum": {
     "minos-api": 10,

@@ -14,7 +14,7 @@ import java.util.ServiceLoader;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-/** A2 / ADR 0042 — minos-bootstrap enregistre exactement une racine de composition, utilisée par open(). */
+/** ADR 0042: minos-bootstrap registers exactly one composition root, the one open() uses. */
 class DefaultMinosApplicationComposerTest {
 
     @Test
@@ -24,9 +24,8 @@ class DefaultMinosApplicationComposerTest {
     }
 
     /**
-     * V48 (a) — un hôte embarqué peut exécuter MINOS avec un chargeur de contexte qui ne voit pas
-     * minos-bootstrap. Avant A2 l'ouverture locale ne dépendait d'aucun ServiceLoader : elle ne doit pas
-     * dépendre de ce chargeur-là.
+     * An embedding host may run MINOS with a context class loader that does not see minos-bootstrap: the local
+     * opening must not depend on that loader.
      */
     @Test
     void openDoesNotDependOnTheThreadContextClassLoader(@TempDir Path temp) throws Exception {
@@ -49,7 +48,7 @@ class DefaultMinosApplicationComposerTest {
         }
     }
 
-    /** L1 — les marqueurs de run reprenable fournis par la composition sont ceux du répertoire de run R1. */
+    /** The resumable run markers the composition provides are those of the run directory. */
     @Test
     void resumableRunMarkersAreTheRunDirectoryMarkersOfTheHome(@TempDir Path temp) throws Exception {
         Path home = temp.resolve("home");
@@ -65,7 +64,7 @@ class DefaultMinosApplicationComposerTest {
         }
     }
 
-    /** L2 — la sonde de production interroge l'hôte réel ; la cause « décision » suit l'énumération. */
+    /** The production probe queries the real host; the "decision" cause follows the enumeration. */
     @Test
     void productionWorkerSandboxProbeAndCommandLocatorAreTheRealHostOnes(@TempDir Path temp) {
         Path home = temp.resolve("home");
@@ -102,7 +101,7 @@ class DefaultMinosApplicationComposerTest {
                 composer.hostedControlPlaneStore(temp.resolve("hosted"), keys));
     }
 
-    /** Port de minos-app — la correspondance de chemins de production est le magasin fichier du home. */
+    /** The production path mapping is the file store of the home. */
     @Test
     void projectPathMappingsAreTheFileStoreOfTheHome(@TempDir Path temp) throws Exception {
         Path home = java.nio.file.Files.createDirectories(temp.resolve("home"));
@@ -113,5 +112,37 @@ class DefaultMinosApplicationComposerTest {
         assertEquals(java.util.Optional.of(mapping), new com.minos.storage.home.ProjectPathMappingStore(home).loadOptional());
         assertInstanceOf(com.minos.storage.local.registry.LocalProjectPathMappings.class,
                 new DefaultMinosApplicationComposer().projectPathMappings(home));
+    }
+
+    /** ADR SEC-0076: the Maven repository designated in minos.properties reaches the scip-java runtime manager. */
+    @Test
+    @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.LINUX)
+    void theMavenRepositoryDesignatedInTheConfigurationReachesScipJava(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        Path absent = temp.resolve("absent-repository");
+        java.nio.file.Files.createDirectories(home.resolve("config"));
+        java.nio.file.Files.writeString(home.resolve("config").resolve("minos.properties"),
+                "minos.scip.java.maven-repository=" + absent + System.lineSeparator());
+
+        java.util.List<String> diagnostics = new DefaultMinosApplicationComposer().providerRuntimeManager(home)
+                .inspect("scip-java").diagnostics();
+
+        org.junit.jupiter.api.Assertions.assertTrue(diagnostics.stream().anyMatch(diagnostic ->
+                diagnostic.contains("minos.scip.java.maven-repository is refused")), diagnostics::toString);
+        org.junit.jupiter.api.Assertions.assertTrue(diagnostics.stream().noneMatch(diagnostic ->
+                diagnostic.contains(absent.toString())), diagnostics::toString);
+    }
+
+    /** An unreadable configuration is refused, never read as an absent designation. */
+    @Test
+    void anUnreadableConfigurationIsRefusedWhenTheRuntimeManagerIsComposed(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        java.nio.file.Files.createDirectories(home.resolve("config").resolve("minos.properties"));
+
+        DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
+        IllegalStateException refused = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> composer.providerRuntimeManager(home));
+
+        assertEquals("MINOS runtime configuration cannot be read", refused.getMessage());
     }
 }

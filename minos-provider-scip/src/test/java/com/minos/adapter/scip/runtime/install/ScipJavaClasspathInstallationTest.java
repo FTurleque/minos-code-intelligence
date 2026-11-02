@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.io.Sha256;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class ScipJavaClasspathInstallationTest {
     Path temp;
 
     private ManagedScipProviderRuntimeManager manager() {
-        return new ManagedScipProviderRuntimeManager(temp.resolve("home"));
+        return new ManagedScipProviderRuntimeManager(temp.resolve("home"), ScipJavaMavenOfflineFixtures.unconfigured(temp.resolve("home")));
     }
 
     private static String pinned(String name, byte[] content) {
