@@ -50,3 +50,14 @@ Inchangée : `plan.ScipJavaClasspath` (nouveau) n'importe que `com.minos.io` (`m
 - Une installation existante devra être refaite (message actionnable).
 - La revérification ajoute un hachage de ≈ 86 Mo par indexation scip-java.
 - Fenêtre de vérification puis exécution : voir « Hors périmètre » de la proposition.
+
+## Mesure de la tâche 1.5 (2026-11-02)
+
+WSL2 Ubuntu 24.04, hors Docker, JAR ombré construit au HEAD de `develop` (`4a92dd81`), scope systemd délégué, `linux-bubblewrap-cgroup2-v5 AVAILABLE`, Coursier épinglé (même commit et SHA-256 que `docker/Dockerfile.mcp.release`) dans le `PATH`, dépôt Maven désigné (ADR SEC-0076).
+
+- `minos tools install scip-java` → scip-java 0.13.2 `READY` ; `MINOS_HOME/tools/scip-java/0.13.2/classpath` contient 72 fichiers en `0600` sous des dossiers `0700`.
+- `minos index` de `fixtures/java/java-simple` → `SUCCEEDED`. Processus relevé pendant le run (`ps`) : `java -jar <MINOS_HOME>/tools/scip-java/0.13.2/classpath/scip-java-launcher.jar index --output … --targetroot … -- --batch-mode --offline …`, fils direct de `bwrap`, qui monte `tools/scip-java/0.13.2` par `--ro-bind`.
+- Un jar copié modifié (`maven-resolver-spi-1.9.27.jar`, un octet ajouté) : `minos index` échoue avant tout lancement (« scip-java classpath verification failed: maven-resolver-spi-1.9.27.jar does not match its pinned SHA-256; run `minos tools install scip-java` »).
+- Le lanceur modifié : refus de même (« scip-java-launcher.jar does not match the verified classpath »).
+- Fichiers restaurés : `minos index` → `SUCCEEDED`.
+- Écart : `minos doctor` déclare scip-java `READY` avec un jar altéré ; la vérification a lieu à chaque plan (D3), pas dans `doctor`.

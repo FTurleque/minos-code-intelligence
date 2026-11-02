@@ -94,3 +94,26 @@ POSIX : `0600` / `0700`, aucun ACL ; l'isolation bubblewrap ne dépend pas des d
 - **Régression d'accès du conteneur** si un fichier destiné au provider est durci par erreur : couverte par un test `@EnabledOnOs(WINDOWS)` qui vérifie l'entrée héritée sur la copie du projet, et par la mesure 5.1 avec un vrai provider.
 - **Quarantaine plus lente sous Windows** (reprise bornée d'`AccessDenied`) : bornée à environ une seconde (`DurableAtomicFile`).
 - **Conflits de texte** avec les trois changements actifs ci-dessus : à rebaser, maxima recalculés.
+
+## Mesure de la tâche 5.1 (2026-11-02)
+
+JAR ombré construit au HEAD de `develop` (`4a92dd81`), code migré seul (aucune version antérieure à la migration n'a été exécutée : la comparaison « avant » n'est pas mesurée).
+
+**Windows 10 (AppContainer)** : `windows-appcontainer-job-v3 AVAILABLE`, scip-typescript 0.4.0 installé par MINOS, `minos index` de `fixtures/typescript/typescript-simple` → `SUCCEEDED` (deux runs). ACL lues par `icacls` toutes les 100 ms pendant le run, puis après :
+
+| Élément | Pendant le run | Après |
+|---|---|---|
+| dossier de run du provider | utilisateur `(OI)(CI)(F)` ; un temps `<AppContainer>:(OI)(CI)(M)` en plus | utilisateur seul |
+| `index.scip` (écrit par le provider) | `<AppContainer>:(I)(M)`, utilisateur `(I)(F)`, niveau d'intégrité faible `(NW)` | utilisateur `(I)(F)`, `(NW)` |
+| `provider.stdout.log`, `provider.stderr.log`, `process.txt` | utilisateur `(F)` explicite, jamais l'entrée du conteneur | idem |
+| `local-provider-workspaces/<run>/<provider>/workspace` | utilisateur `(OI)(CI)(F)` explicite, puis `<AppContainer>:(OI)(CI)(M)` **posé sur `workspace` lui-même** | supprimé |
+| fichiers de la copie du projet | utilisateur `(I)(F)`, puis `<AppContainer>:(I)(M)` hérité de `workspace` | supprimés |
+
+- Les journaux et métadonnées ne portent jamais l'entrée du conteneur.
+- `index.partial.scip` n'existe pas sur ce chemin : le provider sandboxé écrit l'artefact directement dans le dossier de run (`generatedArtifact` égal à l'artefact final), sans copie.
+- `failed-index.scip` non observé : aucun run réel n'a échoué après l'écriture d'un artefact (scip-typescript l'écrit d'un bloc à la fin ; trois arrêts forcés de `node` au premier octet de l'artefact n'ont pas fait échouer le run). Son ACL reste couverte par les tests de `copyArtifactBounded`, pas par une mesure.
+- **L'accès du conteneur à la copie du projet vient d'une entrée posée sur `workspace`** : selon D1, la décision est **rouverte** et revient au propriétaire (option B `ensurePrivateDirectory(workspace)` envisageable).
+
+**Linux (bubblewrap, WSL2)** : scip-java, `minos index` de `fixtures/java/java-simple` → `SUCCEEDED`. Modes relevés pendant le run : journaux et `process.txt` `0600` ; copie du projet dans le dossier de run `0600` (dossier `0755`) ; `local-provider-workspaces/<run>/<provider>` et son `workspace` `0700` ; `index.scip` `0644` (écrit par le provider, umask 022) ; même propriétaire partout (aucun changement d'uid sous bubblewrap).
+
+**Remarque d'exploitation** : un `MINOS_HOME` à chemin long fait échouer le lancement Windows (`CreateProcess error=267`, dossier de travail au-delà de MAX_PATH).
