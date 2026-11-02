@@ -84,7 +84,8 @@ def validate_runtime_contracts() -> None:
         "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/StrongOwnedProcessExecutors.java"
     )
     composition = read(composition_path)
-    require(composition_path, composition, "return qualifySandbox(status, sandbox, isDockerRuntimeLocation());")
+    require(composition_path, composition, "return qualifyOwnership(status, sandbox, isDockerRuntimeLocation());")
+    require(composition_path, composition, "return qualifySandbox(status, sandbox.get(), dockerBackend);")
     require(composition_path, composition, "strongestAvailableForManagedLocalProvider(minosHome)")
     forbid(composition_path, composition, "StrongProcessOwnershipIndexerExecutor.detectCapability(minosHome)")
 
