@@ -72,7 +72,7 @@ jobs:
       # MINOS-AUD-H09 : la version vient du wrapper (minos-intellij/gradle/wrapper, SHA-256 de la distribution
       # vérifié) ; setup-gradle valide aussi le gradle-wrapper.jar contre les sommes publiées par Gradle.
       - name: Set up Gradle (wrapper)
-        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
         with:
           cache-provider: basic
 
@@ -133,7 +133,7 @@ jobs:
       # MINOS-AUD-H09 : la version vient du wrapper (minos-intellij/gradle/wrapper, SHA-256 de la distribution
       # vérifié) ; setup-gradle valide aussi le gradle-wrapper.jar contre les sommes publiées par Gradle.
       - name: Set up Gradle (wrapper)
-        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
         with:
           cache-provider: basic
 
