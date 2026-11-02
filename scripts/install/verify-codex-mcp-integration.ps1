@@ -52,7 +52,7 @@ try {
     Assert-True ($After.Contains('model = "gpt-5.6"')) 'Codex unrelated TOML content changed on uninstall.'
     Assert-True (-not $After.Contains('[mcp_servers.minos]')) 'Codex MINOS MCP section remained after uninstall.'
     Assert-True (-not (Test-Path -LiteralPath $State -PathType Leaf)) 'Codex managed state remained after uninstall.'
-    Assert-True ((Get-ChildItem -LiteralPath $Backups -File -Recurse -ErrorAction SilentlyContinue).Count -ge 2) 'Codex install/uninstall did not create configuration backups.'
+    Assert-True (@(Get-ChildItem -LiteralPath $Backups -File -Recurse -ErrorAction SilentlyContinue).Count -ge 2) 'Codex install/uninstall did not create configuration backups.'
 
     # An unmanaged MINOS section must never be overwritten.
     [System.IO.File]::WriteAllText($Config, "[mcp_servers.minos]`r`ncommand = `"other.exe`"`r`n", [System.Text.UTF8Encoding]::new($false))
@@ -173,7 +173,7 @@ exit /b 1
     Assert-True (-not $OrphanAfter.Contains('[mcp_servers.minos]')) 'Codex MINOS MCP section remained after an uninstall without state file.'
     Assert-True ($OrphanAfter.Contains('[mcp_servers.other]') -and $OrphanAfter.Contains('command = "other.exe"')) 'Uninstall without state file changed another MCP server.'
     Assert-True ($OrphanAfter.Contains('[profiles.after]') -and $OrphanAfter.Contains('model = "o4"')) 'Uninstall without state file changed the content after the MINOS block.'
-    Assert-True ((Get-ChildItem -LiteralPath $OrphanBackups -File -Recurse -ErrorAction SilentlyContinue).Count -ge 2) 'Uninstall without state file did not back up the Codex configuration first.'
+    Assert-True (@(Get-ChildItem -LiteralPath $OrphanBackups -File -Recurse -ErrorAction SilentlyContinue).Count -ge 2) 'Uninstall without state file did not back up the Codex configuration first.'
 
     # Unmanaged section without markers and no state file: never touched.
     $UnmanagedConfig = Join-Path $Root 'unmanaged\.codex\config.toml'
