@@ -173,3 +173,163 @@ Tant qu'aucun test n'exécute la chaîne scip-java Windows sous le bac à sable 
 - **GIVEN** sous Linux, scip-java installé avec tous ses fichiers
 - **WHEN** la disponibilité est calculée
 - **THEN** elle reste `READY`
+
+### Requirement: L'installation d'un outil échoue fermée quand le déplacement atomique manque
+L'installation d'un outil de provider SHALL publier ses fichiers et ses répertoires par un déplacement atomique et SHALL échouer, sans copie ni déplacement non atomique de repli, quand le système de fichiers ne le permet pas. L'arbre précédent SHALL être restauré quand le déplacement du nouvel arbre échoue.
+
+#### Scenario: Déplacement atomique refusé
+- **GIVEN** un déplaceur de répertoire qui signale l'absence de déplacement atomique
+- **WHEN** `./mvnw -B -ntp -pl minos-provider-scip -am test` exécute le test d'installation d'un arbre
+- **THEN** l'installation échoue, aucune copie n'est faite et la destination est inchangée
+
+#### Scenario: Échec du déplacement du nouvel arbre
+- **GIVEN** un arbre installé et un déplacement du nouvel arbre qui échoue
+- **WHEN** l'échange est exécuté
+- **THEN** l'arbre précédent est à sa place et l'échec est propagé
+
+### Requirement: scip-java lance Maven hors ligne sur le dépôt désigné
+Hors Windows, le plan scip-java d'un projet Maven, avec le classpath installé comme avec le lanceur du `PATH`, SHALL déclarer le dépôt désigné en racine de lecture et passer après `--` : `--batch-mode --offline`, `-s` et `-gs` vers le `settings.xml` de MINOS, un dépôt local de tête dans le run, le dépôt désigné en `maven.repo.local.tail`, puis `clean verify -DskipTests`. Le réseau reste `DENY`.
+
+#### Scenario: Plan avec dépôt désigné
+- **GIVEN** sous Linux, un projet Maven et un dépôt Maven désigné valide
+- **WHEN** le plan scip-java est construit
+- **THEN** sa commande contient `--offline`, `-s`, `-gs`, `-Dmaven.repo.local.tail=` suivi du dépôt, et sa racine de lecture est ce dépôt
+
+#### Scenario: Indexation réelle hors ligne
+- **GIVEN** sous Linux avec bac à sable qualifié, `java-simple` et un dépôt désigné qui contient ses plugins et dépendances
+- **WHEN** `minos index` est lancé
+- **THEN** l'artefact SCIP est produit et le dépôt désigné est inchangé
+
+### Requirement: Une désignation de dépôt qui expose un dossier sensible est refusée avant préparation
+Hors Windows, le plan SHALL être refusé avant toute copie du projet sans dépôt désigné, ou si la désignation est relative, absente, un lien, ou si elle est, ou est l'ancêtre de : le dossier personnel, `/mnt/<lecteur>/Users/<compte>`, `/etc`, `/proc`, `/sys`, `/dev`, `/root`, `MINOS_HOME`. Le message MUST nommer le réglage et MUST NOT contenir de chemin absolu.
+
+#### Scenario: Aucun dépôt désigné
+- **GIVEN** sous Linux, un projet Maven et aucun dépôt désigné
+- **WHEN** le plan scip-java est construit
+- **THEN** il est refusé, le message nomme le réglage, et aucun espace de travail n'est créé dans le run
+
+#### Scenario: Profil Windows désigné depuis WSL
+- **GIVEN** sous Linux, la désignation `/mnt/c/Users/<compte>` ou `/mnt/c`
+- **WHEN** le plan scip-java est construit
+- **THEN** il est refusé sans chemin absolu dans le message
+
+### Requirement: Une désignation qui n'a pas la forme d'un dépôt Maven est refusée
+Le plan SHALL refuser une désignation dont la racine contient `settings.xml`, `settings-security.xml`, `toolchains.xml`, un dossier caché (`.ssh`, `.m2`, `.config`…) ou un fichier ordinaire hors d'une liste fermée de métadonnées Maven, ou qui est nommée `.m2` ou située sous `MINOS_HOME` ou `/run`. Le message MUST NOT contenir de chemin absolu.
+
+#### Scenario: Désignation qui contient les réglages de l'utilisateur
+- **GIVEN** sous Linux, un dépôt désigné qui contient `settings.xml` à sa racine
+- **WHEN** le plan scip-java est construit
+- **THEN** il est refusé sans chemin absolu dans le message
+
+#### Scenario: Désignation qui contient un dossier de secrets
+- **GIVEN** sous Linux, une désignation dont la racine contient `.ssh`
+- **WHEN** le plan scip-java est construit
+- **THEN** il est refusé
+
+### Requirement: Les réglages Maven et le dépôt de tête sont fixés par MINOS pour chaque run
+Le `settings.xml` du run SHALL avoir un contenu constant, sans serveur, miroir, proxy, profil, dépôt local ni mode hors ligne. Le dépôt de tête SHALL être créé vide pour le run ; s'il existe déjà, le plan MUST être refusé. Aucun fichier de réglages de l'utilisateur ni son dossier MUST NOT être nommé par la commande ou les racines de lecture.
+
+#### Scenario: Réglages de l'utilisateur présents à côté du dépôt
+- **GIVEN** sous Linux, `~/.m2/settings.xml` avec un serveur à mot de passe et le dépôt désigné `~/.m2/repository`
+- **WHEN** le plan scip-java est construit
+- **THEN** ni la commande ni les racines ne nomment `~/.m2` ou ce `settings.xml`, et le `settings.xml` du run est égal octet pour octet au contenu constant
+
+#### Scenario: Dépôt de tête déjà présent
+- **GIVEN** sous Linux, un run dont le dépôt de tête existe déjà
+- **WHEN** le plan scip-java est construit
+- **THEN** il est refusé avant tout lancement
+
+### Requirement: Le dépôt désigné n'apparaît dans aucune sortie publique ni journal par son chemin
+`doctor`, `tools verify`, les messages de refus et les journaux WARNING SHALL rapporter le dépôt désigné par le nom du réglage et son état (absent, refusé, présent), MUST NOT écrire son chemin absolu.
+
+#### Scenario: Doctor avec dépôt désigné refusé
+- **GIVEN** sous Linux, une désignation refusée
+- **WHEN** `minos doctor` est lancé
+- **THEN** la sortie nomme le réglage et l'état refusé, et ne contient pas le chemin désigné
+
+### Requirement: Les réglages globaux du Maven de l'hôte sont masqués et seul Maven 3.9.x est accepté
+Hors Windows, le plan scip-java SHALL masquer `conf/settings.xml` et `conf/toolchains.xml` du Maven résolu par un montage en lecture seule d'un fichier vide. Un Maven absent ou hors de la plage 3.9.x MUST faire refuser le plan avant toute copie du projet, par un message actionnable sans chemin absolu.
+
+#### Scenario: Réglages globaux avec un serveur
+- **GIVEN** sous Linux avec bac à sable qualifié, un Maven dont `conf/settings.xml` contient un serveur à mot de passe
+- **WHEN** le build lancé par scip-java lit ce fichier
+- **THEN** il lit un fichier vide
+
+#### Scenario: Maven 4
+- **GIVEN** sous Linux, un Maven 4.0.0 dans le `PATH`
+- **WHEN** le plan scip-java est construit
+- **THEN** il est refusé avant tout lancement, le message nomme la plage 3.9.x et aucun espace de travail n'est créé
+
+### Requirement: Sous Linux, scip-java n'est prêt que s'il peut construire hors ligne
+Sous Linux, l'état de scip-java SHALL être `BLOCKED`, avec un diagnostic de prérequis machine actionnable, quand aucun `mvn` 3.9.x n'est trouvé dans le `PATH` sous une racine montée par le bac à sable, ou quand le dépôt désigné est absent ou refusé. La version MUST être lue sur disque, sans exécuter Maven.
+
+#### Scenario: Maven trop ancien
+- **GIVEN** sous Linux, un `mvn` dans le `PATH` dont l'installation porte `lib/maven-core-3.8.8.jar`
+- **WHEN** `minos doctor` inspecte scip-java
+- **THEN** l'état est `BLOCKED`, un diagnostic nomme la plage 3.9.x, et `mvn` n'est pas exécuté
+
+#### Scenario: Prérequis réunis
+- **GIVEN** sous Linux, classpath installé, JDK du projet, Maven 3.9.x sous `/usr` et dépôt désigné valide
+- **WHEN** `minos doctor` inspecte scip-java
+- **THEN** l'état est `READY`
+
+### Requirement: L'installation range une copie vérifiée du classpath de scip-java
+L'installation de scip-java SHALL copier les jars résolus dans le dossier du classpath sous `MINOS_HOME/tools`, SHALL comparer les copies au verrou, puis SHALL écrire le lanceur et, en dernier, la liste des noms relatifs. Les fichiers SHALL hériter des droits du dossier privé. Un échec SHALL laisser l'arbre précédent et aucun arbre partiel. Une liste qui ne se vérifie plus SHALL être réinstallée.
+
+#### Scenario: Copie conforme
+- **GIVEN** des jars du cache Coursier conformes au verrou
+- **WHEN** l'installation range le classpath
+- **THEN** les jars copiés, le lanceur et `classpath.txt` (noms relatifs) existent et le classpath se vérifie
+
+#### Scenario: Droits lisibles par le bac à sable Windows
+- **GIVEN** une installation sous Windows
+- **WHEN** les droits de chaque fichier du classpath sont lus
+- **THEN** toutes leurs entrées sont héritées du dossier, aucune liste de droits n'est protégée
+
+#### Scenario: Cache modifié après l'installation
+- **GIVEN** un classpath installé
+- **WHEN** un jar du cache Coursier est remplacé
+- **THEN** le classpath installé se vérifie toujours et la liste ne nomme aucun chemin du cache
+
+#### Scenario: Copie non conforme
+- **GIVEN** un classpath installé et un verrou qui épingle d'autres octets pour un jar
+- **WHEN** l'installation est rejouée
+- **THEN** elle échoue en nommant le jar seul, l'ancienne liste est intacte et aucun dossier partiel ne reste
+
+#### Scenario: Liste d'une version antérieure
+- **GIVEN** un `classpath.txt` qui nomme des chemins absolus du cache
+- **WHEN** l'installation vérifie le classpath installé
+- **THEN** il est déclaré à refaire
+
+### Requirement: Le plan d'indexation de scip-java n'exécute que le classpath revérifié
+Avant tout plan scip-java, la fabrique SHALL comparer au verrou chaque jar de la liste installée et, hors Windows, le lanceur aux octets dérivés de la liste. Elle SHALL NOT résoudre par coordonnée ni lancer `coursier`. Un classpath différent SHALL refuser le plan avant toute copie, avec la commande de réparation. Hors Windows et sans classpath installé seulement, un lanceur autonome du `PATH` MAY être utilisé.
+
+#### Scenario: Linux sans lanceur autonome
+- **GIVEN** un classpath installé conforme et aucun `scip-java` dans le `PATH`
+- **WHEN** un plan est demandé pour un projet Maven
+- **THEN** la commande est `java -jar <lanceur> index --output <sortie>` et ne contient ni `launch` ni Coursier
+
+#### Scenario: Classpath installé et lanceur dans le PATH
+- **GIVEN** sous Linux un classpath installé conforme et un `scip-java` dans le `PATH`
+- **WHEN** un plan est demandé
+- **THEN** la commande est celle du lanceur du classpath, pas celle du `PATH`
+
+#### Scenario: Jar altéré
+- **GIVEN** un classpath installé dont le vérificateur refuse un jar
+- **WHEN** un plan est demandé, sous Linux ou sous Windows
+- **THEN** la demande échoue en nommant le jar et `minos tools install scip-java`, et aucune copie du projet n'existe
+
+#### Scenario: Lanceur altéré
+- **GIVEN** sous Linux un lanceur dont les octets diffèrent de ceux dérivés de la liste
+- **WHEN** un plan est demandé
+- **THEN** la demande échoue en nommant `scip-java-launcher.jar`
+
+#### Scenario: Classpath absent
+- **GIVEN** aucune liste installée (et, sous Linux, aucun lanceur autonome)
+- **WHEN** un plan est demandé
+- **THEN** la demande échoue avec « managed scip-java classpath is not installed » et l'état du provider est « non installé »
+
+#### Scenario: Le lanceur exécute la classe principale
+- **GIVEN** un jar contenant `org.scip_code.scip_java.ScipJava` et le lanceur dérivé de sa liste
+- **WHEN** la commande du plan est exécutée par la JVM
+- **THEN** la classe principale reçoit `index --output <sortie>`
