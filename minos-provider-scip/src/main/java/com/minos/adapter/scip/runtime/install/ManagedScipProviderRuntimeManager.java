@@ -1,6 +1,7 @@
 package com.minos.adapter.scip.runtime.install;
 
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipTypeScriptProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
@@ -106,12 +107,18 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private final Path home;
     private final Path toolsRoot;
     private final ToolOriginLedger origins;
+    private final ScipJavaMavenOffline mavenOffline;
     private volatile PinnedArtifactSource source;
 
-    public ManagedScipProviderRuntimeManager(Path minosHome) {
+    /**
+     * @param mavenOffline the offline Maven build of scip-java outside Windows: the designated repository and the
+     *     Maven of the PATH ({@link ScipJavaMavenOffline#configured}).
+     */
+    public ManagedScipProviderRuntimeManager(Path minosHome, ScipJavaMavenOffline mavenOffline) {
         this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.toolsRoot = home.resolve("tools");
         this.origins = new ToolOriginLedger(toolsRoot);
+        this.mavenOffline = Objects.requireNonNull(mavenOffline, "mavenOffline");
     }
 
     /** The distribution payload of this installation, looked up once and only when a tool is needed. */
@@ -181,7 +188,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
                             CommandLocator.isWindows() ? mavenExecutable() : null,
-                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars)));
+                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars), mavenOffline));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }
@@ -237,6 +244,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 diagnostics, coursier.isPresent(), windowsRuntimeInstalled, mavenInstalled, classpathInstalled);
         if (CommandLocator.isWindows()) {
             addJavaWindowsPrerequisiteDiagnostics(diagnostics);
+        } else {
+            // The offline build needs a qualified Maven and a designated repository; neither is shipped by MINOS.
+            mavenOffline.problems().forEach(problem -> diagnostics.add(ExternalPrerequisite.of(problem)));
         }
         addProjectJdkDiagnostics(diagnostics);
         boolean installed = coursier.isPresent() && windowsRuntimeInstalled && mavenInstalled && classpathInstalled;
