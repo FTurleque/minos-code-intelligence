@@ -144,9 +144,12 @@ function Invoke-AdminShellCommand([string] $ShellCommand) {
     $ComposeArguments = @(
         'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal) +
         (Get-ComposeFileArgumentsLocal $RuntimeRootLocal $ComposeFileLocal) + @('run', '--rm', '--no-deps', '--entrypoint', 'sh', 'minos-admin', '-c', $ShellCommand)
-    $Output = (($null | & docker @ComposeArguments 2>&1) | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Admin shell command failed: $ShellCommand -- $Output" }
-    return $Output
+    # The value is the command's stdout alone: Compose writes its progress ("Container ... Created") to stderr, which
+    # Docker Desktop prints and a Linux runner does not. stderr is kept for the failure message only.
+    $Lines = @($null | & docker @ComposeArguments 2>&1)
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -ne 0) { throw "Admin shell command failed: $ShellCommand -- $(($Lines | Out-String).Trim())" }
+    return (($Lines | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) | Out-String).Trim()
 }
 
 function Invoke-DockerWorkflow {
