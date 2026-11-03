@@ -199,6 +199,76 @@ class CandidateBuildContextTest(unittest.TestCase):
         self.assertRegex(text, r"(?m)^\s*Copy-DockerBuildContext\s+-Jar\s+\$Jar\s+-LockDirectory\s+\S+\s+-Context\s+\$Context\b")
 
 
+QUALIFY_UPGRADE = ROOT / "scripts" / "ci" / "qualify-docker-upgrade.ps1"
+ADMIN_SHELL_FUNCTIONS = ("Get-ComposeFileArgumentsLocal", "Invoke-AdminShellCommand")
+ADMIN_SHELL_HARNESS = r"""
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile('%SCRIPT%', [ref] $tokens, [ref] $errors)
+if ($errors.Count -gt 0) { throw "parse failed: $($errors[0].Message)" }
+$names = @(%NAMES%)
+$found = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $names -contains $node.Name }, $true))
+if ($found.Count -ne $names.Count) { throw 'missing function in the qualification script' }
+. ([scriptblock]::Create((($found | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine)))
+$InstallRoot = '%INSTALL%'
+try {
+    Write-Output ('VALUE=[' + (Invoke-AdminShellCommand 'cat /var/lib/minos/upgrade-qualification.sentinel') + ']')
+} catch {
+    Write-Output ('THREW=[' + $_.Exception.Message + ']')
+}
+"""
+SENTINEL = "db59b0ac8ca34654809606bfa22c69b9"
+
+
+def fake_docker(directory: Path, exit_code: int) -> None:
+    """A `docker` that prints Compose progress on stderr, as Docker Desktop does, then the command's stdout."""
+    progress = ("Container minos-upgrade-admin-run Creating", "Container minos-upgrade-admin-run Created")
+    if os.name == "nt":
+        lines = ["@echo off", *(f"echo  {line} 1>&2" for line in progress), f"echo {SENTINEL}", f"exit /b {exit_code}"]
+        (directory / "docker.cmd").write_text("\r\n".join(lines) + "\r\n", encoding="ascii")
+        return
+    lines = ["#!/bin/sh", *(f"echo ' {line}' >&2" for line in progress), f"echo {SENTINEL}", f"exit {exit_code}"]
+    script = directory / "docker"
+    script.write_text("\n".join(lines) + "\n", encoding="ascii")
+    script.chmod(0o755)
+
+
+class QualificationAdminShellTest(unittest.TestCase):
+    """The upgrade qualification reads values back through the admin plane; Compose progress is not part of them."""
+
+    def setUp(self) -> None:
+        # The qualification runs under pwsh only (scripts/ci/qualify-docker-upgrade.ps1, header).
+        self.pwsh = shutil.which("pwsh")
+        if not self.pwsh:
+            self.skipTest("pwsh is not installed")
+
+    def admin_shell(self, exit_code: int) -> str:
+        work = Path(tempfile.mkdtemp(prefix="minos-admin-shell-test-"))
+        self.addCleanup(shutil.rmtree, work, True)
+        tools = work / "tools"
+        tools.mkdir()
+        fake_docker(tools, exit_code)
+        script = (ADMIN_SHELL_HARNESS.replace("%SCRIPT%", ps_literal(QUALIFY_UPGRADE))
+                  .replace("%NAMES%", ",".join(f"'{name}'" for name in ADMIN_SHELL_FUNCTIONS))
+                  .replace("%INSTALL%", ps_literal(work / "install")))
+        harness = work / "harness.ps1"
+        harness.write_text(script, encoding="utf-8-sig")
+        environment = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ.get("PATH", ""))
+        result = subprocess.run([self.pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(harness)],
+                                capture_output=True, timeout=120, env=environment, **DECODING)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        return result.stdout
+
+    def test_the_value_read_back_is_the_command_output_without_compose_progress(self) -> None:
+        self.assertIn(f"VALUE=[{SENTINEL}]", self.admin_shell(0))
+
+    def test_a_failed_admin_command_reports_compose_stderr(self) -> None:
+        output = self.admin_shell(3)
+        self.assertIn("THREW=[Admin shell command failed:", output)
+        self.assertIn("Container minos-upgrade-admin-run Created", output)
+
+
 def compose_available() -> bool:
     docker = shutil.which("docker")
     if not docker:
