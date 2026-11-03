@@ -48,9 +48,11 @@ Relevé exécuté : `check-private-io.py` → 10 entrées, 12 occurrences pour c
 
 ## Decisions
 
-### D1. `LocalIsolatedIndexWorker.java:188` — recommandation : entrée durable, justification réécrite
+### D1. `LocalIsolatedIndexWorker.java:188` — décision du propriétaire (2026-11-03) : `ensurePrivateDirectory(workspace)`
 
-Réécrire la justification de l'entrée (« arbre de travail du provider sandboxé, lu par le conteneur par héritage d'ACL ; un dossier privé de MINOS n'hérite pas de son parent »), sans toucher au code, comme `ProviderWorkspaceFiles`. Option B : `ensurePrivateDirectory(workspace)` si la mesure de la tâche 5.1 montre que l'accès du conteneur vient d'une entrée posée sur `workspace` lui-même. Rejetée par défaut : la mesure n'existe pas et la CI n'exécute aucun provider.
+Le dossier de travail du worker est créé par `PrivateLocalStorage.ensurePrivateDirectory`, comme celui de `LocalProviderWorkspace.java:77`, et son entrée de `private-io-allowlist.json` disparaît. Le bac à sable pose ensuite sa propre entrée sur `workspace` : la mesure de la tâche 5.1 montre ce schéma sous AppContainer sur le chemin local (dossier privé, puis `<AppContainer>:(OI)(CI)(M)` posé sur `workspace`, run `SUCCEEDED`). Option écartée : garder `Files.createDirectory` et réécrire la justification de l'entrée ; elle laisse sous Linux un dossier `rwxr-xr-x` (umask 022) sous un parent `0700`.
+
+Le worker distribué refuse AppContainer pour du code non fiable (ADR 0041, `FILESYSTEM_WRITE_*_REQUIRES_OS_ENFORCED_JOB_BOUNDARY`) : ce chemin ne s'exécute pas sous un bac à sable Windows réel, et sa preuve est le test `LocalIsolatedIndexWorkerTest.theProviderWorkspaceIsAPrivateDirectoryOfMinos` (propriétaire seul : POSIX `rwx------`, ACL sans autre principal).
 
 ### D2. Paquet dans le dossier de l'appelant — recommandation : `openNewTreeFile` puis `replace`
 
@@ -112,7 +114,7 @@ JAR ombré construit au HEAD de `develop` (`4a92dd81`), code migré seul (aucune
 - Les journaux et métadonnées ne portent jamais l'entrée du conteneur.
 - `index.partial.scip` n'existe pas sur ce chemin : le provider sandboxé écrit l'artefact directement dans le dossier de run (`generatedArtifact` égal à l'artefact final), sans copie.
 - `failed-index.scip` non observé : aucun run réel n'a échoué après l'écriture d'un artefact (scip-typescript l'écrit d'un bloc à la fin ; trois arrêts forcés de `node` au premier octet de l'artefact n'ont pas fait échouer le run). Son ACL reste couverte par les tests de `copyArtifactBounded`, pas par une mesure.
-- **L'accès du conteneur à la copie du projet vient d'une entrée posée sur `workspace`** : selon D1, la décision est **rouverte** et revient au propriétaire (option B `ensurePrivateDirectory(workspace)` envisageable).
+- **L'accès du conteneur à la copie du projet vient d'une entrée posée sur `workspace`**, après la création privée du dossier : c'est le schéma retenu par D1 pour le worker distribué.
 
 **Linux (bubblewrap, WSL2)** : scip-java, `minos index` de `fixtures/java/java-simple` → `SUCCEEDED`. Modes relevés pendant le run : journaux et `process.txt` `0600` ; copie du projet dans le dossier de run `0600` (dossier `0755`) ; `local-provider-workspaces/<run>/<provider>` et son `workspace` `0700` ; `index.scip` `0644` (écrit par le provider, umask 022) ; même propriétaire partout (aucun changement d'uid sous bubblewrap).
 

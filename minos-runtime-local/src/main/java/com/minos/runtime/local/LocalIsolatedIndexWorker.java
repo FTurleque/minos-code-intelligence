@@ -185,7 +185,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         if (Files.exists(workspace, LinkOption.NOFOLLOW_LINKS)) {
             ProviderWorkspaceFiles.deleteTree(workersRoot, workspace, WORKSPACE_BOUNDARY);
         }
-        Files.createDirectory(workspace);
+        PrivateLocalStorage.ensurePrivateDirectory(workspace);
 
         String portableScope = portableScope(request.execution().projectRelativeRoot());
         Instant startedAt = clock.instant();
