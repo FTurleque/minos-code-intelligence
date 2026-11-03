@@ -99,10 +99,11 @@ def last_json(completed: subprocess.CompletedProcess) -> dict:
     return json.loads(lines[-1])
 
 
-def run_functions(executable: str, directory: Path, call: str, compose: Path | None = None,
-                  environment: Path | None = None) -> dict:
+def run_named_functions(executable: str, directory: Path, names: tuple[str, ...], call: str,
+                        compose: Path | None = None, environment: Path | None = None) -> dict:
+    """Runs `call` after loading the named functions of the real lifecycle script; returns its JSON result."""
     body = (HARNESS.replace("%SCRIPT%", str(LIFECYCLE))
-            .replace("%NAMES%", ",".join(f"'{name}'" for name in FUNCTIONS))
+            .replace("%NAMES%", ",".join(f"'{name}'" for name in names))
             .replace("%COMPOSE%", str(compose or directory / "absent-compose.yaml"))
             .replace("%ENVIRONMENT%", str(environment or directory / "absent.env"))
             .replace("%CALL%", call))
@@ -111,6 +112,11 @@ def run_functions(executable: str, directory: Path, call: str, compose: Path | N
     completed = subprocess.run([executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
                                capture_output=True, timeout=180, check=False, **DECODING)
     return last_json(completed)
+
+
+def run_functions(executable: str, directory: Path, call: str, compose: Path | None = None,
+                  environment: Path | None = None) -> dict:
+    return run_named_functions(executable, directory, FUNCTIONS, call, compose, environment)
 
 
 def legacy_compose(name: str) -> str:
@@ -402,16 +408,8 @@ SPECIAL_SOURCE = "D:/src/it's #1: app\\x\"y"
 
 
 def run_mount_functions(executable: str, directory: Path, call: str) -> dict:
-    body = (HARNESS.replace("%SCRIPT%", str(LIFECYCLE))
-            .replace("%NAMES%", ",".join(f"'{name}'" for name in MOUNT_FUNCTIONS))
-            .replace("%COMPOSE%", str(directory / "absent-compose.yaml"))
-            .replace("%ENVIRONMENT%", str(directory / "absent.env"))
-            .replace("%CALL%", "$ContainerProjectsRoot = '/workspace/projects'; " + call))
-    script = directory / "case.ps1"
-    script.write_text(body, encoding="utf-8-sig")
-    completed = subprocess.run([executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
-                               capture_output=True, timeout=180, check=False, **DECODING)
-    return last_json(completed)
+    return run_named_functions(executable, directory, MOUNT_FUNCTIONS,
+                               "$ContainerProjectsRoot = '/workspace/projects'; " + call)
 
 
 def override_mounts(text: str) -> list[dict]:
@@ -654,20 +652,21 @@ DENIED_HOST = (
 )
 
 
+STORAGE_CALL = ("$detected = Test-PostgresqlStorage; "
+                "[ordered]@{ detected = $detected; calls = @($script:BootstrapCalls | ForEach-Object { $_ -join ' ' }) }")
+POSTGRESQL_SETTINGS = "minos.storage.backend=postgresql\n"
+CONTAINER_POSTGRESQL = DENIED_HOST + "$script:ContainerText = \"minos.storage.backend=postgresql`n\"; "
+
+
 def run_storage_functions(executable: str, directory: Path, prelude: str) -> dict:
-    call = (f"$DataRoot = '{directory / 'data'}'; {BOOTSTRAP_STUB}{prelude}"
-            "$detected = Test-PostgresqlStorage; "
-            "[ordered]@{ detected = $detected; calls = @($script:BootstrapCalls | ForEach-Object { $_ -join ' ' }) }")
-    body = (HARNESS.replace("%SCRIPT%", str(LIFECYCLE))
-            .replace("%NAMES%", ",".join(f"'{name}'" for name in STORAGE_FUNCTIONS))
-            .replace("%COMPOSE%", str(directory / "absent-compose.yaml"))
-            .replace("%ENVIRONMENT%", str(directory / "absent.env"))
-            .replace("%CALL%", call))
-    script = directory / "case.ps1"
-    script.write_text(body, encoding="utf-8-sig")
-    completed = subprocess.run([executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
-                               capture_output=True, timeout=180, check=False, **DECODING)
-    return last_json(completed)
+    call = f"$DataRoot = '{directory / 'data'}'; {BOOTSTRAP_STUB}{prelude}{STORAGE_CALL}"
+    return run_named_functions(executable, directory, STORAGE_FUNCTIONS, call)
+
+
+def bootstrap_calls(result: dict) -> list[str]:
+    """The bootstrap calls of a storage case; one call is serialized by PowerShell as a bare string."""
+    calls = result["value"][0]["calls"] or []
+    return [calls] if isinstance(calls, str) else calls
 
 
 class PostgresqlStorageDetectionTests(PowerShellCase):
@@ -681,42 +680,46 @@ class PostgresqlStorageDetectionTests(PowerShellCase):
                 (directory / "data" / "config" / "minos.properties").write_text(settings, encoding="utf-8")
             return run_storage_functions(executable, directory, prelude)
 
-    def test_a_readable_data_root_is_read_on_the_host(self):
+    def detected(self, executable: str, settings: str | None, prelude: str = "") -> tuple[bool, list[str]]:
+        """Whether PostgreSQL is detected, and the bootstrap calls made to decide it."""
+        result = self.detect(executable, settings, prelude)
+        self.assertEqual("RETURNED", result["outcome"], result)
+        return result["value"][0]["detected"], bootstrap_calls(result)
+
+    def each_runtime(self, check) -> None:
         for label, executable in self.runtimes:
             with self.subTest(runtime=label):
-                postgresql = self.detect(executable, "minos.storage.backend=postgresql\n")
-                local = self.detect(executable, "minos.storage.backend=local\n")
-                absent = self.detect(executable, None)
-                for result in (postgresql, local, absent):
-                    self.assertEqual("RETURNED", result["outcome"], result)
-                self.assertTrue(postgresql["value"][0]["detected"], postgresql)
-                self.assertFalse(local["value"][0]["detected"], local)
-                self.assertFalse(absent["value"][0]["detected"], absent)
-                for result in (postgresql, local, absent):
-                    self.assertFalse(result["value"][0]["calls"], "the host read needs no container")
+                check(executable)
+
+    def assert_read_on_the_host(self, executable: str) -> None:
+        cases = ((POSTGRESQL_SETTINGS, True), ("minos.storage.backend=local\n", False), (None, False))
+        for settings, expected in cases:
+            detected, calls = self.detected(executable, settings)
+            self.assertEqual(expected, detected, settings)
+            self.assertEqual([], calls, "the host read needs no container")
+
+    def assert_read_by_the_container(self, executable: str) -> None:
+        detected, calls = self.detected(executable, None, CONTAINER_POSTGRESQL)
+        self.assertTrue(detected, calls)
+        self.assertEqual(1, len(calls), calls)
+        self.assertTrue(calls[0].startswith("--entrypoint sh -c "), calls)
+        self.assertTrue(calls[0].endswith(" /var/lib/minos/config/minos.properties"), calls)
+        local, _ = self.detected(executable, None, DENIED_HOST + "$script:ContainerText = ''; ")
+        self.assertFalse(local)
+
+    def assert_failed_container_read_throws(self, executable: str) -> None:
+        result = self.detect(executable, None, DENIED_HOST + "$script:BootstrapFails = $true; ")
+        self.assertEqual("THREW", result["outcome"], result)
+        self.assertIn("project mount command failed", result["message"])
+
+    def test_a_readable_data_root_is_read_on_the_host(self):
+        self.each_runtime(self.assert_read_on_the_host)
 
     def test_a_data_root_the_host_may_not_read_is_read_by_the_bootstrap_container(self):
-        for label, executable in self.runtimes:
-            with self.subTest(runtime=label):
-                postgresql = self.detect(executable, None, DENIED_HOST
-                                         + "$script:ContainerText = \"minos.storage.backend=postgresql`n\"; ")
-                local = self.detect(executable, None, DENIED_HOST + "$script:ContainerText = ''; ")
-                for result in (postgresql, local):
-                    self.assertEqual("RETURNED", result["outcome"], result)
-                self.assertTrue(postgresql["value"][0]["detected"], postgresql)
-                self.assertFalse(local["value"][0]["detected"], local)
-                calls = postgresql["value"][0]["calls"]
-                calls = [calls] if isinstance(calls, str) else calls
-                self.assertEqual(1, len(calls), calls)
-                self.assertTrue(calls[0].startswith("--entrypoint sh -c "), calls)
-                self.assertTrue(calls[0].endswith(" /var/lib/minos/config/minos.properties"), calls)
+        self.each_runtime(self.assert_read_by_the_container)
 
     def test_a_failed_container_read_stops_the_migration(self):
-        for label, executable in self.runtimes:
-            with self.subTest(runtime=label):
-                result = self.detect(executable, None, DENIED_HOST + "$script:BootstrapFails = $true; ")
-                self.assertEqual("THREW", result["outcome"], result)
-                self.assertIn("project mount command failed", result["message"])
+        self.each_runtime(self.assert_failed_container_read_throws)
 
 
 if __name__ == "__main__":
