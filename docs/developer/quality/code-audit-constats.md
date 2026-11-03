@@ -308,7 +308,7 @@ Les lots SpotBugs du § 4 (1 à 6) restent valables : les 197 alertes du réacte
 | Changement | Constats | Statut |
 |---|---|---|
 | `ajouter-audit-spotbugs-pitest` (existant, 14/18) | intégration initiale | tâches 5.1 à 5.4 ouvertes ; 5.3 reprise par `renforcer-tests-revelees-par-mutation` |
-| `etendre-audit-outille-a-tout-le-perimetre` | H01, H02, H04, H06, H08 (mesure), H09, H21 | 13/13 au 2026-11-03 ; `code-audit.yml` validé (run 37976513603), Dependency-Check avec la clé NVD validé (run 41701345508) |
+| `etendre-audit-outille-a-tout-le-perimetre` | H01, H02, H04, H06, H08 (mesure), H09, H21 | **archivé** le 2026-11-03 (`archive/2026-11-03-…`), exigences reportées dans `specs/audit-qualite-code` ; `code-audit.yml` validé (run 37976513603), Dependency-Check avec la clé NVD validé (run 41701345508) |
 | `renforcer-tests-revelees-par-mutation` | H07, H14, H15 | **archivé** le 2026-10-09 (`archive/2026-10-09-…`), exigences reportées dans `specs/controle-tenant-heberge` |
 | `couvrir-reprise-apres-interruption-du-stockage` | H12, H13 | **archivé** le 2026-10-09, nouvelle spec `specs/persistance-snapshots` |
 | `corriger-documentation-plugin-et-suivi-audit` | H10, H11, H19 | **archivé** le 2026-10-09, exigence reportée dans `specs/client-intellij` |
