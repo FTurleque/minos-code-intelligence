@@ -28,7 +28,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -79,6 +84,53 @@ class LocalIsolatedIndexWorkerTest {
             assertTrue(paths.findAny().isEmpty(),
                     "transport envelopes and worker directories must be removed");
         }
+    }
+
+    /**
+     * AUD-SEC-03 (D1): the provider workspace is a private directory of MINOS, as in LocalProviderWorkspace; the
+     * sandbox adds its own entry on top of it. Observed by the provider, while the workspace still exists.
+     */
+    @Test
+    void theProviderWorkspaceIsAPrivateDirectoryOfMinos(@TempDir Path temp) throws Exception {
+        Fixture fixture = fixture(temp);
+        AtomicReference<String> exposure = new AtomicReference<>();
+        IndexerExecutor delegate = new IndexerExecutor() {
+            @Override public String indexerId() { return "fixture-provider"; }
+
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                exposure.set(foreignAccess(request.projectRoot()));
+                Path output = Files.writeString(
+                        temp.resolve("provider-" + UUID.randomUUID() + ".scip"), "valid-scip-fixture");
+                return new IndexingArtifact(Language.JAVA, indexerId(), output);
+            }
+        };
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        LocalIsolatedIndexWorker worker = worker(
+                "worker-one", temp.resolve("home"), delegate, store, qualifiedBackend(WorkerNetworkPolicy.ALLOW));
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        executor.execute(fixture.execution());
+
+        assertEquals("", exposure.get(), "the provider workspace must grant nothing beyond its owner");
+    }
+
+    /** Access the directory grants beyond its owner: POSIX group/other bits, or ACL entries of another principal. */
+    private static String foreignAccess(Path directory) throws java.io.IOException {
+        PosixFileAttributeView posix = Files.getFileAttributeView(directory, PosixFileAttributeView.class);
+        if (posix != null) {
+            String mode = PosixFilePermissions.toString(posix.readAttributes().permissions());
+            return "rwx------".equals(mode) ? "" : mode;
+        }
+        AclFileAttributeView acl = Files.getFileAttributeView(directory, AclFileAttributeView.class);
+        UserPrincipal owner = acl.getOwner();
+        StringBuilder foreign = new StringBuilder();
+        for (AclEntry entry : acl.getAcl()) {
+            if (!owner.equals(entry.principal())) foreign.append(entry.principal().getName()).append(' ');
+        }
+        return foreign.toString().trim();
     }
 
     /** MINOS-AUD-A02 (code dormant, ADR 0041) : les résidus d'un run tué sont bornés dans le temps, le run courant protégé. */
