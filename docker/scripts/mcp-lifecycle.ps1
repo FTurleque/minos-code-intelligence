@@ -219,8 +219,8 @@ function Write-ProjectMountsOverride([object[]] $Mounts) {
 
 # Runs one subcommand of com.minos.cli.DockerRuntimeBootstrap in minos-bootstrap (no network) and returns its standard
 # output. A non-zero exit fails with the bootstrap's own message, which names no host path.
-function Invoke-ProjectMountBootstrap([string[]] $Arguments) {
-    $RunArguments = @('run', '-T', '--rm', '--no-deps', 'minos-bootstrap') + $Arguments
+function Invoke-ProjectMountBootstrap([string[]] $Arguments, [string[]] $Entrypoint = @()) {
+    $RunArguments = @('run', '-T', '--rm', '--no-deps') + $Entrypoint + @('minos-bootstrap') + $Arguments
     $AmbientQueryImage = $env:MINOS_QUERY_IMAGE
     try {
         Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue
@@ -252,11 +252,28 @@ function ConvertFrom-BootstrapJson([string] $Output) {
     return ($Line | ConvertFrom-Json)
 }
 
+# The lines of config/minos.properties in the MINOS data root, none when the file is absent. On a Linux host the
+# data root belongs to the container user and the host may not read it: the file is then read by the bootstrap
+# container, which mounts the same data root. Any other failure, and a failed container read, stops the caller.
+function Read-DataRootSettings {
+    $Settings = Join-Path (Join-Path $DataRoot 'config') 'minos.properties'
+    try {
+        if (-not (Test-Path -LiteralPath $Settings -PathType Leaf -ErrorAction Stop)) { return , @() }
+        return , @(Get-Content -LiteralPath $Settings -ErrorAction Stop)
+    }
+    catch {
+        $Denied = $_.Exception -is [System.UnauthorizedAccessException] -or
+            "$($_.CategoryInfo.Category)" -eq 'PermissionDenied'
+        if (-not $Denied) { throw }
+    }
+    $Output = Invoke-ProjectMountBootstrap -Entrypoint @('--entrypoint', 'sh') `
+        -Arguments @('-c', 'test ! -e "$0" || cat "$0"', '/var/lib/minos/config/minos.properties')
+    return , @("$Output" -split "`r?`n")
+}
+
 # True when the MINOS data root selects the PostgreSQL storage backend (config/minos.properties).
 function Test-PostgresqlStorage {
-    $Settings = Join-Path (Join-Path $DataRoot 'config') 'minos.properties'
-    if (-not (Test-Path -LiteralPath $Settings -PathType Leaf)) { return $false }
-    foreach ($Line in @(Get-Content -LiteralPath $Settings)) {
+    foreach ($Line in @(Read-DataRootSettings)) {
         if ($Line -match '^\s*minos\.storage\.backend\s*[=:]\s*postgresql\s*$') { return $true }
     }
     return $false

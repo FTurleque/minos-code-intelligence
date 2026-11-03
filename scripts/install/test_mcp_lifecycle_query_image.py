@@ -639,5 +639,85 @@ class ProjectMountLifecycleTests(PowerShellCase):
             self.assertLess(removal, up, (label, calls))
 
 
+STORAGE_FUNCTIONS = ("Read-DataRootSettings", "Test-PostgresqlStorage")
+# Stands in for the bootstrap container: records its arguments and prints what the container would.
+BOOTSTRAP_STUB = (
+    "$script:BootstrapCalls = @(); $script:BootstrapFails = $false; $script:ContainerText = ''; "
+    "function Invoke-ProjectMountBootstrap([string[]] $Arguments, [string[]] $Entrypoint = @()) { "
+    "$script:BootstrapCalls += ,(@($Entrypoint) + @($Arguments)); "
+    "if ($script:BootstrapFails) { throw 'MINOS Docker project mount command failed (exit 1): sh' }; "
+    "return $script:ContainerText }; "
+)
+# Stands in for a host that may not read the container-owned data root (a Linux host).
+DENIED_HOST = (
+    "function Test-Path { throw [System.UnauthorizedAccessException]::new('Access to the path is denied.') }; "
+)
+
+
+def run_storage_functions(executable: str, directory: Path, prelude: str) -> dict:
+    call = (f"$DataRoot = '{directory / 'data'}'; {BOOTSTRAP_STUB}{prelude}"
+            "$detected = Test-PostgresqlStorage; "
+            "[ordered]@{ detected = $detected; calls = @($script:BootstrapCalls | ForEach-Object { $_ -join ' ' }) }")
+    body = (HARNESS.replace("%SCRIPT%", str(LIFECYCLE))
+            .replace("%NAMES%", ",".join(f"'{name}'" for name in STORAGE_FUNCTIONS))
+            .replace("%COMPOSE%", str(directory / "absent-compose.yaml"))
+            .replace("%ENVIRONMENT%", str(directory / "absent.env"))
+            .replace("%CALL%", call))
+    script = directory / "case.ps1"
+    script.write_text(body, encoding="utf-8-sig")
+    completed = subprocess.run([executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+                               capture_output=True, timeout=180, check=False, **DECODING)
+    return last_json(completed)
+
+
+class PostgresqlStorageDetectionTests(PowerShellCase):
+    """The storage of the data root decides the migration; a host that may not read it asks the container."""
+
+    def detect(self, executable: str, settings: str | None, prelude: str = "") -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            if settings is not None:
+                (directory / "data" / "config").mkdir(parents=True)
+                (directory / "data" / "config" / "minos.properties").write_text(settings, encoding="utf-8")
+            return run_storage_functions(executable, directory, prelude)
+
+    def test_a_readable_data_root_is_read_on_the_host(self):
+        for label, executable in self.runtimes:
+            with self.subTest(runtime=label):
+                postgresql = self.detect(executable, "minos.storage.backend=postgresql\n")
+                local = self.detect(executable, "minos.storage.backend=local\n")
+                absent = self.detect(executable, None)
+                for result in (postgresql, local, absent):
+                    self.assertEqual("RETURNED", result["outcome"], result)
+                self.assertTrue(postgresql["value"][0]["detected"], postgresql)
+                self.assertFalse(local["value"][0]["detected"], local)
+                self.assertFalse(absent["value"][0]["detected"], absent)
+                for result in (postgresql, local, absent):
+                    self.assertFalse(result["value"][0]["calls"], "the host read needs no container")
+
+    def test_a_data_root_the_host_may_not_read_is_read_by_the_bootstrap_container(self):
+        for label, executable in self.runtimes:
+            with self.subTest(runtime=label):
+                postgresql = self.detect(executable, None, DENIED_HOST
+                                         + "$script:ContainerText = \"minos.storage.backend=postgresql`n\"; ")
+                local = self.detect(executable, None, DENIED_HOST + "$script:ContainerText = ''; ")
+                for result in (postgresql, local):
+                    self.assertEqual("RETURNED", result["outcome"], result)
+                self.assertTrue(postgresql["value"][0]["detected"], postgresql)
+                self.assertFalse(local["value"][0]["detected"], local)
+                calls = postgresql["value"][0]["calls"]
+                calls = [calls] if isinstance(calls, str) else calls
+                self.assertEqual(1, len(calls), calls)
+                self.assertTrue(calls[0].startswith("--entrypoint sh -c "), calls)
+                self.assertTrue(calls[0].endswith(" /var/lib/minos/config/minos.properties"), calls)
+
+    def test_a_failed_container_read_stops_the_migration(self):
+        for label, executable in self.runtimes:
+            with self.subTest(runtime=label):
+                result = self.detect(executable, None, DENIED_HOST + "$script:BootstrapFails = $true; ")
+                self.assertEqual("THREW", result["outcome"], result)
+                self.assertIn("project mount command failed", result["message"])
+
+
 if __name__ == "__main__":
     sys.exit(unittest.main(verbosity=2))
