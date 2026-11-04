@@ -26,3 +26,8 @@ ces fichiers font foi. Le diagramme de déploiement Docker d'arc42 § 7.3 n'a pa
 | [component-modules-et-dependances.md](application/component-modules-et-dependances.md) | Composants (flowchart) | Quels modules, quelles dépendances Maven ? |
 | [deployment-docker-connecte.md](application/deployment-docker-connecte.md) | Déploiement (flowchart) | Conteneurs, réseaux et volumes de la pile Docker connectée |
 | [usecase-acteurs-et-surfaces.md](application/usecase-acteurs-et-surfaces.md) | Cas d'utilisation (flowchart) | Qui utilise MINOS, par quelle surface ? |
+
+## Dossiers de capacité (`capacites/`)
+
+Un dossier par capacité OpenSpec : vues du comportement, traçabilité exigence → preuve, écarts. Index et
+couverture : [capacites/README.md](capacites/README.md).

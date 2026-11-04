@@ -347,3 +347,7 @@ Sur une application ouverte dont le répertoire de données ne peut plus être �
 - **GIVEN** l'état du répertoire relevé avant les appels (entrées, tailles, dates, permissions ou refus d'écriture)
 - **WHEN** tous les outils ont été appelés
 - **THEN** l'état relevé après est identique
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [surfaces-publiques](../../../docs/architecture/diagrams/capacites/surfaces-publiques.md)

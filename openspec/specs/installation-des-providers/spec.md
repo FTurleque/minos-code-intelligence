@@ -333,3 +333,7 @@ Avant tout plan scip-java, la fabrique SHALL comparer au verrou chaque jar de la
 - **GIVEN** un jar contenant `org.scip_code.scip_java.ScipJava` et le lanceur dérivé de sa liste
 - **WHEN** la commande du plan est exécutée par la JVM
 - **THEN** la classe principale reçoit `index --output <sortie>`
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [installation-des-providers](../../../docs/architecture/diagrams/capacites/installation-des-providers.md)

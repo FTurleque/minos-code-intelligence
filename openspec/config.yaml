@@ -1,4 +1,4 @@
-schema: spec-driven
+schema: detailed-uml
 
 context: |
   MINOS est un moteur de code intelligence local-first, multi-langages, indépendant
@@ -18,13 +18,14 @@ context: |
     tenir sur les deux.
 
   Architecture et frontières :
-  - Le reactor Maven impose les frontières de modules (ADR-0022). Ne jamais créer un
-    module juste pour reproduire un package, ni introduire une dépendance contraire
+  - Le reactor Maven impose les frontières de modules (ARCH-0068). Ne jamais créer
+    un module juste pour reproduire un package, ni introduire une dépendance contraire
     à la direction domain -> engine -> runtime/storage -> adapters -> application ->
-    surfaces. minos-app est le composition root.
-  - Une décision d'architecture structurante donne lieu à un ADR numéroté dans
-    docs/architecture/adr/ (Contexte, Décision, Conséquences) et non à une simple note de design.
-  - MCP en STDIO est en lecture seule (ADR-0017). Les surfaces publiques (CLI, API
+    surfaces. minos-bootstrap est la racine de composition (ARCH-0042) ; minos-app
+    est l'assemblage distribué.
+  - Une décision d'architecture structurante donne lieu à un ADR dans
+    docs/architecture/adr/ (format Archgate) et non à une simple note de design.
+  - MCP en STDIO est en lecture seule (ARCH-0017). Les surfaces publiques (CLI, API
     Java, MCP) sont versionnées et additives : pas de rupture de contrat.
   - Fail-closed : le code non fiable est refusé par le sandbox OS, jamais exécuté
     en mode dégradé.
@@ -40,6 +41,13 @@ context: |
   - Les goldens de caractérisation (minos-app/src/test/resources/characterization/)
     ne doivent pas dépendre de l'outillage de l'hôte.
 
+  Documentation (schéma detailed-uml, guide docs/developer/openspec-detailed-uml.md) :
+  - OpenSpec porte les exigences et leurs évolutions ; docs/architecture/ (arc42,
+    diagrams/) la vue consolidée ; les ADR les décisions structurantes.
+  - Dossier durable d'une capacité : docs/architecture/diagrams/capacites/<capacité>.md
+    (vues Mermaid, traçabilité, écarts), relié par la section « ## Documentation liée »
+    de openspec/specs/<capacité>/spec.md.
+
   Workflow Git : branches thématiques (docs/, build/, sec/, feat/…) fusionnées par PR
   dans develop, puis promotion de develop vers main. Releases immuables (tags
   vX.Y.Z), jamais retaguées.
@@ -53,14 +61,16 @@ rules:
       numéro).
   design:
     - Vérifier que le changement respecte la direction des dépendances entre modules
-      (ADR-0022) et expliquer toute exception.
+      (ARCH-0068) et expliquer toute exception.
     - Qualifier explicitement chaque capacité nouvelle (qualifiée, partielle ou
       non supportée) ; ne jamais en présumer.
     - Couvrir Windows et Linux ; signaler tout comportement propre à une plateforme.
   specs:
     - Rédiger les exigences de façon testable et indiquer les cas de refus
       (fail-closed) en plus du cas nominal.
+    - Chaque scénario est vérifiable par un test ou une commande locale.
   tasks:
+    - Porter l'identifiant du constat d'audit (AUD-…) quand il existe.
     - Nommer les scripts check-*.py et les scopes JaCoCo à rejouer pour chaque tâche
       qui renomme ou déplace du code.
     - Prévoir les tests dans la même tâche que le code, pas dans une tâche finale.
@@ -74,3 +84,5 @@ operations:
     guidance:
       - Résumer le résultat de l'archivage et lister les docs/ à mettre à jour
         (STATUS.md, ROADMAP.md, ADR) avant de conclure.
+      - Vérifier que chaque spec de référence touchée garde sa section
+        « ## Documentation liée » et que son dossier de capacité est à jour.

@@ -163,6 +163,13 @@ jobs:
       - name: Product facts consistency
         run: python scripts/docs/product-facts.py --check
 
+      # OpenSpec schema detailed-uml: durable capability dossiers stay consistent with the reference specs.
+      - name: Capability dossiers consistency
+        run: python scripts/docs/check-capability-dossiers.py
+
+      - name: Capability dossiers checker self-test (one refused mutation per rule)
+        run: python scripts/docs/test_check_capability_dossiers.py -v
+
       - name: Milestone artifact reference guard
         run: python scripts/quality/check-milestone-artifact-references.py
 

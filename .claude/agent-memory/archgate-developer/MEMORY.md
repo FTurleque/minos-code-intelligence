@@ -1,1 +1,2 @@
 - [Fusion de PR sans suppression anticipée](feedback_fusion_pr.md) — vérifier MERGED avant de supprimer la branche ; auto-merge interdit ; PR fermée non réouvrable
+- [review-context sans texte d'ADR](reference_review_context_sans_texte.md) — Archgate 0.18 : lire Decision/Do's des ADR soi-même pour la revue

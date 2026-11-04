@@ -227,3 +227,7 @@ Une exception levée par un puits d'audit externe, contrôlée ou non, SHALL êt
 - **GIVEN** un amorçage et une rotation de clé réussis
 - **WHEN** `TeamControlPlaneTest` lit `toString()` des résultats et compare `TeamRole` à `HostedRole`
 - **THEN** aucun jeton n'apparaît, et chaque valeur de l'une a son pendant dans l'autre
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [controle-tenant-heberge](../../../docs/architecture/diagrams/capacites/controle-tenant-heberge.md)

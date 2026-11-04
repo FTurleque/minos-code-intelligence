@@ -174,3 +174,7 @@ Le workflow de publication du plugin SHALL pouvoir être lancé à la demande po
 - **GIVEN** une release qui contient déjà l'archive du plugin
 - **WHEN** le workflow du plugin est relancé pour le même tag
 - **THEN** il échoue sans remplacer l'asset
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [chaine-de-livraison](../../../docs/architecture/diagrams/capacites/chaine-de-livraison.md)

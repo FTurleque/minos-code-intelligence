@@ -136,3 +136,7 @@ L'activité Git rendue par la CLI et par l'API Java SHALL rendre `originRemote` 
 - **GIVEN** un dépôt à remote local connu avant ce changement
 - **WHEN** son identité est recalculée
 - **THEN** `repositoryId` est identique
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [analyse-git](../../../docs/architecture/diagrams/capacites/analyse-git.md)
