@@ -12,7 +12,7 @@
 - [x] 2.2 Mettre à jour le dossier durable de chaque capacité touchée (tâche 1.3) ; vérifier par `python scripts/docs/check-capability-dossiers.py`
 - [x] 2.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`
 - [x] 2.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, docs/user, docs/developer, arc42, ADR) ; vérifier que chacun est fait ou nommé comme reste — aucun : correctif interne sans surface publique ni décision structurante ; seul le dossier de capacité change (1.3)
-- [ ] 2.5 **(manuelle)** Constater le passage des deux tests 1.1 sur `Verify (windows-2022)` dans la CI de la PR
+- [x] 2.5 **(manuelle)** Constater le passage des deux tests 1.1 sur `Verify (windows-2022)` dans la CI de la PR
 
 ## Workflow follow-up
 
