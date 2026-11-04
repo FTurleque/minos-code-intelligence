@@ -1,7 +1,7 @@
 # Capacité `distribution-docker` — dossier durable
 
 Spec de référence : [openspec/specs/distribution-docker/spec.md](../../../../openspec/specs/distribution-docker/spec.md)
-· Relevé au commit `3b516b1e` (2026-11-03).
+· Relevé au commit `50ec096c` (2026-11-05).
 
 ## Objet et périmètre
 
@@ -11,9 +11,10 @@ outils de provider. Acteurs : l'utilisateur ou l'installeur Windows (scripts de 
 de release (CI). Hors périmètre : l'exécution des providers (la CI n'en exécute aucun dans Docker), le contenu
 de l'index.
 
-[Existant vérifié] Le changement actif `openspec/changes/exposer-seulement-les-projets-inscrits-a-docker/`
-retire les deux exigences sur la racine des projets et les remplace par un montage par projet inscrit. Le code
-au HEAD suit déjà ce changement (voir Écarts) ; ses exigences ne sont pas encore celles de la spec de référence.
+[Exigence] Le runtime Docker ne monte aucune racine des projets : chaque projet inscrit a son propre montage en
+lecture seule sous `/workspace/projects`, ajouté par `-Action AddProject` et retiré par `-Action RemoveProject`
+(décision `SEC-0075`). Une installation à racine unique migre vers cette table au premier `Install`, sauf avec
+PostgreSQL géré, où la migration est refusée.
 
 ## Vues
 
@@ -81,6 +82,35 @@ d'administration aux services qui lancent un provider ou un outil embarqué (`do
 `:186`, `:224`). Les services `minos-postgres` et `minos-ollama` de la pile connectée utilisent leurs propres
 images (voir Écarts, E3).
 
+### Que voit chaque conteneur d'un projet exposé ?
+
+Type : flowchart (vue de déploiement, non UML) · Portée : existant vérifié · Exigences : « Le runtime Docker ne
+monte aucune racine des projets », « Exposer un projet Docker ajoute son montage puis l'inscrit », « L'override
+des montages est régénéré depuis la table », « Retirer un projet Docker retire son montage sans perdre son index »
+
+```mermaid
+flowchart LR
+  subgraph hote["Hôte"]
+    a["dossier alpha"]
+    b["dossier team/beta"]
+    n["dossier voisin non inscrit"]
+    t["table des montages (format 2, 64 montages au plus)"]
+  end
+  t -->|"régénère à chaque appel"| ov["compose-mcp.projects.yaml"]
+  ov -->|"lecture seule"| mcp["minos-mcp : /workspace/projects/alpha, /workspace/projects/team/beta"]
+  ov -->|"lecture seule"| adm["minos-admin : mêmes montages"]
+  a --> ov
+  b --> ov
+  n -. "aucun montage" .-> mcp
+```
+
+`AddProject` contrôle le dossier sur l'hôte avant toute écriture, ajoute le montage à la table, régénère l'override
+et recrée `minos-mcp` ; `RemoveProject` retire le montage et recrée `minos-mcp`, le projet restant inscrit avec
+`rootAvailable: false` (`docker/scripts/mcp-lifecycle.ps1`, actions `AddProject` et `RemoveProject`). Relevé sur un
+Docker Desktop réel le 2026-11-05 : après la mise à jour d'une installation à racine unique, `minos-mcp` et
+`minos-admin` listent seulement `alpha` et `team`, le dossier voisin est absent et l'écriture dans un montage est
+refusée.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -88,16 +118,21 @@ images (voir Écarts, E3).
 | L'image du plan de requête ne contient ni compilateur ni outil de provider | 3/3 | V1, V2 | `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#queryTargetOfTheReleaseDockerfileCarriesNoToolchain`, `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#toolchainReintroducedInTheQueryTargetIsRefusedWithItsLine`, `scripts/ci/qualify-docker-release.sh:274` (sonde des commandes), `.github/workflows/docker-release-validation.yml` | couverte |
 | Chaque service Docker utilise l'image qui correspond à son rôle | 2/2 | V2 | `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#everyComposeServiceUsesTheImageOfItsRole`, `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#queryServiceOnTheAdministrationImageIsRefusedWithItsName` | couverte |
 | Une installation sans image de requête échoue de façon actionnable | 3/4 (avertissement non asserté) | V1 | `scripts/install/test_mcp_lifecycle_query_image.py#test_start_without_the_query_image_fails_before_any_docker_call`, `scripts/install/test_mcp_lifecycle_query_image.py#test_start_refuses_a_query_image_that_is_not_a_query_plane_image`, `scripts/install/test_mcp_lifecycle_query_image.py#test_start_of_a_single_image_runtime_still_works`, `scripts/ci/qualify-docker-upgrade.ps1` (mise à niveau, `workflow_dispatch` et promotion seulement) | partielle |
-| L'installeur Windows ne propose aucune racine de projets par défaut | 0/2 | — | aucune ; le code contredit l'exigence (E1) | manquante |
-| Une racine de projets dangereuse est refusée avant tout montage | 0/4 | — | aucune ; le code contredit l'exigence (E2) | manquante |
+| Le runtime Docker ne monte aucune racine des projets | 2/2 | V3 | `minos-app/src/test/java/com/minos/packaging/M29DockerAdministrationContractTest.java#noShippedComposeFileMountsAProjectsRoot`, `minos-application/src/test/java/com/minos/application/ProjectPathMappingServiceTest.java#initializeCreatesAnEmptyTableOnceAndRefusesASingleRoot`, `scripts/install/test_mcp_lifecycle_query_image.py#test_an_empty_table_mounts_nothing` | couverte |
+| Exposer un projet Docker ajoute son montage puis l'inscrit | 3/3 | V3 | `scripts/install/test_mcp_lifecycle_query_image.py#test_a_dedicated_folder_is_mounted_then_registered`, `scripts/install/test_mcp_lifecycle_query_image.py#test_the_profile_is_refused_before_the_bootstrap`, `scripts/install/test_mcp_lifecycle_query_image.py#test_a_link_to_a_project_folder_is_refused_before_the_bootstrap`, relevé Docker Desktop du 2026-11-05 (`AddProject` d'un troisième dossier : trois projets disponibles, poignée de main MCP) | couverte |
+| La table des montages est bornée et sans chevauchement | 3/3 | V3 | `minos-domain/src/test/java/com/minos/domain/registry/ProjectPathMappingMountTableTest.java#withMountAddsANewNameAndRefusesInvalidOnes`, `minos-domain/src/test/java/com/minos/domain/registry/ProjectPathMappingMountTableTest.java#aHostFolderEqualToOrContainingAnotherIsRefused`, `minos-domain/src/test/java/com/minos/domain/registry/ProjectPathMappingMountTableTest.java#theTableIsCappedAtSixtyFourMounts` | couverte |
+| L'override des montages est régénéré depuis la table | 3/3 | V3 | `scripts/install/test_mcp_lifecycle_query_image.py#test_an_override_edited_by_hand_is_rewritten`, `scripts/install/test_mcp_lifecycle_query_image.py#test_docker_compose_accepts_the_override_with_special_characters`, `scripts/install/test_mcp_lifecycle_query_image.py#test_a_missing_folder_is_omitted_with_a_warning_and_the_start_goes_on` | couverte |
+| Retirer un projet Docker retire son montage sans perdre son index | 2/2 (index existant non mesuré) | V3 | `scripts/install/test_mcp_lifecycle_query_image.py#test_remove_project_needs_a_name_and_recreates_the_query_plane`, `minos-domain/src/test/java/com/minos/domain/registry/ProjectPathMappingMountTableTest.java#withoutMountRemovesAKnownNameAndRefusesAnUnknownOne`, relevé Docker Desktop du 2026-11-05 (`RemoveProject` : projet inscrit, `rootAvailable: false`, projet jamais indexé) | partielle |
+| Une racine unique migre vers un montage par projet inscrit | 3/3 | V3 | `minos-application/src/test/java/com/minos/application/ProjectPathMappingServiceTest.java#migrationMountsEachProjectOnItsContainerPathAndSkipsTheRootAndDetachedOnes`, `minos-application/src/test/java/com/minos/application/ProjectPathMappingServiceTest.java#anUnreadableRegistryRefusesTheMigrationBeforeAnyWrite`, `minos-storage/src/test/java/com/minos/storage/local/registry/ProjectMountMigrationTest.java#theMigrationSavesTheSingleRootFileThenWritesTheTable`, `scripts/ci/qualify-docker-upgrade.ps1` (run 41541452830), relevé Docker Desktop du 2026-11-05 (v1.2.0 vers 1.3.0, deux montages, dossier voisin absent) | couverte |
+| La migration d'une racine unique stockée dans PostgreSQL est refusée | 1/1 | — | `minos-application/src/test/java/com/minos/application/ProjectPathMappingServiceTest.java#aHomeWhoseProjectsAreInPostgresqlIsNotMigratedAndTheRefusalGivesTheRemedy`, `scripts/install/test_docker_script_contexts.py#test_the_migration_is_refused_before_any_change_with_the_remedy` | couverte |
+| L'installeur Windows ne demande aucune racine des projets Docker | 2/2 | — | `minos-app/src/test/java/com/minos/packaging/DockerProjectsRootIgnoredContractTest.java#installerAsksForNoRootAndNamesTheCommandThatExposesAProject`, `minos-app/src/test/java/com/minos/packaging/DockerProjectsRootIgnoredContractTest.java#scriptsAcceptLegacyParametersWithAWarningAndForwardNoRoot`, parcours de l'assistant du candidat 1.3.0 par le propriétaire le 2026-11-02 | couverte |
+| Un dossier de projet dangereux est refusé avant tout montage | 3/3 | V3 | `scripts/install/test_mcp_lifecycle_query_image.py#test_the_profile_is_refused_before_the_bootstrap`, `minos-application/src/test/java/com/minos/application/ProjectPathMappingServiceTest.java#aDryRunWritesNothingAndARefusedFolderIsNotMounted`, `scripts/install/test_mcp_lifecycle_query_image.py#test_a_dedicated_folder_is_mounted_then_registered` | couverte |
 | La qualification interroge le plan de requête sur des données en lecture seule | 2/3 (pas de cas fautif) | — | `scripts/ci/qualify-docker-release.sh:333` (montage `readonly`), `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#qualificationQueriesTheMcpServerWithTheDataRootMountedReadOnly` | partielle |
 
 ## Écarts
 
 | Id | Écart | Preuve | Suite proposée |
 |---|---|---|---|
-| E1 | [Existant vérifié] L'installeur ne demande plus de racine des projets ; la spec exige un champ vide obligatoire | `minos-app/src/test/java/com/minos/packaging/DockerProjectsRootIgnoredContractTest.java#installerAsksForNoRootAndNamesTheCommandThatExposesAProject`, `packaging/windows/minos-installer.iss.template:859` | [Proposition] Résolu par l'archivage du changement `exposer-seulement-les-projets-inscrits-a-docker` (16/17 tâches), qui retire l'exigence. Ne pas modifier le code pour suivre l'ancienne exigence |
-| E2 | [Existant vérifié] Les paramètres hérités de racine sont ignorés avec un avertissement, pas refusés ; le contrôle « racine dangereuse » n'existe plus | `minos-app/src/test/java/com/minos/packaging/DockerProjectsRootIgnoredContractTest.java#scriptsAcceptLegacyParametersWithAWarningAndForwardNoRoot`, `scripts/install/verify-installer-template.ps1:53` | [Proposition] Même suite que E1 ; le changement le remplace par le refus d'un dossier de projet dangereux |
 | E5 | La garde contrôle 10 commandes (`cc`, `rustc`, `npm` en plus des 7 de la spec) | `scripts/ci/qualify-docker-release.sh:274` | Aucun : sur-ensemble conforme |
 | E6 | L'exigence dit « avant tout appel à Docker » ; le refus « image qui n'en est pas une » vient après `docker image inspect` (le scénario dit seulement « sans démarrer de conteneur ») | `docker/scripts/mcp-lifecycle.ps1:724` | [Question] Énoncé de l'exigence plus strict que son scénario ; à préciser |
 
@@ -106,3 +141,7 @@ images (voir Écarts, E3).
 - Le scénario de mise à niveau n'est exercé que par `workflow_dispatch` et la promotion de release, pas par
   chaque PR : est-ce la couverture voulue ?
 - Aucun test n'injecte une image dont une lecture écrirait sur le montage : faut-il un cas fautif explicite ?
+- Le maintien d'un index existant après `RemoveProject` n'est mesuré que par `rootAvailable: false` : le plan
+  d'administration Docker n'indexe pas, donc aucun index réel n'a pu être produit pour le vérifier.
+- Un runtime dont les projets sont dans PostgreSQL géré et qui monte encore une racine unique n'est pas migré
+  (limite déclarée) : faut-il prévoir un inventaire par `minos-admin` ?
