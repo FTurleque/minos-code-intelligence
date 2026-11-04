@@ -382,3 +382,7 @@ Un journal de processus, une copie d'artefact conservée ou un paquet que MINOS 
 - **GIVEN** un dossier de travail portant une entrée héritable supplémentaire
 - **WHEN** un fichier du projet y est copié
 - **THEN** le fichier copié porte cette entrée héritée
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [confinement-code-non-fiable](../../../docs/architecture/diagrams/capacites/confinement-code-non-fiable.md)

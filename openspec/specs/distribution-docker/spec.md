@@ -112,3 +112,7 @@ La qualification de l'image de release SHALL lancer le serveur MCP de l'image de
 - **GIVEN** une copie du script où le conteneur MCP reçoit un répertoire de données inscriptible
 - **WHEN** les tests de contrat Docker de `minos-app` sont exécutés (`./mvnw -B -ntp -pl minos-app -am test "-Dtest=M29Docker*"`)
 - **THEN** `M29DockerQueryImageContractTest` échoue
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [distribution-docker](../../../docs/architecture/diagrams/capacites/distribution-docker.md)

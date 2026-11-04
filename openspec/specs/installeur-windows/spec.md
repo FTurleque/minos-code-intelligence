@@ -150,3 +150,7 @@ Une ligne de protocole SHALL ne contenir ni chemin, ni URL, ni nom de modèle, n
 - **GIVEN** le modèle de l'installeur
 - **WHEN** le test de contrat lit la création des rangées
 - **THEN** elle sort sur `IsSmokeBuild()` avant de créer une rangée
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [installeur-windows](../../../docs/architecture/diagrams/capacites/installeur-windows.md)

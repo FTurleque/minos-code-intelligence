@@ -135,3 +135,7 @@ Une relation de test lié dont aucun type de preuve ne dépasse N emplacements S
 - **GIVEN** un test qui référence un symbole à exactement N emplacements
 - **WHEN** les tests liés sont dérivés
 - **THEN** la relation porte N preuves et aucune preuve de synthèse
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [tests-lies-et-impact](../../../docs/architecture/diagrams/capacites/tests-lies-et-impact.md)

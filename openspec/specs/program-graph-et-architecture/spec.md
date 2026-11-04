@@ -245,3 +245,7 @@ Un chemin source-puits qui traverse un assainisseur déclaré SHALL être rappor
 - **GIVEN** un projet Java dont les règles déclarent un assainisseur qui n'est sur aucun chemin entre la source et le puits
 - **WHEN** `minos_security_paths` est appelé
 - **THEN** le chemin figure dans la réponse avec l'indicateur d'assainissement à faux
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [program-graph-et-architecture](../../../docs/architecture/diagrams/capacites/program-graph-et-architecture.md)

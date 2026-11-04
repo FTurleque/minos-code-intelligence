@@ -63,3 +63,7 @@ Le garde SHALL échouer quand un appel `LOGGER.log` des sources de production tr
 #### Scenario: Diagnostic de bac à sable listé
 - **WHEN** le garde est exécuté sur le dépôt corrigé
 - **THEN** il réussit, les six sites de diagnostic ou de refus étant les seules entrées de la liste
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [journalisation](../../../docs/architecture/diagrams/capacites/journalisation.md)

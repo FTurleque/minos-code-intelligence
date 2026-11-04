@@ -164,3 +164,7 @@ L'empreinte de scope persistée au point de reprise SHALL être identique, à l'
 - **GIVEN** un fichier source dont le contenu change pendant le run, taille et date de modification restaurées
 - **WHEN** le run se termine
 - **THEN** l'empreinte de référence n'est pas promue et un diagnostic signale que l'espace de travail a changé
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [decouverte-et-negociation](../../../docs/architecture/diagrams/capacites/decouverte-et-negociation.md)
