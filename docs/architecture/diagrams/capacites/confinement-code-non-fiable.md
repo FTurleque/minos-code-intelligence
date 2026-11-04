@@ -62,7 +62,11 @@ sequenceDiagram
   L->>R: Recover-Stale (lit les journaux des autres lanceurs)
   alt verrou du propriétaire libéré par l'OS (propriétaire mort)
     L->>OS: retrait des droits journalisés, suppression du profil
-    L->>R: suppression du journal
+    alt retraits et profil prouvés
+      L->>R: suppression du journal
+    else retrait ou profil non prouvé
+      L->>R: journal réduit aux chemins en échec et verrou conservés, avertissement
+    end
   else propriétaire vivant
     L->>L: ne touche à rien
   else propriété non prouvable
@@ -79,13 +83,18 @@ sequenceDiagram
   end
   L->>OS: RunSandbox (provider confiné)
   L->>OS: finally : retrait des droits, DeleteProfile
-  L->>R: suppression du journal, Close-OwnershipLock
+  alt retraits et profil prouvés
+    L->>R: suppression du journal, puis du verrou (Close-OwnershipLock)
+  else retrait ou profil non prouvé
+    L->>R: journal réduit aux chemins en échec et verrou relâché conservés, avertissement
+  end
 ```
 
 La preuve de mort d'un propriétaire est un verrou de fichier tenu ouvert par le lanceur et libéré par le système à
 sa mort (`minos-runtime-local/src/main/resources/com/minos/runtime/local/windows-fragments/appcontainer-recovery-ownership.ps1frag:29-42`),
 pas une horloge ni un PID. Chaque octroi est journalisé avant d'être appliqué, pour qu'un lanceur suivant puisse le
-retirer.
+retirer. Un retrait se prouve par le code de sortie d'`icacls` ; le journal et son verrou ne sont supprimés qu'après
+le retrait prouvé de chaque droit et la suppression prouvée du profil, sinon un lanceur suivant les rejoue.
 
 ## Traçabilité
 
@@ -100,7 +109,7 @@ retirer.
 | Les résidus de travail d'un run mort ont une durée de vie bornée | tous | V1 | `minos-runtime-local/src/test/java/com/minos/runtime/local/workspace/LocalProviderWorkspaceTest.java#creatingAWorkspaceReclaimsTheOrphanWorkspaceOfADeadRunOlderThanTheLifetime`, `minos-engine/src/test/java/com/minos/io/StaleScratchReclamationTest.java#anOldChildIsReclaimedWithItsWholeContentAndARecentOneIsKept`, `minos-integration-git/src/test/java/com/minos/integration/git/JGitRemoteRepositoryMaterializerTest.java#anExpiredCloneTemporaryIsReclaimedWhereAValidEntryAndARecentTemporaryAreKept` | couverte |
 | Un résidu récent, protégé ou daté dans le futur n'est jamais supprimé | protection du run courant non testée | V1 | `minos-engine/src/test/java/com/minos/io/StaleScratchReclamationTest.java#theThresholdIsStrictAtTheLifetimeBoundary`, `minos-engine/src/test/java/com/minos/io/StaleScratchReclamationTest.java#aResidueDatedInTheFutureIsNeverReclaimed` | partielle |
 | Le balayage des résidus ne sort jamais de sa racine et reste non fatal | tous (tests sautables selon le système) | V1 | `minos-engine/src/test/java/com/minos/io/StaleScratchReclamationTest.java#anOldSymbolicLinkIsRemovedWithoutWalkingOrTouchingItsTarget`, `minos-engine/src/test/java/com/minos/io/StaleScratchReclamationTest.java#anOldJunctionIsRemovedWithoutWalkingOrTouchingItsTarget`, `minos-engine/src/test/java/com/minos/io/StaleScratchReclamationTest.java#aResidueThatCannotBeRemovedIsReportedWithoutAnAbsolutePathAndTheSweepContinues` | couverte |
-| Les autorisations accordées à un conteneur sont retirées même après un arrêt brutal | un cas d'échec reste à prouver (E1) | V2 | `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aSandboxWhoseOwnerWasKilledIsRecoveredByTheNextLauncher`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aJournaledPathWhoseGrantWasNeverAppliedIsRecoveredAsANoOp` | partielle |
+| Les autorisations accordées à un conteneur sont retirées même après un arrêt brutal | tous | V2 | `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aSandboxWhoseOwnerWasKilledIsRecoveredByTheNextLauncher`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aJournaledPathWhoseGrantWasNeverAppliedIsRecoveredAsANoOp`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aLiveSandboxIsNotAlteredWhenAnotherLauncherStartsAndRunsToCompletion`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aJournalWithoutAnOwnerLockIsLeftInPlaceAndReported`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aGrantThatCannotBeRemovedAtTheEndOfARunKeepsItsJournalForTheNextLauncher`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java#aRecoveryWhoseGrantRemovalFailsKeepsTheJournalForTheNextLauncher` | couverte |
 | Les autorisations orphelines existantes sont recensées | tous | — | `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/OrphanAppContainerGrantDiagnosticTest.java#orphanGrantsAreReportedWithoutChangeAndRemovedOnlyOnRequest`, `scripts/windows/Find-MinosAppContainerGrants.ps1` | couverte |
 | Un confinement indisponible fait échouer sa qualification quand elle est exigée | racine cgroup absente non forcée par un test | V1 | `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/SandboxTestSupportTest.java#requiredAndUnavailableFailsWithTheReason`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/SandboxTestSupportTest.java#anAbsentBackendFailsOrSkipsAccordingToTheProperty` | partielle |
 | La CI exige la qualification du confinement sur chacun de ses deux systèmes | aucun gate ne compte les tests sautés | — | `scripts/docs/check-current-docs.py:171`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/SandboxTestSupportTest.java#requiredModeIsActiveOnThePullRequestVerificationJob` | partielle |
@@ -128,7 +137,6 @@ tournent que sur un système (`@EnabledOnOs`).
 
 | Id | Écart | Preuve | Suite proposée |
 |---|---|---|---|
-| E1 | Écart de sécurité relevé sur cette exigence ; son détail n'est pas publié et il est traité selon `SECURITY.md` | — | Correction par un changement OpenSpec avec test rouge |
 | E2 | Le message de la sonde Windows annonce un repli « vers un niveau de bac à sable plus faible », alors que l'exécution est ensuite refusée : le comportement est fail-closed, l'annonce est inexacte | `minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java:128-131` | [Proposition] Corriger le message |
 | E3 | La spec annonce quatre tests pour la classe du backend bubblewrap ; elle en compte cinq | `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/LinuxBubblewrapWorkerSandboxBackendTest.java` | [Proposition] Corriger le scénario |
 | E4 | La spec exige « aucun test sauté » pour la classe de reprise AppContainer ; un `assumeTrue` peut en sauter un, et aucun gate ne lit les rapports Surefire | `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsAppContainerRecoveryOwnershipTest.java:145` | [Proposition] Gate qui compte les tests sautés des classes de confinement |
