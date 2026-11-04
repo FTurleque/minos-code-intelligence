@@ -249,6 +249,100 @@ class WindowsAppContainerRecoveryOwnershipTest {
         assertFalse(fixture.acl(neverGranted.toString()).contains(FOREIGN_SID));
     }
 
+    /**
+     * A grant whose removal fails at the end of a run keeps the journal and its released lock, so the next
+     * launcher proves the owner dead and replays the whole cleanup. The failure is injected by denying the
+     * OWNER RIGHTS principal the right to change the DACL of the working directory while the provider runs:
+     * the directory owner then loses its implicit WRITE_DAC and icacls fails with "access denied".
+     */
+    @Test
+    void aGrantThatCannotBeRemovedAtTheEndOfARunKeepsItsJournalForTheNextLauncher() throws Exception {
+        Fixture fixture = fixture("end-removal");
+        Prepared prepared = fixture.prepare("end-removal", """
+                param([string] $Out)
+                Start-Sleep -Seconds 20
+                [System.IO.File]::WriteAllText($Out, 'ok')
+                exit 0
+                """);
+        Sandbox first = prepared.launch();
+        Journal journal;
+        try {
+            journal = fixture.awaitJournalWithGrants(first, Duration.ofSeconds(60));
+            fixture.denyAclChange(prepared.working());
+        } finally {
+            // Let the launcher run its own cleanup: killing it would leave its grants to a later recovery.
+            if (!first.process().waitFor(90, TimeUnit.SECONDS)) first.destroy();
+        }
+        Path lock = lockOf(journal.file());
+        try {
+            assertFalse(first.process().isAlive(), "launcher timed out: " + first.output());
+            assertEquals(0, first.process().exitValue(), "the provider exit code must be kept: " + first.output());
+            assertKeptAndReported(journal.file(), lock, first);
+            assertEquals(1, Journal.read(journal.file()).paths().size(),
+                    "the kept journal must name only the path whose removal failed: " + first.output());
+        } finally {
+            // The denied directory can still be deleted, which also drops the entry it kept.
+            deleteTree(prepared.working());
+        }
+
+        // Once the denied directory is gone, the next launcher's replay succeeds.
+        Sandbox next = startAndAwaitSuccess(fixture, "end-removal-next");
+        assertReplayed(journal.file(), lock, next);
+        for (String path : journal.paths()) {
+            if (Files.exists(Path.of(path))) {
+                assertFalse(fixture.acl(path).contains(journal.sid()),
+                        "the replay kept the ACL on " + path + ": " + next.output());
+            }
+        }
+    }
+
+    /** A recovery whose grant removal fails keeps the journal and its lock, and a later launcher replays it. */
+    @Test
+    void aRecoveryWhoseGrantRemovalFailsKeepsTheJournalForTheNextLauncher() throws Exception {
+        Fixture fixture = fixture("recovery-removal");
+        Foreign foreign = Foreign.create(fixture, CURRENT_RECOVERY, "recovery-removal", true);
+        try {
+            fixture.denyAclChange(foreign.grantRoot());
+
+            assertKeptAndReported(foreign.journal(), foreign.lock(), startAndAwaitSuccess(fixture, "second"));
+
+            deleteTree(foreign.grantRoot());
+            assertReplayed(foreign.journal(), foreign.lock(), startAndAwaitSuccess(fixture, "third"));
+        } finally {
+            if (Files.exists(foreign.grantRoot())) deleteTree(foreign.grantRoot());
+        }
+    }
+
+    /** Starts a launcher around a provider that exits at once, and requires it to succeed. */
+    private static Sandbox startAndAwaitSuccess(Fixture fixture, String label) throws Exception {
+        Sandbox sandbox = fixture.start(label, "exit 0\n");
+        assertTrue(sandbox.process().waitFor(90, TimeUnit.SECONDS), "launcher timed out: " + sandbox.output());
+        assertEquals(0, sandbox.process().exitValue(), sandbox.output());
+        return sandbox;
+    }
+
+    /** An incomplete cleanup keeps the journal and its lock, and reports the journal by name. */
+    private static void assertKeptAndReported(Path journal, Path lock, Sandbox sandbox) {
+        assertTrue(Files.exists(journal), "a failed removal must keep the recovery journal: " + sandbox.output());
+        assertTrue(Files.exists(lock), "a failed removal must keep the lock beside its journal: " + sandbox.output());
+        assertTrue(sandbox.output().contains(journal.getFileName().toString()),
+                "the kept journal was not reported: " + sandbox.output());
+    }
+
+    /** A replayed journal disappears together with its lock. */
+    private static void assertReplayed(Path journal, Path lock, Sandbox sandbox) {
+        assertFalse(Files.exists(journal), "the kept journal was not replayed: " + sandbox.output());
+        assertFalse(Files.exists(lock), "the kept lock was not removed: " + sandbox.output());
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
     private static boolean canOpenForWriting(Path file) {
         try (var ignored = Files.newByteChannel(file, java.nio.file.StandardOpenOption.READ,
                 java.nio.file.StandardOpenOption.WRITE)) {
@@ -360,6 +454,16 @@ class WindowsAppContainerRecoveryOwnershipTest {
             String name = System.getProperty("user.name");
             String domain = System.getenv("USERDOMAIN");
             return domain == null || domain.isBlank() ? name : domain + "\\" + name;
+        }
+
+        /**
+         * Denies the OWNER RIGHTS principal (S-1-3-4) WRITE_DAC on {@code path}, without inheritance: the owner loses
+         * its implicit right to change the DACL, so removing any entry fails, while deleting the path still works.
+         */
+        void denyAclChange(Path path) throws Exception {
+            run("icacls.exe", path.toString(), "/deny", "*S-1-3-4:(WDAC)", "/q");
+            // icacls prints the well-known principal under its localized name: match the language-neutral flags.
+            assertTrue(acl(path.toString()).contains("(DENY)(WDAC"), "the OWNER RIGHTS deny could not be set up");
         }
 
         String acl(String path) throws Exception {

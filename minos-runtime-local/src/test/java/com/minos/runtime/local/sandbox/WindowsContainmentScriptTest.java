@@ -36,7 +36,7 @@ class WindowsContainmentScriptTest {
     private static final String PRIVATE_STORAGE_SHA256 =
             "fa5ed8c517237ca180652403cb6a812cbb6233f7023cde773f91809c06999ef7";
     private static final String OWNERSHIP_RECOVERY_SHA256 =
-            "f8e25954378984fad359ef0412e30edaae9d75614aa01b3bd9d9707fbd91929f";
+            "ec2adab2de978f2673ea1533af432d339f511290b61ca09834e83ba9bc2bf986";
 
     @Test
     void jobObjectLauncherMatchesQualifiedBaselineExceptForApprovedPlanConsumption() throws Exception {
@@ -131,6 +131,7 @@ class WindowsContainmentScriptTest {
         String assembled = normalizeScriptText(WindowsContainmentScript.assemble(launcher));
         if ("windows-appcontainer-sandbox-v4.ps1".equals(launcher)) {
             assembled = removeApprovedPrivateStorageHardening(assembled);
+            assembled = removeApprovedFailClosedGrantRemoval(assembled);
             assembled = removeApprovedOwnershipRecovery(assembled, golden);
             assembled = removeApprovedJournalBeforeGrant(assembled);
         }
@@ -176,6 +177,62 @@ class WindowsContainmentScriptTest {
                     Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
                 }""",
                 "ownership lock release");
+    }
+
+    /**
+     * A grant removal is proven by the exit code of {@code icacls}, and the end of a run removes its journal only once
+     * every removal and the profile deletion are proven; otherwise it keeps the journal for the next launcher. The
+     * only accepted differences are that exit-code check and the cleanup block that tracks the outcome.
+     */
+    private static String removeApprovedFailClosedGrantRemoval(String assembled) {
+        String value = replaceExactlyOnce(
+                assembled,
+                lines(
+                        "    & icacls.exe $Path /remove:g \"*$Sid\" /q | Out-Null",
+                        "    if ($LASTEXITCODE -ne 0) { throw \"Unable to remove an AppContainer ACL entry (icacls exit code"
+                                + " $LASTEXITCODE)\" }"),
+                lines("    & icacls.exe $Path /remove:g \"*$Sid\" /q | Out-Null"),
+                "grant removal exit-code check");
+        return replaceExactlyOnce(
+                value,
+                lines(
+                        "finally {",
+                        "    # The journal goes only once every removal and the profile deletion are proven. Otherwise it"
+                                + " stays, beside the",
+                        "    # lock released below, naming only the paths whose removal failed, so that the next launcher"
+                                + " proves this owner",
+                        "    # dead and replays the rest of the cleanup.",
+                        "    $cleaned = $true",
+                        "    $remaining = New-Object System.Collections.Generic.List[string]",
+                        "    if ($sid) {",
+                        "        foreach ($path in @($granted | Select-Object -Unique)) {",
+                        "            try { Remove-AppContainerPath $path $sid } catch { $cleaned = $false; $remaining.Add($path);"
+                                + " Write-Warning $_ }",
+                        "        }",
+                        "    }",
+                        "    try { [MinosAppContainerNativeV3]::DeleteProfile($containerProfile) } catch { $cleaned = $false;"
+                                + " Write-Warning $_ }",
+                        "    if ($cleaned) {",
+                        "        Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue",
+                        "    } elseif (Test-Path -LiteralPath $journal) {",
+                        "        try { Write-Recovery $journal $containerProfile $sid $remaining } catch { Write-Warning $_ }",
+                        "        Write-Warning \"MINOS AppContainer cleanup is incomplete; recovery journal"
+                                + " $(Split-Path -Leaf $journal) is kept for the next launcher\"",
+                        "    }"),
+                lines(
+                        "finally {",
+                        "    if ($sid) {",
+                        "        foreach ($path in @($granted | Select-Object -Unique)) {",
+                        "            try { Remove-AppContainerPath $path $sid } catch { Write-Warning $_ }",
+                        "        }",
+                        "    }",
+                        "    try { [MinosAppContainerNativeV3]::DeleteProfile($containerProfile) } catch { Write-Warning $_ }",
+                        "    Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue"),
+                "fail-closed end-of-run cleanup");
+    }
+
+    private static String lines(String... lines) {
+        return String.join("\n", lines) + "\n";
     }
 
     /**

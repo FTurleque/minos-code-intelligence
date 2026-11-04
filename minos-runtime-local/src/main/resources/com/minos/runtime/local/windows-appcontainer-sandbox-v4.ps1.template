@@ -486,6 +486,7 @@ function Grant-AppContainerFile([string] $Path, [string] $Sid) {
 function Remove-AppContainerPath([string] $Path, [string] $Sid) {
     if (-not (Test-Path -LiteralPath $Path)) { return }
     & icacls.exe $Path /remove:g "*$Sid" /q | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to remove an AppContainer ACL entry (icacls exit code $LASTEXITCODE)" }
 }
 
 #minos-include:appcontainer-recovery-ownership
@@ -556,12 +557,22 @@ try {
     exit $exitCode
 }
 finally {
+    # The journal goes only once every removal and the profile deletion are proven. Otherwise it stays, beside the
+    # lock released below, naming only the paths whose removal failed, so that the next launcher proves this owner
+    # dead and replays the rest of the cleanup.
+    $cleaned = $true
+    $remaining = New-Object System.Collections.Generic.List[string]
     if ($sid) {
         foreach ($path in @($granted | Select-Object -Unique)) {
-            try { Remove-AppContainerPath $path $sid } catch { Write-Warning $_ }
+            try { Remove-AppContainerPath $path $sid } catch { $cleaned = $false; $remaining.Add($path); Write-Warning $_ }
         }
     }
-    try { [MinosAppContainerNativeV3]::DeleteProfile($containerProfile) } catch { Write-Warning $_ }
-    Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+    try { [MinosAppContainerNativeV3]::DeleteProfile($containerProfile) } catch { $cleaned = $false; Write-Warning $_ }
+    if ($cleaned) {
+        Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+    } elseif (Test-Path -LiteralPath $journal) {
+        try { Write-Recovery $journal $containerProfile $sid $remaining } catch { Write-Warning $_ }
+        Write-Warning "MINOS AppContainer cleanup is incomplete; recovery journal $(Split-Path -Leaf $journal) is kept for the next launcher"
+    }
     Close-OwnershipLock $ownership $recoveryDirectory $containerProfile
 }
