@@ -95,9 +95,7 @@ Rassemblées depuis les écarts des six lots.
   côté API, ou devenir un refus nommé ?
 - `chaine-de-livraison` E1 : attester aussi les sommes `.sha256` publiées, ou restreindre l'exigence ?
 - `client-intellij` E1 : remplacer la garde textuelle `implementation("com.minos:` par une garde structurelle ?
-- `confinement-code-non-fiable` E1, défaut de sécurité : le retrait des droits AppContainer ne contrôle pas le
-  code de sortie d'`icacls` et supprime le journal de reprise même en cas d'échec. Correction proposée par un
-  changement avec test rouge ; à traiter selon `SECURITY.md` avant toute communication publique de détails.
+- `confinement-code-non-fiable` E1 : écart de sécurité traité selon `SECURITY.md` ; son détail n'est pas publié.
 - `persistance-snapshots` E4 : un format de snapshot non mesuré doit-il garder l'amplification prudente ?
 - `stockage-prive-et-secrets` E4 : déclarer la limite de la publication de répertoire (course entre deux
   écrivains) dans l'exigence, ou la corriger ?
