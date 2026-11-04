@@ -329,3 +329,7 @@ Sous Windows, le lanceur du plugin SHALL refuser, avant toute modification, un d
 - **GIVEN** un dossier MINOS absent, ou présent et appartenant à l'utilisateur courant
 - **WHEN** le plugin lance une commande MINOS
 - **THEN** le dossier est réservé à son propriétaire et la commande démarre
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [client-intellij](../../../docs/architecture/diagrams/capacites/client-intellij.md)

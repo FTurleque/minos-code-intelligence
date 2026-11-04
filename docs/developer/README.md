@@ -117,6 +117,7 @@ flowchart TB
 19. [Audit de code : SpotBugs et PIT](quality/code-audit.md)
 20. [Configuration des assistants IA](ai-configuration.md)
 21. [Archgate : règles rattachées aux ADR](archgate.md)
+22. [Spécifier avec OpenSpec : le schéma detailed-uml](openspec-detailed-uml.md)
 
 ## Build développeur
 

@@ -167,3 +167,7 @@ Pour un statut HTTP hors 2xx, le fournisseur SHALL lire une quantité bornée du
 - **GIVEN** un serveur local de test qui répond 500 avec un corps contenant `/home/u/models`
 - **WHEN** `embed` est appelé
 - **THEN** le message de l'exception nomme le statut et ne contient pas ce chemin
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [recherche-semantique](../../../docs/architecture/diagrams/capacites/recherche-semantique.md)

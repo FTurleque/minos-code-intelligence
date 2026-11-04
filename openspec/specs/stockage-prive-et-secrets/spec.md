@@ -641,3 +641,7 @@ Un paquet d'artefact distribué SHALL être publié et un répertoire hostile ou
 - **GIVEN** le dépôt après ce changement
 - **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
 - **THEN** il réussit et la liste ne contient plus d'entrée `Files.move`, `Files.createTempFile`, `Files.newOutputStream` ni `Files.newByteChannel` pour ces six fichiers (hors l'entrée `LocalIsolatedIndexWorker`, reclassée)
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [stockage-prive-et-secrets](../../../docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md)

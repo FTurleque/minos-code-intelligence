@@ -94,3 +94,7 @@ La propriété `maven.compiler.release` du POM racine SHALL être la source de v
 - **GIVEN** le dépôt réel après la migration
 - **WHEN** `python scripts/docs/check-current-docs.py` et le gate de baseline sont exécutés
 - **THEN** les deux réussissent
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [socle-d-execution](../../../docs/architecture/diagrams/capacites/socle-d-execution.md)

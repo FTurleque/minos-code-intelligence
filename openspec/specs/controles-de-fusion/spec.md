@@ -315,3 +315,7 @@ Dans un job qui se connecte à un registre d'images, une étape `run:` postérie
 - **GIVEN** une liste fermée qui nomme un job qui ne se connecte plus à un registre
 - **WHEN** le gate est exécuté
 - **THEN** il échoue en nommant l'entrée périmée
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [controles-de-fusion](../../../docs/architecture/diagrams/capacites/controles-de-fusion.md)

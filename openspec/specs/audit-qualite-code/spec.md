@@ -437,3 +437,7 @@ L'analyse de secrets SHALL couvrir l'arbre de travail (fichiers non suivis compr
 #### Scenario: Qualification d'une alerte
 - **WHEN** une alerte est qualifiée dans un document
 - **THEN** seule sa forme (longueur, alphabet) et la ligne masquée sont citées, jamais la valeur
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [audit-qualite-code](../../../docs/architecture/diagrams/capacites/audit-qualite-code.md)
