@@ -133,10 +133,10 @@ Dossiers `docs/architecture/diagrams/capacites/journalisation.md`, `distribution
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| journalisation › La cause d'un journal n'est transmise que par une liste nominative | Diagnostic de bac à sable listé | D1 | 1.1 | `scripts/architecture/check-private-io.py` sur le dépôt |
-| distribution-docker › Chaque service Docker utilise l'image qui correspond à son rôle | Classement des services réels | D1 | 1.2 | `M29DockerQueryImageContractTest#everyComposeServiceUsesTheImageOfItsRole` |
-| analyse-git › Aucun filtre déclaré par le dépôt analysé ne s'exécute | Filtre du dépôt principal atteint depuis un worktree lié | D2 | 1.3 | `GitIntelligenceTrustTest#aTrapOfTheMainRepositoryIsNotExecutedFromALinkedWorktree` |
-| tests-lies-et-impact › Les preuves d'une relation de test lié sont bornées et l'omission est déclarée | Score inchangé par le plafond | D1 | 1.4 | `RelatedTestDerivationServiceTest#capChangesNeitherPairsNorConfidencesNorOrder` |
+| journalisation › La cause d'un journal n'est transmise que par une liste nominative | Diagnostic de bac à sable listé | D1 | 1.1 | `scripts/architecture/check-private-io.py` sur le dépôt : SUCCESS le 2026-11-04 ; six entrées de cause (trois de bac à sable, une de reprise, deux du plan de contrôle hébergé), chacune avec fichier, maximum et justification |
+| distribution-docker › Chaque service Docker utilise l'image qui correspond à son rôle | Classement des services réels | D1 | 1.2 | `M29DockerQueryImageContractTest#everyComposeServiceUsesTheImageOfItsRole` : classe 6/6, 0 saut, le 2026-11-04 ; seuls `minos-postgres` et `minos-ollama` gardent une image tierce dans `docker/compose-mcp.connected.yaml` |
+| analyse-git › Aucun filtre déclaré par le dépôt analysé ne s'exécute | Filtre du dépôt principal atteint depuis un worktree lié | D2 | 1.3 | `GitIntelligenceTrustTest#aTrapOfTheMainRepositoryIsNotExecutedFromALinkedWorktree` : classe 12/12, 0 saut, le 2026-11-04 |
+| tests-lies-et-impact › Les preuves d'une relation de test lié sont bornées et l'omission est déclarée | Score inchangé par le plafond | D1 | 1.4 | `RelatedTestDerivationServiceTest#capChangesNeitherPairsNorConfidencesNorOrder` : classe 11/11, 0 saut, le 2026-11-04 |
 
 ## Questions ouvertes
 

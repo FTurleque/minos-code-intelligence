@@ -77,7 +77,6 @@ toute cause transmise hors de la liste `scripts/architecture/private-io-allowlis
 | Id | Écart | Preuve | Suite proposée |
 |---|---|---|---|
 | E1 | Les scénarios de récupération exigent « aucun enregistrement n'a de cause » ; l'outil de capture des tests ne lit que le message, jamais la cause | `minos-engine/src/test/java/com/minos/testsupport/LogCapture.java:31` | [Proposition] Faire exposer la cause par `LogCapture` et l'asserter vide |
-| E2 | Le scénario « Diagnostic de bac à sable listé » parle de six sites de bac à sable ; la liste compte six entrées dont trois de bac à sable (les trois autres : reprise d'indexation, plan de contrôle hébergé), pour huit occurrences maximum | `scripts/architecture/private-io-allowlist.json` | [Proposition] Reformuler le scénario par un changement (« six sites nominatifs ») |
 | E3 | Le scénario « Le protocole MCP reste propre » vise le jar ombré ; la seule vérification ligne à ligne de stdout passe par l'image Docker de requête | `scripts/ci/qualify-docker-release.sh:378` | [Proposition] Test sur le jar ombré nu |
 | E4 | Le marqueur du scénario (`marqueur-d-essai`) diffère de celui du test (`erreur-de-bibliotheque-visible`) | `minos-app/src/test/java/com/minos/packaging/ShadedJarLoggingIT.java:26` | Aucun : écart cosmétique |
 

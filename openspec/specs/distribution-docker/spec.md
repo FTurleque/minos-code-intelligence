@@ -33,8 +33,9 @@ Les fichiers compose SHALL désigner l'image de requête pour tout service qui n
 
 #### Scenario: Classement des services réels
 - **GIVEN** les deux fichiers compose du dépôt
-- **WHEN** le test de contrat Docker et `python scripts/quality/check-compose-limits.py` sont exécutés
-- **THEN** les deux réussissent et chaque service a une image de l'une des deux variables
+- **WHEN** le test de contrat Docker de `minos-app` est exécuté
+- **THEN** il réussit
+- **AND** chaque service MINOS désigne l'image de requête ou l'image d'administration, les services tiers de la pile connectée (PostgreSQL, Ollama) gardant leur propre image épinglée
 
 ### Requirement: Une installation sans image de requête échoue de façon actionnable
 Quand le fichier compose du runtime demande l'image de requête et que sa variable est absente ou vide, le lancement SHALL échouer avant tout appel à Docker, avec un message qui nomme la commande de mise à jour. Il SHALL NOT utiliser l'image d'administration à la place. Le runtime laissé par une version à une seule image SHALL rester utilisable jusqu'à sa mise à jour, qui SHALL produire les deux images.

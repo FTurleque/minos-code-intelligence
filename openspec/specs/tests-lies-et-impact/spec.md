@@ -109,8 +109,8 @@ Une relation de test lié SHALL conserver au plus N emplacements par type de pre
 - **THEN** la relation porte N preuves de référence directe avec emplacement et une preuve de synthèse qui annonce 3 emplacements omis
 
 #### Scenario: Score inchangé par le plafond
-- **GIVEN** un corpus dont plusieurs relations dépassent le plafond
-- **WHEN** les relations sont dérivées avec puis sans plafond
+- **GIVEN** deux corpus de mêmes tests et symboles, l'un avec une seule occurrence par paire, l'autre avec plus d'occurrences que le plafond pour chaque paire
+- **WHEN** les relations sont dérivées sur chacun
 - **THEN** les paires test et symbole, leurs confiances et leur ordre sont identiques
 
 #### Scenario: Ordre reproductible
