@@ -48,8 +48,8 @@ class LinuxSandboxToolchainHomeTest {
     @Test
     void distributionPackagedJdkReadsItsSecurityConfigurationInsideTheSandbox() throws Exception {
         Optional<Path> packaged = packagedJdk();
-        assumeTrue(packaged.isPresent(),
-                "hypothesis: a distribution-packaged JDK whose conf/security/java.security links under /etc "
+        SandboxTestSupport.decide(SandboxTestSupport.required(), packaged.isPresent(),
+                () -> "a distribution-packaged JDK whose conf/security/java.security links under /etc "
                         + "is installed under /usr/lib/jvm");
         List<String> output = runSandboxed(packaged.orElseThrow(),
                 List.of("-XshowSettings:security:properties", "-version"));

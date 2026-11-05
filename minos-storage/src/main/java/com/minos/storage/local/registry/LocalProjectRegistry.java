@@ -328,7 +328,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
                         pathMapping.orElseThrow().relativeForPhysical(project.rootPath(), runtimeLocation));
             } catch (IllegalArgumentException exception) {
                 throw new IOException("project path cannot be represented by configured runtime mapping: "
-                        + project.rootPath(), exception);
+                        + leafName(project.rootPath()), exception);
             }
         } else {
             properties.setProperty(LEGACY_ROOT_PATH, project.rootPath().toString());
@@ -397,8 +397,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
             String migratedRelative = pathMapping.orElseThrow().relativeForLegacyPath(legacyRoot);
             return new ResolvedRoot(pathMapping.orElseThrow().resolve(migratedRelative, runtimeLocation), migratedRelative);
         } catch (IllegalArgumentException exception) {
-            throw new IOException("legacy project root cannot be migrated with configured mapping: "
-                    + legacyRoot, exception);
+            throw new IOException("legacy project root cannot be migrated with configured mapping", exception);
         }
     }
 
