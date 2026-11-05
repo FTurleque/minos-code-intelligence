@@ -378,7 +378,7 @@ jobs:
         if: runner.os != 'Windows'
         timeout-minutes: 10
         shell: bash
-        run: bash scripts/ci/install-linux-sandbox-toolchain.sh
+        run: bash scripts/ci/install-linux-sandbox-toolchain.sh --with-packaged-jdk
 
       - name: Delegate a cgroup v2 job boundary to the worker sandbox
         if: runner.os != 'Windows'

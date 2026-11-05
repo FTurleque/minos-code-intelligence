@@ -22,9 +22,28 @@
 # Azure mirror is still preferred whenever it works; the pin is only a recovery path.
 #
 # This never masks a failure: if both attempts fail the script exits non-zero and the CI step fails.
+#
+# --with-packaged-jdk additionally installs a distribution-packaged JDK, whose conf/security links point under
+# /etc: LinuxSandboxToolchainHomeTest qualifies that the Linux sandbox lets such a JDK read its security
+# configuration, and in required mode (-Dminos.sandbox.tests.required=true) it fails when no such JDK exists. The
+# GitHub-hosted image ships Temurin only. The package version is a qualified input, like the toolchain versions of
+# scripts/ci/delegate-linux-cgroup.sh: Ubuntu publishes a new openjdk-21 build with each OpenJDK quarterly update,
+# and the install then fails until this constant is updated deliberately.
 set -euo pipefail
 
 PACKAGES=(bubblewrap util-linux apparmor apparmor-profiles)
+PACKAGED_JDK_PACKAGE='openjdk-21-jre-headless=21.0.12.1+1-1~24.04.4'
+PACKAGED_JDK_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+with_packaged_jdk=false
+if [ "${1:-}" = '--with-packaged-jdk' ]; then
+  with_packaged_jdk=true
+  PACKAGES+=("$PACKAGED_JDK_PACKAGE")
+  shift
+fi
+if [ "$#" -ne 0 ]; then
+  echo "usage: install-linux-sandbox-toolchain.sh [--with-packaged-jdk]" >&2
+  exit 2
+fi
 APT_OPTIONS=(-o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
 ATTEMPT_TIMEOUT_SECONDS="${MINOS_APT_ATTEMPT_TIMEOUT_SECONDS:-180}"
 MIRRORLIST=/etc/apt/apt-mirrors.txt
@@ -53,6 +72,18 @@ command -v bwrap
 command -v prlimit
 command -v unshare
 command -v setpriv
+
+if [ "$with_packaged_jdk" = true ]; then
+  # The shape LinuxSandboxToolchainHomeTest looks for: a real java-*-openjdk-* directory whose security
+  # configuration is a link into /etc.
+  test -x "$PACKAGED_JDK_HOME/bin/java"
+  test ! -L "$PACKAGED_JDK_HOME"
+  case "$(readlink "$PACKAGED_JDK_HOME/conf/security/java.security")" in
+    /etc/*) ;;
+    *) echo "MINOS sandbox toolchain: $PACKAGED_JDK_HOME/conf/security/java.security does not link under /etc" >&2
+       exit 1 ;;
+  esac
+fi
 
 profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
 test -f "$profile"
