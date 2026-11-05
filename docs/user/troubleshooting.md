@@ -8,7 +8,7 @@ La ligne `error: index failed: …` (code de sortie 1) nomme le run, sa phase et
 
 ## Windows : « scip-java execution under the Windows AppContainer sandbox is not qualified »
 
-scip-java est `BLOCKED` sous Windows (`minos doctor`, `minos tools verify`, `minos providers scip-java`), `minos tools install scip-java` échoue et l'indexation d'un projet Java est refusée avant tout lancement : la chaîne scip-java Windows n'a pas été exécutée de bout en bout sous le bac à sable AppContainer, et MINOS ne déclare pas prêt ce qui n'est pas qualifié ([ADR 0060](../architecture/adr/SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md)). Les autres providers (TypeScript) ne sont pas touchés. Remède : indexer les projets Java par le [runtime Docker](docker-runtime.md). Sous Windows, le runner scip-java n'utilise que le Windows PowerShell 5.1 du répertoire système (`System32\WindowsPowerShell\v1.0`), jamais un PowerShell du `PATH`.
+scip-java est `BLOCKED` sous Windows (`minos doctor`, `minos tools verify`, `minos providers scip-java`), `minos tools install scip-java` échoue et l'indexation d'un projet Java est refusée avant tout lancement : la chaîne scip-java Windows n'a pas été exécutée de bout en bout sous le bac à sable AppContainer, et MINOS ne déclare pas prêt ce qui n'est pas qualifié ([ADR 0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)). Les autres providers (TypeScript) ne sont pas touchés. **Aucune voie n'indexe aujourd'hui un projet Java depuis un poste Windows** : le [runtime Docker](docker-runtime.md) ne lance aucun provider (`minos-admin index` y est refusé, `provider runtime is not ready`). Seul recours : indexer le projet par MINOS sur un hôte Linux, ou y produire un artefact SCIP et l'importer sous Windows par `minos import-scip <projet> --provider scip-java --file <index.scip>` (import de diagnostic : le projet n'est pas compilé par MINOS). Sous Windows, le runner scip-java n'utilise que le Windows PowerShell 5.1 du répertoire système (`System32\WindowsPowerShell\v1.0`), jamais un PowerShell du `PATH`.
 
 ## Commencer par `doctor`
 
@@ -62,6 +62,8 @@ Si la racine a été déplacée, si une lettre de lecteur a changé ou si un vol
 
 Réenregistrer le bon projet ou rétablir exactement la racine attendue.
 
+Avec le backend MCP Docker, un projet est indisponible quand son montage a été retiré (`RemoveProject`), quand son dossier a été supprimé ou déplacé (le montage est alors omis au démarrage, avec un avertissement qui le nomme), ou quand la migration d'une ancienne racine ne l'a pas monté (projet inscrit à la racine elle-même, isolé, ou dossier refusé). Il garde son identité et son index ; l'exposer de nouveau avec `prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier> -Name <nom>` ([Projets exposés au runtime Docker](docker-runtime.md#projets-exposés-au-runtime-docker)).
+
 ## `index` échoue avant de lancer le provider
 
 Exécuter :
@@ -105,6 +107,52 @@ Puis relancer :
 minos.cmd doctor
 minos.cmd index <project> --dry-run
 ```
+
+## Linux : JDK et Maven de `scip-java` dans le bac à sable
+
+Sous Linux, `scip-java` s'exécute dans le bac à sable bubblewrap avec un egress `DENY`. Le bac à sable ne voit que `/usr`, `/bin`, `/lib`, `/lib64`, `/sbin`, les outils gérés de `MINOS_HOME/tools`, le projet et le run. Il ajoute, en lecture seule :
+
+- **le JDK désigné par `JAVA_HOME`** (ou `JDK_HOME`), entier, où qu'il soit : JDK de paquet (`apt install openjdk-21-jdk`, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`) ou JDK autonome extrait dans le profil (Temurin, archive) ;
+- **la configuration Java de `/etc` que ce JDK lie**, fichier par fichier, et seulement sous `/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java` ou `/etc/pki/ca-trust/extracted`. `/etc` n'est jamais monté en entier ; un lien du JDK vers un autre emplacement n'est pas suivi et le journal le signale (« did not mount … link target(s) of JAVA_HOME »).
+
+`JAVA_HOME` doit désigner **le répertoire du JDK lui-même**. Une valeur trop large (`/`, `/opt`, `/home`, le répertoire personnel, `MINOS_HOME`, un répertoire sous `/etc`, `/proc`, `/sys`, `/dev` ou `/run`) est refusée avant le lancement : « JAVA_HOME names a directory too broad to mount in the Linux sandbox ».
+
+Vérifier :
+
+```bash
+echo "$JAVA_HOME"
+"$JAVA_HOME/bin/javac" -version
+```
+
+**Maven** est cherché dans le `PATH` du provider, et le bac à sable n'en monte que ce qui est sous `/usr`, `/bin`, `/lib`, `/lib64` ou `/sbin` : installer une **archive Apache Maven 3.9.x sous `/usr`** (par exemple `/usr/local/apache-maven-3.9.x`, avec un lien `/usr/local/bin/mvn`). MINOS lit la version sur le nom de `lib/maven-core-<version>.jar`, sans lancer Maven ; une autre version (Maven 4, Maven 3.8) ou un Maven hors de ces répertoires rend `scip-java` `BLOCKED` (« outside the qualified range 3.9.x », « installed outside the system directories the Linux sandbox mounts »). Le paquet `apt install maven` n'est **pas pris en charge** : il lie sa configuration vers `/etc/maven`, que le bac à sable ne monte pas. Les réglages globaux du Maven de l'hôte (`conf/settings.xml`, `conf/toolchains.xml`) apparaissent vides dans le bac à sable.
+
+## Linux : dépôt Maven désigné, build hors ligne
+
+Le build Maven d'un projet analysé exécute du code que contrôle ce projet (greffons, extensions de `.mvn/extensions.xml`, options de `.mvn/jvm.config`). Sous Linux il tourne dans le bac à sable, **sans réseau** ([ADR SEC-0076](../architecture/adr/SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md)) : ses greffons et dépendances viennent d'un **dépôt Maven que vous désignez**, monté en lecture seule. MINOS lance alors Maven avec `--offline`, ses propres réglages (aucun serveur, miroir ni proxy) et un dépôt de tête vide créé pour le run ; le dépôt désigné n'est jamais écrit.
+
+Le réglage `minos.scip.java.maven-repository` n'a **pas de valeur par défaut**. Le définir, au choix :
+
+```bash
+# MINOS_HOME/config/minos.properties
+minos.scip.java.maven-repository=/srv/maven-minos/repository
+# ou dans l'environnement de MINOS
+export MINOS_SCIP_JAVA_MAVEN_REPOSITORY=/srv/maven-minos/repository
+```
+
+Sans lui, `minos doctor` rapporte `scip-java` `BLOCKED` (« minos.scip.java.maven-repository is not set ») et `minos index` d'un projet Maven est refusé avant toute copie du projet. Une désignation est **refusée** (« … is refused: <raison> ») quand elle est relative, absente, un lien ; quand elle est, ou contient, le répertoire personnel, `/`, `/home`, `/mnt`, `/mnt/<lecteur>`, `/mnt/<lecteur>/Users` ou un profil Windows `/mnt/<lecteur>/Users/<compte>`, `MINOS_HOME`, `/etc`, `/proc`, `/sys`, `/dev`, `/root` ou `/run` ; quand elle est sous `MINOS_HOME` ou un répertoire système ; quand elle s'appelle `.m2` (désigner `~/.m2/repository`, jamais `~/.m2`) ; quand sa racine contient `settings.xml`, `settings-security.xml`, `toolchains.xml`, une entrée cachée ou un fichier qui n'est pas une métadonnée Maven. Le bac à sable revérifie le répertoire juste avant de le monter : chaque composant de son chemin doit appartenir à vous ou à root et n'être inscriptible par aucun autre compte. Les messages, `doctor` et `tools verify` nomment le réglage et son état, jamais le chemin.
+
+**Peupler le dépôt sans exécuter le projet.** Ne lancez **jamais** Maven dans un projet que vous ne maîtrisez pas pour remplir le dépôt (`mvn dependency:go-offline` dans le projet) : Maven y chargerait `.mvn/extensions.xml` et `.mvn/jvm.config` sur votre machine, avec le réseau et vos réglages. Procédures sûres :
+
+- dépôt **dédié** peuplé par un projet de confiance qui déclare les mêmes greffons et dépendances : `mvn -Dmaven.repo.local=/srv/maven-minos/repository clean verify -DskipTests` dans ce projet de confiance ;
+- ou, depuis un dossier vide, chaque artefact lu dans le `pom.xml` : `mvn -Dmaven.repo.local=/srv/maven-minos/repository dependency:get -Dartifact=groupe:artefact:version`.
+
+Puis retirer de la racine du dépôt tout fichier qui n'est pas une métadonnée Maven.
+
+**Un artefact manque** : le build échoue hors ligne. `minos index` rapporte seulement `provider exited with code 1` et renvoie au journal `provider.stderr.log` du run sous `MINOS_HOME` ; ce journal nomme l'artefact (« Cannot access central … in offline mode and the artifact org.apache.maven.plugins:maven-clean-plugin:jar:3.2.0 has not been downloaded from it before », « Plugin … could not be resolved »). Aucun accès réseau n'est tenté : le bac à sable n'a pas d'interface réseau. La cause est dans les journaux du run (voir [Échec d'indexation](#échec-dindexation--lire-la-cause-dun-run)). Ajouter l'artefact au dépôt désigné par une procédure sûre, puis relancer. MINOS n'ouvre jamais le réseau pour le récupérer.
+
+**Ce que le build peut lire finit peut-être dans l'index.** Tout ce que le bac à sable rend lisible, dont le dépôt désigné, peut être recopié par le build dans l'artefact SCIP, que MCP sert ensuite à son client. Un dépôt `~/.m2/repository` partagé contient souvent des artefacts privés d'autres projets : préférez un **dépôt dédié**.
+
+**WSL2** : un dépôt sous `/mnt/c/Users/<compte>/.m2/repository` est accepté comme sous-dossier exact, monté seul. Par défaut, DrvFs présente les fichiers Windows avec les droits `777` : le bac à sable les refuse (« writable by other accounts »). Monter le lecteur avec l'option `metadata` et un `umask` qui retire l'écriture du groupe et des autres (`/etc/wsl.conf`, section `[automount]`, `options = "metadata,umask=022"`), ou garder le dépôt dans le système de fichiers Linux de la distribution. `minos doctor` ne lit pas ces droits : il rapporte `scip-java` `READY` pour un dépôt DrvFs en `777`, et c'est `minos index` qui le refuse (« the Linux sandbox refuses a read-only root declared by the provider plan: a component of its path belongs to another account or is writable by other accounts »). Un dépôt sur DrvFs ralentit aussi le build : environ 7 à 8 s contre 3 s pour `fixtures/java/java-simple` sur le système de fichiers Linux.
 
 ## Windows : « cannot grant AppContainer read access … without administrator privileges »
 
@@ -164,6 +212,25 @@ chaque démarrage.
 MINOS réserve à son propriétaire chaque dossier privé qu'il utilise, à commencer par `MINOS_HOME`. Sous Windows, il refuse désormais, **sans rien modifier**, un dossier qui existait déjà et qui est le profil de l'utilisateur, un de ses parents, une racine de volume, ou un dossier appartenant à un autre compte : rendre un tel dossier privé donnerait l'accès exclusif à son propriétaire (pour le profil, Système), et le poste ne démarrerait plus aucune JVM (incident MINOS-AUD-H23).
 
 Remède : choisir un `MINOS_HOME` dédié (par défaut `%USERPROFILE%\.minos`) ; pour un dossier créé par une exécution en administrateur, en reprendre la propriété (`takeown /F <dossier>` puis `icacls <dossier> /setowner <compte>`) ou le recréer. Le plugin IntelliJ applique la même règle à son dossier MINOS.
+
+## Docker : « This folder cannot be exposed to the MINOS Docker runtime »
+
+`prod-mcp-release.ps1 -Action AddProject` contrôle le dossier sur le poste avant toute écriture. Le message nomme la cause, sans chemin :
+
+- « does not exist », « is not an absolute path » : donner le chemin complet d'un dossier existant ;
+- « is a junction or a symbolic link » : Docker Desktop ne suit pas les liens ; donner le dossier réel ;
+- « a volume root », « the user profile or one of its parents », « an application data or MINOS folder… » : choisir le dossier du projet lui-même, par exemple `%USERPROFILE%\source\repos\mon-projet`, jamais un dossier qui en contient beaucoup d'autres.
+
+« No valid mount name » : le nom dérivé du dossier n'est pas valide ; passer `-Name` (minuscules, chiffres, `.`, `_`, `-`). Un nom déjà pris, un dossier déjà exposé (ou qui en contient un, ou s'y trouve) et un 65e montage sont refusés par le bootstrap, sans rien changer.
+
+## Docker : « project mount migration refused » ou installation refusée après une mise à jour
+
+À la première installation de cette version, un runtime qui montait une racine des projets migre vers un montage par projet inscrit ([Mise à jour d'une installation qui montait une racine](docker-runtime.md#mise-à-jour-dune-installation-qui-montait-une-racine)). La migration est refusée, sans rien écrire, et l'ancien runtime est conservé :
+
+- « … registry entry is unreadable » : `project list` signale l'inscription illisible ; la réparer ou la retirer, puis relancer l'installation ;
+- « … stores its projects in PostgreSQL and still mounts one projects root » : limite déclarée, cette migration n'est pas prise en charge et l'ancien runtime reste en place. Remède (donné par le message) : désinstaller le runtime Docker avec ses données, réinstaller cette version, puis exposer chaque projet par `prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier>`.
+
+Un avertissement « Project '<nom>' is not mounted after the migration » signale un projet resté inscrit sans montage ; l'exposer avec `AddProject` si besoin.
 
 ## Espace disque dans `MINOS_HOME`
 
@@ -230,6 +297,28 @@ vers un bac à sable moins isolant) et `doctor` le montre. Les causes, par messa
 
 Le désinstalleur ne supprime pas `%LOCALAPPDATA%\minos-launchers` (quelques dizaines de Ko par version du script) : supprimez-le à la
 main si vous désinstallez MINOS.
+
+## Ressources Docker restées après une désinstallation
+
+Message : « Certaines ressources Docker MINOS n'ont pas pu être retirées » ou « Docker Desktop est absent ou arrêté ».
+
+Le désinstalleur retire les conteneurs et réseaux du projet Compose de l'instance (et, en cas de purge, ses volumes et les images
+MINOS inutilisées) en les
+cherchant par étiquette. Le détail est dans le journal de désinstallation (dossier `%TEMP%`), lignes `MINOS-DOCKER-REMOVAL` :
+`result=failed` nomme l'objet refusé et reprend le message de Docker ; `result=unavailable` signale un Docker absent ou arrêté.
+
+Docker Desktop démarré, retrouver ce qui reste (remplacer `minos-mcp-prod` par le nom de l'instance) :
+
+```powershell
+docker ps -a --filter label=com.docker.compose.project=minos-mcp-prod
+docker network ls --filter label=com.docker.compose.project=minos-mcp-prod
+docker volume ls --filter label=io.minos.installation=minos-mcp-prod
+docker volume ls --filter name=minos-mcp-prod-
+docker image ls minos-code-intelligence
+```
+
+Puis `docker rm -f`, `docker network rm`, `docker image rm` et, seulement pour supprimer les données, `docker volume rm` sur les
+objets listés.
 
 ## `scip-typescript` est `BLOCKED`
 
@@ -341,6 +430,14 @@ Symptôme : `Ollama configuration error: the semantic endpoint (minos.semantic.e
 Cause : le `MINOS_HOME` a été configuré pour le backend Docker (l'installation y écrit `http://minos-ollama:11434/api/embed`) et il est ouvert par un lanceur natif. Ce nom n'est joignable que sur le réseau Docker géré ; MINOS ne l'essaie jamais depuis le poste, car il pourrait être résolu par une autre machine du réseau.
 
 Remède : utiliser la recherche sémantique par le backend Docker, ou, pour un usage natif, fixer `minos.semantic.endpoint` (ou `MINOS_SEMANTIC_ENDPOINT`) sur un endpoint de bouclage, par exemple `http://127.0.0.1:11434/api/embed`. Les autres commandes ne sont pas concernées. Détail : `docs/user/docker-runtime.md`, « `minos-ollama` : réservé au runtime Docker ».
+
+## La commande native refuse un PostgreSQL géré par Docker
+
+Symptôme : toute commande `minos` native sort en code 1 sur `error: MINOS bootstrap failed: managed PostgreSQL storage is reachable only from the MINOS Docker runtime (MINOS_RUNTIME_LOCATION=docker) …`.
+
+Cause : le `MINOS_HOME` natif sélectionne un PostgreSQL géré par Docker sans paramètre de connexion (configuration écrite par l'installeur 1.3.0 avec le backend MCP Docker et PostgreSQL). Ce PostgreSQL n'est joignable que depuis le runtime Docker ; MINOS refuse plutôt que de basculer en silence sur un autre stockage.
+
+Remède : relancer l'installateur MINOS, qui écrit `minos.storage.backend=local` dans le dossier natif ; ou, à la main, remplacer `minos.storage.backend=postgresql` par `minos.storage.backend=local` et retirer `minos.postgres.managed` dans `config\minos.properties` du dossier natif. Les projets et index du runtime Docker s'administrent par `minos-admin`. Détail : [Deux `MINOS_HOME` : natif et Docker](docker-runtime.md#deux-minos_home--natif-et-docker).
 
 ## `impact` retourne des limitations
 

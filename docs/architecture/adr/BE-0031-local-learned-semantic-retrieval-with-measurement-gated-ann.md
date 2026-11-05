@@ -107,7 +107,7 @@ Ajout, sans rien retirer à la décision ci-dessus : le § 2 (« loopback endpoi
 - **Source de l'emplacement** : `MinosRuntimeSettings.runtimeLocation()`, qui lit la propriété système `minos.runtime.location` puis `MINOS_RUNTIME_LOCATION` comme `ProjectPathMapping.resolveRuntimeLocation` pour les registres, **jamais** le fichier `minos.properties` (partagé par tous les lanceurs d'un même `MINOS_HOME`). Une valeur inconnue est refusée en nommant la valeur.
 - **Corps d'erreur** : pour un statut hors 2xx, au plus 4 Kio sont lus, 512 caractères au plus sont retenus sur une ligne et passent par `PublicErrorMessages.sanitize` ; un extrait sensible (chemin, justificatif) est omis, le statut reste. La limite de 16 Mio ne vaut plus que pour les réponses valides.
 - **Inchangé** : HTTP en clair vers Ollama (le contrat reste le bouclage et le réseau Docker interne), pas de redirection, aucun modèle téléchargé.
-- **Limite** : la qualification sur une installation Docker réelle avec le profil Ollama, et l'absence de requête DNS pour `minos-ollama` depuis un poste natif, n'ont pas été rejouées (tâche manuelle 4.2 du changement).
+- **Qualification réelle (2026-10-31)** : sur une installation Docker 1.3.0 avec le profil Ollama, la recherche sémantique du serveur MCP Docker aboutit (`pgvector-exact-cosine`, `nomic-embed-text`) ; un lanceur natif qui lit `minos.semantic.endpoint=http://minos-ollama:11434/api/embed` refuse la synchronisation sémantique par l'erreur qui nomme l'endpoint et `MINOS_RUNTIME_LOCATION=docker`, et le cache DNS de Windows ne garde aucune entrée `minos-ollama`. Les requêtes LLMNR et NBT-NS n'ont pas été capturées.
 
 ## Écarts constatés
 

@@ -134,7 +134,9 @@ function Assert-PackagedRuntimeModules {
 foreach ($Verifier in @(
     'scripts\install\verify-mcp-client-integration.ps1',
     'scripts\install\verify-mcp-client-preflight.ps1',
-    'scripts\install\verify-mcp-backend-lifecycle.ps1'
+    'scripts\install\verify-mcp-backend-lifecycle.ps1',
+    'scripts\install\verify-codex-mcp-integration.ps1',
+    'scripts\install\verify-docker-instance-removal.ps1'
 )) {
     $VerifierPath = Join-Path $RepoRoot $Verifier
     if (-not (Test-Path -LiteralPath $VerifierPath -PathType Leaf)) {
@@ -330,6 +332,9 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp
     -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-m30-docker-services.ps1') `
     -Destination (Join-Path $DockerScripts 'configure-m30-docker-services.ps1') -Force
+# Run by the uninstaller: removes the containers, networks and, on purge, the volumes of the instance.
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\remove-docker-instance.ps1') `
+    -Destination (Join-Path $DockerScripts 'remove-docker-instance.ps1') -Force
 foreach ($IntegrationScript in @(
     'configure-runtime-settings.ps1',
     'invoke-named-mcp-script.ps1',

@@ -511,3 +511,7 @@ La liaison d'un projet hébergé à un snapshot et la reprise d'un run dont le s
 - **GIVEN** un run non réussi dont le snapshot préparé est le snapshot actif
 - **WHEN** la reprise est évaluée
 - **THEN** le run est reconnu comme promu sans chargement du snapshot, et un run dont le snapshot préparé n'est pas actif ne l'est pas
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [persistance-snapshots](../../../docs/architecture/diagrams/capacites/persistance-snapshots.md)

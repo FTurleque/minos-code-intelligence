@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -49,7 +50,7 @@ class ManagedScipProviderRuntimeManagerToolchainTest {
     }
 
     private ManagedScipProviderRuntimeManager manager() {
-        return new ManagedScipProviderRuntimeManager(home);
+        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home));
     }
 
     /** The scip-typescript package tree as npm leaves it: entry script and command shim. */
@@ -272,7 +273,10 @@ class ManagedScipProviderRuntimeManagerToolchainTest {
         assertTrue(outcome.get("inspect.diagnostics").contains(
                         ManagedScipProviderRuntimeManager.SANDBOXED_EXECUTION_NOT_QUALIFIED),
                 outcome.get("inspect.diagnostics"));
-        assertTrue(outcome.get("inspect.diagnostics").contains("Docker runtime"), outcome.get("inspect.diagnostics"));
+        // The Docker administration plane runs no provider: the diagnostic must not send the user there.
+        assertTrue(outcome.get("inspect.diagnostics").contains("no supported way to index Java projects from a Windows host"),
+                outcome.get("inspect.diagnostics"));
+        assertFalse(outcome.get("inspect.diagnostics").contains("Docker runtime"), outcome.get("inspect.diagnostics"));
         // Indexing is refused before any provider is launched.
         assertTrue(outcome.get("executor.failure").contains("provider runtime is not ready"), outcome.get("executor.failure"));
     }

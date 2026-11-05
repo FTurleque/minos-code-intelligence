@@ -8,7 +8,7 @@ Ce dossier regroupe les audits du dépôt `minos-code-intelligence`. **Seul le d
 |---|---|---|
 | `2026-10-10/` | Audit technique complet du 10 octobre 2026 (6 axes, 11 sprints) : `README.md`, `findings.md` / `findings.json`, `sprints.md`, `plan-action.md`, `architecture.md`, `SUIVI.md` | Sprint 1 corrigé et archivé ; sprint 2 spécifié ; sprints 3 à 11 à traiter. Le suivi vivant est `SUIVI.md` de ce dossier. |
 
-L'audit outillé du 8 octobre 2026 (SpotBugs, PIT, ArchUnit, Dependency-Check, Gitleaks) est tenu dans [`../quality/`](../../developer/quality/code-audit-couverture.md), non ici : il n'est pas clos (changement OpenSpec `etendre-audit-outille-a-tout-le-perimetre` actif).
+L'audit outillé du 8 octobre 2026 (SpotBugs, PIT, ArchUnit, Dependency-Check, Gitleaks) est tenu dans [`../quality/`](../../developer/quality/code-audit-couverture.md), non ici. Ses changements OpenSpec sont tous archivés, le dernier (`etendre-audit-outille-a-tout-le-perimetre`) le 2026-11-03.
 
 ## Archive
 

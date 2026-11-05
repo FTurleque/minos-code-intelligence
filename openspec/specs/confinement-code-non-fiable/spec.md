@@ -105,7 +105,7 @@ Le balayage des résidus SHALL ne supprimer que des enfants directs de la racine
 - **THEN** seul un nombre borné de résidus est supprimé à ce déclenchement et les autres le seront aux suivants
 
 ### Requirement: Les autorisations accordées à un conteneur sont retirées même après un arrêt brutal
-Toute autorisation qu'un lanceur Windows accorde au SID d'un conteneur sur un chemin de l'hôte SHALL être journalisée dans le répertoire de récupération du run avant d'être appliquée, et SHALL être retirée par la fin normale du run ou, si le lanceur est tué, par la reprise qui prouve la mort de son propriétaire. Aucune autorisation d'un run terminé ou mort SHALL NOT subsister après cette reprise.
+Toute autorisation qu'un lanceur Windows accorde au SID d'un conteneur sur un chemin de l'hôte SHALL être journalisée dans le répertoire de récupération du run avant d'être appliquée, et SHALL être retirée par la fin normale du run ou, si le lanceur est tué, par la reprise qui prouve la mort de son propriétaire. Aucune autorisation d'un run terminé ou mort SHALL NOT subsister après cette reprise. Un retrait non prouvé SHALL laisser le journal en place.
 
 #### Scenario: Lanceur tué après l'octroi
 - **WHEN** un lanceur accorde la lecture d'un répertoire de runtime à son conteneur puis est tué avant son nettoyage
@@ -118,6 +118,18 @@ Toute autorisation qu'un lanceur Windows accorde au SID d'un conteneur sur un ch
 #### Scenario: Propriété non prouvable
 - **WHEN** la mort du propriétaire ne peut pas être prouvée
 - **THEN** aucune autorisation n'est retirée et le diagnostic signale le run
+
+#### Scenario: Retrait en échec à la fin du run
+- **GIVEN** un run dont le répertoire de travail porte l'entrée du SID de son conteneur et refuse au propriétaire la modification de sa liste d'accès
+- **WHEN** le provider se termine et que le lanceur nettoie ce run
+- **THEN** le lanceur rend le code de sortie du provider et un avertissement nomme le journal conservé
+- **AND** le journal de reprise et son fichier de verrou restent dans le répertoire de récupération
+
+#### Scenario: Retrait en échec pendant la reprise
+- **GIVEN** un journal de reprise dont le propriétaire est prouvé mort et dont un chemin journalisé refuse au propriétaire la modification de sa liste d'accès
+- **WHEN** un lanceur démarre et reprend ce journal
+- **THEN** un avertissement nomme le journal conservé et le lanceur exécute son provider
+- **AND** le journal et son fichier de verrou restent en place, puis un lanceur suivant, une fois le retrait possible, les supprime
 
 ### Requirement: Les autorisations orphelines existantes sont recensées
 Un diagnostic SHALL lister les entrées d'ACL de SID d'AppContainer présentes sur les chemins que MINOS accorde et qu'aucun run vivant ne possède, sans les retirer sans demande explicite de l'utilisateur.
@@ -273,3 +285,116 @@ La sonde de capacité de l'AppContainer SHALL lire la sortie du lanceur par un t
 - **GIVEN** le dépôt après ce changement
 - **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
 - **THEN** il réussit et la liste ne contient plus d'entrée `Files.move` pour `SandboxLauncherScript.java` ni `ProcessBuilder.redirect(file)` pour `WindowsAppContainerWorkerSandboxBackend.java`
+
+### Requirement: Le bac à sable Linux monte en lecture seule le JDK nommé par JAVA_HOME
+Sous Linux, quand l'environnement du provider nomme par `JAVA_HOME` ou `JDK_HOME` un répertoire existant, le bac à sable SHALL monter en lecture seule la racine réelle de ce répertoire, visible au chemin réel et au chemin nommé. Il MUST NOT monter son répertoire parent ni le monter en écriture.
+
+#### Scenario: JDK autonome hors de /usr
+- **GIVEN** sous Linux, un JDK autonome dans un répertoire temporaire et `JAVA_HOME` qui le nomme
+- **WHEN** `$JAVA_HOME/bin/java -version` est exécuté dans le bac à sable avec un egress `DENY`
+- **THEN** la commande réussit
+
+#### Scenario: Parent non monté
+- **GIVEN** sous Linux, `JAVA_HOME` qui nomme `<tmp>/profil/jdk` et un fichier `<tmp>/profil/secret.txt`
+- **WHEN** le plan du bac à sable est construit
+- **THEN** il monte `<tmp>/profil/jdk` en `--ro-bind` et ne monte ni `<tmp>/profil` ni `secret.txt`
+
+### Requirement: Les liens du JDK ne montent qu'une cible exacte de la configuration Java de /etc
+Sous Linux, pour un lien du JDK nommé dont la cible sort de ce qui est monté, le bac à sable SHALL monter en lecture seule la cible exacte si elle est sous `/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java` ou `/etc/pki/ca-trust/extracted`. Il MUST NOT monter `/etc`, le répertoire de la cible ni une cible hors de cette liste.
+
+#### Scenario: Disposition Debian
+- **GIVEN** sous Linux, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` installé par paquet
+- **WHEN** le plan du bac à sable est construit
+- **THEN** il monte `/etc/java-21-openjdk/security/java.security` et ne monte ni `/etc` ni `/etc/java-21-openjdk`
+
+#### Scenario: Lien planté vers le profil
+- **GIVEN** sous Linux, un JDK nommé qui contient un lien vers un fichier du profil et un lien vers `/etc/shadow`
+- **WHEN** le plan du bac à sable est construit
+- **THEN** aucune des deux cibles n'est montée
+
+### Requirement: Une racine d'outillage trop large est refusée avant le lancement
+Sous Linux, quand `JAVA_HOME` ou `JDK_HOME` désigne la racine du système de fichiers, un répertoire de premier niveau, le répertoire personnel ou un de ses ancêtres, `MINOS_HOME`, ou un répertoire sous `/etc`, `/proc`, `/sys`, `/dev` ou `/run`, le bac à sable SHALL refuser le plan avant tout lancement, par un message qui nomme la variable et ne contient aucun chemin absolu.
+
+#### Scenario: JAVA_HOME à la racine
+- **GIVEN** sous Linux, `JAVA_HOME=/`
+- **WHEN** le plan du bac à sable est construit
+- **THEN** il échoue par `IllegalStateException` dont le message nomme `JAVA_HOME` sans chemin absolu
+
+#### Scenario: JAVA_HOME au répertoire personnel
+- **GIVEN** sous Linux, `JAVA_HOME` égal au répertoire personnel de l'utilisateur
+- **WHEN** le plan du bac à sable est construit
+- **THEN** il échoue avant lancement et ne monte pas ce répertoire
+
+### Requirement: Une racine d'outillage qui n'est pas un JDK est refusée
+Sous Linux, le bac à sable SHALL refuser avant tout lancement une racine réelle de `JAVA_HOME` ou `JDK_HOME` qui n'a pas sa propre `bin/java`, fichier régulier, avec un fichier `release` ou `lib/libjli.so`. Il SHALL aussi refuser une racine située sous `MINOS_HOME` hors de `MINOS_HOME/tools`. Le message MUST NOT contenir de chemin absolu.
+
+#### Scenario: Lien vers un répertoire du profil
+- **GIVEN** sous Linux, `JAVA_HOME` qui nomme un lien vers un répertoire `.ssh` du profil
+- **WHEN** le plan du bac à sable est construit
+- **THEN** il échoue par `IllegalStateException` qui nomme `JAVA_HOME` sans le chemin
+
+#### Scenario: JDK dans MINOS_HOME
+- **GIVEN** sous Linux, un JDK sous `MINOS_HOME/registry` et un autre sous `MINOS_HOME/tools`
+- **WHEN** le plan du bac à sable est construit pour chacun
+- **THEN** le premier est refusé et le second est monté en lecture seule
+
+### Requirement: Un plan déclare ses racines de lecture et le bac à sable Linux les monte exactement
+Un plan d'indexation SHALL pouvoir déclarer des racines en lecture seule. Le bac à sable Linux SHALL monter chacune en lecture seule par son chemin réel, elle seule, jamais un ancêtre, après les montages système et les montages inscriptibles. Le réseau reste `DENY`.
+
+#### Scenario: Racine montée en lecture seule
+- **GIVEN** sous Linux, un plan qui déclare un répertoire comme racine de lecture
+- **WHEN** le bac à sable construit sa commande
+- **THEN** elle contient `--ro-bind` de ce répertoire vers lui-même, placé après tout `--bind`, aucun montage de son parent, et pas `--share-net`
+
+#### Scenario: Écriture refusée dans la racine
+- **GIVEN** sous Linux avec bac à sable qualifié, un provider qui tente d'écrire dans une racine de lecture déclarée
+- **WHEN** il s'exécute par la chaîne `ProcessIndexerExecutor → sandbox → provider`
+- **THEN** l'écriture échoue et la racine est inchangée
+
+### Requirement: Le bac à sable Linux revérifie une racine de lecture juste avant de la monter
+Juste avant de construire la commande, le bac à sable Linux MUST refuser une racine relative, absente, non répertoire, dont le chemin réel diffère du chemin normalisé (lien sur un composant), dont un composant n'appartient ni à l'utilisateur ni à root ou est inscriptible par d'autres, ou qui est égale, ancêtre ou descendante de l'espace de travail, de l'artefact, du run ou du projet source.
+
+#### Scenario: Composant intermédiaire lien symbolique
+- **GIVEN** sous Linux, une racine de lecture `/data/u` où `/data` est un lien symbolique
+- **WHEN** le bac à sable prépare le plan
+- **THEN** le plan est refusé avant tout lancement, sans chemin absolu dans le message
+
+#### Scenario: Racine dans le run
+- **GIVEN** sous Linux, une racine de lecture située sous le répertoire du run
+- **WHEN** le bac à sable prépare le plan
+- **THEN** le plan est refusé avant tout lancement
+
+### Requirement: Les racines de lecture survivent à chaque transformation du plan ou font refuser
+Toute transformation d'un plan (transformateurs de `StrongProcessOwnershipIndexerExecutor`, `WindowsJobObjectProcessOwnership`, backends) SHALL conserver ses racines de lecture. `WindowsAppContainerWorkerSandboxBackend`, `WindowsJobObjectProcessOwnership` et un exécuteur sans bac à sable OS SHALL refuser un plan qui en déclare, avant toute création de processus et sans octroi nouveau.
+
+#### Scenario: AppContainer et racine de lecture
+- **GIVEN** sous Windows, un plan qui déclare une racine de lecture, transmis par la chaîne d'exécution réelle
+- **WHEN** le plan atteint le bac à sable
+- **THEN** il est refusé, aucun processus n'est lancé et aucune ACL n'est modifiée
+
+#### Scenario: Plan sans racine
+- **GIVEN** un plan sans racine de lecture
+- **WHEN** n'importe quel backend le prépare
+- **THEN** sa commande est identique à celle produite sans cette capacité
+
+### Requirement: Ce que MINOS relit dans une zone inscriptible par le provider n'est jamais hérité
+Un journal de processus, une copie d'artefact conservée ou un paquet que MINOS relit après l'exécution d'un provider SHALL être créé exclusivement et durci, sans hériter l'accès de la zone que le provider peut écrire. La copie du projet que le provider lit SHALL, à l'inverse, garder l'accès hérité de son dossier.
+
+#### Scenario: Copie d'artefact conservée sous Windows
+- **GIVEN** un dossier de run portant une entrée héritable accordée à une identité tierce de test
+- **WHEN** `./mvnw -B -ntp -pl minos-runtime-local -am test` exécute le test de conservation d'artefact (`@EnabledOnOs(WINDOWS)`)
+- **THEN** la copie conservée ne porte pas cette entrée
+
+#### Scenario: Nom réapparu avant la création d'un journal
+- **GIVEN** un fichier qui réapparaît au nom d'un journal entre sa suppression et sa création
+- **WHEN** le journal est ouvert
+- **THEN** l'ouverture échoue et le fichier réapparu n'est pas adopté
+
+#### Scenario: Copie du projet lisible par le conteneur
+- **GIVEN** un dossier de travail portant une entrée héritable supplémentaire
+- **WHEN** un fichier du projet y est copié
+- **THEN** le fichier copié porte cette entrée héritée
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [confinement-code-non-fiable](../../../docs/architecture/diagrams/capacites/confinement-code-non-fiable.md)

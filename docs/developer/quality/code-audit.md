@@ -228,7 +228,7 @@ Indicateurs : **mutation score** (tués / générés), **force des tests** (tué
 1. Une exclusion SpotBugs vise **une classe**, si possible **une méthode**, pour **un motif**, avec un commentaire daté qui dit pourquoi l'alerte est fausse.
 2. Une alerte *réelle* mais acceptée ne s'exclut pas : elle se consigne comme constat ou se couvre par un ADR.
 3. Côté PIT, un mutant équivalent se documente dans le constat qui le concerne ; une classe peu testée ne s'exclut pas.
-4. Côté Dependency-Check, une suppression vise un couple précis (purl ou fichier, CPE ou CVE), avec la démonstration de la fausse correspondance. `quality/dependency-check-suppressions.xml` n'en contient que deux, les faux rapprochements de modules MINOS de H02 (`minos-storage-postgresql` ↔ serveur PostgreSQL, `minos-nexus` ↔ project-nexus) ; `failBuildOnUnusedSuppressionRule=true` fait échouer l'analyse dès qu'une règle ne sert plus.
+4. Côté Dependency-Check, une suppression vise un couple précis (purl ou fichier, CPE ou CVE), avec la démonstration de la fausse correspondance. `quality/dependency-check-suppressions.xml` n'en contient qu'une, le faux rapprochement de module MINOS de H02 qui se produit encore (`minos-nexus` ↔ project-nexus) ; `failBuildOnUnusedSuppressionRule=true` fait échouer l'analyse dès qu'une règle ne sert plus.
 5. Côté Gitleaks, une liste d'autorisations se limite à une forme démontrée (par exemple un SHA d'action après `uses: …@`), jamais à un fichier entier.
 
 ## Limites connues

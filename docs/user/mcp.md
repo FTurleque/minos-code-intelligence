@@ -147,7 +147,7 @@ MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 
 Si le mode natif est décoché, la page d'intégration des clients IA est ignorée. Le binaire MCP natif reste installé et peut être configuré manuellement plus tard.
 
-Si le mode Docker est sélectionné, une page séparée demande ensuite la racine des projets à exposer au conteneur.
+Si le mode Docker est sélectionné, une page séparée présente le runtime Docker. Elle ne demande **aucune racine des projets** : le runtime ne monte que les projets exposés un par un, après l'installation, par `docker\scripts\prod-mcp-release.ps1 -Action AddProject -ProjectPath <dossier>` (voir [Projets exposés au runtime Docker](docker-runtime.md#projets-exposés-au-runtime-docker)). Chaque projet exposé est monté en lecture seule dans `minos-mcp` et dans `minos-admin`, qui accède au réseau. `/DOCKERPROJECTSROOT`, `install-windows.ps1 -ProjectsRoot` et `switch-mcp-backend.ps1 -ProjectsRoot` sont ignorés avec un avertissement dans le journal.
 
 ### Préflight
 
@@ -192,7 +192,7 @@ Ils appliquent les règles suivantes :
 - les autres serveurs MCP et propriétés de configuration sont conservés ;
 - l'état des intégrations créées est enregistré ;
 - la réinstallation compatible est idempotente ;
-- la désinstallation retire uniquement les entrées correspondant encore à la configuration gérée ;
+- la désinstallation retire uniquement les entrées correspondant encore à la configuration gérée ; pour Codex, le bloc borné par `# BEGIN MINOS MANAGED MCP SERVER` et `# END MINOS MANAGED MCP SERVER` est retiré même si l'état d'intégration a disparu, et une section `[mcp_servers.minos]` sans ces marqueurs n'est jamais touchée ;
 - si une entrée gérée a été modifiée manuellement, elle est conservée ;
 - les chemins des CLI sont mémorisés afin qu'un changement ultérieur du `PATH` ne rende pas automatiquement le cleanup impossible.
 

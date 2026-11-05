@@ -316,8 +316,7 @@ try {
                 '-Jar', $InstalledReleaseJar,
                 '-Version', $ReleaseVersion,
                 '-Commit', $Head,
-                '-InstallRoot', $DockerValidationRoot,
-                '-ProjectsRoot', (Split-Path -Parent $RepoRoot)) `
+                '-InstallRoot', $DockerValidationRoot) `
             -Failure 'Installed distribution Docker install failed'
         Invoke-NativeChecked -File $script:PowerShellExecutable `
             -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',

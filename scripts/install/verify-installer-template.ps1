@@ -42,16 +42,29 @@ Require 'LoadStringFromFile(ConfigPath, ConfigText)' 'Installer does not inspect
 Require "ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties')" 'Installer does not read the canonical backend configuration.'
 Require "Result := 'docker'" 'Installer cannot restore a persisted Docker selection during upgrade.'
 Require 'McpClientsPage := CreateCustomPage(' 'Installer is missing the shared MCP client integration page.'
-Require 'DockerProjectsPage := CreateInputDirPage(' 'Installer is missing the Docker projects page.'
+Require 'DockerProjectsPage := CreateCustomPage(' 'Installer is missing the Docker projects page.'
 Require 'McpClientsPage.ID,' 'Docker projects page must follow client integration.'
 Require 'Result := NoMcpSelected()' 'Shared MCP client page must be skipped only when MCP configuration is disabled.'
 Require 'Result := not DockerMcpSelected()' 'Docker projects page is not conditional on Docker MCP mode.'
-# A previously customized Docker projects root must survive an upgrade. Without this, every
-# upgrade wizard run resets the field to {%USERPROFILE} regardless of what was configured before,
-# and the fail-closed project-path-mapping guard then refuses to silently replace the differing
-# on-disk mapping -- surfacing as a backend-switch failure on every single future update.
-Require "ReadInstallerValue('ProjectsRoot'" 'Installer does not restore a previously configured Docker projects root on upgrade -- every upgrade will reset it to {%USERPROFILE} and trip the project-path-mapping guard.'
-Require "RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot'" 'Installer does not persist the configured Docker projects root for the next upgrade.'
+# The Docker runtime mounts no projects root: each project is exposed by the user with
+# prod-mcp-release.ps1 -Action AddProject. The Docker page asks for no root, names that command, and
+# the installer forwards no root, no replacement and no root refusal to the backend switcher.
+Forbid 'Racine des projets' 'The Docker page still asks for a projects root; the Docker runtime mounts only the projects exposed with -Action AddProject.'
+Forbid '-ProjectsRoot' 'Installer still forwards a Docker projects root to the backend switcher.'
+Forbid '-ReplaceDockerProjectsRoot' 'Installer still forwards a Docker projects root replacement to the backend switcher.'
+Forbid 'UnsafeDockerProjectsRootReason' 'Installer still checks a Docker projects root that is no longer mounted.'
+Forbid 'RecordedDockerProjectsRoot' 'Installer still compares a Docker projects root that is no longer mounted.'
+Forbid "ReadInstallerValue('ProjectsRoot'" 'Installer still proposes the Docker projects root saved in the Windows registry.'
+Forbid "RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot'" 'Installer still saves a Docker projects root in the Windows registry.'
+Require 'prod-mcp-release.ps1 -Action AddProject -ProjectPath' 'The Docker page does not name the command that exposes a project.'
+# Legacy settings are ignored, never refused: each one present reaches the setup log as a warning,
+# and the value saved by earlier installers is removed from the Windows registry.
+Require 'procedure LogIgnoredDockerProjectsRootSettings;' 'Installer does not report the ignored legacy Docker projects root settings.'
+Require "{param:DOCKERPROJECTSROOT|}" 'Installer does not detect a legacy /DOCKERPROJECTSROOT parameter.'
+Require "{param:REPLACEDOCKERPROJECTSROOT|}" 'Installer does not detect a legacy /REPLACEDOCKERPROJECTSROOT parameter.'
+Require "Log('Warning: /DOCKERPROJECTSROOT" 'A legacy /DOCKERPROJECTSROOT parameter does not reach the setup log as a warning.'
+Require "RegDeleteValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot');" 'Installer does not remove the Docker projects root saved in the Windows registry.'
+Require "    LogIgnoredDockerProjectsRootSettings;`n    if not ConfigureRuntimeSettings() then" 'Legacy Docker projects root settings must be reported before any post-install configuration step.'
 Require 'McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot JetBrains MCP row.'
 Require 'McpCopilotCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot CLI MCP row.'
 Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude CLI / Code MCP row.'
@@ -87,7 +100,6 @@ Require 'SummaryMemo.Text := Text;' 'Installer summary is not rendered to the re
 Require 'function ConfigureSelectedMcpBackend(): Boolean;' 'Installer is missing the transactional backend setup function.'
 Require 'integration\switch-mcp-backend.ps1' 'Installer does not invoke the canonical backend switcher.'
 Require '-TargetBackend ' 'Installer does not pass the selected backend to the switcher.'
-Require '-ProjectsRoot ' 'Installer does not pass the Docker project root to the switcher.'
 Require 'if ConfigureSelectedMcpBackend() then' 'Installer does not gate client setup on backend validation success.'
 Require 'ConfigureMcpClients;' 'Installer does not configure shared clients after backend activation.'
 # A backend-switch failure must never leave the user unsure whether the update actually happened:
@@ -96,13 +108,28 @@ Require 'ConfigureMcpClients;' 'Installer does not configure shared clients afte
 # validation/handshake" message that reads as if nothing happened at all.
 Require 'DiagnosticLine' 'Backend-switch failure dialog does not clarify that the MINOS program files were already installed successfully.'
 Require 'function LastBackendSwitchLogLine' 'Installer does not surface the actual backend-switch failure reason inline instead of only pointing at a log file.'
+# A failed switch ends its log with ROLLBACK lines; the cause is the FAIL line of the same run.
+Require 'function BackendSwitchFailureCause(LogPath: String): String;' 'Installer does not read the FAIL line of the last backend switch run.'
+Require "DiagnosticLine := 'Cause : ' + Cause" 'Backend-switch failure dialog does not show the FAIL message as the cause.'
 # Inno's own progress bar reflects file-copy progress only; the long-running Docker/MCP [Code]
 # steps that follow it give no visual feedback at all unless the script explicitly updates the
 # status text, which otherwise reads as a frozen/hung installer during a multi-minute Docker build.
 Require 'WizardForm.StatusLabel.Caption :=' 'Installer gives no textual progress feedback during its long-running post-install configuration steps.'
+# One progress row per selected post-install step. The configuration scripts append protocol lines
+# to -ProgressPath and a timer reads that file while Exec waits: the scripts' own stdout/stderr
+# (docker build progress included) are never piped through the installer.
+Require 'procedure BuildSetupStepRows;' 'Installer does not create one progress row per selected post-install step.'
+Require "external 'SetTimer@user32.dll stdcall'" 'Installer does not read the progress file while a configuration script runs.'
+Require 'CreateCallback(@SetupProgressTick)' 'Installer progress timer is not wired to the progress-file reader.'
+Require "KillTimer(0, SetupProgressTimer);" 'Installer does not stop the progress timer after a configuration script.'
+Require "' -ProgressPath `"' + SetupProgressPath + '`"'" 'Installer does not pass the progress file to its configuration scripts.'
+Require 'procedure FinishSetupStepGroup(Group: String; Succeeded: Boolean);' 'Installer does not derive the final row state from the exit code.'
+Forbid 'ExecAndLogOutput' 'Installer must not pipe configuration-script output (docker build writes megabytes to stderr) through ExecAndLogOutput.'
 Require 'if not DockerReady() then' 'Installer does not block an explicitly selected unavailable Docker backend.'
 Require 'Result := False;' 'Installer Docker prerequisite failure does not block wizard progression.'
 Require 'aucun fallback silencieux' 'Installer does not explain fail-closed backend selection.'
+Require 'MessagesFile: "compiler:Languages\French.isl"' 'Installer runs with the English Inno Setup messages next to French pages.'
+Require "'Cause : ' + ReadRuntimeSettingsFailure('ConfigureRuntimeSettings')" 'Installer does not show the cause of a configure-runtime-settings.ps1 failure.'
 Forbid 'configuration du MCP Docker sera ignoree' 'Installer must not silently ignore an explicitly selected Docker backend.'
 Forbid 'configuration du MCP Docker sera ignor' 'Installer must not silently ignore an explicitly selected Docker backend.'
 Forbid 'ConfigureDockerMcp;' 'Installer still owns a non-transactional direct Docker configuration path.'
@@ -182,6 +209,18 @@ Require 'procedure DeleteMinosUserData;' 'Uninstaller is missing the guarded use
 Require 'DelTree(UserDataRoot, True, True, True)' 'User-data purge does not remove the full MINOS local-data tree.'
 Require 'CurUninstallStep = usPostUninstall' 'User-data purge must run only after normal uninstall cleanup.'
 Require 'RegDeleteKeyIncludingSubkeys' 'Full user-data purge must also remove the MINOS per-user registry state.'
+# The Docker instance is removed by label, profile services included, before {app}\docker goes;
+# volumes only on purge; every outcome reaches the uninstall log, which is always written.
+Require 'UninstallLogging=yes' 'The uninstaller must always write its log.'
+Require 'procedure RemoveManagedDockerInstance;' 'Uninstaller does not remove the Docker Compose project of the instance.'
+Require 'docker\scripts\remove-docker-instance.ps1' 'Uninstaller does not call the shipped Docker instance removal script.'
+Require "    RemoveManagedDockerInstance;`n    RemoveMinosProgramPayload;" 'Docker instance removal must run before the program files (and its script) are deleted.'
+Require "if DeleteUserDataOnUninstall then`n      Parameters := Parameters + ' -Purge -RemoveImages';" 'Docker volumes and unused MINOS images must only be removed when the user chose the purge.'
+Require 'procedure LogScriptOutput(LogFile: String);' 'Cleanup script output does not reach the uninstall log.'
+Require 'System.Management.Automation.WarningRecord' 'MCP client removal warnings are swallowed instead of being logged.'
+Require 'Type: dirifempty; Name: "{userprograms}\MINOS"' 'The empty Start menu group folder is left behind.'
+Forbid 'docker volume rm' 'Docker volumes must not be removed by a bare call while containers still mount them.'
+Forbid 'PurgeManagedDockerVolumes' 'Docker volumes must be removed by the removal script, which checks every exit code.'
 
 Forbid 'Name: "docker"' 'Docker MCP must be selected on the explicit MCP mode page, not as a generic Inno task.'
 Forbid 'Name: "mcp_copilot_jetbrains"' 'MCP clients must not be static Inno [Tasks] entries.'

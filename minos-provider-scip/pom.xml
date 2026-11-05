@@ -46,6 +46,15 @@
         </dependency>
     </dependencies>
     <build>
+        <resources>
+            <!-- osv-scanner.toml sits next to the npm lockfiles it scopes (OSV reads it per directory); it is not shipped. -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <excludes>
+                    <exclude>**/osv-scanner.toml</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

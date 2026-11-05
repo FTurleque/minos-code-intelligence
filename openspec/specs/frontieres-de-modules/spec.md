@@ -993,3 +993,7 @@ Les accesseurs publics d'instance de `MinosApplication` qui rendent un type de `
 - **GIVEN** le dépôt
 - **WHEN** le garde est exécuté
 - **THEN** il réussit et annonce 15 accesseurs publics typés moteur, et la CLI ne liste plus `registry.ProjectPathMappings` dans aucune table A11
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [frontieres-de-modules](../../../docs/architecture/diagrams/capacites/frontieres-de-modules.md)

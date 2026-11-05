@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string] $ExpectedHead,
-    [string] $ProjectsRoot = '',
     [ValidateSet('disabled', 'local-hash')][string] $SemanticProvider = 'disabled',
     [switch] $SkipMavenVerify,
     [switch] $KeepArtifacts
@@ -15,8 +14,6 @@ if ($env:OS -ne 'Windows_NT') {
 }
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { $ProjectsRoot = Split-Path -Parent $RepoRoot }
-$ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 function Invoke-NativeCapture {
     param([Parameter(Mandatory = $true)][string] $File, [Parameter(Mandatory = $true)][string[]] $Arguments)
@@ -108,7 +105,6 @@ function Invoke-Workflow {
         $Parameters['Jar'] = $Jar
         $Parameters['Version'] = '1.0.1-SNAPSHOT'
         $Parameters['Commit'] = $Head
-        $Parameters['ProjectsRoot'] = $ProjectsRoot
         $Parameters['SemanticProvider'] = $SemanticProvider
     }
     if ($MinosArguments.Count -gt 0) { $Parameters['MinosArguments'] = $MinosArguments }
@@ -139,7 +135,7 @@ try {
     if ($Inventory.formatVersion -ne 1) { throw "unsupported provider inventory format: $($Inventory.formatVersion)" }
     if ($Inventory.platform -ne 'linux/amd64') { throw "unexpected provider inventory platform: $($Inventory.platform)" }
     if ($Inventory.minosCommit -ne $Head) { throw "provider inventory commit mismatch: $($Inventory.minosCommit)" }
-    if ($Metadata.formatVersion -ne 5) { throw "unexpected Docker installation metadata format: $($Metadata.formatVersion)" }
+    if ($Metadata.formatVersion -ne 6) { throw "unexpected Docker installation metadata format: $($Metadata.formatVersion)" }
     if ($Metadata.semanticProvider -ne $SemanticProvider) { throw "Docker semantic provider mismatch: $($Metadata.semanticProvider)" }
 
     $ExpectedProviders = @('scip-java', 'scip-typescript', 'scip-python', 'scip-clang', 'scip-dotnet', 'scip-go', 'rust-analyzer-scip')

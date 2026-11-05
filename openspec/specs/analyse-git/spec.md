@@ -23,6 +23,12 @@ L'analyse Git (`inspect`, `analyze`, `git-activity`) SHALL NOT exécuter de comm
 - **WHEN** `analyze` est appelé sur la racine du projet
 - **THEN** le fichier témoin n'est pas créé
 
+#### Scenario: Filtre du dépôt principal atteint depuis un worktree lié
+- **GIVEN** un dépôt principal dont `.git/config` déclare le filtre piégé, et un worktree lié dont le fichier suivi porte `* filter=piege` et une date qui force la vérification de contenu
+- **WHEN** `inspect` est appelé sur le worktree lié
+- **THEN** le fichier témoin n'est pas créé
+- **AND** la vue rendue déclare la limitation `REPOSITORY_FILTERS_NOT_APPLIED`
+
 ### Requirement: Les filtres de l'utilisateur ne sont pas retirés
 Seuls les filtres de la configuration du dépôt SHALL être écartés ; les filtres de la configuration de l'utilisateur et du système SHALL rester appliqués par JGit comme avant.
 
@@ -136,3 +142,7 @@ L'activité Git rendue par la CLI et par l'API Java SHALL rendre `originRemote` 
 - **GIVEN** un dépôt à remote local connu avant ce changement
 - **WHEN** son identité est recalculée
 - **THEN** `repositoryId` est identique
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [analyse-git](../../../docs/architecture/diagrams/capacites/analyse-git.md)

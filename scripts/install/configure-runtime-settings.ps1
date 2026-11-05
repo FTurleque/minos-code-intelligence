@@ -42,11 +42,27 @@ param(
 
     [switch] $ProvisionOllamaModel,
 
-    [string] $InstallerStatePath = ''
+    [string] $InstallerStatePath = '',
+
+    [string] $FailureLogPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# The installer runs this script through Exec, which keeps no output: the message of the error that
+# stops it is written to -FailureLogPath, which the installer copies to its log and shows the user.
+trap {
+    if (-not [string]::IsNullOrWhiteSpace($FailureLogPath)) {
+        try {
+            [System.IO.File]::WriteAllText($FailureLogPath, $_.Exception.Message, [System.Text.UTF8Encoding]::new($true))
+        }
+        catch {
+            Write-Warning "Unable to write the failure message to $FailureLogPath"
+        }
+    }
+    break
+}
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS installer runtime settings currently target Windows hosts.'
@@ -266,9 +282,11 @@ $SecretPath = $null
 
 if ($StorageBackend -eq 'postgresql') {
     if ($ManagedDockerPostgres.IsPresent) {
-        # Managed Docker PostgreSQL: connection settings are written by configure-m30-docker-services.ps1.
-        # Record the backend selection only; do not validate external URL/credentials here.
-        $Configuration['minos.postgres.managed'] = 'true'
+        # Managed Docker PostgreSQL is reachable only from the Docker runtime: its settings, written by
+        # configure-m30-docker-services.ps1 into the Docker data folder, name a host of the managed Docker
+        # network and no port is published on the host. The native MINOS home keeps local storage; the
+        # installer state below records the PostgreSQL choice.
+        $Configuration['minos.storage.backend'] = 'local'
     } else {
         Assert-ExternalPostgresUrl $PostgresUrl
         Require-Identifier $PostgresUser 'PostgreSQL user'

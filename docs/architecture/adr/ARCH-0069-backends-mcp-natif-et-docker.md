@@ -40,6 +40,7 @@ Options écartées :
 - Docker est un backend autonome de premier rang, et non nécessairement un simple MCP en lecture seule non autonome (ADR 0037 § « Relation avec ADR-0021 »).
 - L'administration et l'indexation Docker forment un plan distinct, afin de ne pas affaiblir le serveur MCP en lecture seule (ADR 0037 § « Relation avec ADR-0021 »).
 - Le conteneur MCP est une surface de lecture sans chaîne de compilation. `docker/Dockerfile.mcp.release` construit deux cibles : `query` (JRE et jar), utilisée par `minos-mcp` et par les tâches qui n'exécutent que `java` ou `sh`, et `admin` (image complète), utilisée par les services qui lancent ou sondent des providers (ADR 0021 § « Mise en œuvre — image de requête séparée »).
+- Les projets de l'hôte sont montés en lecture seule, un montage par projet exposé, sans racine des projets montée (SEC-0075).
 - Le plan de requête lit sans écrire : les fichiers Compose montent le répertoire de données en lecture seule pour `minos-mcp` ; les lectures du registre et des observations runtime prennent un bail partagé sur le verrou existant, ouvert en lecture (`BoundedFileLease.acquireShared`), sans rien créer, durcir ni migrer ; les écritures gardent leur bail exclusif (ADR 0021 § « Mise en œuvre — le plan de requête lit sans écrire »).
 
 ### 3. Point d'entrée stable
@@ -66,7 +67,7 @@ La bascule prépare le backend cible, le valide, fait le handshake, écrit atomi
 
 L'acceptation de cette décision n'établit pas la parité fonctionnelle de Docker avec le natif : aucun document ne la déduit de cet ADR (ADR 0037 § Statut, § Do's and Don'ts et § Consequences). Voir « Écarts constatés ».
 
-L'emplacement des classes du routage (`com.minos.app`, route `minos mcp` par le SPI `McpLaunchRoute`) relève de l'[ADR 0068](ARCH-0068-modules-dependances-et-propriete-des-packages.md) ; l'indexation Java sous Windows par le runtime Docker, de l'[ADR 0060](SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) ; la reprise d'une indexation interrompue, de l'[ADR 0039](BE-0039-reprise-indexation-apres-interruption.md).
+L'emplacement des classes du routage (`com.minos.app`, route `minos mcp` par le SPI `McpLaunchRoute`) relève de l'[ADR 0068](ARCH-0068-modules-dependances-et-propriete-des-packages.md) ; l'indexation Java sous Windows, que le runtime Docker n'assure pas, de l'[ADR 0074](SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) ; la reprise d'une indexation interrompue, de l'[ADR 0039](BE-0039-reprise-indexation-apres-interruption.md).
 
 ## Do's and Don'ts
 
@@ -121,6 +122,6 @@ Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en v
 ## References
 
 - ADR remplacés : [0021](archive/0021-native-runtime-autonomous-indexing.md) (runtime natif, notes de mise en œuvre du 2026-10-13), [0037](archive/0037-first-class-native-and-docker-runtime-backends.md) (backends MCP explicites, contrat S1).
-- ADR liés : [0017](ARCH-0017-mcp-stdio-read-only.md) (MCP STDIO en lecture seule), [0039](BE-0039-reprise-indexation-apres-interruption.md) (reprise d'indexation), [0060](SEC-0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) (indexation Java par Docker sous Windows), [0067](GEN-0067-socle-d-execution-java-25-et-maven.md) (runtime Java embarqué), [0068](ARCH-0068-modules-dependances-et-propriete-des-packages.md) (emplacement des classes de routage, SPI `McpLaunchRoute`) ; [0040](archive/0040-distribution-auto-portante-indexeurs-embarques.md) (distribution auto-portante, qui complète l'ADR 0037).
+- ADR liés : [0017](ARCH-0017-mcp-stdio-read-only.md) (MCP STDIO en lecture seule), [0039](BE-0039-reprise-indexation-apres-interruption.md) (reprise d'indexation), [0074](SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) (aucune voie d'indexation Java depuis Windows, WSL2 retenu), [0067](GEN-0067-socle-d-execution-java-25-et-maven.md) (runtime Java embarqué), [0068](ARCH-0068-modules-dependances-et-propriete-des-packages.md) (emplacement des classes de routage, SPI `McpLaunchRoute`) ; [0040](archive/0040-distribution-auto-portante-indexeurs-embarques.md) (distribution auto-portante, qui complète l'ADR 0037).
 - Exploitation : [`docs/user/docker-runtime.md`](../../user/docker-runtime.md) (« Deux images : requête et administration », « Le plan de requête lit sans écrire »), [`docs/user/mcp.md`](../../user/mcp.md), [`docs/user/production-installation.md`](../../user/production-installation.md).
 - Roadmap : [`docs/project/roadmap/M29_EXECUTION.md`](../../project/roadmap/M29_EXECUTION.md), [`docs/project/roadmap/M14_EXECUTION.md`](../../project/roadmap/M14_EXECUTION.md) ; [`docs/project/governance/ROADMAP.md`](../../project/governance/ROADMAP.md).

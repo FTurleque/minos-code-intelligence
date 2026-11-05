@@ -8,6 +8,8 @@ param(
     [ValidateSet('none', 'native', 'docker')]
     [string] $McpBackend = 'none',
 
+    # Ignored with a warning: the Docker runtime mounts no projects root, only the projects exposed with
+    # prod-mcp-release.ps1 -Action AddProject. Kept so that scripted installs of earlier releases still run.
     [string] $ProjectsRoot = '',
     [string] $DataRoot = '',
     [string] $DockerInstallRoot = '',
@@ -18,6 +20,9 @@ param(
 
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $DockerComposeProject = 'minos-mcp-prod',
+
+    # Ignored with a warning: there is no projects root to replace.
+    [switch] $ReplaceDockerProjectsRoot,
 
     [switch] $AddToPath
 )
@@ -79,14 +84,14 @@ if ([string]::IsNullOrWhiteSpace($DockerDataRoot)) {
 }
 $DockerDataRoot = [System.IO.Path]::GetFullPath($DockerDataRoot)
 
-if ($McpBackend -eq 'docker') {
-    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-        throw '-ProjectsRoot is required when -McpBackend docker is selected.'
-    }
-    $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
-    if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
-        throw "Docker projects root does not exist: $ProjectsRoot"
-    }
+# The legacy parameters are reported, never refused: neither mounts a folder nor reaches the backend switcher.
+# The warning carries no path.
+if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    Write-Warning ('The -ProjectsRoot parameter is ignored: the MINOS Docker runtime mounts no projects root. ' +
+        'Expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.')
+}
+if ($ReplaceDockerProjectsRoot) {
+    Write-Warning 'The -ReplaceDockerProjectsRoot switch is ignored: the MINOS Docker runtime has no projects root to replace.'
 }
 
 $Temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-install-" + [Guid]::NewGuid())
@@ -176,9 +181,6 @@ try {
                 DockerContainerName = $DockerContainerName
                 DockerComposeProject = $DockerComposeProject
             }
-            if ($McpBackend -eq 'docker') {
-                $SwitchParameters['ProjectsRoot'] = $ProjectsRoot
-            }
             & $Switcher @SwitchParameters
         }
     }
@@ -207,7 +209,7 @@ try {
     Write-Host "MCP     : $McpBackend"
     Write-Host "Switch  : $(Join-Path $InstallRoot 'integration\switch-mcp-backend.ps1')"
     if ($McpBackend -eq 'docker') {
-        Write-Host "Projects: $ProjectsRoot"
+        Write-Host 'Projects: exposed one by one with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder> (listed by -Action Status)'
         Write-Host "Docker  : $DockerInstallRoot"
     }
     if ($AddToPath) {

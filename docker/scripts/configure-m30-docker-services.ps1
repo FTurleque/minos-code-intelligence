@@ -27,11 +27,32 @@ param(
     [string] $OllamaImage = '',
 
     [switch] $ProvisionOllamaModel,
-    [switch] $Start
+    [switch] $Start,
+
+    # Installer progress file; empty (the default) writes no progress.
+    [string] $ProgressPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# Installer progress protocol, read by the Windows installer while this script runs (-ProgressPath).
+# A line carries only a step id, a state and a number: no path, URL, model name or secret can reach it.
+function Write-SetupProgress([string] $Step, [string] $State, [int] $Percent = -1) {
+    if ([string]::IsNullOrWhiteSpace($ProgressPath)) { return }
+    if ($Step -cnotmatch '^[a-z][a-z0-9-]{0,47}\z') { return }
+    if (@('running', 'done', 'skipped') -cnotcontains $State) { return }
+    if ($Percent -lt -1 -or $Percent -gt 100) { return }
+    $Line = "MINOS-PROGRESS step=$Step state=$State"
+    if ($Percent -ge 0) { $Line += " percent=$Percent" }
+    for ($Attempt = 1; $Attempt -le 5; $Attempt++) {
+        try {
+            [System.IO.File]::AppendAllText($ProgressPath, $Line + "`r`n", [System.Text.Encoding]::ASCII)
+            return
+        }
+        catch { Start-Sleep -Milliseconds 50 }
+    }
+}
 
 # Declared before anything that can fail: PowerShell hoists the rollback `trap` below to the
 # whole script scope, so it also runs for errors raised before the snapshot is taken. Under
@@ -214,8 +235,18 @@ function Ensure-ManagedVolume([string] $Name, [string] $Plane) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to create managed Docker volume: $Name" }
 }
 
+# The -f arguments of every Compose call: the runtime compose file, then the project mounts override that
+# mcp-lifecycle.ps1 generates (one read-only mount per exposed project) when it exists. Without it, minos-mcp would be
+# recreated with no project mounted.
+function Get-ComposeFileArguments {
+    $Files = @('-f', $ComposeFile)
+    $ProjectMounts = Join-Path $RuntimeRoot 'compose-mcp.projects.yaml'
+    if (Test-Path -LiteralPath $ProjectMounts -PathType Leaf) { $Files += @('-f', $ProjectMounts) }
+    return , $Files
+}
+
 function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
-    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile, '-f', $ComposeFile)
+    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile) + (Get-ComposeFileArguments)
     foreach ($Profile in $Profiles) { $Base += @('--profile', $Profile) }
     # Stdin MUST be a non-terminal pipe here, for the same reason as prod-mcp-release.ps1's
     # Compose helper: some invocation contexts (notably an installer's inherited console)
@@ -262,8 +293,8 @@ function Sync-ManagedPostgresPassword([string] $SecretFile) {
     $Password = (Read-BoundedUtf8 -Path $SecretFile -MaximumBytes 65536 -Label 'Managed PostgreSQL secret').Trim()
     if ([string]::IsNullOrWhiteSpace($Password)) { throw "Managed PostgreSQL secret is empty: $SecretFile" }
 
-    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile,
-        '-f', $ComposeFile, '--profile', 'postgresql', 'ps', '-q', 'minos-postgres')
+    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile) +
+        (Get-ComposeFileArguments) + @('--profile', 'postgresql', 'ps', '-q', 'minos-postgres')
     $Container = ((& docker @Base) | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Container)) {
         throw 'Unable to resolve the managed PostgreSQL container.'
@@ -283,6 +314,19 @@ function Sync-ManagedPostgresPassword([string] $SecretFile) {
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to reconcile the managed PostgreSQL role password.`n$($Output.Trim())"
     }
+}
+
+# Last download percentage of an `ollama pull` output record, or $null when the record shows none.
+# Without a terminal Ollama redraws its progress with carriage returns and ANSI sequences, so the
+# record is cleaned and split before the last "NN%" is taken; a value above 100 is not a percentage.
+function Get-OllamaPullPercent([string] $Text) {
+    $Clean = [regex]::Replace($Text, '\x1B\[[0-9;?]*[A-Za-z]', '')
+    $Segments = @($Clean -split "[`r`n]" | Where-Object { $_ -match '(?<!\d)\d{1,3}%' })
+    if ($Segments.Count -eq 0) { return $null }
+    $Found = [regex]::Matches($Segments[$Segments.Count - 1], '(?<!\d)(\d{1,3})%')
+    $Value = [int]$Found[$Found.Count - 1].Groups[1].Value
+    if ($Value -gt 100) { return $null }
+    return $Value
 }
 
 function New-ProvisioningEgressNetwork {
@@ -443,15 +487,20 @@ Invoke-Compose -Arguments @('config', '--quiet')
 $Profiles = @()
 if ($StorageBackend -eq 'postgresql') {
     $Profiles += 'postgresql'
+    Write-SetupProgress -Step 'postgres' -State 'running'
     Invoke-Compose -Arguments @('up', '-d', '--wait', 'minos-postgres') -Profiles @('postgresql')
     Sync-ManagedPostgresPassword -SecretFile $SecretFile
+    Write-SetupProgress -Step 'postgres' -State 'done'
 }
 if ($SemanticProvider -eq 'ollama') {
     $Profiles += 'ollama'
+    Write-SetupProgress -Step 'ollama' -State 'running'
     Invoke-Compose -Arguments @('up', '-d', '--wait', 'minos-ollama') -Profiles @('ollama')
+    Write-SetupProgress -Step 'ollama' -State 'done'
     if ($ProvisionOllamaModel) {
-        $ComposeBase = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile,
-            '-f', $ComposeFile, '--profile', 'ollama', 'ps', '-q', 'minos-ollama')
+        Write-SetupProgress -Step 'ollama-model' -State 'running'
+        $ComposeBase = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile) +
+            (Get-ComposeFileArguments) + @('--profile', 'ollama', 'ps', '-q', 'minos-ollama')
         $OllamaContainer = ((& docker @ComposeBase) | Out-String).Trim()
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($OllamaContainer)) {
             throw 'Unable to resolve managed Ollama container.'
@@ -471,8 +520,20 @@ if ($SemanticProvider -eq 'ollama') {
                 $ErrorActionPreference = 'Continue'
                 # Captured rather than discarded: this is the only place the actual reason a
                 # pull failed (network, disk, unknown model) is reported, and swallowing it
-                # leaves nothing but "provisioning failed" to debug from.
-                $PullOutput = (& docker exec $OllamaContainer ollama pull $SemanticModel 2>&1 | Out-String)
+                # leaves nothing but "provisioning failed" to debug from. Read record by record
+                # so the download percentage Ollama prints, if any, reaches the installer.
+                $PullLines = New-Object System.Collections.Generic.List[string]
+                $LastPullPercent = -1
+                & docker exec $OllamaContainer ollama pull $SemanticModel 2>&1 | ForEach-Object {
+                    $PullText = [string]$_
+                    $PullLines.Add($PullText)
+                    $PullPercent = Get-OllamaPullPercent $PullText
+                    if ($null -ne $PullPercent -and $PullPercent -ne $LastPullPercent) {
+                        $LastPullPercent = $PullPercent
+                        Write-SetupProgress -Step 'ollama-model' -State 'running' -Percent $PullPercent
+                    }
+                }
+                $PullOutput = $PullLines -join "`n"
             }
             finally { $ErrorActionPreference = $PullPreference }
             if ($LASTEXITCODE -ne 0) {
@@ -482,6 +543,7 @@ if ($SemanticProvider -eq 'ollama') {
             if ($LASTEXITCODE -ne 0) { throw "Unable to list Ollama models after provisioning: $SemanticModel" }
             $ModelPresent = $ModelLines | Select-Object -Skip 1 | Where-Object { $_ -match "^$([regex]::Escape($SemanticModel))" }
             if (-not $ModelPresent) { throw "Ollama model '$SemanticModel' not found after pull - provisioning incomplete." }
+            Write-SetupProgress -Step 'ollama-model' -State 'done'
         }
         finally {
             # Both are best-effort cleanup and must never mask the real failure, so they go

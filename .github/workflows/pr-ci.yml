@@ -105,14 +105,23 @@ jobs:
       - name: Installation secret file tests (declared skipped here, executed on Windows in the verify job)
         run: python scripts/install/test_secret_file_acl.py -v
 
+      - name: Installation storage selection tests (declared skipped here, executed on Windows in the verify job)
+        run: python scripts/install/test_runtime_settings_storage.py -v
+
       - name: Development launcher tests (declared skipped here, executed on Windows in the verify job)
         run: python scripts/install/test_dev_launcher.py -v
 
       - name: Docker lifecycle query-image tests (pwsh here, Windows PowerShell 5.1 and pwsh in the verify job)
         run: python scripts/install/test_mcp_lifecycle_query_image.py -v
 
+      - name: MCP client backup tests (static count check here, backups executed on Windows in the verify job)
+        run: python scripts/install/test_mcp_client_backups.py -v
+
       - name: Docker script context tests (runtime .env and image build context; whole verification script in the verify job)
         run: python scripts/install/test_docker_script_contexts.py -v
+
+      - name: Installer progress protocol tests (pwsh here, Windows PowerShell 5.1 and pwsh in the verify job)
+        run: python scripts/install/test_setup_progress.py -v
 
       - name: Delegated cgroup root validation tests (provisioning scripts run with a recording sudo)
         run: python scripts/deploy/test_cgroup_root_validation.py -v
@@ -153,6 +162,13 @@ jobs:
 
       - name: Product facts consistency
         run: python scripts/docs/product-facts.py --check
+
+      # OpenSpec schema detailed-uml: durable capability dossiers stay consistent with the reference specs.
+      - name: Capability dossiers consistency
+        run: python scripts/docs/check-capability-dossiers.py
+
+      - name: Capability dossiers checker self-test (one refused mutation per rule)
+        run: python scripts/docs/test_check_capability_dossiers.py -v
 
       - name: Milestone artifact reference guard
         run: python scripts/quality/check-milestone-artifact-references.py
@@ -382,6 +398,17 @@ jobs:
           bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
           ./mvnw -B -ntp -Dminos.postgresql.tests.required=true -Dminos.sandbox.tests.required=true clean verify
 
+      # ADR SEC-0076: a real scip-java index of the trusted fixture, built offline under the required Linux sandbox
+      # from a qualification Maven repository populated outside it; the repository must come out unchanged.
+      - name: Offline Maven index under the Linux sandbox (scip-java, designated repository)
+        if: runner.os != 'Windows'
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
+          bash scripts/ci/qualify-linux-offline-maven-index.sh
+
       - name: Maven clean verify (Windows)
         if: runner.os == 'Windows'
         shell: powershell
@@ -399,13 +426,22 @@ jobs:
         run: |
           python scripts/install/test_secret_file_acl.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The native MINOS home of an installation with PostgreSQL managed by Docker keeps local storage.
+          python scripts/install/test_runtime_settings_storage.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/install/test_dev_launcher.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # AUD-DEP-15: the Docker lifecycle script is started by the installer under Windows PowerShell 5.1.
           python scripts/install/test_mcp_lifecycle_query_image.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Back-to-back backups of MCP client configurations each keep their own file.
+          python scripts/install/test_mcp_client_backups.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # The Docker helper scripts under Windows PowerShell 5.1 and pwsh, and verify-run-configurations.ps1 when Compose answers.
           python scripts/install/test_docker_script_contexts.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The installer progress emitters of the shipped configuration scripts, under Windows PowerShell 5.1 and pwsh.
+          python scripts/install/test_setup_progress.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # AUD-DEP-06: the release scripts run under Windows PowerShell 5.1 too; the real Get-AuthenticodeSignature.
           & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File scripts/release/test-release-signature.ps1

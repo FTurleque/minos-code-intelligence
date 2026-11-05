@@ -106,8 +106,10 @@ Les outils de la variante complète sont décrits par `tools\TOOLS-MANIFEST.json
 | Langage du projet | Prérequis du poste |
 |---|---|
 | TypeScript | rien d'autre : le critère « machine neuve, sans réseau » est rempli tel quel |
-| Java (Maven) | un **JDK complet** (`JAVA_HOME` pointant sur un JDK avec `javac` et `jar` ; le runtime embarqué de MINOS n'en tient pas lieu), **Git for Windows** (`Git\bin\bash.exe`), **Windows PowerShell 5.1** et `csc.exe` (tous deux fournis par Windows). Le build Maven du projet résout ses propres greffons et dépendances : sans réseau, elles doivent déjà être dans `~/.m2` |
+| Java (Maven) | un **JDK complet** (`JAVA_HOME` pointant sur un JDK avec `javac` et `jar` ; le runtime embarqué de MINOS n'en tient pas lieu), **Git for Windows** (`Git\bin\bash.exe`), **Windows PowerShell 5.1** et `csc.exe` (tous deux fournis par Windows). Sous Windows natif, scip-java reste `BLOCKED` ([ADR SEC-0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)) |
 | Go, C#, Rust, C/C++, Python | Go, SDK .NET 10, cargo, toolchain C++ et Python 3.10+ ; ces indexeurs (scip-go, scip-dotnet, scip-clang, rust-analyzer, scip-python) ne sont pas embarqués (pas de binaire Windows amont, ou toolchain du poste requise) et restent installables comme avant |
+
+Ce tableau décrit un poste Windows. Sous Linux, le JDK et le Maven 3.9.x de `scip-java` sont exécutés dans le bac à sable bubblewrap, sans réseau : voir [JDK et Maven de `scip-java` dans le bac à sable](troubleshooting.md#linux--jdk-et-maven-de-scip-java-dans-le-bac-à-sable). Le build Maven y lit ses greffons et dépendances dans un dépôt Maven que vous désignez : voir [dépôt Maven désigné, build hors ligne](troubleshooting.md#linux--dépôt-maven-désigné-build-hors-ligne).
 
 `minos.cmd doctor` et `minos.cmd tools verify` nomment ce qui manque : un diagnostic préfixé `machine prerequisite (not shipped by MINOS)` est une dépendance externe, `tools origin: …=embedded` ou `=downloaded` dit d'où vient chaque outil géré. Les licences et les mentions obligatoires sont dans `supply-chain\THIRD-PARTY-NOTICES.txt` (dont l'offre de sources pour les composants EPL, CDDL et GPL avec exception classpath embarqués avec le classpath de scip-java ; le dépôt `coursier/launchers`, d'où vient `cs.exe`, ne porte pas de fichier LICENSE propre : la licence est celle du projet coursier, Apache-2.0).
 
@@ -322,6 +324,24 @@ Une section `mcp_servers.<nom>` non détenue par MINOS n'est jamais écrasée.
 
 Codex CLI et Codex Desktop ciblent la même intégration MINOS nommée : le wizard les détecte séparément mais interdit de cocher les deux simultanément.
 
+## 8 bis. Progression de la configuration
+
+Après la copie des fichiers, la page d'installation affiche une rangée par étape que vos choix déclenchent, sous la barre de copie :
+
+| Rangée | Présente si |
+|---|---|
+| Paramètres d'exécution MINOS | toujours |
+| Image Docker MINOS | mode MCP Docker |
+| PostgreSQL géré | mode MCP Docker et PostgreSQL |
+| Service Ollama géré | mode MCP Docker et Ollama |
+| Modèle Ollama | mode MCP Docker, Ollama et téléchargement du modèle coché |
+| Validation du backend MCP | un mode MCP choisi |
+| Client … | chaque client IA coché |
+
+Chaque rangée passe d'« en attente » à « en cours », puis à « terminée » (barre verte). Une étape en échec reste **rouge** ; le message d'erreur qui suit en donne la cause, et les étapes suivantes restent « non exécutée ». « réutilisée » signale un runtime Docker de même version redémarré tel quel.
+
+Un pourcentage n'est affiché que pour le téléchargement du modèle Ollama, et seulement si Ollama l'imprime. Les autres étapes, dont la construction de l'image Docker (une dizaine de minutes à la première installation), n'exposent pas d'avancement : leur barre défile tant que l'étape est en cours.
+
 ## 9. Ownership et backups
 
 Règles :
@@ -468,14 +488,19 @@ Non / conserver → choix par défaut
 
 Le bouton par défaut est **Non / conserver**.
 
+Avec le backend MCP Docker, la désinstallation arrête puis retire, dans les deux cas, les conteneurs et les réseaux du projet Compose de l'instance (services PostgreSQL et Ollama compris). Sans purge, les volumes Docker restent : une réinstallation retrouve les données.
+
 La purge complète peut supprimer :
 
 - `%LOCALAPPDATA%\MINOS` ;
 - snapshots/index/logs/backups ;
 - runtime/data Docker MINOS ;
-- volumes PostgreSQL/Ollama gérés par MINOS.
+- volumes Docker de l'instance, dont les volumes PostgreSQL/Ollama gérés par MINOS ;
+- images Docker `minos-code-intelligence:*` qu'aucun conteneur n'utilise (celles d'une autre instance encore installée restent).
 
 Elle ne supprime jamais une base PostgreSQL externe.
+
+Le désinstalleur écrit toujours son journal dans le dossier temporaire de l'utilisateur (`%TEMP%`). Un retrait Docker qui échoue (Docker Desktop arrêté, objet refusé par le démon) y est détaillé, ligne `MINOS-DOCKER-REMOVAL` par ligne, et une fenêtre l'annonce : voir [Dépannage](troubleshooting.md#ressources-docker-restées-après-une-désinstallation).
 
 Les smoke/silent uninstall automatisés ne posent pas ce prompt et ne purgent pas les vraies données utilisateur.
 

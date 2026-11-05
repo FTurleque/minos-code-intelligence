@@ -15,7 +15,6 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
@@ -62,7 +61,7 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  * MINOS roots and this private AppContainer storage; the two independent ceilings therefore still
  * sum to at most {@link ProviderWriteQuota#DEFAULT}.</p>
  */
-public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSandboxBackend {
+public final class WindowsAppContainerWorkerSandboxBackend implements OsEnforcedWorkerSandboxBackend {
 
     static final long MAX_JOB_MEMORY_BYTES = 8L * 1024L * 1024L * 1024L;
     static final int MAX_ACTIVE_PROCESSES = 128;
@@ -136,16 +135,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     @Override
     public String id() {
         return "windows-appcontainer-job-v3";
-    }
-
-    @Override
-    public WorkerIsolation isolation() {
-        return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE;
-    }
-
-    @Override
-    public NetworkGuarantee networkGuarantee() {
-        return NetworkGuarantee.OS_ENFORCED;
     }
 
     @Override
@@ -260,6 +249,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     ) throws IOException {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(networkPolicy, "networkPolicy");
+        plan.requireNoSandboxMounts("the Windows AppContainer sandbox"); // before any plan file or grant exists
         Path run = runDirectory.toRealPath();
         Path working = plan.workingDirectory().toRealPath();
         Path artifact = plan.generatedArtifact().toAbsolutePath().normalize();
@@ -354,12 +344,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 launcher.file().toString(),
                 "-Plan",
                 planFile.toString());
-        return new IndexerProcessPlan(
-                wrapper,
-                plan.workingDirectory(),
-                Map.of(),
-                plan.generatedArtifact(),
-                plan.timeout());
+        return plan.withCommand(wrapper).withEnvironment(Map.of());
     }
 
     /**

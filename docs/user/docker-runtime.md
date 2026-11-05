@@ -57,16 +57,72 @@ La qualification de release (`scripts/ci/qualify-docker-release.sh`) construit l
 
 Le lanceur de développement (`docker/scripts/prod-mcp.ps1`) construit une seule image, celle de `docker/Dockerfile.mcp` (JRE et jar) : c'est déjà une image de requête, qu'il déclare sous les deux variables.
 
-## Mapping des projets
+## Projets exposés au runtime Docker
 
-Configuration runtime versionnée :
+Le runtime Docker ne monte **aucune racine des projets**. `/workspace/projects` ne contient qu'un montage en lecture seule par projet que vous avez exposé, le même dans `minos-mcp` et dans `minos-admin`. Un dossier que vous n'avez pas exposé n'est visible d'aucun conteneur, y compris `minos-admin`, qui a une sortie réseau. Sans projet exposé, le serveur MCP démarre et `/workspace/projects` est vide.
 
-```text
-<MINOS_HOME>/runtime/project-paths.properties
-N:/workspace-dev <-> /workspace/projects
+Les commandes ci-dessous sont celles de `docker\scripts\prod-mcp-release.ps1` du dossier d'installation (Windows PowerShell 5.1 ou PowerShell 7).
+
+### Exposer un projet
+
+```powershell
+.\prod-mcp-release.ps1 -Action AddProject -ProjectPath D:\src\mon-projet
+.\prod-mcp-release.ps1 -Action AddProject -ProjectPath D:\src\Mon Projet -Name mon-projet
 ```
 
-Le registre persiste `rootRelativePath`, pas le chemin physique host/container. Dans Docker, les commandes utilisent `/workspace/projects/...`.
+L'action contrôle le dossier sur le poste, avant toute écriture : il doit exister, être donné par un chemin absolu, n'être ni une jonction ni un lien symbolique (ni se trouver sous un parent qui en est un), et ne pas être une racine de volume, le profil de l'utilisateur ou l'un de ses parents, ni être, contenir ou se trouver dans `%LOCALAPPDATA%`, `%APPDATA%` ou un dossier de MINOS. Un refus nomme la catégorie, jamais le chemin.
+
+Le montage est nommé `-Name`, ou, à défaut, d'après le nom du dossier (minuscules, tout caractère hors de `a-z`, `0-9`, `.`, `_`, `-` remplacé par `-`). Un nom valide suit `[a-z0-9][a-z0-9._-]{0,62}` et n'est pas déjà pris (sans tenir compte de la casse). L'action ajoute le montage `/workspace/projects/<nom>`, **recrée `minos-mcp`** (les sessions MCP attachées sont interrompues : relancer le client), puis inscrit le projet par `project add /workspace/projects/<nom>`.
+
+Sont refusés aussi : un dossier égal à un dossier déjà exposé, qui le contient ou qui s'y trouve, et un 65e montage (64 au plus).
+
+### Retirer un projet
+
+```powershell
+.\prod-mcp-release.ps1 -Action RemoveProject -Name mon-projet
+```
+
+Le montage est retiré et `minos-mcp` est recréé. Les projets inscrits sous ce montage **restent inscrits avec leur index** et `project list` les signale `rootAvailable: false`. Exposer de nouveau le même dossier sous le même nom les rend disponibles. Un nom inconnu est refusé sans rien changer.
+
+### Voir les projets exposés
+
+```powershell
+.\prod-mcp-release.ps1 -Action Status
+.\prod-mcp-release.ps1 -Action Status -ShowHostPaths
+```
+
+La liste donne chaque montage par son nom et dit s'il est monté. Les dossiers du poste ne sont affichés qu'avec `-ShowHostPaths`. `installation.json` (`projectMounts`) ne garde que le compte et les noms.
+
+### Table des montages
+
+```text
+<données Docker>/runtime/project-paths.properties   table des montages (format 2)
+<installation Docker>/runtime/compose-mcp.projects.yaml   fichier Compose généré
+```
+
+La table est écrite seulement par le bootstrap Docker. Le fichier Compose des montages en est **régénéré** avant chaque démarrage de `minos-mcp`, chaque commande `minos-admin` et chaque validation : une modification à la main est écrasée. Un dossier exposé qui n'existe plus est omis, avec un avertissement qui nomme le montage, et ses projets répondent `rootAvailable: false` ; le serveur MCP démarre quand même.
+
+Le registre garde `rootRelativePath`, relatif à `/workspace/projects`, jamais le chemin du poste.
+
+### Mise à jour d'une installation qui montait une racine
+
+À la première installation de cette version sur des données Docker qui montaient une racine des projets (format 1 de `project-paths.properties`), chaque projet inscrit reçoit un montage sur **son chemin conteneur actuel** (`/workspace/projects/<chemin relatif>`) : aucune inscription n'est réécrite. Un projet et ses sous-projets inscrits partagent un seul montage, celui du plus court.
+
+Ne sont **pas** montés, avec un avertissement qui nomme le projet :
+
+- un projet inscrit à la racine elle-même (le monter exposerait de nouveau toute la racine) ;
+- un projet isolé par un ancien remplacement de racine ;
+- un projet dont le dossier est refusé par le contrôle ci-dessus.
+
+Ils restent inscrits avec leur index (`rootAvailable: false`) ; les exposer avec `AddProject` si besoin. Un dossier de l'ancienne racine qui n'était inscrit dans aucun registre **n'est plus visible** des conteneurs : c'est le but du changement.
+
+L'ancienne correspondance est sauvegardée à côté (`project-paths.properties.<horodatage>.format1.bak`). Une inscription illisible arrête la migration avant toute écriture ; l'installation échoue et l'ancien runtime est conservé. **Limite : stockage PostgreSQL.** Une installation dont les projets sont stockés dans PostgreSQL et qui montait encore une racine n'est pas migrée : l'installation échoue avant toute modification et l'ancien runtime reste en place. Remède : désinstaller le runtime Docker avec ses données, réinstaller cette version, puis exposer chaque projet par `AddProject`.
+
+Une version antérieure de MINOS refuse le format 2 (`unsupported project path mapping format`) sans le modifier.
+
+### Paramètres hérités
+
+`/DOCKERPROJECTSROOT` (installeur), `-ProjectsRoot` (scripts) et la valeur `ProjectsRoot` enregistrée par une installation antérieure ne montent plus rien : ils sont ignorés avec un avertissement dans le journal.
 
 ## Image provider-complete
 
@@ -148,12 +204,7 @@ mvnw
 mvnw.cmd
 ```
 
-`.mvn` reste disponible. Docker utilise le Maven 3.9.16 qualifié de l'image. Son état writable est confiné :
-
-```text
-HOME=/var/lib/minos/cache/home
-MAVEN_OPTS=-Dmaven.repo.local=/var/lib/minos/cache/maven/repository
-```
+`.mvn` reste disponible. L'image contient le Maven 3.9.16 qualifié. Le plan d'administration ne lance aucun provider ([ADR SEC-0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)) : les variables `HOME` et `MAVEN_OPTS` que posent les fichiers Compose sur ce conteneur n'atteignent aucun build Maven et ne confinent rien.
 
 Le checkpoint historique `45536e2fc7d32ed67932e2715e458fa26a8239b1` avait précisément exposé `workspace/mvnw` / `error=2, No such file or directory`; ce défaut est corrigé.
 
@@ -215,11 +266,30 @@ Exemple d'installation :
 
 `local-hash` expose le provider `minos-local-hash`, 384 dimensions. C'est un provider déterministe zéro-réseau destiné à valider le plumbing provider/store/search. **Ce n'est pas un modèle appris et il ne remplace pas la qualification de qualité M23.**
 
+## Deux `MINOS_HOME` : natif et Docker
+
+L'installeur Windows écrit deux dossiers de données distincts :
+
+| Dossier | Lu par | Stockage quand PostgreSQL est géré par Docker |
+|---|---|---|
+| `%LOCALAPPDATA%\MINOS\data` (natif) | `minos.cmd` et les clients MCP en backend natif | `minos.storage.backend=local`, aucune clé `minos.postgres.*` |
+| `%LOCALAPPDATA%\MINOS\docker-data` (Docker) | les conteneurs `minos-mcp` et `minos-admin` | `minos.storage.backend=postgresql`, `minos.postgres.managed=true`, URL `jdbc:postgresql://minos-postgres:5432/…`, mot de passe dans `secrets/postgres.password` |
+
+Le PostgreSQL géré n'est joignable que depuis le runtime Docker : l'hôte `minos-postgres` n'existe que sur le réseau Docker géré par MINOS et aucun port n'est publié sur l'hôte. La commande native travaille donc sur son propre stockage local ; elle ne voit pas les projets ni les index enregistrés dans le runtime Docker, qui s'administre par `minos-admin` (section [Installation / administration](#installation--administration)). Le choix PostgreSQL reste consigné dans `installer-state.json`.
+
+Une configuration native qui désigne un PostgreSQL géré sans URL de connexion (écrite par l'installeur 1.3.0) est refusée au démarrage, hors Docker, par :
+
+```text
+error: MINOS bootstrap failed: managed PostgreSQL storage is reachable only from the MINOS Docker runtime (MINOS_RUNTIME_LOCATION=docker) and this launcher has no PostgreSQL connection settings; ...
+```
+
+MINOS ne bascule pas de lui-même sur le stockage local. Remède : relancer l'installateur MINOS (il réécrit la configuration native), ou remplacer `minos.storage.backend=postgresql` par `minos.storage.backend=local` et retirer `minos.postgres.managed` dans `config\minos.properties` du dossier natif.
+
 ## `minos-ollama` : réservé au runtime Docker
 
 Le nom `minos-ollama` n'existe que sur le réseau Docker géré par MINOS. Le fournisseur d'embeddings ne l'utilise que si l'emplacement d'exécution est Docker : `MINOS_RUNTIME_LOCATION=docker`, posé par les images (`ENV`) et par les services `minos-mcp`, `minos-admin` et `minos-bootstrap` des fichiers `docker/compose-mcp.*.yaml`. Hors Docker, ce nom serait résolu par le DNS du réseau local, LLMNR ou NBT-NS : une autre machine pourrait y répondre et recevoir en clair le code envoyé pour l'embedding.
 
-Le `MINOS_HOME` d'une installation Docker avec Ollama contient `minos.semantic.endpoint=http://minos-ollama:11434/api/embed`. Si un lanceur **natif** ouvre ce même dossier, l'ouverture réussit et les commandes qui n'utilisent pas la recherche sémantique fonctionnent. Seule la recherche sémantique est refusée, avant toute résolution de nom, par une erreur qui nomme `minos.semantic.endpoint` et `MINOS_RUNTIME_LOCATION=docker`, et le statut de l'index sémantique porte la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`. Aucun autre endpoint n'est essayé à la place. La valeur de `MINOS_RUNTIME_LOCATION` est `native` ou `docker` ; toute autre valeur est refusée en la nommant. Elle est lue dans la propriété système `minos.runtime.location` puis la variable d'environnement, jamais dans `minos.properties`.
+Le `MINOS_HOME` d'une installation Docker avec Ollama contient `minos.semantic.endpoint=http://minos-ollama:11434/api/embed`, y compris le dossier natif (voir [Deux `MINOS_HOME` : natif et Docker](#deux-minos_home--natif-et-docker)). Si un lanceur **natif** ouvre ce dossier, l'ouverture réussit et les commandes qui n'utilisent pas la recherche sémantique fonctionnent, le stockage natif étant local quand PostgreSQL est géré par Docker. Seule la recherche sémantique est refusée, avant toute résolution de nom, par une erreur qui nomme `minos.semantic.endpoint` et `MINOS_RUNTIME_LOCATION=docker`, et le statut de l'index sémantique porte la limite `OLLAMA_MANAGED_SERVICE_UNREACHABLE_OUTSIDE_DOCKER`. Aucun autre endpoint n'est essayé à la place. La valeur de `MINOS_RUNTIME_LOCATION` est `native` ou `docker` ; toute autre valeur est refusée en la nommant. Elle est lue dans la propriété système `minos.runtime.location` puis la variable d'environnement, jamais dans `minos.properties`.
 
 Un conteneur lancé hors des fichiers compose fournis doit exporter `MINOS_RUNTIME_LOCATION=docker` pour garder la recherche sémantique.
 
@@ -263,7 +333,7 @@ Workflow :
 $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 & $Docker -Action Admin -MinosArguments @('doctor', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('tools', 'verify', '--all', '--format', 'json')
-& $Docker -Action Admin -MinosArguments @('project', 'add', '/workspace/projects/my-project', '--name', 'my-project', '--format', 'json')
+& $Docker -Action AddProject -ProjectPath D:\src\my-project -Name my-project
 # `index` est refusé dans ce plan (aucun provider n'y tourne) : indexer sur l'hôte natif.
 & $Docker -Action Admin -MinosArguments @('index-status', 'my-project', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('semantic', 'status', 'my-project', '--format', 'json')

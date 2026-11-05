@@ -7,6 +7,8 @@ param(
     [ValidateSet('native', 'docker')]
     [string] $TargetBackend,
 
+    # Ignored with a warning: the Docker runtime mounts no projects root, only the projects exposed with
+    # prod-mcp-release.ps1 -Action AddProject. Kept so that scripted installs of earlier releases still run.
     [string] $ProjectsRoot = '',
     [string] $DataRoot = '',
     [string] $DockerInstallRoot = '',
@@ -32,6 +34,9 @@ param(
 
     [switch] $ProvisionOllamaModel,
 
+    # Ignored with a warning: there is no projects root to replace.
+    [switch] $ReplaceDockerProjectsRoot,
+
     [ValidateRange(1, 120)]
     [int] $ProbeTimeoutSeconds = 20,
 
@@ -39,11 +44,32 @@ param(
     [string] $LauncherPath = '',
     [string] $HandshakeProbePath = '',
     [string] $DockerConfiguratorPath = '',
-    [string] $DockerWorkflowPath = ''
+    [string] $DockerWorkflowPath = '',
+
+    # Installer progress file; empty (the default) writes no progress.
+    [string] $ProgressPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# Installer progress protocol, read by the Windows installer while this script runs (-ProgressPath).
+# A line carries only a step id, a state and a number: no path, URL, model name or secret can reach it.
+function Write-SetupProgress([string] $Step, [string] $State, [int] $Percent = -1) {
+    if ([string]::IsNullOrWhiteSpace($ProgressPath)) { return }
+    if ($Step -cnotmatch '^[a-z][a-z0-9-]{0,47}\z') { return }
+    if (@('running', 'done', 'skipped') -cnotcontains $State) { return }
+    if ($Percent -lt -1 -or $Percent -gt 100) { return }
+    $Line = "MINOS-PROGRESS step=$Step state=$State"
+    if ($Percent -ge 0) { $Line += " percent=$Percent" }
+    for ($Attempt = 1; $Attempt -le 5; $Attempt++) {
+        try {
+            [System.IO.File]::AppendAllText($ProgressPath, $Line + "`r`n", [System.Text.Encoding]::ASCII)
+            return
+        }
+        catch { Start-Sleep -Milliseconds 50 }
+    }
+}
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS MCP backend switching currently targets Windows hosts.'
@@ -63,9 +89,6 @@ if ([string]::IsNullOrWhiteSpace($DockerDataRoot)) {
     $DockerDataRoot = Join-Path $LocalAppData 'MINOS\docker-data'
 }
 $DockerDataRoot = [System.IO.Path]::GetFullPath($DockerDataRoot)
-if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-    $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
-}
 
 if ([string]::IsNullOrWhiteSpace($LauncherPath)) {
     $LauncherPath = Join-Path $InstallRoot 'app\minos.exe'
@@ -95,12 +118,6 @@ if ($TargetBackend -eq 'docker') {
             throw "MINOS Docker backend switching helper is missing: $Required"
         }
     }
-    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-        throw '-ProjectsRoot is required when switching to the Docker backend.'
-    }
-    if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
-        throw "MINOS Docker projects root does not exist: $ProjectsRoot"
-    }
 }
 
 $RuntimeRoot = Join-Path $DataRoot 'runtime'
@@ -114,6 +131,20 @@ New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 function Write-SwitchLog([string] $Message) {
     $Line = '{0} {1}' -f ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')), $Message
     Add-Content -LiteralPath $SwitchLog -Value $Line -Encoding UTF8
+}
+
+function Assert-RuntimeFileWritable([string] $Path) {
+    # An existing file is opened for writing and closed untouched: a DACL that denies the user is found
+    # here, before PREPARE, not after COMMIT once a Docker build has run. A missing file is created later
+    # in the runtime directory, which New-Item above has just proven usable.
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $Stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::ReadWrite)
+        $Stream.Dispose()
+    }
+    catch {
+        throw "MINOS runtime file is not writable by the current user: $Path. Restore the owner's access (icacls `"$Path`" /grant:r `"$($env:USERNAME):F`") and run the installer again."
+    }
 }
 
 function Read-KeyValueFile([string] $Path) {
@@ -153,8 +184,8 @@ function Test-ReusableDockerRuntime {
     $ExpectedCommit = [string]$Identity['commit']
     if ([string]::IsNullOrWhiteSpace($ExpectedVersion) -or [string]::IsNullOrWhiteSpace($ExpectedCommit)) { return $false }
 
+    # A marker written by an earlier release also carries projectsRoot: it is no longer read.
     try {
-        $MarkerProjects = [System.IO.Path]::GetFullPath([string]$Marker['projectsRoot'])
         $MarkerInstall = [System.IO.Path]::GetFullPath([string]$Marker['dockerInstallRoot'])
         $MarkerData = [System.IO.Path]::GetFullPath([string]$Marker['dockerDataRoot'])
     }
@@ -162,7 +193,6 @@ function Test-ReusableDockerRuntime {
 
     return [string]$Marker['version'] -eq $ExpectedVersion -and
         [string]$Marker['commit'] -eq $ExpectedCommit -and
-        $MarkerProjects -eq $ProjectsRoot -and
         $MarkerInstall -eq $DockerInstallRoot -and
         $MarkerData -eq $DockerDataRoot -and
         [string]$Marker['containerName'] -eq $DockerContainerName -and
@@ -288,10 +318,51 @@ function Restore-DockerRuntimeSnapshot([object] $Snapshot) {
     }
 }
 
+function New-ProjectRootSnapshot {
+    # The project mapping of the Docker data root (format 1: one projects root; format 2: the mount table) and the
+    # registry entries, kept in memory: the install migrates a format 1 mapping to the mount table, and a failed
+    # switch writes them back over the same files, which keeps their access rules. A mapping that did not exist is
+    # recorded as $null, so that the one a failed install created is removed.
+    $Mapping = Join-Path $DockerDataRoot 'runtime\project-paths.properties'
+    $Files = @($Mapping)
+    $Projects = Join-Path $DockerDataRoot 'registry\projects'
+    if (Test-Path -LiteralPath $Projects -PathType Container) {
+        $Files += @(Get-ChildItem -LiteralPath $Projects -File |
+            Where-Object { $_.Name -like '*.properties' } | ForEach-Object { $_.FullName })
+    }
+    $Snapshot = @{}
+    foreach ($File in $Files) {
+        if (Test-Path -LiteralPath $File -PathType Leaf) { $Snapshot[$File] = [System.IO.File]::ReadAllBytes($File) }
+    }
+    if (-not $Snapshot.ContainsKey($Mapping)) { $Snapshot[$Mapping] = $null }
+    return $Snapshot
+}
+
+function Restore-ProjectRootSnapshot([hashtable] $Snapshot) {
+    # Each file is written to a temporary of its folder, then swapped in by File.Replace, which keeps the access
+    # rules of the file it replaces: a failure leaves every file either restored or as the install left it.
+    foreach ($File in @($Snapshot.Keys)) {
+        if ($null -eq $Snapshot[$File]) {
+            if (Test-Path -LiteralPath $File -PathType Leaf) { Remove-Item -LiteralPath $File -Force }
+            continue
+        }
+        $Temporary = $File + '.' + [Guid]::NewGuid().ToString('N') + '.restore.tmp'
+        try {
+            [System.IO.File]::WriteAllBytes($Temporary, $Snapshot[$File])
+            if (Test-Path -LiteralPath $File -PathType Leaf) { [System.IO.File]::Replace($Temporary, $File, [NullString]::Value) }
+            else { [System.IO.File]::Move($Temporary, $File) }
+        }
+        finally {
+            Remove-Item -LiteralPath $Temporary -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 $PreviousBackend = Read-CurrentBackend
 $BackendFileExisted = Test-Path -LiteralPath $BackendFile -PathType Leaf
 $BackendFileBytes = if ($BackendFileExisted) { [System.IO.File]::ReadAllBytes($BackendFile) } else { [byte[]]@() }
 $ReuseDockerRuntime = $TargetBackend -eq 'docker' -and (Test-ReusableDockerRuntime)
+$ProjectRootSnapshot = $null
 $PreviousDockerRuntime = if ($PreviousBackend -eq 'docker') { Resolve-DockerRuntimeParameters } else { $null }
 $DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker' -and -not $ReuseDockerRuntime) {
     New-DockerRuntimeSnapshot -Runtime $PreviousDockerRuntime
@@ -299,7 +370,23 @@ $DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -
 $CandidateHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-m29-backend-probe-' + [Guid]::NewGuid())
 $Committed = $false
 
+Assert-RuntimeFileWritable -Path $SwitchLog
+Assert-RuntimeFileWritable -Path $BackendFile
+Assert-RuntimeFileWritable -Path $SwitchStateFile
 Write-SwitchLog "BEGIN previous=$PreviousBackend target=$TargetBackend reuseDocker=$ReuseDockerRuntime"
+# The legacy parameters are reported, never refused: neither mounts a folder nor reaches the Docker configurator.
+# The warning carries no path.
+if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    $IgnoredWarning = 'The -ProjectsRoot parameter is ignored: the MINOS Docker runtime mounts no projects root. ' +
+        'Expose each project with prod-mcp-release.ps1 -Action AddProject -ProjectPath <folder>.'
+    Write-Warning $IgnoredWarning
+    Write-SwitchLog ("WARNING ignored=ProjectsRoot message='" + $IgnoredWarning + "'")
+}
+if ($ReplaceDockerProjectsRoot) {
+    $IgnoredWarning = 'The -ReplaceDockerProjectsRoot switch is ignored: the MINOS Docker runtime has no projects root to replace.'
+    Write-Warning $IgnoredWarning
+    Write-SwitchLog ("WARNING ignored=ReplaceDockerProjectsRoot message='" + $IgnoredWarning + "'")
+}
 try {
     # PREPARE + VALIDATE. Reuse a same-version managed Docker runtime when
     # switching back to it; only a new/mismatched release goes through install.
@@ -309,11 +396,15 @@ try {
             Invoke-DockerRuntimeAction -Action Start -Runtime $ReusableRuntime
             Invoke-DockerRuntimeAction -Action Validate -Runtime $ReusableRuntime
             Write-SwitchLog 'PREPARE target=docker mode=reuse result=success'
+            # The same-version runtime is started as it is: image and managed services are not rebuilt.
+            Write-SetupProgress -Step 'docker-image' -State 'skipped'
+            Write-SetupProgress -Step 'postgres' -State 'skipped'
+            Write-SetupProgress -Step 'ollama' -State 'skipped'
+            Write-SetupProgress -Step 'ollama-model' -State 'skipped'
         }
         else {
             $DockerParameters = @{
                 InstallRoot = $InstallRoot
-                ProjectsRoot = $ProjectsRoot
                 Start = $true
                 Strict = $true
                 DockerInstallRoot = $DockerInstallRoot
@@ -331,6 +422,13 @@ try {
             if ($ProvisionOllamaModel) {
                 $DockerParameters['ProvisionOllamaModel'] = $true
             }
+            # Passed only when set, so an injected test configurator without the parameter stays callable.
+            if (-not [string]::IsNullOrWhiteSpace($ProgressPath)) {
+                $DockerParameters['ProgressPath'] = $ProgressPath
+            }
+            # Every install or upgrade may migrate a format 1 mapping (one projects root) to the mount table.
+            $ProjectRootSnapshot = New-ProjectRootSnapshot
+            Write-SwitchLog 'PREPARE target=docker projectMounts=saved'
             & $DockerConfiguratorPath @DockerParameters
             Write-SwitchLog 'PREPARE target=docker mode=install result=success'
         }
@@ -352,8 +450,10 @@ try {
         ('docker.probeTimeoutMillis=' + ($ProbeTimeoutSeconds * 1000))
     ) | Set-Content -LiteralPath $CandidateBackendFile -Encoding ascii
 
+    Write-SetupProgress -Step 'handshake' -State 'running'
     & $HandshakeProbePath -LauncherPath $LauncherPath -CandidateHome $CandidateHome -TimeoutSeconds $ProbeTimeoutSeconds
     Write-SwitchLog "HANDSHAKE target=$TargetBackend result=success"
+    Write-SetupProgress -Step 'handshake' -State 'done'
 
     # COMMIT only after the new backend has proved readiness.
     Write-BackendConfiguration -Backend $TargetBackend
@@ -379,7 +479,6 @@ try {
         dockerDataRoot = $DockerDataRoot
         dockerContainerName = $DockerContainerName
         dockerComposeProject = $DockerComposeProject
-        projectsRoot = $ProjectsRoot
         reusedDockerRuntime = $ReuseDockerRuntime
         transaction = 'prepare -> validate -> handshake -> commit -> retire'
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $SwitchStateFile -Encoding utf8
@@ -400,6 +499,19 @@ catch {
         catch {
             Write-SwitchLog ("ROLLBACK config=$PreviousBackend result=failure message='" + $_.Exception.Message.Replace("'", "''") + "'")
             throw "MINOS backend switch failed and backend configuration rollback also failed: $($Failure.Exception.Message); rollback: $($_.Exception.Message)"
+        }
+    }
+
+    # Before any previous runtime starts again: it reads the mapping and the registry it was installed with.
+    if ($null -ne $ProjectRootSnapshot) {
+        try {
+            Restore-ProjectRootSnapshot -Snapshot $ProjectRootSnapshot
+            Write-SwitchLog 'ROLLBACK projectMounts=restored result=success'
+        }
+        catch {
+            Write-SwitchLog ("ROLLBACK projectMounts=restored result=failure message='" + $_.Exception.Message.Replace("'", "''") + "'")
+            throw ('MINOS backend switch failed and the Docker project mapping could not be restored: ' +
+                "$($Failure.Exception.Message); restore: $($_.Exception.Message)")
         }
     }
 

@@ -43,7 +43,7 @@ class StorageEntryRefusalMessagePathTest {
 
     @ParameterizedTest
     @CsvSource(delimiter = '|', textBlock = """
-            rootRelativePath=project;rootPath=/legacy/project | registry project contains both legacy and portable roots: %s
+            rootRelativePath=project;rootPath=/legacy/project | registry project contains more than one root: %s
             rootRelativePath=project                          | portable project registry requires runtime path mapping: %s
             displayName=Project                               | missing registry project root in %s
             """)
@@ -63,7 +63,7 @@ class StorageEntryRefusalMessagePathTest {
         Path hostRoot = Files.createDirectories(temp.resolve("host-projects")).toRealPath();
         Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects")).toRealPath();
         LocalProjectRegistry registry = new LocalProjectRegistry(temp.resolve("registry"),
-                new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString()),
+                ProjectPathMapping.singleRoot(hostRoot.toString(), dockerRoot.toString()),
                 ProjectPathMapping.RuntimeLocation.NATIVE);
         UUID id = UUID.randomUUID();
         writeEntry(id, "rootRelativePath=../escape\n");

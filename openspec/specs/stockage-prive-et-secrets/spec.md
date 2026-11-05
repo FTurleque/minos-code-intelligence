@@ -509,3 +509,139 @@ Sur un système de fichiers à ACL, avant de rendre privé un dossier qui exista
 - **GIVEN** un dossier absent, ou existant et propriété de l'utilisateur courant
 - **WHEN** MINOS le demande comme dossier privé
 - **THEN** le dossier est réservé à son propriétaire comme avant
+
+### Requirement: Le MINOS_HOME natif d'une installation PostgreSQL gérée par Docker est en stockage local
+Quand le script de configuration d'installation reçoit un PostgreSQL géré par Docker, il SHALL écrire `minos.storage.backend=local` dans le `MINOS_HOME` natif et SHALL NOT y écrire de clé `minos.postgres.*`. L'état d'installation SHALL garder le choix PostgreSQL géré.
+
+#### Scenario: Installation avec PostgreSQL géré par Docker
+- **GIVEN** `configure-runtime-settings.ps1 -StorageBackend postgresql -McpBackend docker -ManagedDockerPostgres`
+- **WHEN** le script s'exécute sur un dossier vide
+- **THEN** `config/minos.properties` contient `minos.storage.backend=local` et aucune clé `minos.postgres.`, et l'état porte `storageBackend=postgresql` et `managedDockerPostgres=true`
+
+#### Scenario: PostgreSQL externe inchangé
+- **GIVEN** le même script sans `-ManagedDockerPostgres`, avec une URL externe valide
+- **WHEN** il s'exécute
+- **THEN** `minos.storage.backend=postgresql` et `minos.postgres.managed=false` sont écrits
+
+### Requirement: Un PostgreSQL géré sans URL est refusé hors Docker de façon actionnable
+Quand la configuration désigne un PostgreSQL géré sans URL et que l'emplacement d'exécution est natif, la résolution du stockage SHALL échouer par une erreur qui nomme le runtime Docker et `minos.storage.backend=local`, sans chemin absolu ni secret, et SHALL NOT basculer sur le stockage local. En Docker, le comportement SHALL rester inchangé.
+
+#### Scenario: Configuration native résiduelle
+- **GIVEN** `minos.storage.backend=postgresql`, `minos.postgres.managed=true`, sans URL, emplacement natif
+- **WHEN** la configuration du stockage est résolue
+- **THEN** elle échoue et le message nomme `MINOS_RUNTIME_LOCATION=docker` et `minos.storage.backend=local`
+
+#### Scenario: Même configuration en Docker
+- **GIVEN** la même configuration avec `MINOS_RUNTIME_LOCATION=docker`
+- **WHEN** la configuration est résolue
+- **THEN** elle réussit et désigne un PostgreSQL géré
+
+#### Scenario: URL présente en natif
+- **GIVEN** un PostgreSQL géré avec une URL de bouclage, emplacement natif
+- **WHEN** la configuration est résolue
+- **THEN** elle réussit
+
+### Requirement: Un fichier d'arbre d'installation hérite de l'accès de son dossier privé
+Un fichier extrait ou copié dans un arbre d'installation SHALL être créé sans suivre de lien et sans réécriture de DACL : droits propriétaire seul sous POSIX, ACL du dossier hérité sous Windows. Une archive qui contient deux fois le même chemin SHALL être refusée.
+
+#### Scenario: Entrée dupliquée dans une archive
+- **GIVEN** une archive ZIP qui contient deux fois le même chemin
+- **WHEN** l'extraction bornée est exécutée par `./mvnw -B -ntp -pl minos-provider-scip -am test`
+- **THEN** l'extraction échoue sans chemin absolu dans le message et le premier fichier est intact
+
+#### Scenario: Héritage d'ACL sous Windows
+- **GIVEN** un dossier privé portant une entrée héritable accordée à un tiers de test
+- **WHEN** un fichier d'arbre y est copié
+- **THEN** le fichier porte cette entrée héritée (test `@EnabledOnOs(WINDOWS)`)
+
+#### Scenario: Plus d'entrée de liste pour l'installation
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée pour `LockedNpmPackage.java`, `ManagedPolyglotScipRuntimeManager.java`, `ManagedScipProviderRuntimeManager.java` (hors `createDirectories`), `ManagedScipPythonRuntimeManager.java`, `PinnedArtifactSource.java`
+
+### Requirement: Une lecture du registre des projets n'écrit rien
+Une lecture du registre local (recherche, liste ou inventaire de projets et d'espaces) SHALL NOT créer, durcir ni ouvrir en écriture un fichier, fichier de verrou compris, y compris quand le registre vient d'être rouvert. Une mutation du registre SHALL garder son verrou exclusif.
+
+#### Scenario: Lectures sur un registre protégé en écriture
+- **GIVEN** un registre contenant un projet rattaché à un espace, puis protégé en écriture
+- **WHEN** les six lectures sont appelées (`./mvnw -B -ntp -pl minos-storage-local -am test "-Dtest=InterProcessLocalProjectRegistryWriteProtectedStorageTest"`)
+- **THEN** chacune rend le projet ou l'espace, et l'état du répertoire est identique avant et après
+
+#### Scenario: Registre rouvert sur un support protégé
+- **GIVEN** un registre protégé en écriture
+- **WHEN** une nouvelle instance l'ouvre puis recherche le projet
+- **THEN** le projet est rendu et rien n'a été modifié
+
+### Requirement: Une lecture du registre reste exclue par un écrivain
+Un lecteur du registre SHALL attendre la fin d'une mutation en cours dans un autre processus, et une mutation SHALL attendre la fin des lectures en cours, dans la limite de l'échéance du bail. Deux processus lecteurs SHALL NOT s'exclure. Une échéance dépassée SHALL échouer ; la lecture SHALL NOT se poursuivre sans le bail.
+
+#### Scenario: Lecteur pendant une mutation
+- **GIVEN** un processus qui tient le bail exclusif du registre
+- **WHEN** un second processus lance une lecture
+- **THEN** la lecture ne rend son résultat qu'après la libération du bail
+
+#### Scenario: Deux lecteurs en même temps
+- **GIVEN** un processus qui tient le bail de lecture du registre
+- **WHEN** un second processus lance une lecture
+- **THEN** elle aboutit sans attendre la libération
+
+#### Scenario: Échéance dépassée
+- **GIVEN** un bail exclusif tenu au-delà de l'échéance du lecteur
+- **WHEN** le lecteur attend le bail
+- **THEN** la lecture échoue par une erreur d'E/S et ne rend aucune donnée
+
+### Requirement: Un fichier de verrou non conforme est refusé à la lecture, jamais réparé
+Un lecteur SHALL refuser un fichier de verrou qui est un lien symbolique, un objet spécial ou un fichier accordant un accès à un autre principal que son propriétaire. Il SHALL NOT modifier ses permissions. Un fichier de verrou absent SHALL NOT être créé par un lecteur. Le message d'erreur SHALL NOT contenir de chemin.
+
+#### Scenario: Verrou remplacé par un lien symbolique
+- **GIVEN** un registre dont le fichier de verrou est un lien symbolique
+- **WHEN** une lecture est lancée
+- **THEN** elle échoue sans suivre le lien, et le message ne contient aucun chemin
+
+#### Scenario: Verrou absent
+- **GIVEN** un registre ouvert dont le fichier de verrou n'existe pas
+- **WHEN** une liste des projets est demandée
+- **THEN** la liste est rendue et le fichier de verrou n'existe toujours pas
+
+### Requirement: Une lecture ne migre pas une entrée de registre héritée
+Une lecture qui rencontre une entrée de projet au format hérité SHALL rendre le projet résolu comme aujourd'hui et SHALL NOT écrire de sauvegarde, de fichier temporaire ni d'entrée migrée. La migration sur disque SHALL être faite par une opération qui tient le verrou exclusif du registre.
+
+#### Scenario: Entrée héritée lue sur un support protégé
+- **GIVEN** une entrée de projet au format hérité, une correspondance de chemins configurée et un registre protégé en écriture
+- **WHEN** le projet est recherché
+- **THEN** il est rendu avec sa racine résolue et aucun fichier n'est créé ni modifié
+
+#### Scenario: Migration par la mutation suivante
+- **GIVEN** la même entrée héritée sur un registre inscriptible
+- **WHEN** une mutation du registre touche ce projet
+- **THEN** l'entrée est au format courant et sa sauvegarde existe
+
+### Requirement: La lecture des observations runtime n'écrit rien
+La recherche et la liste des sessions d'observation runtime d'un projet SHALL NOT créer, durcir ni ouvrir en écriture un fichier, fichier de verrou compris. Elles SHALL rester exclues par un import ou une suppression en cours dans un autre processus.
+
+#### Scenario: Sessions listées sur un support protégé
+- **GIVEN** un projet ayant une session runtime importée, puis le répertoire des observations protégé en écriture
+- **WHEN** les sessions du projet sont listées et l'une est recherchée
+- **THEN** les deux lectures aboutissent et l'état du répertoire est identique avant et après
+
+### Requirement: Un paquet d'artefact et une mise de côté de répertoire sont atomiques sans repli
+Un paquet d'artefact distribué SHALL être publié et un répertoire hostile ou périmé SHALL être mis de côté par un déplacement atomique. Un système de fichiers qui ne le permet pas SHALL faire échouer l'opération, sans copie ni déplacement non atomique, et sans modifier les droits du dossier de sortie de l'appelant.
+
+#### Scenario: Déplacement atomique refusé pour un paquet
+- **GIVEN** un déplaceur qui signale l'absence de déplacement atomique
+- **WHEN** `./mvnw -B -ntp -pl minos-runtime-local -am test` exécute le test de publication d'un paquet
+- **THEN** la publication échoue et la cible n'existe pas
+
+#### Scenario: Dossier de sortie de l'appelant
+- **GIVEN** un dossier de sortie dont le mode ou l'ACL est connu
+- **WHEN** un paquet y est créé
+- **THEN** le mode ou l'ACL du dossier est inchangé
+
+#### Scenario: Plus d'entrée de liste pour les artefacts
+- **GIVEN** le dépôt après ce changement
+- **WHEN** `python scripts/architecture/check-private-io.py` est exécuté
+- **THEN** il réussit et la liste ne contient plus d'entrée `Files.move`, `Files.createTempFile`, `Files.newOutputStream` ni `Files.newByteChannel` pour ces six fichiers (hors l'entrée `LocalIsolatedIndexWorker`, reclassée)
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [stockage-prive-et-secrets](../../../docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md)

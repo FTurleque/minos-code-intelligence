@@ -4,6 +4,7 @@ param(
     [ValidateSet('Install', 'Start', 'Attach', 'Status', 'Stop', 'Validate')]
     [string]$Action,
     [string]$InstallRoot = '',
+    # Ignored with a warning: no projects root is mounted (packaged workflow: mcp-lifecycle.ps1 -Action AddProject).
     [string]$ProjectsRoot = '',
     [string]$ImageTag = ''
 )
@@ -23,10 +24,9 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     $InstallRoot = Join-Path $localAppData 'MINOS'
 }
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
-if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-    $ProjectsRoot = Split-Path -Parent $projectRoot
+if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    Write-Warning 'Le parametre -ProjectsRoot est ignore : le runtime Docker ne monte aucune racine des projets.'
 }
-$ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 $runtimeDirectory = Join-Path $InstallRoot 'runtime'
 $dataDirectory = Join-Path $InstallRoot 'data'
@@ -125,11 +125,15 @@ function ConvertTo-MinosEnvValue {
 function Get-MinosComposeArguments {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
 
+    $files = @('-f', $composeFile)
+    # The project mounts override that mcp-lifecycle.ps1 generates in the same runtime directory takes part in every
+    # Compose call: without it, recreating minos-mcp would drop every exposed project.
+    $projectMounts = Join-Path $runtimeDirectory 'compose-mcp.projects.yaml'
+    if (Test-Path -LiteralPath $projectMounts -PathType Leaf) { $files += @('-f', $projectMounts) }
     return @(
         'compose', '--project-directory', $runtimeDirectory,
-        '--env-file', $environmentFile,
-        '-f', $composeFile
-    ) + $Arguments
+        '--env-file', $environmentFile
+    ) + $files + $Arguments
 }
 
 function Invoke-MinosCompose {
@@ -214,9 +218,6 @@ Move-LegacyMinosComposeFile
 switch ($Action) {
     'Install' {
         Assert-CommandAvailable -Name 'git'
-        if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
-            throw "La racine des projets est introuvable : $ProjectsRoot"
-        }
         Assert-MinosDocker
         Initialize-MinosProdLayout
         Assert-NoRunningMinosProdContainer
@@ -271,8 +272,6 @@ MINOS_CONTAINER_NAME=$containerName
 MINOS_IMAGE=$image
 MINOS_QUERY_IMAGE=$image
 MINOS_DATA_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $dataDirectory))
-MINOS_PROJECTS_DIR=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $ProjectsRoot))
-MINOS_HOST_PROJECTS_ROOT=$(ConvertTo-MinosEnvValue -Value (ConvertTo-MinosDockerPath -Path $ProjectsRoot))
 MINOS_VERSION=$version
 MINOS_GIT_COMMIT=$commit
 "@
@@ -298,8 +297,7 @@ MINOS_GIT_COMMIT=$commit
             updatedAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
             installRoot = $InstallRoot
             dataRoot = $dataDirectory
-            projectsRoot = $ProjectsRoot
-            containerProjectsRoot = '/workspace/projects'
+            projectMounts = [ordered]@{ containerRoot = '/workspace/projects'; count = 0; names = @() }
             composeProject = $composeProject
             image = $image
             version = $version
@@ -314,7 +312,7 @@ MINOS_GIT_COMMIT=$commit
         Write-Host "Image    : $image"
         Write-Host "Java     : $($java.VersionLine)"
         Write-Host "Data     : $dataDirectory -> /var/lib/minos"
-        Write-Host "Projects : $ProjectsRoot -> /workspace/projects (lecture seule)"
+        Write-Host 'Projects : aucun projet monte sous /workspace/projects (lanceur de developpement)'
         Write-Host "Network  : none"
         if ($null -ne $backup) {
             Write-Host "Backup   : $backup"
@@ -384,7 +382,7 @@ MINOS_GIT_COMMIT=$commit
         Write-Host "Image ID : $($imageDetails[0].Id)"
         Write-Host "Commit   : $($metadata.gitCommit)"
         Write-Host "Data     : $($metadata.dataRoot)"
-        Write-Host "Projects : $($metadata.projectsRoot) (lecture seule)"
+        Write-Host 'Projects : aucun projet monte (lanceur de developpement)'
         if ([string]::IsNullOrWhiteSpace($containerId)) {
             Write-Host 'Session  : inactive'
         } else {

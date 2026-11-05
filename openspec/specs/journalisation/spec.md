@@ -61,5 +61,11 @@ Le garde SHALL échouer quand un appel `LOGGER.log` des sources de production tr
 - **THEN** il échoue en demandant de resserrer la liste
 
 #### Scenario: Diagnostic de bac à sable listé
-- **WHEN** le garde est exécuté sur le dépôt corrigé
-- **THEN** il réussit, les six sites de diagnostic ou de refus étant les seules entrées de la liste
+- **GIVEN** la liste nominative du dépôt, dont chaque entrée nomme un fichier, un maximum et une justification (diagnostics de bac à sable, refus de reprise d'indexation, journaux serveur du plan de contrôle hébergé)
+- **WHEN** le garde est exécuté sur le dépôt
+- **THEN** il réussit
+- **AND** chaque appel qui transmet une cause appartient à un fichier de la liste, sans dépasser son maximum
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [journalisation](../../../docs/architecture/diagrams/capacites/journalisation.md)

@@ -102,7 +102,7 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 | H01 | Les rapports SpotBugs du plugin Maven ne prouvent pas le périmètre analysé | Défaut confirmé (outillage), **corrigé** (#371 : `spotbugs-cli.py` et `--strict` dans `code-audit.yml`) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H02 | Dependency-Check rapproche deux modules MINOS de CPE tiers (43 CVE du serveur PostgreSQL) | Faux positif, **traité** (#371 : deux suppressions liées à un artefact et un CPE) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H03 | Quatre CVE dans le client HTTP embarqué par Testcontainers (tests seulement) | Risque | P3 | E | `aligner-dependances-de-test-testcontainers` |
-| H04 | La clé NVD de l'environnement est refusée ; Dependency-Check 13.0.0 ne rafraîchit pas sans clé | Décision ouverte (environnement) | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
+| H04 | La clé NVD de l'environnement est refusée ; Dependency-Check 13.0.0 ne rafraîchit pas sans clé | **Traité en CI** (secret du dépôt valide, run 41701345508) ; clé du poste encore refusée | P2 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H05 | Testcontainers mélange deux versions majeures (cœur 2.0.5, modules 1.21.4) ; `slf4j-api` ne converge pas | Risque, **corrigé** (#369 : BOM 2.0.5, `slf4j.version`) | P3 | E | `aligner-dependances-de-test-testcontainers` |
 | H06 | Gitleaks n'est ni configuré ni exécuté par la CI ; la règle par défaut ne produit que des faux positifs | **Corrigé** le 2026-10-09 (`.gitleaks.toml`, `secret-scan.yml`) | P3 | E | `etendre-audit-outille-a-tout-le-perimetre` |
 | H07 | Faiblesses de tests révélées par PIT (chaîne d'audit et autorisation en P1) | Faiblesse de test ; **P1 corrigés** (`5b9ef15b`) | P1 à P3 | E | `renforcer-tests-revelees-par-mutation` |
@@ -152,6 +152,7 @@ Identifiants stables `MINOS-AUD-H<nn>` (H : audit outillé), dans la continuité
 - **Preuve (E)** : `dependency-check-maven:13.0.0:update-only -DnvdApiKeyEnvironmentVariable=NVD_API_KEY` → `Error updating the NVD Data: Invalid API Key`, rc = 1. Repli : mise à jour anonyme par 12.2.2 (anomalie amont #8715 de 13.0.0), analyse 13.0.0 sans mise à jour.
 - **Impact** : une analyse avec 13.0.0 échoue tant que la clé n'est pas valide ; le job Dependency-Check de `code-audit.yml` exige le secret `NVD_API_KEY`.
 - **Action (utilisateur)** : vérifier ou régénérer la clé sur le site du NVD, l'activer, la placer dans l'environnement utilisateur et comme secret du dépôt ; jamais dans un fichier versionné ni dans une conversation. **Validation** : E04 rc = 0.
+- **État au 2026-11-03** : le secret `NVD_API_KEY` du dépôt est accepté. Le job Dependency-Check de `code-audit.yml` ([run 41701345508](https://github.com/FTurleque/minos-code-intelligence/actions/runs/41701345508)) télécharge la base complète avec 13.0.0 et se termine en succès. La variable du poste reste refusée (`Invalid API Key`) : E04 n'est pas encore à rc = 0 en local.
 
 #### MINOS-AUD-H05 — Versions de test non alignées
 
@@ -307,7 +308,7 @@ Les lots SpotBugs du § 4 (1 à 6) restent valables : les 197 alertes du réacte
 | Changement | Constats | Statut |
 |---|---|---|
 | `ajouter-audit-spotbugs-pitest` (existant, 14/18) | intégration initiale | tâches 5.1 à 5.4 ouvertes ; 5.3 reprise par `renforcer-tests-revelees-par-mutation` |
-| `etendre-audit-outille-a-tout-le-perimetre` | H01, H02, H04, H06, H08 (mesure), H09, H21 | 12/13 au 2026-10-09 ; reste la clé NVD (H04) ; `code-audit.yml` validé (run 37976513603) |
+| `etendre-audit-outille-a-tout-le-perimetre` | H01, H02, H04, H06, H08 (mesure), H09, H21 | **archivé** le 2026-11-03 (`archive/2026-11-03-…`), exigences reportées dans `specs/audit-qualite-code` ; `code-audit.yml` validé (run 37976513603), Dependency-Check avec la clé NVD validé (run 41701345508) |
 | `renforcer-tests-revelees-par-mutation` | H07, H14, H15 | **archivé** le 2026-10-09 (`archive/2026-10-09-…`), exigences reportées dans `specs/controle-tenant-heberge` |
 | `couvrir-reprise-apres-interruption-du-stockage` | H12, H13 | **archivé** le 2026-10-09, nouvelle spec `specs/persistance-snapshots` |
 | `corriger-documentation-plugin-et-suivi-audit` | H10, H11, H19 | **archivé** le 2026-10-09, exigence reportée dans `specs/client-intellij` |

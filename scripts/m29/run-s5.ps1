@@ -81,7 +81,6 @@ Write-Host "M29-S5 controlled fixture: $FixtureRelativePath" -ForegroundColor Cy
 $S4Runner = Join-Path $RepoRoot 'scripts\m29\run-s4.ps1'
 $S4Parameters = @{
     ExpectedHead = $Head
-    ProjectsRoot = $ProjectsRoot
     SemanticProvider = 'local-hash'
     KeepArtifacts = $true
 }
@@ -145,7 +144,10 @@ try {
     $InitialProjects = Invoke-AdminJson -MinosArguments @('project', 'list', '--format', 'json') -Label 'fresh project list (a registry with unreadable entries is not fresh)' -Strict
     if ([int] $InitialProjects.count -ne 0) { throw "M29-S5 expected a fresh project registry, found $($InitialProjects.count)" }
 
-    $ContainerFixture = '/workspace/projects/' + $FixtureRelativePath
+    # The Docker runtime mounts only the projects exposed one by one: the fixture is exposed under its own mount.
+    & $Workflow -Action AddProject -InstallRoot $InstallRoot -DataRoot $DataRoot -ContainerName $ContainerName `
+        -ComposeProject $ComposeProject -ProjectPath $FixtureHostPath -Name 'm29-s5-polyglot'
+    $ContainerFixture = '/workspace/projects/m29-s5-polyglot'
     $Added = Invoke-AdminJson -MinosArguments @('project', 'add', $ContainerFixture, '--name', 'm29-s5-polyglot', '--format', 'json') -Label 'project add'
     $ProjectId = [string] $Added.id
     if ([string]::IsNullOrWhiteSpace($ProjectId)) { throw 'M29-S5 project add returned no project id.' }

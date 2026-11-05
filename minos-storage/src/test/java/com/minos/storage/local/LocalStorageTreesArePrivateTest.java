@@ -53,7 +53,7 @@ class LocalStorageTreesArePrivateTest {
         Path hostRoot = Files.createDirectories(temp.resolve("host-projects")).toRealPath();
         Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects")).toRealPath();
         Path project = Files.createDirectories(hostRoot.resolve("demo"));
-        ProjectPathMapping mapping = new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString());
+        ProjectPathMapping mapping = ProjectPathMapping.singleRoot(hostRoot.toString(), dockerRoot.toString());
         ProjectPathMappingStore mappings = new ProjectPathMappingStore(home);
         mappings.save(mapping);
         LocalProjectRegistry registry = new LocalProjectRegistry(

@@ -1,0 +1,15 @@
+# OSV-Scanner applies this file to the lockfiles of this directory only (the required check osv-scan passes
+# scip-python-package-lock.json and scip-typescript-package-lock.json explicitly). The minos-provider-scip
+# build excludes it from the jar: it describes the scan, not the product.
+#
+# GHSA-g3hv-75wg-m249 (CVE-2026-118764) declares every minimatch release before 11.0.1 affected, but the
+# amplification it describes lives in firstPhasePreProcess/secondPhasePreProcess under optimizationLevel >= 2,
+# code that minimatch 3.1.5 does not contain (checked on the registry archive whose sha512 is the one locked).
+# minimatch 3.1.5 comes with glob 7.2.3 (minimatch ^3.1.1) in the scip-python tree, so no lock change can reach
+# 11.0.1. Only this advisory is ignored, and the exception expires: re-evaluate it then, or when
+# scip-python moves off glob 7 (docs/developer/supply-chain.md).
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-01-31
+reason = "The vulnerable preprocessing does not exist in minimatch 3.1.5, pinned by glob 7.2.3 in scip-python"

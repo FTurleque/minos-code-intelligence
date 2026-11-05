@@ -20,6 +20,10 @@ description: Préparer et contrôler (sans jamais publier de soi-même) une prom
 5. Supply-chain : SBOM CycloneDX et `THIRD-PARTY-NOTICES.txt` produits, `python scripts/release/check-supply-chain.py`, `python scripts/quality/check-tools-manifest.py` (charge d'outils ↔ catalogue), actions épinglées par SHA, images par digest.
 6. Documentation : `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md`, notes de version, `docs/user/production-installation.md` à jour (skill `minos-doc-sync`).
 7. Publication Windows : workflow manuel `release-windows.yml` (version SemVer en entrée ; seul le job de publication a `contents: write`). Plugin : `release-windows.yml` appelle `intellij-plugin-release.yml` (job `plugin`) puis vérifie que la release porte le zip du plugin et sa somme (job `release-complete`) ; une release créée à la main, ou un échec de ce job, se répare par `workflow_dispatch` de `intellij-plugin-release.yml` avec le tag.
+8. Preuves que seule une release produit, à relever sur le premier candidat publié puis à noter (run ids) dans le suivi d'audit :
+   - **AUD-DEP-06** : `gh attestation verify .\MINOS-<version>-windows-x64-setup.exe --repo FTurleque/minos-code-intelligence` sur l'installateur téléchargé ; release non signée (D2 = C, risque R-28) : le texte de la release le dit, aucune signature Authenticode attendue.
+   - **AUD-DEP-05** : `release-windows.yml` et `intellij-plugin-release.yml` construisent le plugin par le wrapper `minos-intellij/gradlew`.
+   - **AUD-DEP-07** : le job `plugin` s'exécute, la release porte le zip du plugin et sa somme, `release-complete` est vert ; une relance de `intellij-plugin-release.yml` sur le même tag refuse d'écraser l'asset.
 
 ## Rapport
 Pour chaque point : fait / non fait / non vérifiable ici, avec la commande ou le run. Lister les **actions manuelles** restant au propriétaire (ruleset, secrets, publication). Ne jamais déclarer « prêt » sur la seule base d'une CI verte de PR.

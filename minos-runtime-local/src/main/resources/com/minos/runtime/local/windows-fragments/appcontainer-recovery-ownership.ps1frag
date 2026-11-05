@@ -17,10 +17,12 @@ function New-OwnershipLock([string] $RecoveryDirectory, [string] $ContainerProfi
     return New-Object System.IO.FileStream($lockPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
 }
 
-# The last step of a launcher: the journal is already gone, so a lock is never left without its journal.
+# The last step of a launcher. A lock is never left without its journal, and a journal kept after an incomplete
+# cleanup keeps its released lock: that lock is what lets the next launcher prove this owner dead and replay it.
 function Close-OwnershipLock($Lock, [string] $RecoveryDirectory, [string] $ContainerProfile) {
     if ($null -eq $Lock) { return }
     try { $Lock.Dispose() } catch { Write-Warning $_ }
+    if (Test-Path -LiteralPath (Join-Path $RecoveryDirectory ($ContainerProfile + '.json'))) { return }
     Remove-Item -LiteralPath (Join-Path $RecoveryDirectory ($ContainerProfile + '.lock')) -Force -ErrorAction SilentlyContinue
 }
 
@@ -58,11 +60,21 @@ function Recover-Stale([string] $RecoveryDirectory) {
             if (-not (Test-Path -LiteralPath $journal.FullName -PathType Leaf)) { continue }
             $state = Get-Content -LiteralPath $journal.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
             $sid = [string]$state.sid
+            # The journal goes only once every removal and the profile deletion are proven; otherwise it stays with
+            # its lock, naming only the paths whose removal failed, and a later launcher replays it (removing an
+            # absent profile is a no-op).
+            $cleaned = $true
+            $remaining = New-Object System.Collections.Generic.List[string]
             foreach ($path in @($state.paths)) {
-                try { Remove-AppContainerPath ([string]$path) $sid } catch { Write-Warning $_ }
+                try { Remove-AppContainerPath ([string]$path) $sid } catch { $cleaned = $false; $remaining.Add([string]$path); Write-Warning $_ }
             }
-            try { [MinosAppContainerNativeV3]::DeleteProfile([string]$state.profile) } catch { Write-Warning $_ }
-            Remove-Item -LiteralPath $journal.FullName -Force -ErrorAction SilentlyContinue
+            try { [MinosAppContainerNativeV3]::DeleteProfile([string]$state.profile) } catch { $cleaned = $false; Write-Warning $_ }
+            if ($cleaned) {
+                Remove-Item -LiteralPath $journal.FullName -Force -ErrorAction SilentlyContinue
+            } else {
+                try { Write-Recovery $journal.FullName ([string]$state.profile) $sid $remaining } catch { Write-Warning $_ }
+                Write-Warning "MINOS AppContainer recovery of journal $($journal.Name) is incomplete; the journal is kept for the next launcher"
+            }
         } catch {
             Write-Warning "Unable to reconcile stale MINOS AppContainer journal $($journal.Name): $_"
         } finally {

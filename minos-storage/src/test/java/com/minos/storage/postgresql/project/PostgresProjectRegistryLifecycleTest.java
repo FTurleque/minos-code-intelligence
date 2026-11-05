@@ -277,7 +277,7 @@ class PostgresProjectRegistryLifecycleTest extends PostgresTestSupport {
     /** A MINOS home whose runtime mapping exposes {@code projects} at the same location on host and container. */
     private Path mappedHome(String name, Path projects) throws IOException {
         Path home = Files.createDirectories(temp.resolve(name));
-        new ProjectPathMappingStore(home).save(new ProjectPathMapping(projects.toString(), projects.toString()));
+        new ProjectPathMappingStore(home).save(ProjectPathMapping.singleRoot(projects.toString(), projects.toString()));
         return home;
     }
 

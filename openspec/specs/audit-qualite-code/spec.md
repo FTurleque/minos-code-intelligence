@@ -1,7 +1,7 @@
 # audit-qualite-code Specification
 
 ## Purpose
-Définit l'audit de qualité du code de MINOS à la demande : l'analyse statique du bytecode (SpotBugs) et la mesure de la capacité des tests à détecter une régression (tests de mutation PIT). Cet audit est borné, reproductible et sans effet sur le build habituel.
+Définit l'audit de qualité du code de MINOS à la demande : l'analyse statique du bytecode (SpotBugs), la mesure de la capacité des tests à détecter une régression (tests de mutation PIT), les tests d'architecture (ArchUnit), l'analyse des vulnérabilités des dépendances (Dependency-Check) et la recherche de secrets dans l'historique (Gitleaks), plugin IntelliJ compris. Cet audit est borné, reproductible et sans effet sur le build habituel.
 
 ## Requirements
 
@@ -253,3 +253,191 @@ Le gate de langue SHALL compter, par module, les fichiers Java de production don
 - **GIVEN** un fichier dont les commentaires citent `arm64`, `System32` ou `qualifiedM24Providers`, sans autre jalon
 - **WHEN** `python scripts/quality/check-comment-language.py --self-test` est exécuté
 - **THEN** le cas est accepté : le fichier n'est pas compté
+
+### Requirement: Les verrous npm livrés sont analysés par le gate de vulnérabilités
+Le job de vulnérabilités des pull requests SHALL analyser chaque verrou npm livré avec le produit, quel que soit le nom du fichier. Une vulnérabilité connue dans un paquet de ces verrous SHALL faire échouer le job.
+
+#### Scenario: Paquet vulnérable dans un verrou livré
+- **GIVEN** une copie du dépôt où `scip-python-package-lock.json` référence une version d'un paquet touchée par un avis connu
+- **WHEN** OSV-Scanner est exécuté avec les arguments du job de pull request
+- **THEN** l'analyse échoue et nomme le paquet et l'avis
+
+#### Scenario: Verrous sains
+- **GIVEN** le dépôt réel
+- **WHEN** OSV-Scanner est exécuté avec les arguments du job de pull request
+- **THEN** les deux verrous figurent parmi les sources analysées et l'analyse réussit
+
+### Requirement: Aucun verrou npm livré n'échappe au scan
+Un gate statique SHALL échouer quand un fichier de verrou npm versionné sous un répertoire de ressources de production n'est pas passé au job de vulnérabilités.
+
+#### Scenario: Troisième verrou non déclaré
+- **GIVEN** une copie du dépôt où un nouveau `scip-autre-package-lock.json` est ajouté aux ressources sans modifier le workflow
+- **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté sur cette copie
+- **THEN** le gate échoue en nommant le fichier
+
+#### Scenario: Verrous déclarés
+- **GIVEN** le dépôt réel
+- **WHEN** le gate est exécuté
+- **THEN** il réussit
+
+### Requirement: Le catalogue des outils embarqués a une veille planifiée à couverture déclarée
+Un contrôle planifié SHALL interroger une base d'avis pour chaque composant du catalogue qui a un identifiant interrogeable et SHALL échouer quand un composant est touché ou hors support. Sa sortie SHALL lister les composants non couverts avec leur raison. Un échec réseau, un composant inconnu de la table ou une dérogation échue SHALL être un échec.
+
+#### Scenario: Composant touché par un avis
+- **GIVEN** des réponses simulées où un composant du catalogue est touché par un avis
+- **WHEN** `python scripts/quality/check-embedded-tools-advisories.py --self-test` exécute ce cas
+- **THEN** le contrôle échoue et nomme le composant et l'avis
+
+#### Scenario: Composant absent de la table
+- **GIVEN** un catalogue simulé contenant un composant que la table du script ne connaît pas
+- **WHEN** le contrôle est exécuté
+- **THEN** il échoue en nommant le composant
+
+#### Scenario: Service d'avis injoignable
+- **GIVEN** une interrogation qui échoue
+- **WHEN** le contrôle est exécuté
+- **THEN** il échoue avec un message distinct d'une alerte et ne rapporte pas « aucun avis »
+
+#### Scenario: Composants non couverts déclarés
+- **GIVEN** le catalogue réel et des réponses sans avis
+- **WHEN** le contrôle est exécuté
+- **THEN** il réussit et sa sortie énumère les composants non couverts avec leur raison
+
+### Requirement: Aucun identifiant de production ne porte un numéro de jalon
+Un nom de fichier, un identifiant de code, une référence de classe d'un descripteur ou un nom de variable d'environnement du code de production SHALL NOT contenir de segment à jalon (`M` ou `m` suivi de chiffres en début de segment). Un gate du job des invariants SHALL échouer sur un tel nom hors d'une liste décroissante dont chaque entrée porte sa raison, et SHALL échouer sur une entrée périmée ou un fichier illisible. Littéraux et commentaires ne sont pas lus.
+
+#### Scenario: Nouvelle méthode à jalon
+- **GIVEN** une copie du dépôt où un fichier de `src/main` déclare une méthode `qualifiedM31Providers`
+- **WHEN** `python scripts/quality/check-milestone-identifiers.py --root <copie>` est exécuté
+- **THEN** le gate échoue en nommant le fichier, la ligne et l'identifiant
+
+#### Scenario: Jalon à un seul chiffre
+- **GIVEN** une copie où un fichier de `src/main` déclare une méthode `registerQualifiedM1`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant l'identifiant
+
+#### Scenario: Fichier nommé par un jalon
+- **GIVEN** une copie du dépôt où un fichier `MinosM21Actions.java` existe sous `src/main`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant le fichier
+
+#### Scenario: Variable d'environnement à jalon dans un script embarqué
+- **GIVEN** une copie où un script `.ps1` de `src/main` pose `MINOS_M14_MAVEN_CMD`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant le fichier, la ligne et la variable
+
+#### Scenario: Sigles techniques et littéraux acceptés
+- **GIVEN** une copie dont `src/main` contient les identifiants `arm64`, `MACOS_ARM64`, `windowsSystem32` et le littéral `"not claimed by M24"`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il réussit
+
+#### Scenario: Entrée de liste périmée
+- **GIVEN** une liste décroissante qui nomme un identifiant disparu ou un fichier introuvable
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant l'entrée périmée
+
+#### Scenario: Dépôt réel après renommage
+- **GIVEN** le dépôt après le renommage
+- **WHEN** `python scripts/quality/check-milestone-identifiers.py` est exécuté
+- **THEN** il réussit et affiche le nombre d'entrées restantes de la liste
+
+### Requirement: Retirer un jalon d'un identifiant ne change aucune surface publique
+Le renommage d'un identifiant à jalon SHALL NOT modifier une sortie de la CLI, de l'API Java ou du serveur MCP, ni un identifiant d'action du plugin IntelliJ. Une chaîne publique qui cite un jalon SHALL rester inchangée tant qu'une décision écrite ne l'a pas modifiée, goldens mis à jour et version notée dans le même changement.
+
+#### Scenario: Goldens de caractérisation
+- **GIVEN** le dépôt après le renommage
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify` puis `git diff --exit-code minos-app/src/test/resources/characterization/` sont exécutés
+- **THEN** les tests réussissent et aucun golden n'a changé
+
+#### Scenario: Identifiants d'action du plugin
+- **GIVEN** la liste attendue des 16 identifiants d'action de `plugin.xml`
+- **WHEN** le test du plugin lit `plugin.xml` après le renommage
+- **THEN** l'ensemble lu est égal à la liste attendue et chaque attribut `class` désigne une classe existante
+
+#### Scenario: Identifiant d'action retiré par erreur
+- **GIVEN** une copie de `plugin.xml` où une action a perdu ou changé son `id`
+- **WHEN** le test du plugin est exécuté sur cette copie
+- **THEN** il échoue en nommant l'identifiant manquant
+
+#### Scenario: Classe d'action introuvable
+- **GIVEN** une copie de `plugin.xml` dont un attribut `class` désigne encore `MinosM21Actions` après le renommage
+- **WHEN** le test du plugin est exécuté sur cette copie
+- **THEN** il échoue en nommant la classe introuvable
+
+### Requirement: Le périmètre analysé par SpotBugs est prouvé par un décompte
+Une conclusion de couverture SpotBugs SHALL s'appuyer sur un rapport qui énumère les classes analysées. `audit-report-summary.py spotbugs` SHALL comparer, module par module, le nombre de classes analysées au nombre de fichiers `.class` du répertoire de sortie de production, et SHALL signaler un rapport qui ne permet pas ce décompte.
+
+#### Scenario: Relecture en ligne de commande complète
+- **WHEN** la synthèse lit les rapports de la ligne de commande de SpotBugs pour les 14 modules après une compilation du réacteur
+- **THEN** chaque module affiche autant de classes analysées que de classes compilées et la commande se termine avec le code 0
+
+#### Scenario: Rapport sans statistiques de classes
+- **WHEN** la synthèse lit un rapport du plugin Maven qui ne contient aucun `ClassStats`
+- **THEN** le module est signalé `UNPROVEN`, et avec `--strict` la commande se termine avec le code 1
+
+#### Scenario: Module partiellement analysé ou sans rapport
+- **WHEN** un module compilé n'a pas de rapport, ou son rapport compte moins de classes analysées que de classes compilées, ou signale des classes manquantes
+- **THEN** la commande se termine avec le code 1 et nomme le module
+
+### Requirement: Les tests d'architecture importent tout le réacteur avant d'appliquer une règle
+`ModuleArchitectureTest` SHALL importer le bytecode de production de chacun des 14 modules du réacteur et SHALL échouer si un répertoire de sortie est absent, vide, ou si le nombre de classes importées diffère du nombre de fichiers `.class` sur disque. Les règles d'architecture SHALL NOT s'évaluer sur un import partiel.
+
+#### Scenario: Réacteur compilé
+- **WHEN** les tests d'architecture s'exécutent après une compilation complète
+- **THEN** les 14 modules sont importés en entier et les règles établies sont évaluées
+
+#### Scenario: Module non compilé
+- **WHEN** le répertoire `target/classes` d'un module est absent
+- **THEN** le test échoue en nommant le module et le chemin attendu, sans évaluer de règle
+
+### Requirement: Les règles d'architecture obligatoires reprennent uniquement des décisions établies
+Les règles d'architecture exécutées par défaut SHALL correspondre chacune à une décision acceptée (ADR 0022, 0042, 0044 ou 0058) et SHALL la citer. Une règle sans décision établie SHALL rester opt-in.
+
+#### Scenario: Règles établies évaluées par défaut
+- **WHEN** `clean verify` exécute les tests de `minos-app`
+- **THEN** sont vérifiés : aucun package compilé par deux modules (ADR 0044) ; aucun adaptateur vers l'application, la racine de composition, une surface ou l'assemblage (ADR 0042) ; l'application sans adaptateur, racine ni surface (ADR 0042) ; aucune surface vers la racine de composition, un adaptateur ou l'assemblage à la compilation (ADR 0042) ; le domaine sans dépendance interne et le moteur limité au domaine (ADR 0022) ; aucune classe n'utilise un module que son module ne déclare pas (ADR 0058)
+
+#### Scenario: Violation d'une frontière établie
+- **WHEN** une classe d'un adaptateur référence une classe de `minos-application`
+- **THEN** `clean verify` échoue sur la règle correspondante et nomme la classe, la dépendance et l'ADR
+
+#### Scenario: Usage d'un module non déclaré
+- **WHEN** une classe utilise un module que son module atteint seulement par une dépendance transitive
+- **THEN** `clean verify` échoue sur `everyModuleOnlyUsesItsAllowedModules`, qui liste tous les usages non déclarés de tous les modules (ADR 0058)
+
+### Requirement: Dependency-Check distingue une erreur d'un résultat
+Les profils `audit-dependency-check` et `audit-dependency-check-tests` SHALL faire échouer le build sur toute erreur de mise à jour ou d'analyse (`failOnError=true`), SHALL produire un rapport agrégé sur tous les modules du réacteur, et SHALL séparer les dépendances livrées de celles des tests. La clé NVD SHALL être transmise par le nom d'une variable d'environnement, jamais par sa valeur.
+
+#### Scenario: Clé NVD refusée
+- **WHEN** la mise à jour s'exécute avec une clé que le NVD refuse
+- **THEN** le build échoue avec le message du NVD, aucun rapport « sans vulnérabilité » n'est produit, et la valeur de la clé n'apparaît dans aucun rapport
+
+#### Scenario: Analyse des dépendances livrées
+- **WHEN** `aggregate` s'exécute avec `audit-dependency-check` sur une base à jour
+- **THEN** `target/dependency-check/dependency-check-report.json` liste les dépendances de portées compile, runtime, provided et system de tous les modules, sans dépendance de test, et la synthèse affiche la date de la base
+
+#### Scenario: Faux rapprochement d'un module MINOS
+- **WHEN** un module `com.minos:*` est rapproché d'un CPE tiers
+- **THEN** l'alerte est supprimée seulement par une règle qui cite ce purl et ce CPE, justifiée, et une règle devenue inutile fait échouer l'analyse
+
+### Requirement: Les composants hors du réacteur Maven restent visibles
+Chaque composant que les profils Maven ne couvrent pas (plugin IntelliJ, plugins Maven, images Docker, outils SCIP embarqués, historique Git) SHALL figurer dans la matrice de couverture avec son statut (exécuté par un autre moyen, bloqué, non applicable) et la raison.
+
+#### Scenario: Plugin IntelliJ sans Gradle
+- **WHEN** Gradle n'est pas disponible
+- **THEN** le plugin est analysé par le harnais documenté (compilation contre l'IDE cible, tests, SpotBugs, dépendances reconstituées) ou marqué bloqué, jamais omis
+
+### Requirement: Gitleaks couvre l'historique complet et ne publie aucun secret
+L'analyse de secrets SHALL couvrir l'arbre de travail (fichiers non suivis compris), l'historique local et l'historique distant complet (branches, tags, `refs/pull/*`) par un clone miroir hors dépôt lorsque le clone de travail est superficiel. Les rapports SHALL être rédigés (`--redact`) et écrits hors du périmètre analysé.
+
+#### Scenario: Clone de travail superficiel
+- **WHEN** `git rev-parse --is-shallow-repository` répond `true`
+- **THEN** l'historique est analysé sur un clone miroir, et les références indisponibles sont déclarées
+
+#### Scenario: Qualification d'une alerte
+- **WHEN** une alerte est qualifiée dans un document
+- **THEN** seule sa forme (longueur, alphabet) et la ligne masquée sont citées, jamais la valeur
+
+## Documentation liée
+
+- Dossier durable (vues, traçabilité, écarts) : [audit-qualite-code](../../../docs/architecture/diagrams/capacites/audit-qualite-code.md)

@@ -182,6 +182,8 @@ Constat AUD-DEP-03 (audit du 10 octobre 2026). Le tableau dit, pour chaque famil
 
 OSV-Scanner reconnaît un verrou npm à son nom de fichier, `package-lock.json`. Les deux verrous livrés portent le nom de leur outil en préfixe (`scip-typescript-package-lock.json`, `scip-python-package-lock.json`) et restent à leur place : ils sont lus par chemin par les gestionnaires Java, le catalogue, l'image Docker et un lanceur. Ils sont donc passés un par un au scan (`scan-args` de `pr-ci.yml`). `scripts/quality/check-ci-wiring.py` calcule la liste des `*package-lock.json` rangés sous un `src/main/resources` et échoue si l'un d'eux manque aux arguments, ou si un argument nomme un fichier absent.
 
+Un avis qui ne s'applique pas à la version verrouillée, ou qui n'a pas de correctif atteignable, se déroge dans `minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/osv-scanner.toml`. OSV applique ce fichier aux verrous de son dossier, et le build de `minos-provider-scip` l'exclut du jar. Une dérogation y nomme **un avis** (`[[IgnoredVulns]]`), porte une raison et une échéance (`ignoreUntil`), et le scan la signale de nouveau à cette date. Une seule dérogation y figure : GHSA-g3hv-75wg-m249 sur minimatch 3.1.5, jusqu'au 2027-01-31. L'avis déclare affectées toutes les versions antérieures à 11.0.1, mais le prétraitement qu'il décrit n'existe pas dans minimatch 3.1.5, et glob 7.2.3 (arbre de scip-python) impose `minimatch ^3.1.1`. À réévaluer à l'échéance, ou quand scip-python quitte glob 7.
+
 Dependabot n'a pas d'écosystème `npm`, volontairement : ces verrous **sont** l'arbre installé chez l'utilisateur, et une PR automatique en changerait le contenu sans la qualification du catalogue.
 
 ### Catalogue des outils embarqués
