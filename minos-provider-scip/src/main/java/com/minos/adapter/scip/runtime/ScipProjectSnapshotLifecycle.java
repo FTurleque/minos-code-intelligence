@@ -80,7 +80,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
         for (IndexingArtifact artifact : request.artifacts()) {
             IndexerDescriptor descriptor = descriptor(artifact.indexerId());
             String scope = scopeKey(artifact.projectRelativeRoot());
-            String portableRoot = portable(artifact.projectRelativeRoot());
+            String portableRelativeRoot = portable(artifact.projectRelativeRoot());
             Path providerRoot = runRoot.resolve("providers").resolve(artifact.indexerId()).resolve(scope);
             CodeKnowledgeSnapshotStore providerStore = stagingStores.open(providerRoot);
             String providerSnapshotId = "provider-" + request.runId() + "-" + artifact.indexerId() + "-" + scope;
@@ -94,14 +94,14 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                             descriptor.version(),
                             request.runId() + ":" + descriptor.id(),
                             Map.of(),
-                            portableRoot
+                            portableRelativeRoot
                     ),
                     providerStore
             );
             CodeKnowledgeSnapshot normalized = providerStore.loadActiveKnowledge(request.projectId())
                     .orElseThrow(() -> new IllegalStateException(
                             "provider normalization did not publish its temporary snapshot: "
-                                    + descriptor.id() + " scope=" + portableRoot));
+                                    + descriptor.id() + " scope=" + portableRelativeRoot));
             normalized.symbols().forEach(symbol -> putUnique(symbols, symbol.id(),
                     withModule(symbol, request.moduleAssignment()), "symbol"));
             normalized.occurrences().forEach(occurrence -> putUnique(occurrences, occurrence.id(), occurrence, "occurrence"));

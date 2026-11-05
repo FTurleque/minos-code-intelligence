@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,6 +75,21 @@ class ProjectPathMappingTest {
                 () -> WINDOWS_HOST.relativeForLegacyPath("/elsewhere/app"));
         assertTrue(refusal.getMessage().startsWith("legacy project path is outside both configured roots"));
         assertEquals(1, refusal.getCause().getSuppressed().length, "the host failure is kept");
+    }
+
+    @Test
+    void aRefusalNamesNoPathAlongTheWholeCauseChain() {
+        for (Runnable refused : new Runnable[] {
+                () -> WINDOWS_HOST.hostToContainer("D:\\other\\private-app"),
+                () -> WINDOWS_HOST.relativeForLegacyPath("/elsewhere/private-app")}) {
+            IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, refused::run);
+            for (Throwable link = refusal; link != null; link = link.getCause()) {
+                assertFalse(String.valueOf(link.getMessage()).contains("private-app"), link.getMessage());
+                for (Throwable suppressed : link.getSuppressed()) {
+                    assertFalse(String.valueOf(suppressed.getMessage()).contains("private-app"), suppressed.getMessage());
+                }
+            }
+        }
     }
 
     @Test

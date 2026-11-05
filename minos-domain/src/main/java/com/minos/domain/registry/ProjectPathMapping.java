@@ -162,7 +162,7 @@ public record ProjectPathMapping(String hostRoot, String containerRoot, List<Pro
         } catch (IllegalArgumentException exception) {
             exception.addSuppressed(hostFailure);
             throw new IllegalArgumentException(
-                    "legacy project path is outside both configured roots: " + legacyPath, exception);
+                    "legacy project path is outside both configured roots", exception);
         }
     }
 
@@ -220,7 +220,7 @@ public record ProjectPathMapping(String hostRoot, String containerRoot, List<Pro
 
     public String hostToContainer(String hostPath) {
         String relative = relativeForHostPath(hostPath).orElseThrow(
-                () -> new IllegalArgumentException("project path is outside configured root: " + hostPath));
+                () -> new IllegalArgumentException("project path is outside configured root"));
         return join(containerRoot, relative);
     }
 
@@ -277,7 +277,7 @@ public record ProjectPathMapping(String hostRoot, String containerRoot, List<Pro
         if (comparableCandidate.equals(comparableRoot)) return ".";
         String prefix = comparableRoot + "/";
         if (!comparableCandidate.startsWith(prefix)) {
-            throw new IllegalArgumentException("project path is outside configured root: " + candidate);
+            throw new IllegalArgumentException("project path is outside configured root");
         }
         return normalizeRelative(candidate.substring(root.length() + 1));
     }

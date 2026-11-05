@@ -42,7 +42,7 @@ class MinosProjectListTest {
         JsonObject output = MinosJsonOutput.parse(3, partialInventory(), "warning: project inventory is partial",
                 MinosProjectList.ACCEPTED_EXIT_CODES);
 
-        MinosProjectList.Resolution resolution = MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals, OPEN_PROJECT_ROOT);
+        MinosProjectList.Resolution resolution = MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals);
 
         assertEquals("11111111-1111-1111-1111-111111111111", resolution.project().get("id").getAsString());
         assertEquals(1, resolution.unreadable(), "the user is told about the damaged entry, not left with a silent success");
@@ -52,7 +52,7 @@ class MinosProjectListTest {
     void aHealthyRegistryResolvesWithNothingToReport() throws Exception {
         JsonObject output = MinosJsonOutput.parse(0, healthyInventory(), "", MinosProjectList.ACCEPTED_EXIT_CODES);
 
-        MinosProjectList.Resolution resolution = MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals, OPEN_PROJECT_ROOT);
+        MinosProjectList.Resolution resolution = MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals);
 
         assertEquals("11111111-1111-1111-1111-111111111111", resolution.project().get("id").getAsString());
         assertEquals(0, resolution.unreadable());
@@ -63,7 +63,7 @@ class MinosProjectListTest {
         JsonObject output = partial("/work/other", 2);
 
         MinosProtocolException failure = assertThrows(MinosProtocolException.class,
-                () -> MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals, OPEN_PROJECT_ROOT));
+                () -> MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals));
 
         assertFalse(failure instanceof MinosProjectNotRegisteredException,
                 "it may be one of the unreadable entries: telling the user to `project add` it would be a wrong answer");
@@ -75,8 +75,12 @@ class MinosProjectListTest {
     void anOpenProjectNotFoundInAHealthyRegistryIsStillUnregistered() {
         JsonObject output = partial("/work/other", 0);
 
-        assertThrows(MinosProjectNotRegisteredException.class,
-                () -> MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals, OPEN_PROJECT_ROOT));
+        MinosProjectNotRegisteredException failure = assertThrows(MinosProjectNotRegisteredException.class,
+                () -> MinosProjectList.resolve(output, OPEN_PROJECT_ROOT::equals));
+
+        assertTrue(failure.getMessage().contains("Click Register"), failure.getMessage());
+        assertFalse(failure.getMessage().contains(OPEN_PROJECT_ROOT),
+                "the message reaches the IDE and idea.log: it never carries the project root");
     }
 
     @Test

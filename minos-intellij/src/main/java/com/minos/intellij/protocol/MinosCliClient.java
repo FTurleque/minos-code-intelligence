@@ -57,7 +57,7 @@ public final class MinosCliClient {
         // Exit 3 is a partial result (some registry entries are unreadable) with valid JSON for the others (Q23).
         JsonObject root = runJsonRaw(List.of("project", "list", "--format", "json"), MinosProjectList.ACCEPTED_EXIT_CODES);
         MinosProjectList.Resolution resolution = MinosProjectList.resolve(
-                root, rootPath -> pathsEqual(expected, normalizePath(rootPath)), basePath);
+                root, rootPath -> pathsEqual(expected, normalizePath(rootPath)));
         reportUnreadableEntries(resolution.unreadable());
         return resolution.project();
     }
