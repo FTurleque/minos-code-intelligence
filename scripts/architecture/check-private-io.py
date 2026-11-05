@@ -136,6 +136,19 @@ _ABSOLUTE_CALL = r"\.\s*(?:toAbsolutePath|toRealPath|getAbsolutePath|getCanonica
 _ABSOLUTE_RENDERED = re.compile(
     rf"\+\s*(?:[\w.\s]|\(\s*\))*?{_ABSOLUTE_CALL}(?!\s*\.)|{_ABSOLUTE_CALL}\s*\+(?!\+)")
 _FORMAT_CALL = re.compile(r"\b(?:String\s*\.\s*format|formatted)\s*\(")
+# A path that is not a `Path x` / `File x` variable: a String the file declares with a path-like name
+# (legacyRoot, configuredSecretPath), or a call without argument whose name says it returns one
+# (project.rootPath(), config.secretFile()). The name is the only thing the gate can read.
+_PATH_LIKE_SUFFIX = r"(?:Path|Root|Dir|Directory|File)"
+_PATH_LIKE_STRING_DECLARATION = re.compile(rf"\bString\s+(\w*{_PATH_LIKE_SUFFIX})\b")
+_PATH_ACCESSOR = rf"\b(?!\w*[Rr]elative)\w*{_PATH_LIKE_SUFFIX}\s*\(\s*\)"
+_ACCESSOR_CHAIN = r"(?:[\w.\s]|\(\s*\))*?"
+_ACCESSOR_RENDERED = re.compile(
+    rf"\+\s*{_ACCESSOR_CHAIN}{_PATH_ACCESSOR}(?!\s*[.(\w])"
+    rf"|{_PATH_ACCESSOR}\s*\+(?!\+)"
+    rf"|{_PATH_ACCESSOR}\s*\.\s*toString\s*\("
+    rf"|\bString\s*\.\s*valueOf\s*\(\s*{_ACCESSOR_CHAIN}{_PATH_ACCESSOR}\s*\)")
+_BARE_ACCESSOR = re.compile(rf"\s*{_ACCESSOR_CHAIN}{_PATH_ACCESSOR}\s*")
 
 _FILES_METHODS = ("createDirectories", "write", "writeString", "newInputStream", "newOutputStream",
                   "newBufferedWriter", "newByteChannel", "createFile", "createDirectory", "createTempFile",
@@ -302,18 +315,20 @@ def _arguments_from(code: str, start: int) -> str:
 
 
 def _renders_path(arguments: str, names: set[str]) -> bool:
-    """A Path or File rendered into a message: _renders, this.name, a format argument, or an absolute form."""
-    if _renders(arguments, names) or _ABSOLUTE_RENDERED.search(arguments):
+    """A path rendered into a message: a declared name or a path accessor (_renders, this.name, a format
+    argument), or an absolute form."""
+    if _renders(arguments, names) or _ABSOLUTE_RENDERED.search(arguments) or _ACCESSOR_RENDERED.search(arguments):
         return True
-    if not names:
-        return False
-    alternatives = "|".join(re.escape(name) for name in sorted(names))
-    if re.search(rf"\+\s*this\s*\.\s*(?:{alternatives})\b(?!\s*[.(\w])", arguments):
-        return True
-    bare = re.compile(rf"\s*(?:this\s*\.\s*)?(?:{alternatives})\s*")
-    for match in _FORMAT_CALL.finditer(arguments):
-        if any(bare.fullmatch(part) for part in _split_top_level(_arguments_from(arguments, match.end()))):
+    bare_names = None
+    if names:
+        alternatives = "|".join(re.escape(name) for name in sorted(names))
+        if re.search(rf"\+\s*this\s*\.\s*(?:{alternatives})\b(?!\s*[.(\w])", arguments):
             return True
+        bare_names = re.compile(rf"\s*(?:this\s*\.\s*)?(?:{alternatives})\s*")
+    for match in _FORMAT_CALL.finditer(arguments):
+        for part in _split_top_level(_arguments_from(arguments, match.end())):
+            if _BARE_ACCESSOR.fullmatch(part) or (bare_names and bare_names.fullmatch(part)):
+                return True
     return False
 
 
@@ -321,11 +336,18 @@ def path_rule_sites(code: str) -> list[tuple[int, str, str, str]]:
     """(line, rule, construct, exposure) of each site of the two path rules in lexed code.
 
     Exposure is "a" (public: an exception message, a log line at WARNING or above) or "b" (internal: a log
-    line below WARNING). Like the logging rules, the gate does not know types: a Path or a File is a name the
-    file declares as `Path name` / `File name`, so one reached through an accessor is not seen (documented
-    limit, fixed by the self-test). A name that says it is relative is a path under a confined root.
+    line below WARNING). Like the logging rules, the gate does not know types and reads names only. A path is
+    a name the file declares as `Path name` / `File name`, a `String` it declares with a name ending in Path,
+    Root, Dir, Directory or File, a call without argument whose name ends the same way (`project.rootPath()`),
+    or the result of toAbsolutePath / toRealPath, rendered by `+`, toString, String.valueOf or a format
+    argument. A name that says it is relative is a path under a confined root; leafName(...), getFileName()
+    and any other call on the path wrap it and are not a rendering. Still invisible, and fixed by the
+    self-test: a message prepared in a variable and thrown later, a path reached through a field or an
+    accessor whose name does not end as above (`path()`, `getLocation()`), a String declared elsewhere (a
+    parameter of another file, a record component) and a cause that carries a path.
     """
     names = {name for name in _FILE_OR_PATH_DECLARATION.findall(code) if "relative" not in name.lower()}
+    names |= {name for name in _PATH_LIKE_STRING_DECLARATION.findall(code) if "relative" not in name.lower()}
     log_names = {name for name in _PATH_DECLARATION.findall(code) if "relative" not in name.lower()}
     sites: list[tuple[int, str, str, str]] = []
 

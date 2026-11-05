@@ -37,7 +37,7 @@ final class MinosProjectList {
      * The project whose root is the open IntelliJ project. Not found in a healthy registry, it is unregistered; not
      * found while entries are unreadable, it may be one of them, which is a different answer and says so.
      */
-    static Resolution resolve(JsonObject inventory, Predicate<String> isOpenProjectRoot, String basePath)
+    static Resolution resolve(JsonObject inventory, Predicate<String> isOpenProjectRoot)
             throws MinosProtocolException {
         int unreadable = unreadableCount(inventory);
         JsonArray projects = inventory.has("projects") ? inventory.getAsJsonArray("projects") : new JsonArray();
@@ -54,7 +54,8 @@ final class MinosProjectList {
                     + describe(unreadable) + ": it may be one of them. Run `minos project list` to see them.");
         }
         throw new MinosProjectNotRegisteredException(
-                "This IntelliJ project is not registered in MINOS. Run `minos project add \"" + basePath + "\"` first.");
+                "This IntelliJ project is not registered in MINOS. Click Register, or run `minos project add` on the"
+                        + " exact root IntelliJ opened.");
     }
 
     /** « 1 registry entry is unreadable » or « N registry entries are unreadable », as the CLI words it. */

@@ -59,6 +59,7 @@ WITNESSES = {
 }
 PLUGIN = "minos-intellij/src/main/java/com/minos/intellij/protocol/Launcher.java"
 REAL_FIXED_SITE = "minos-storage/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java"
+REAL_REGISTRY = "minos-storage/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java"
 
 
 def java(body: str, header: str = "") -> str:
@@ -460,6 +461,61 @@ class PrivateIoGateTest(unittest.TestCase):
             with self.subTest(body=body):
                 self.assertEqual([], self.violations(java(body)))
 
+    def test_a_path_reached_through_an_accessor_or_held_in_a_string_fails(self):
+        for body in ('throw new IOException("x: " + project.rootPath());',
+                     'throw new IOException(project.rootPath() + " is missing");',
+                     'throw new IOException("x: " + config.secretFile());',
+                     'throw new IOException("x: " + home.dataRoot());',
+                     'throw new IOException("x: " + home.getDirectory());',
+                     'throw new IOException("x: " + project.rootPath().toString());',
+                     'throw new IOException("x: " + String.valueOf(project.rootPath()));',
+                     'throw new IOException(String.format("x %s", project.rootPath()));',
+                     'throw new IOException("x %s".formatted(project.rootPath()));',
+                     'throw new IOException("x: "\n                + project.rootPath(), failure);',
+                     'LOG.warn("x " + project.rootPath());',
+                     'String legacyRoot = "p"; throw new IOException("x: " + legacyRoot, failure);',
+                     'String configuredSecretPath = "p"; throw new IOException(configuredSecretPath + " is unreadable");',
+                     'String dataDir = "p"; throw new IOException(String.format("x %s", dataDir));',
+                     'throw new IOException("x: " + root.toRealPath());'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("message(Path)", violations[0])
+
+    def test_an_accessor_or_a_string_that_is_not_a_rendered_path_passes(self):
+        for body in ('throw new IOException("x: " + leafName(project.rootPath()));',
+                     'throw new IOException("x: " + PublicErrorMessages.leafName(project.rootPath()));',
+                     'throw new IOException(String.format("x %s", leafName(project.rootPath())));',
+                     'throw new IOException("x: " + project.rootPath().getFileName());',
+                     'throw new IOException("x: " + project.rootPath().relativize(other));',
+                     'throw new IOException("x: " + project.id());',
+                     'throw new IOException("x: " + project.rootPathCount());',
+                     'throw new IOException("x: " + module.relativePath());',
+                     'throw new IOException(String.format("x %s", module.relativePath()));',
+                     'String relativeRoot = "p"; throw new IOException("x: " + relativeRoot);',
+                     'String fileName = "p"; throw new IOException("x: " + fileName);',
+                     'String legacyRoot = "p"; throw new IOException("x: " + count, failure);',
+                     'String legacyRoot = "p"; throw new IOException("legacy root cannot be migrated", failure);',
+                     'throw new IOException("project.rootPath() is missing");',
+                     'int i = project.rootPath().hashCode() + 1;'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+
+    def test_an_accessor_site_takes_a_justified_entry_and_a_stale_entry_is_refused(self):
+        self.repo.put(SOURCE, java('throw new IOException("x: " + project.rootPath());'))
+        self.repo.allow(entry(method="message(Path)", why="Diagnostic interne jamais rendu : le chemin sert au débogage."))
+        violations, _, listed = self.repo.check()
+        self.assertEqual(([], 1), (violations, listed))
+        self.repo.put(SOURCE, java('throw new IOException("x: " + leafName(project.rootPath()));'))
+        violations = self.repo.check()[0]
+        self.assertEqual(1, len(violations))
+        self.assertIn("ratchet", violations[0])
+
+    def test_the_inventory_lists_an_accessor_site(self):
+        self.repo.put(SOURCE, java('throw new IOException("x: " + project.rootPath());'))
+        lines = _MODULE.inventory(self.repo.root, self.repo.allowlist)
+        self.assertIn(f"{SOURCE}:5\tmessage(Path)\tnew IOException\t(a)", lines[0])
+
     def test_the_message_rule_applies_to_the_plugin_and_to_the_primitives(self):
         message = java('Path target = root; throw new IOException("x: " + target);')
         for file in (PLUGIN, PRIMITIVE):
@@ -513,6 +569,21 @@ class PrivateIoGateTest(unittest.TestCase):
                                 'non-symlink directory: " + directory);')
         self.assertNotEqual(real, reverted, "the fixed site moved: update this witness")
         self.assertEqual(1, _MODULE.count_occurrences(reverted)["message(Path)"])
+
+    def test_the_two_real_registry_messages_reverted_to_their_absolute_path_are_caught(self):
+        real = (Path(__file__).resolve().parents[2] / REAL_REGISTRY).read_text(encoding="utf-8")
+        self.assertEqual({}, {k: v for k, v in _MODULE.count_occurrences(real).items() if k == "message(Path)"})
+        reverts = {
+            "accessor": ('configured runtime mapping: "\n                        + leafName(project.rootPath()), exception);',
+                         'configured runtime mapping: "\n                        + project.rootPath(), exception);'),
+            "string": ('configured mapping", exception);',
+                       'configured mapping: " + legacyRoot, exception);'),
+        }
+        for name, (fixed, reverted_text) in reverts.items():
+            with self.subTest(site=name):
+                reverted = real.replace(fixed, reverted_text)
+                self.assertNotEqual(real, reverted, "the fixed site moved: update this witness")
+                self.assertEqual(1, _MODULE.count_occurrences(reverted)["message(Path)"])
 
     # ------------------------------------------------------------------------------------- the CLI
 
