@@ -13,7 +13,9 @@ is public: its `git fetch` calls are anonymous; a private repository would authe
 that runs on a runner declares `timeout-minutes`; a job that logs in to Docker Hub logs out in its first `run:` step
 after the login, unless DOCKER_LOGIN_KEPT names it with a reason, and a stale entry of that list is refused; that
 logout step runs no repository code (a script under scripts/, the Maven wrapper), which goes in a step before the
-login. A job that
+login. The logout must run: `docker logout` is a command of the step's script, or sits in a shell function that an
+active `trap <function> EXIT` calls; a commented-out line, a function nobody traps and a trap that is cleared leave
+the token on disk and are refused. A job that
 pulls the Testcontainers images before logging out (`check-image-pins.py --testcontainers-images`) declares, in its
 `env:`, the pull policy that refuses any other image and disables Ryuk (TESTCONTAINERS_GUARD_ENV): without them a test
 needing a new image would pull it anonymously, under Docker Hub's quota.
@@ -218,6 +220,83 @@ def _step_runs(step: list[str]) -> bool:
     return any(RUN_KEY.match(line) for line in step)
 
 
+DOCKER_LOGOUT = re.compile(r"\bdocker\s+logout\b")
+# `docker logout` as a command of its own: at the start of a line, after a separator, or after a keyword.
+DIRECT_DOCKER_LOGOUT = re.compile(r"(?:^|[;&|({]|\b(?:then|do|else)\b)\s*docker\s+logout\b")
+SHELL_FUNCTION_START = re.compile(
+    r"^\s*(?:function\s+(?P<keyword_name>\w+)(?:\s*\(\s*\))?|(?P<paren_name>\w+)\s*\(\s*\))\s*(?P<brace>\{)?(?P<rest>.*)$")
+TRAP_ON_EXIT = re.compile(r"\btrap\s+(?:--\s+)?['\"]?(?P<name>[A-Za-z_]\w*)['\"]?(?:\s+[A-Z0-9]+)*?\s+(?:EXIT|0)\b")
+TRAP_CLEARED = re.compile(r"\btrap\s+(?:--\s+)?(?:-|''|\"\")(?:\s+[A-Z0-9]+)*?\s+(?:EXIT|0)\b")
+
+
+def _run_script(step: list[str]) -> list[str]:
+    """The shell lines of a step's `run:` (inline value, then the block under it). Whole-line comments are already
+    gone: the jobs are read through _without_comment."""
+    script: list[str] = []
+    key_column: int | None = None
+    for line in step:
+        if key_column is None:
+            match = RUN_KEY.match(line)
+            if match is None:
+                continue
+            body = line[len(match.group("indent")):]
+            key_column = len(match.group("indent")) + (len(body) - len(body[1:].lstrip(" \t")) if body.startswith("-") else 0)
+            rest = match.group("rest").strip()
+            if rest and not BLOCK_SCALAR.match(rest):
+                script.append(rest)
+        elif _content_indent(line) > key_column:
+            script.append(line)
+        else:
+            break
+    return script
+
+
+def _logout_runs(step: list[str]) -> bool:
+    """Whether the `docker logout` of a step is executed: written as a command of the script itself, or inside a
+    function that an active `trap <function> EXIT` calls. A logout inside a function nobody traps, or one whose trap is
+    commented out or cleared, is text only: the token stays on disk while the next steps run.
+
+    The reading is syntactic (the shell forms the workflows use): a function is `name() {` or `function name {` up to
+    its balancing brace; any other way of arranging the call (an inline trap command, a sourced file) is not seen,
+    so the step is refused and the logout is written in one of the two forms.
+    """
+    direct = False
+    logout_functions: set[str] = set()
+    trapped: set[str] = set()
+    function: str | None = None
+    pending: str | None = None
+    depth = 0
+    for line in _run_script(step):
+        if pending is not None:
+            if line.strip().startswith("{"):
+                function, depth, line, pending = pending, 0, line.strip(), None
+            else:
+                pending = None
+        if function is None:
+            start = SHELL_FUNCTION_START.match(line)
+            if start is not None:
+                name = start.group("keyword_name") or start.group("paren_name")
+                if start.group("brace"):
+                    function, depth, line = name, 0, "{" + start.group("rest")
+                elif not start.group("rest").strip():
+                    pending = name
+                    continue
+        if function is not None:
+            if DOCKER_LOGOUT.search(line):
+                logout_functions.add(function)
+            depth += line.count("{") - line.count("}")
+            if depth <= 0:
+                function = None
+            continue
+        if DIRECT_DOCKER_LOGOUT.search(line):
+            direct = True
+        if TRAP_CLEARED.search(line):
+            trapped.clear()
+        for trap in TRAP_ON_EXIT.finditer(line):
+            trapped.add(trap.group("name"))
+    return direct or bool(logout_functions & trapped)
+
+
 def find_job_hardening_violations(label: str, text: str) -> tuple[list[str], set[str]]:
     """(failures, ids of the jobs kept logged in to Docker Hub) for the jobs of one workflow.
 
@@ -253,11 +332,17 @@ def find_job_hardening_violations(label: str, text: str) -> tuple[list[str], set
                 continue
             if logged_in and _step_runs(step) and (workflow, job) not in DOCKER_LOGIN_KEPT:
                 logged_in = False
-                if not any("docker logout" in line for line in step):
+                if not any(DOCKER_LOGOUT.search(line) for line in _run_script(step)):
                     failures.append(
                         f"{label}:{step_line}: job '{job}' runs code while logged in to Docker Hub -- pull the pinned "
                         f"images, then 'docker logout' in the first run: step after the login, or name the job in "
                         f"DOCKER_LOGIN_KEPT with its reason."
+                    )
+                elif not _logout_runs(step):
+                    failures.append(
+                        f"{label}:{step_line}: job '{job}' writes 'docker logout' in the step after the login but "
+                        f"never runs it -- call it as a command of the script, or call the function that holds it "
+                        f"with an active 'trap <function> EXIT': the token would stay on disk for the next steps."
                     )
                 elif any(REPOSITORY_CODE.search(line) for line in step):
                     failures.append(
