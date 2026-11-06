@@ -21,7 +21,7 @@
 - [x] 4.1 ADR : `GEN-0077` (Accepted), `GEN-0067` archivé (Superseded), règle Archgate renommée ; index du registre, arc42 § 9, `docs/developer/archgate.md`, liens de `ARCH-0069`. Rejouer : `archgate check`.
 - [x] 4.2 Documentation courante : `TOOLCHAIN_POLICY.md` (Java 21, support jusqu'en 2029-12), `AGENTS.md`, `openspec/config.yaml`, `STATUS.md`, `ROADMAP.md`, pages `docs/user/` et `docs/developer/`, arc42, skills `.claude/`. Rejouer : `check-current-docs.py`, `product-facts.py --check`.
 - [x] 4.3 Preuve locale (2026-11-06) : `./mvnw -B -ntp verify` sous JDK 21.0.12.1 (Microsoft), 14 modules en `BUILD SUCCESS`, 4130 tests, 0 échec, 134 ignorés ; jar ombré (classes version 65) sous Java 21 réel : `initialize` (2025-06-18), `tools/list` (31 outils), `minos_index_status` (`NEVER_INDEXED`), sortie 0, `MINOS_HOME` vide.
-- [ ] 4.4 **(manuelle)** CI de la PR : `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts sous Java 21.
+- [x] 4.4 CI de la PR #665 (2026-11-06, tête `2b83136c`) : `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts sous Java 21 (run 42230669977), `IntelliJ plugin (gate)` et `Windows process ownership / Java 21` verts (run 42230669125, relancé une fois après un blocage du runner), SonarCloud réussi (82,2 % de couverture du nouveau code). Fusionnée dans `develop` (`0e464f24`).
 - [ ] 4.5 **(manuelle)** Qualifications hors de la PR : `docker-release-validation`, `windows-installer`, `release-promotion-gate` ; indexation réelle d'un projet Java sous Java 21 (bac à sable Windows et Linux).
 
 ## 5. Clôture
