@@ -58,6 +58,20 @@ class PlatformAccessControlDiscoveryTest {
     }
 
     @Test
+    void aRegistrationThatCannotBeLoadedIsRefusedWithoutNamingThePathOrTheClass() {
+        PlatformAccessControl found = PlatformAccessControlDiscovery.discover(
+                loaderRegisteringNames("com.minos.io.NoSuchAccessControl"));
+
+        IOException protect = assertThrows(IOException.class, () -> found.protectFromInheritance(temporary));
+        IOException read = assertThrows(IOException.class, () -> found.requireNoConditionalDeny(temporary));
+
+        assertTrue(protect.getMessage().contains("cannot be loaded"), protect.getMessage());
+        assertTrue(read.getMessage().contains("cannot be loaded"), read.getMessage());
+        assertFalse(protect.getMessage().contains(temporary.toString()));
+        assertFalse(protect.getMessage().contains("NoSuchAccessControl"), "the class name is disclosed");
+    }
+
+    @Test
     void twoImplementationsAreRefusedRatherThanChosenBetween() {
         PlatformAccessControl found = PlatformAccessControlDiscovery.discover(
                 loaderRegistering(RecordingAccessControl.class, OtherAccessControl.class));
@@ -96,11 +110,17 @@ class PlatformAccessControlDiscoveryTest {
     // ------------------------------------------------------------------------------ helpers
 
     private URLClassLoader loaderRegistering(Class<?>... implementations) {
+        String[] names = new String[implementations.length];
+        for (int index = 0; index < implementations.length; index++) names[index] = implementations[index].getName();
+        return loaderRegisteringNames(names);
+    }
+
+    private URLClassLoader loaderRegisteringNames(String... implementations) {
         try {
             Path root = Files.createTempDirectory(temporary, "services-");
             Path services = Files.createDirectories(root.resolve("META-INF").resolve("services"));
             StringBuilder lines = new StringBuilder();
-            for (Class<?> implementation : implementations) lines.append(implementation.getName()).append('\n');
+            for (String implementation : implementations) lines.append(implementation).append('\n');
             Files.writeString(services.resolve(PlatformAccessControl.class.getName()), lines, StandardCharsets.UTF_8);
             // A parent-less loader would not see the test classes; the parent below sees no services file of its
             // own for the port because the registration here is the only one read by name from this root first.
