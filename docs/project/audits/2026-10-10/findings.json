@@ -74,8 +74,8 @@
     "changement": "migrer-le-socle-vers-java-25",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "pom.xml:44 release 25, pom.xml:198 [25,26) ; Dockerfile.mcp.release:26,37,69 eclipse-temurin:25.0.4.1 ; ScipIndexerCatalog.java:336 'Java 25 JDK' ; docs/TOOLCHAIN_POLICY.md:9-10 Java 25 ; check-toolchain-baseline.py rc=0 (java=25, 36 places) ; test_check_toolchain_baseline OK ; test_check_image_pins OK",
-      "reserve": "Restent java-version: '24' dans release-promotion-gate.yml:79 et docker-upgrade-qualification.yml:62 (candidat A, exception tracée dans le gate, à retirer) ; fixture java-24-smoke voulue ; commentaire 'measured on JDK 24' DurableAtomicFile.java:207. Aucune exécution Java 25 vérifiable ici."
+      "preuve": "Revérifié le 06/11 sur develop 0e464f24 : la baseline passe à Java 21 (ADR GEN-0077, qui remplace GEN-0067 ; PR #665). pom.xml:43 `maven.compiler.release` 21 et :214 `[21,22)` ; eclipse-temurin 21.0.12.1_1 dans Dockerfile.mcp et Dockerfile.mcp.release ; ScipIndexerCatalog.java:332 « Java 21 JDK » ; docs/developer/TOOLCHAIN_POLICY.md. `python -I scripts/quality/check-toolchain-baseline.py` : SUCCESS (java=21, 38 places). `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts sur la PR.",
+      "reserve": "Candidat A : release-promotion-gate.yml:80 et docker-upgrade-qualification.yml:63 installent Java 25 tant que `main` est construit en Java 25 (exception tracée dans le gate, `PREVIOUS_JAVA = \"25\"`, à retirer quand `main` sera en Java 21). Les images Docker de release, l'installateur Windows, la promotion et une indexation réelle sous Java 21 ne sont pas requalifiés (tâche 4.5 du changement aligner-java-21). Fixture java-24-smoke voulue."
     }
   },
   {
@@ -416,8 +416,8 @@
     "changement": "epingler-et-isoler-l-installation-des-providers, executer-scip-java-sur-classpath-verifie",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "`ScipJavaProcessPlanFactory.java` (package `runtime/plan`) ne contient plus `coursier launch` ; le plan passe par `ScipJavaClasspath.verify(...)` (l.173) puis `java -jar <lanceur>` (l.181-185). Repli : lanceur `scip-java` du `PATH` sans vérification (l.139), décision du propriétaire en attente. (revérifié le 14/10 sur `9e4a6e61`)",
-      "reserve": "Indexation réelle dans bubblewrap et AppContainer non rejouée (la CI n'exécute aucun provider, tâche manuelle 1.5) ; un scip-java installé à la main dans le PATH, sans classpath installé, reste exécuté sans vérification (décision du propriétaire) ; fenêtre vérification → ouverture par la JVM (même compte)."
+      "preuve": "ScipJavaProcessPlanFactory.java:174-178 : commande = lanceur PATH ou classpathCommand vérifié (ScipJavaClasspath.verify l. 201), puis `--` + ligne Maven fixe ; plan refusé avant copie si dépôt/Maven 3.9 absents (l. 158-160, ScipJavaMavenOffline.prepare). Nouveau : la CI rejoue une indexation scip-java réelle sous bwrap (pr-ci.yml:401-411 → scripts/ci/qualify-linux-offline-maven-index.sh, Coursier épinglé par commit+SHA-256 lus dans Dockerfile.mcp.release:80-81, vérifiés par sha256sum -c l. 104). (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
+      "reserve": "Réserve « indexation réelle non rejouée » partiellement levée côté Linux (étape CI, non exécutable ici) ; inchangé : lanceur scip-java du PATH exécuté sans vérification (l. 162), AppContainer non couvert."
     }
   },
   {
@@ -473,8 +473,8 @@
     "changement": "idem",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "SandboxTestSupport.java:26-67 (decide : échec si requis, TestAbortedException sinon) ; pr-ci.yml:291 et :296 passent -Dminos.sandbox.tests.required=true ; check-current-docs.py:161 l'exige → SUCCESS",
-      "reserve": "Preuve d'exécution CI (135 tests, 0 sauté Windows) non rejouable ici (pas de JDK 25). Quelques assumeTrue annexes non soumis au mode requis : LinuxBubblewrapWorkerSandboxBackendTest.java:80 (python3), LinuxCgroupJobContainmentTest.java:53 (/dev/shm)."
+      "preuve": "Revérifié le 06/11 sur develop 0e464f24. LinuxSandboxToolchainHomeTest.java:53 passe par `SandboxTestSupport.decide(SandboxTestSupport.required(), packaged.isPresent(), …)` : en mode requis, un JDK de distribution absent fait échouer le test. `scripts/ci/install-linux-sandbox-toolchain.sh --with-packaged-jdk` (l. 35-40, appelé par pr-ci.yml seulement) installe `openjdk-21-jre-headless=21.0.12.1+1-1~24.04.4` (PR #663, e0a9bb77). Sur le runner : run 42125613723 (develop cc38f352), `LinuxSandboxToolchainHomeTest` 13 tests, 0 échec, 0 sauté.",
+      "reserve": "Le paquet Ubuntu est épinglé par version : chaque mise à jour trimestrielle d'OpenJDK fait échouer l'installation volontairement, il faut alors changer PACKAGED_JDK_PACKAGE. Les autres `assumeTrue` annexes relevés le 05/11 (bundle CA, …) n'ont pas été revérifiés."
     }
   },
   {
@@ -757,8 +757,8 @@
     "changement": "surveiller-les-outils-embarques",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Montée cohérente en 0.13.2 : embedded-tools.json (assembled scip-java-classpath, coordinate org.scip-code:scip-java:0.13.2, payload …-0.13.2-windows-x64.zip), scip-java-classpath.lock.json (coordinate/version 0.13.2, 70 jars, sha256 ; guava 25.1-android → 33.6.0-jre, maven 3.8.8 → 3.9.16, guice 4.2.2 → 5.1.0, kotlin 2.2.0 → 2.4.21, wagon-http retiré), ManagedScipProviderRuntimeManager.SCIP_JAVA_VERSION, ScipIndexerCatalog, Dockerfile.mcp.release ARG SCIP_JAVA_VERSION=0.13.2 ; aucune 0.13.1 hors fixtures de test. check-embedded-tools-advisories.py lit catalogue et verrou puis s'arrête à l'API OSV (403 proxy, « No verdict »). (revérifié le 29/10 sur `7f5d886d`)",
-      "reserve": "Il RESTE une dérogation OSV pour scip-java : embedded-tools-advisory-waivers.json, scip-java-classpath / GHSA-xxph-c9ww-hj94 (guava 33.6.0-jre, R-29, expire 2027-01-28) ; la prémisse « plus aucune dérogation » est fausse (le SUIVI l. 416 dit bien « réduit la dérogation R-29 à guava »). Absence des 4 autres avis non vérifiable (OSV inaccessible). plexus-utils descend 4.0.0 → 3.6.1 (à confirmer côté avis). Veille planifiée toujours non exécutée."
+      "preuve": "Revérifié le 06/11 sur develop 0e464f24. La dérogation minimatch GHSA-g3hv-75wg-m249 (osv-scanner.toml:12-15, jusqu'au 2027-01-31) est le risque R-30 de docs/architecture/risks/register.md (l. 26) : origine dans le verrou de scip-python, exposition, décision datée, révision au plus tard le 2027-01-31. Les références à l'ADR 0060 sont remplacées par SEC-0074 dans embedded-tools-advisory-waivers.json (PR #664, cc38f352).",
+      "reserve": "R-30 reprend la dérogation du 2026-10-31 sans décision écrite du propriétaire : à confirmer. Le risque expire le 2027-01-31 : passé ce jour, le check exigé `osv-scan` échoue."
     }
   },
   {
@@ -1086,8 +1086,8 @@
     "changement": "decouper-les-methodes-d-analyse-et-d-ingestion",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Mesure indépendante par script (commentaires et chaînes blanchis, longueur de la signature à l'accolade fermante, src/main hors minos-intellij) : 4 928 méthodes et 35 blocs ≥ 80 lignes, dont 19 constructeurs canoniques de records. Il reste donc 16 méthodes ≥ 80 lignes, soit exactement la liste « hors lot » du SUIVI. ScipIngestionAdapter.ingest et ImpactAnalysisService.analyze n'y figurent plus. IndexingRunExecutor.java:53 execute(RunRequest, Collaborators) a 2 paramètres (records :869, :886). (revérifié le 24/10 sur `bf633fc7`)",
-      "reserve": "Trois méthodes citées par l'audit restent longues : CodeSearchService.search (119 l.), WindowsAppContainerWorkerSandboxBackend.sandboxPlan (108 l.) et LocalIsolatedIndexWorker.execute (107 l.). Il n'y a ni gate ni seuil, ce qui est conforme à l'audit. Le décompte de 40 de l'audit n'est pas reproduit (16 hors records)."
+      "preuve": "Même script de mesure (scratchpad/methods.py) sur les deux snapshots : seules différences ≥ 80 lignes : WindowsAppContainerWorkerSandboxBackend.sandboxPlan 108 → 104 ; DistributedArtifactBundleStore.accept apparaît à 80 l. ; CodeSearchService.search 119 et LocalIsolatedIndexWorker.execute 107 inchangés. (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
+      "reserve": "Les trois méthodes citées restent longues ; aucun seuil (conforme à l'audit)."
     }
   },
   {
@@ -1211,8 +1211,8 @@
     "changement": "etendre-le-garde-d-e-s-privees-aux-ecritures-brutes",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "check-private-io.py rejoué : SUCCESS (sources=533, allowlisted-occurrences=56, forbidden=20, primitives=4). FORBIDDEN couvre désormais newOutputStream, newBufferedWriter, createDirectory, createTempFile, createTempDirectory, copy, move (et newByteChannel, createFile). Auto-test test_check_private_io.py : 43 tests OK. private-io-allowlist.json : 23 entrées (56 occurrences). (revérifié le 21/10 sur `1492113e`)",
-      "reserve": "Le garde est complet, mais 23 entrées de liste blanche, soit 56 occurrences, restent à migrer (le SUIVI en comptait 44 à 107 auparavant). La migration est en cours : les écritures brutes subsistent derrière la liste blanche."
+      "preuve": "LocalIsolatedIndexWorker.java:188 `PrivateLocalStorage.ensurePrivateDirectory(workspace)` remplace Files.createDirectory ; private-io-allowlist.json : 24 entrées / 54 occurrences (25/56 au 29/10), l'entrée LocalIsolatedIndexWorker retirée et la sonde bubblewrap ramenée de max 2 à 1. Nouveau code d'écriture (ScipJavaMavenOffline.java:244-249, ProjectPathMappingStore.java:110-117) passe par PrivateLocalStorage/DurableAtomicFile. Gate SUCCESS. (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
+      "reserve": "54 occurrences restent derrière la liste blanche (amélioration, pas de régression)."
     }
   },
   {
@@ -1235,9 +1235,9 @@
     "statut": "Partiel",
     "changement": "idem",
     "verification": {
-      "verdict": "partiel",
-      "preuve": "minos-storage/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java inchangé : l. 313-314 `throw new IOException(\"project path cannot be represented by configured runtime mapping: \" + project.rootPath(), exception)` et l. 364-365 `… cannot be migrated with configured mapping: \" + legacyRoot, exception)`. check-private-io.py : SUCCESS (sources=614, allowlisted-occurrences=56, forbidden=21) ; path_rule_sites() sur ce fichier : []. Sondes sur fragments : `+ project.rootPath()` → [] ; `+ legacyRoot` (String) → [] ; `+ root` avec `Path root` déclaré → 1 site message(Path). La docstring du gate documente toujours la limite (« one reached through an accessor is not seen »). (revérifié le 29/10 sur `7f5d886d`)",
-      "reserve": "Désaccord maintenu avec le suivi (« 0 après ») : les 2 messages exposent toujours une racine absolue et le gate, syntaxique, ne voit ni un Path rendu par accesseur ni une chaîne qui porte un chemin."
+      "verdict": "fermé avec réserve",
+      "preuve": "Revérifié le 06/11 sur develop 0e464f24. Les deux messages de LocalProjectRegistry.java n'ont plus de chemin : l. 330-331 `+ leafName(project.rootPath())`, l. 400 « legacy project root cannot be migrated with configured mapping » sans valeur (PR #662, 7ad45c93). La règle `message(Path)` de check-private-io.py reconnaît maintenant l'accesseur sans argument dont le nom finit par Path, Root, Dir, Directory ou File, la String déclarée avec un tel nom et toAbsolutePath/toRealPath concaténé (l. 318-346) ; elle était rouge sur le dépôt réel avant les corrections. `python -I scripts/architecture/check-private-io.py` : SUCCESS (sources=621, allowlisted-occurrences=54) ; `python scripts/architecture/test_check_private_io.py` : 57 tests OK.",
+      "reserve": "La règle reste syntaxique, sans moteur de types : un message préparé dans une variable, un accesseur au nom différent ou une String déclarée ailleurs échappent encore au gate (docstring l. 343-346). Un message d'exception de JGit contenait le chemin du fichier de configuration d'un dépôt analysé malformé (GitIntelligenceService, ouverture du dépôt) : corrigé par la PR #666."
     }
   },
   {
@@ -1315,8 +1315,8 @@
     "changement": "reserver-minos-ollama-au-runtime-docker",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "OllamaEmbeddingProvider.java:69-70 managedServiceOutsideDocker = host minos-ollama && runtimeLocation != DOCKER ; :98-103 embed lève avant openConnection ; :206-215 readErrorExcerpt lit au plus MAX_ERROR_BODY_BYTES, coupe à 512 car. et passe par PublicErrorMessages.sanitize. Tests : OllamaEmbeddingProviderRuntimeLocationTest et ErrorBodyTest ; gate check-semantic-retrieval-consistency.py rc=0. (revérifié le 21/10 sur `1492113e`)",
-      "reserve": "Le refus intervient à l'usage, pas à l'ouverture (décision D1). :190 accepte encore minos-ollama comme hôte valide sans condition. La preuve Docker réelle est en attente, et Dockerfile.mcp ne pose pas MINOS_RUNTIME_LOCATION. HTTP en clair reste accepté."
+      "preuve": "OllamaEmbeddingProvider.java identique au 29/10 ; compose-mcp.connected.yaml:360 ollama 0.40.13@sha256:b2f0122c… (digest épinglé, check-image-pins SUCCESS files=4). SUIVI « Clôtures OpenSpec du 2026-10-31 » rapporte la preuve Docker (non vérifiable ici). (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
+      "reserve": "Le suivi passe à « Fermé » ; restent : :190 accepte minos-ollama sans condition, HTTP clair, Dockerfile.mcp sans MINOS_RUNTIME_LOCATION (reconnu par le suivi)."
     }
   },
   {
@@ -1951,8 +1951,8 @@
     "changement": "idem",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "check-workflow-pins.py:256 reste textuel : `any(\"docker logout\" in line for line in step)`. Sur copie, suppression de la seule ligne `trap log_out EXIT` de pr-ci.yml:313 → SUCCESS rc=0 (la fonction log_out() est alors définie mais jamais appelée : le jeton reste sur disque pour mvnw) ; mise en commentaire du trap de code-audit.yml:162 → rc=0. DOCKER_LOGIN_KEPT (l. 126-131) contient toujours (release-promotion-gate.yml, docker-upgrade-qualification), déclenché sur pull_request vers main (release-promotion-gate.yml:21-22). Preuves CI du 28/10 et portée lecture seule du jeton : non vérifiables depuis le dépôt. (revérifié le 29/10 sur `7f5d886d`)",
-      "reserve": "Gate insensible au trap (prouvé) ; un job PR vers main garde la connexion Docker Hub pendant le code du dépôt. SUIVI l. 428 dit « Fermé » sans réserve."
+      "preuve": "Revérifié le 06/11 sur develop 0e464f24. check-workflow-pins.py ignore les lignes commentées (`_without_comment`, l. 71-72) et n'accepte une étape que si `docker logout` est exécuté directement ou dans une fonction qu'un `trap <fonction> EXIT` actif appelle (`TRAP_ON_EXIT` et `TRAP_CLEARED`, l. 228-229 ; `_logout_runs`, l. 254-257) (PR #663, e0a9bb77). `python -I scripts/quality/check-workflow-pins.py` : SUCCESS (external uses=104) ; `python scripts/quality/test_check_workflow_pins.py` : 86 tests OK.",
+      "reserve": "La portée « Public Repo Read-only » du jeton Docker Hub n'est pas vérifiée (tâche 4.1, propriétaire) ; `release-promotion-gate.yml` et `docker-upgrade-qualification.yml` restent dans DOCKER_LOGIN_KEPT avec leur raison. Seules les formes de shell présentes dans les workflows sont reconnues."
     }
   },
   {
@@ -1976,8 +1976,8 @@
     "changement": "aucun nouveau changement : `aligner-dependances-de-test-testcontainers`, tâche 4.1",
     "verification": {
       "verdict": "risque accepté",
-      "preuve": "Risque accepté jusqu'au 2027-01-15 (registre R-27, décision du propriétaire le 17/10) : aucun docker-java postérieur à 3.7.1 ; CVE limitées à la portée test et visibles dans le rapport Dependency-Check. (relu le 17/10 sur `2ccbccb0`)",
-      "reserve": "À revoir à l'échéance du 2027-01-15."
+      "preuve": "testcontainers.version 2.0.5 (pom.xml:62) inchangé ; R-27 inchangé au registre (accepté jusqu'au 2027-01-15). La règle retirée de quality/dependency-check-suppressions.xml est le faux positif minos-storage ↔ cpe:/a:postgresql:postgresql (devenue sans correspondance, failBuildOnUnusedSuppressionRule) : elle ne touchait pas httpclient5/httpcore5 ; la seule règle restante vise minos-nexus. Profils audit-dependency-check(-tests) inchangés (pom.xml:445-484, report-only failBuildOnCVSS=11). (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
+      "reserve": "R-27 toujours couvert (CVE visibles dans le rapport, aucune exception) ; échéance 2027-01-15."
     }
   },
   {
