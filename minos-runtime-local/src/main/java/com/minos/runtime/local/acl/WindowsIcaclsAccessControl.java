@@ -81,7 +81,7 @@ public final class WindowsIcaclsAccessControl implements PlatformAccessControl {
     private static byte[] readSaved(Path saved) throws IOException {
         try {
             return Files.readAllBytes(saved);
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             throw new IOException(READ_REFUSAL + ": the saved rules cannot be read");
         }
     }
@@ -93,7 +93,7 @@ public final class WindowsIcaclsAccessControl implements PlatformAccessControl {
     private static void deleteSaved(Path saved) {
         try {
             Files.deleteIfExists(saved);
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // Best effort: the refusal or the success of the read stands.
         }
     }
@@ -114,7 +114,7 @@ public final class WindowsIcaclsAccessControl implements PlatformAccessControl {
             if (directory.isAbsolute() && Files.isDirectory(directory)) {
                 try {
                     return Files.createTempFile(directory, "minos-dacl-", ".sddl");
-                } catch (IOException _) {
+                } catch (IOException ignored) {
                     throw new IOException(READ_REFUSAL + ": no place to save them");
                 }
             }

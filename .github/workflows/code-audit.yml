@@ -53,11 +53,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Installer Java 25
+      - name: Installer Java 21
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
 
       - name: Set up Python
@@ -163,11 +163,11 @@ jobs:
           test -n "$IMAGES"
           for image in $IMAGES; do docker pull "$image"; done
 
-      - name: Installer Java 25
+      - name: Installer Java 21
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
 
       - name: Set up Python
@@ -220,11 +220,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Installer Java 25
+      - name: Installer Java 21
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
 
       - name: Set up Python

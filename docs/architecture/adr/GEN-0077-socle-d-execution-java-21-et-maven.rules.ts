@@ -1,10 +1,10 @@
 /// <reference path="../rules.d.ts" />
 
-// Règles de l'ADR 0067 (socle d'exécution).
+// Règles de l'ADR GEN-0077 (socle d'exécution).
 //
 // Décision § 2 : `maven.compiler.release` du POM racine est la source de vérité de la version Java ; l'enforcer, les
 // `java-version:` des workflows, les images `eclipse-temurin`, TOOLCHAIN_POLICY.md, AGENTS.md et openspec/config.yaml
-// énoncent la même. Décision § 3 : Java 21 seulement dans la liste fermée des étapes du plugin.
+// énoncent la même. Décision § 3 : Java 21 hors du produit seulement dans la liste fermée des étapes du plugin.
 // Ces quatre premières règles sont un second exécutant des règles 4 à 7 de scripts/quality/check-toolchain-baseline.py,
 // qui reste le gate de la CI : elles lisent dans ce script (par son AST) les chemins, les expressions régulières et les
 // listes fermées, et dans le POM la version ; elles ne recopient ni version, ni liste.
@@ -92,7 +92,7 @@ async function baselineOf(ctx: RuleContext): Promise<Baseline | undefined> {
     ctx.report.violation({
       message: `POM ou RELEASE introuvable dans ${GATE} : la source de vérité de la version Java n'est plus lisible.`,
       file: GATE,
-      fix: "Mettre à jour la règle 0067 avec le nouveau nom de ces constantes.",
+      fix: "Mettre à jour la règle GEN-0077 avec le nouveau nom de ces constantes.",
     });
     return undefined;
   }
@@ -112,7 +112,7 @@ function missingConstant(ctx: RuleContext, names: string): void {
   ctx.report.violation({
     message: `Constante(s) ${names} introuvable(s) ou non littérale(s) dans ${GATE} : la règle ne peut pas lire ce que le gate contrôle.`,
     file: GATE,
-    fix: "Garder ces constantes littérales dans le gate, ou mettre à jour la règle 0067.",
+    fix: "Garder ces constantes littérales dans le gate, ou mettre à jour la règle GEN-0077.",
   });
 }
 
@@ -363,7 +363,7 @@ export default {
             for (const [framework, pattern] of Object.entries(FRAMEWORK_GROUPS)) {
               if (pattern.test(groupId)) {
                 ctx.report.violation({
-                  message: `${file} déclare ${groupId} (${framework}) : l'ADR 0067 exclut tout framework serveur du cœur.`,
+                  message: `${file} déclare ${groupId} (${framework}) : l'ADR GEN-0077 exclut tout framework serveur du cœur.`,
                   file,
                   line: lineOf(text, match.index ?? 0),
                   fix: "Retirer cette dépendance ; une exposition réseau future choisit son framework hors du domaine, par un nouvel ADR.",

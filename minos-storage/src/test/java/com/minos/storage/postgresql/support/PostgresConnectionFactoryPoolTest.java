@@ -143,7 +143,7 @@ class PostgresConnectionFactoryPoolTest extends PostgresTestSupport {
                 insertWorkspace(outer, "outer");
                 try {
                     pool.inTransaction(failingInner);
-                } catch (IOException _) {
+                } catch (IOException ignored) {
                     // The outer work deliberately ignores the nested failure: the commit must still be refused.
                 }
                 return null;

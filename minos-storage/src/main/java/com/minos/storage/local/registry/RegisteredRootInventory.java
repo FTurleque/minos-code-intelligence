@@ -59,7 +59,7 @@ final class RegisteredRootInventory {
             // Validates the relative root the same way a read of the registry resolves it.
             existing.hostPathOf(portable);
             return Optional.of(new RegisteredRoot(displayName, Optional.of(portable)));
-        } catch (IOException | IllegalArgumentException _) {
+        } catch (IOException | IllegalArgumentException ignored) {
             return Optional.empty();
         }
     }

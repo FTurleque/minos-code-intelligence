@@ -19,7 +19,7 @@ java -version
 .\mvnw.cmd -version
 ```
 
-Le build doit tourner réellement sous Java 25.
+Le build doit tourner réellement sous Java 21.
 
 ## Pipeline Maven
 

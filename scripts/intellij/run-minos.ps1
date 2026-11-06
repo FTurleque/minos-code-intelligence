@@ -27,7 +27,7 @@ $jar = Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'target') -File `
 $minosHome = Join-Path $repositoryRoot "target\minos-dev-home"
 
 if ([string]::IsNullOrWhiteSpace($jar) -or -not (Test-Path -LiteralPath $jar -PathType Leaf)) {
-    throw "JAR shaded MINOS absent. Lancez d'abord le profil DEV ou .\mvnw.cmd package sous Java 25."
+    throw "JAR shaded MINOS absent. Lancez d'abord le profil DEV ou .\mvnw.cmd package sous Java 21."
 }
 
 if ($ValidateOnly) {

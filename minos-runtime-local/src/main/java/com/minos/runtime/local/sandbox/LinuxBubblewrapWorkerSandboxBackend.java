@@ -432,7 +432,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         for (String argument : providerCommand) {
             try {
                 addProviderArgumentBind(command, mounted, argument, tools);
-            } catch (InvalidPathException _) {
+            } catch (InvalidPathException ignored) {
                 // Non-path provider arguments stay opaque.
             }
         }
@@ -507,7 +507,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         try {
             Path named = Path.of(value);
             return named.isAbsolute() && Files.isDirectory(named) ? Optional.of(named) : Optional.empty();
-        } catch (InvalidPathException _) {
+        } catch (InvalidPathException ignored) {
             // A value that is not a path names no toolchain root: nothing to mount, nothing granted.
             return Optional.empty();
         }
@@ -552,7 +552,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
             try {
                 home = home.toRealPath();
                 tools = home.resolve(TOOLS_DIRECTORY);
-            } catch (IOException _) {
+            } catch (IOException ignored) {
                 // The normalized spelling is compared instead; it is never broader.
             }
         }
@@ -596,7 +596,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         Path target;
         try {
             target = link.toRealPath();
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // A dangling link resolves to nothing inside the sandbox either: there is nothing to mount.
             return true;
         }

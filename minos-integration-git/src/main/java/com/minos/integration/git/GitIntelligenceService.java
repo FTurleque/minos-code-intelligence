@@ -252,7 +252,7 @@ public final class GitIntelligenceService implements GitIntelligence {
         try {
             found = Files.getOwner(gitDirectory.toRealPath());
             expected = expectedOwner != null ? expectedOwner.get() : processOwner();
-        } catch (IOException | UncheckedIOException | UnsupportedOperationException _) {
+        } catch (IOException | UncheckedIOException | UnsupportedOperationException ignored) {
             throw new IOException(
                     "The owner of the Git repository cannot be read; the analysis is refused (fail-closed)");
         }
@@ -317,7 +317,7 @@ public final class GitIntelligenceService implements GitIntelligence {
                 new File(repository.getCommonDirectory(), "config"), repository.getFS());
         try {
             declared.load();
-        } catch (ConfigInvalidException _) {
+        } catch (ConfigInvalidException ignored) {
             throw new IOException("The Git repository configuration is invalid");
         }
         Set<String> drivers = declared.getSubsections(FILTER_SECTION);
@@ -557,7 +557,7 @@ public final class GitIntelligenceService implements GitIntelligence {
                 }
                 return new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), trimGitSuffix(uri.getPath()),
                         null, null).toString();
-            } catch (URISyntaxException _) {
+            } catch (URISyntaxException ignored) {
                 return null;
             }
         }

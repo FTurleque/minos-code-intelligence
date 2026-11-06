@@ -39,7 +39,7 @@ final class PlatformAccessControlDiscovery {
         List<PlatformAccessControl> found = new ArrayList<>();
         try {
             ServiceLoader.load(PlatformAccessControl.class, loader).forEach(found::add);
-        } catch (ServiceConfigurationError _) {
+        } catch (ServiceConfigurationError ignored) {
             return refusing("a platform access control for private storage cannot be loaded");
         }
         if (found.isEmpty()) {

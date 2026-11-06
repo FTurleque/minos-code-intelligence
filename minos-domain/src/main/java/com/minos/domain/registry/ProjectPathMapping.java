@@ -213,7 +213,7 @@ public record ProjectPathMapping(String hostRoot, String containerRoot, List<Pro
         }
         try {
             return Optional.of(relativeFrom(hostRoot, candidate));
-        } catch (IllegalArgumentException _) {
+        } catch (IllegalArgumentException ignored) {
             return Optional.empty();
         }
     }

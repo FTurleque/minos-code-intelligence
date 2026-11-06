@@ -329,7 +329,7 @@ public final class ScipIndexerCatalog {
     private static ProviderOperationalProfile scipJavaOperationalProfile() {
         return operational(
                 scipJava(), Set.of(ProviderPlatform.WINDOWS_X64),
-                List.of("Java 25 JDK", "Maven", "PowerShell", "Git Bash", "C# compiler shim on qualified Windows runtime"),
+                List.of("Java 21 JDK", "Maven", "PowerShell", "Git Bash", "C# compiler shim on qualified Windows runtime"),
                 "READY only after the M17/M22 packaged scip-java runtime and required local tools are present",
                 "managed under MINOS_HOME/tools with the historical M17 Windows compatibility runtime",
                 "M2/M17 qualified deterministic MINOS identity; provider raw symbols remain preserved",

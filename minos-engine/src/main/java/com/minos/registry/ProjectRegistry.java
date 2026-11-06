@@ -68,7 +68,7 @@ public interface ProjectRegistry {
             List<DegradedEntry> unreadable = inventory().unreadable();
             return unreadable.isEmpty() ? Optional.empty()
                     : Optional.of(UnreadableRegistryException.of(unreadable, consequence));
-        } catch (IOException | RuntimeException _) {
+        } catch (IOException | RuntimeException ignored) {
             return Optional.empty();
         }
     }

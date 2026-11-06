@@ -160,7 +160,7 @@ public final class ScipJavaMavenOffline {
         Path named;
         try {
             named = Path.of(designation);
-        } catch (InvalidPathException _) {
+        } catch (InvalidPathException ignored) {
             return refused("it is not a path");
         }
         if (!named.isAbsolute()) return refused("it is not an absolute path");
@@ -169,7 +169,7 @@ public final class ScipJavaMavenOffline {
         Path real;
         try {
             real = normalized.toRealPath();
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             return refused("it cannot be resolved");
         }
         if (!real.equals(normalized)) return refused("a component of its path is a symbolic link");
@@ -191,7 +191,7 @@ public final class ScipJavaMavenOffline {
         try {
             Path real = launcher.orElseThrow().toRealPath();
             home = real.getParent() == null ? null : real.getParent().getParent();
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             home = null;
         }
         if (home == null) {
@@ -279,7 +279,7 @@ public final class ScipJavaMavenOffline {
                     return Optional.of(matcher.group(1) + "." + matcher.group(2) + "." + matcher.group(3));
                 }
             }
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // An unreadable installation has no version that MINOS can vouch for.
             return Optional.empty();
         }
@@ -318,7 +318,7 @@ public final class ScipJavaMavenOffline {
         if (location == null) return Stream.empty();
         try {
             return Files.exists(location) ? Stream.of(location, location.toRealPath()).distinct() : Stream.of(location);
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // Unresolvable now: only the normalized spelling can be compared, which is never broader.
             return Stream.of(location);
         }
@@ -347,7 +347,7 @@ public final class ScipJavaMavenOffline {
                     return Optional.of("its root holds a file that is not Maven repository metadata");
                 }
             }
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             return Optional.of("its content cannot be listed");
         }
         return Optional.empty();

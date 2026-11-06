@@ -43,7 +43,7 @@ class PrivateLocalStorageStreamsTest {
     private static Path symbolicLinkOrSkip(Path link, Path target) throws IOException {
         try {
             return Files.createSymbolicLink(link, target);
-        } catch (UnsupportedOperationException | IOException _) {
+        } catch (UnsupportedOperationException | IOException ignored) {
             assumeTrue(false, "this platform/account cannot create symbolic links");
             return link;
         }

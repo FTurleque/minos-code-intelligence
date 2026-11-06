@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   verify:
-    name: Java 25 / Maven Wrapper verify
+    name: Java 21 / Maven Wrapper verify
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -23,13 +23,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Installer Java 25
+      - name: Installer Java 21
         id: java
         continue-on-error: true
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
 
       - name: Préparer Maven Wrapper

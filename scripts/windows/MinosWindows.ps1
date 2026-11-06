@@ -52,7 +52,7 @@ function Resolve-MinosJava {
         if (Test-Path -LiteralPath $searchRoot -PathType Container) {
             $candidates += @(
                 Get-ChildItem -LiteralPath $searchRoot -Directory -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -match '^(?:openjdk-|jdk-|temurin-)?25(?:\.|$)' } |
+                    Where-Object { $_.Name -match '^(?:openjdk-|jdk-|temurin-)?21(?:\.|$)' } |
                     Sort-Object Name -Descending |
                     Select-Object -ExpandProperty FullName
             )
@@ -84,7 +84,7 @@ function Resolve-MinosJava {
         }
         $version = Get-MinosJavaVersion -JavaExecutable $javaExecutable
         if ($null -ne $version -and $version.ExitCode -eq 0 -and
-            $version.Output -match '(?m)^(?:openjdk|java) version "25(?:\.|\")') {
+            $version.Output -match '(?m)^(?:openjdk|java) version "21(?:\.|\")') {
             return [pscustomobject]@{
                 JavaHome = $javaHome
                 JavaExecutable = $javaExecutable
@@ -95,7 +95,7 @@ function Resolve-MinosJava {
         }
     }
 
-    throw 'JDK 25 introuvable. Configurez MINOS_JAVA_HOME ou installez un JDK 25 sous %USERPROFILE%\.jdks.'
+    throw 'JDK 21 introuvable. Configurez MINOS_JAVA_HOME ou installez un JDK 21 sous %USERPROFILE%\.jdks.'
 }
 
 function Invoke-MinosNative {

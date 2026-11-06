@@ -35,7 +35,7 @@ Preuves, écarts avec le critère de sortie et suite à ouvrir : [`docs/project/
 
 Les cinq changements du sprint 3 (« socle d'exécution supporté ») sont **fusionnés dans `develop`** (PR #434 à #437 et #441) :
 
-- **Java 25 LTS** : le noyau, la CLI, le MCP, le stockage et les providers sont compilés pour Java 25 (enforcer `[25,26)`), les deux images partent d'`eclipse-temurin:25` sur Ubuntu 24.04, le runtime de l'installateur Windows est produit par le JDK 25 ; le plugin IntelliJ reste en Java 21. La version est énoncée une fois (POM racine) et gardée par `check-toolchain-baseline.py` ; la politique de toolchain date la fin de support (ADR 0059). Une installation par jar demande un JDK 25.
+- **Java 21 LTS** : le noyau, la CLI, le MCP, le stockage et les providers sont compilés pour Java 21 (enforcer `[21,22)`), les deux images partent d'`eclipse-temurin:21` sur Ubuntu 24.04, le runtime de l'installateur Windows est produit par le JDK 21 ; le plugin IntelliJ est en Java 21 aussi. La version est énoncée une fois (POM racine) et gardée par `check-toolchain-baseline.py` ; la politique de toolchain date la fin de support (GEN-0077). Une installation par jar demande un JDK 21.
 - **Node.js 24 LTS dans l'image Docker**, la même ligne que la distribution Windows ; l'inventaire de provenance lit les versions de .NET, Go, Rust et Node sur les binaires installés, et la qualification d'image les compare.
 - **Veille des dépendances livrées** : les deux verrous npm embarqués sont analysés par le gate OSV de chaque PR ; une veille hebdomadaire, non exigée, interroge une base d'avis pour le catalogue d'outils et le classpath de scip-java. Elle ne tournera qu'après la promotion vers `main`, et signale un avis sur le classpath de scip-java 0.13.2 (guava 33.6.0-jre, sans version corrigée dans une release de scip-java), sous dérogation datée jusqu'au 2027-01-28 (risque R-29).
 - **Notices et licences tierces** : le jar ombré et les images conservent les notices (agrégées) et un fichier de licence par dépendance ; `META-INF/LICENSE` est la licence de MINOS. Douze dépendances ne livrent aucun fichier de licence dans leur jar et ne sont couvertes que par le SBOM ; les outils non Maven de l'image sont hors périmètre.
@@ -273,7 +273,7 @@ La **gate JaCoCo ciblée** de `PR Validation` (`scripts/quality/check-jacoco.py`
 ## Supply-chain et toolchains
 
 - Maven Wrapper : Maven 3.10.0 avec checksum SHA-256 (`.mvn/wrapper/maven-wrapper.properties`), accepté par la plage `[3.9,4.0)` de l'enforcer ; l'image Docker et les outils embarqués (`embedded-tools.json`) restent en Maven 3.9.16 ;
-- cœur MINOS : Java 25 / Maven 3.9.x ;
+- cœur MINOS : Java 21 / Maven 3.9.x ;
 - plugin IntelliJ : Java 21 / Gradle 9.8.2 / IntelliJ Platform 2026.1 ;
 - Dependabot couvre Maven, GitHub Actions **et le build Gradle `minos-intellij`** ;
 - les actions GitHub sont épinglées sur des SHA immuables ;

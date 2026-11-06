@@ -10,12 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-# The runtime image is eclipse-temurin 25 on Ubuntu 24.04 `noble` (maven.compiler.release; the untagged variant moved to
+# The runtime image is eclipse-temurin 21 on Ubuntu 24.04 `noble` (maven.compiler.release; the untagged variant moved to
 # Ubuntu 26.04, which the pinned apt snapshot of the release image does not serve), written <image>:<tag>@sha256:<digest>.
-# The tag is deliberately a PATTERN, not a literal: a Dependabot bump to another 24.x JRE (new tag, new
-# digest) must keep this gate green, while a floating tag (24-jre), another major (25.x), a tag without a
+# The tag is deliberately a PATTERN, not a literal: a Dependabot bump to another 21.x JRE (new tag, new
+# digest) must keep this gate green, while a floating tag (21-jre), another major (25.x), a tag without a
 # digest and a digest without a tag must all stay red.
-TEMURIN_JRE_FROM = re.compile(r"^FROM eclipse-temurin:25\.[0-9._]+-jre-noble@sha256:[0-9a-f]{64}\s*$", re.MULTILINE)
+TEMURIN_JRE_FROM = re.compile(r"^FROM eclipse-temurin:21\.[0-9._]+-jre-noble@sha256:[0-9a-f]{64}\s*$", re.MULTILINE)
 
 
 def read(path: str) -> str:
@@ -69,7 +69,6 @@ def main() -> int:
         )
         require(
             "docs/developer/TOOLCHAIN_POLICY.md",
-            "Java: **25**",
             "Java: **21**",
             "Gradle: **9.8.2**",
             "IntelliJ Platform: **2026.1**",
@@ -127,9 +126,9 @@ def main() -> int:
         dockerfile = read("docker/Dockerfile.mcp")
         if not TEMURIN_JRE_FROM.search(dockerfile):
             raise RuntimeError(
-                "docker/Dockerfile.mcp: FROM must be eclipse-temurin:25.<x>-jre-noble@sha256:<digest> (tag and digest)")
-        if "FROM eclipse-temurin:25-jre" in dockerfile:
-            raise RuntimeError("docker/Dockerfile.mcp still uses a floating 24-jre tag")
+                "docker/Dockerfile.mcp: FROM must be eclipse-temurin:21.<x>-jre-noble@sha256:<digest> (tag and digest)")
+        if "FROM eclipse-temurin:21-jre" in dockerfile:
+            raise RuntimeError("docker/Dockerfile.mcp still uses a floating 21-jre tag")
 
         require(
             "minos-engine/src/main/java/com/minos/io/BoundedOutputStream.java",

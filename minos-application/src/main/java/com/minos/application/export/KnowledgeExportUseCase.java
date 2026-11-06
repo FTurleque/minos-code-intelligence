@@ -250,7 +250,7 @@ public final class KnowledgeExportUseCase {
             Path canonical = resolved.toRealPath();
             if (!canonical.startsWith(root)) return null;
             return root.relativize(resolved).toString().replace('\\', '/');
-        } catch (InvalidPathException | IOException _) {
+        } catch (InvalidPathException | IOException ignored) {
             return null;
         }
     }
