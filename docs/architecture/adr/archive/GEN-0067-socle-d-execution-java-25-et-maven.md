@@ -2,16 +2,18 @@
 id: GEN-0067
 title: "Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur"
 domain: general
-rules: true
+rules: false
 ---
 
 # Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur
 
-- **Statut** : Accepted
+> **Archivé le 2026-11-06** : Superseded by [GEN-0077](../GEN-0077-socle-d-execution-java-21-et-maven.md), qui porte la baseline Java 21. Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+
+- **Statut** : Superseded
 - **Date** : 2026-10-23
 - **Origine** : consolidation du registre (décision du propriétaire du 2026-10-23)
-- **Remplace** : [ADR-0004](archive/0004-stack-java-maven-core-sans-framework.md), [ADR-0059](archive/0059-migrer-le-socle-vers-java-25-lts.md) (l'[ADR-0005](archive/0005-aligner-java-24-environnement-developpement.md), Java 24, est remplacé par l'ADR 0059 et archivé)
-- **Remplacé par** : —
+- **Remplace** : [ADR-0004](0004-stack-java-maven-core-sans-framework.md), [ADR-0059](0059-migrer-le-socle-vers-java-25-lts.md) (l'[ADR-0005](0005-aligner-java-24-environnement-developpement.md), Java 24, est remplacé par l'ADR 0059 et archivé)
+- **Remplacé par** : [GEN-0077](../GEN-0077-socle-d-execution-java-21-et-maven.md)
 
 ## Context
 
@@ -34,11 +36,11 @@ Maven 3.9.x est retenu pour sa stabilité, son support des projets Java et de la
 
 1. **Java 25 pour le produit.** Le noyau, la CLI, le MCP, le stockage et les providers sont compilés pour Java 25 (`maven.compiler.release`), et Maven Enforcer exige `[25,26)`. Les images Docker partent d'`eclipse-temurin:25` (tag et digest) ; le runtime de l'installateur Windows est produit par le JDK 25 (ADR 0059 § 1).
 2. **Une source de vérité gardée.** `maven.compiler.release` du POM racine est la source de vérité de la version Java. `scripts/quality/check-toolchain-baseline.py` échoue quand l'enforcer, un `java-version:` de workflow, une image `eclipse-temurin`, `docs/developer/TOOLCHAIN_POLICY.md`, `AGENTS.md` ou `openspec/config.yaml` énonce une autre version (ADR 0059 § 2).
-3. **Plugin IntelliJ en Java 21.** Ses étapes de workflow sont une liste fermée du gate ; Java 21 ailleurs, ou toute troisième version, est refusé (ADR 0059 § 3). Le plugin reste un client externe du protocole CLI ([ADR 0027](ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md)).
+3. **Plugin IntelliJ en Java 21.** Ses étapes de workflow sont une liste fermée du gate ; Java 21 ailleurs, ou toute troisième version, est refusé (ADR 0059 § 3). Le plugin reste un client externe du protocole CLI ([ADR 0027](../ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md)).
 4. **Fin de support suivie.** La politique de toolchain écrit la date de fin de support de la baseline et ouvre le changement suivant au plus tard douze mois avant. Une baseline hors support figure au registre des risques tant qu'elle n'est pas remplacée (ADR 0059 § 4).
 5. **Majeur du JDK hors propositions automatiques.** La règle `ignore` de Dependabot sur les montées majeures d'`eclipse-temurin` est gardée : le majeur du JDK suit cette politique (ADR 0059 § 5).
 6. **Maven par le wrapper.** Le build utilise Apache Maven 3.9.x par le Maven Wrapper versionné (`mvnw`, `mvnw.cmd`), point d'entrée canonique du build (ADR 0004 § Decision et § Build ; `docs/developer/TOOLCHAIN_POLICY.md`).
-7. **Aucun framework serveur dans le cœur.** Le domaine et les services ne dépendent d'aucun framework serveur (Spring, Quarkus, Micronaut). CLI, MCP et API restent des adaptateurs périphériques ; une couche d'exposition réseau future peut choisir son framework indépendamment, sans pénétrer le domaine. Les DTO et objets du domaine ne dépendent pas du framework d'exposition, les adaptateurs d'indexeurs externes sont isolés du domaine, et les outils externes restent exécutables comme processus séparés lorsque nécessaire (ADR 0004 § Framework et § « Règles courantes » 3 à 7). L'[ADR 0057](ARCH-0057-finaliser-les-frontieres-hexagonales.md) réaffirme cette exclusion pour les frontières hexagonales.
+7. **Aucun framework serveur dans le cœur.** Le domaine et les services ne dépendent d'aucun framework serveur (Spring, Quarkus, Micronaut). CLI, MCP et API restent des adaptateurs périphériques ; une couche d'exposition réseau future peut choisir son framework indépendamment, sans pénétrer le domaine. Les DTO et objets du domaine ne dépendent pas du framework d'exposition, les adaptateurs d'indexeurs externes sont isolés du domaine, et les outils externes restent exécutables comme processus séparés lorsque nécessaire (ADR 0004 § Framework et § « Règles courantes » 3 à 7). L'[ADR 0057](../ARCH-0057-finaliser-les-frontieres-hexagonales.md) réaffirme cette exclusion pour les frontières hexagonales.
 
 ## Do's and Don'ts
 
@@ -64,7 +66,7 @@ Maven 3.9.x est retenu pour sa stabilité, son support des projets Java et de la
 ### Positives
 
 - Une montée de baseline est un changement d'une ligne suivi d'un gate rouge qui nomme chaque site : elle se fait dans une seule PR (ADR 0059 § Consequences).
-- L'installateur Windows et les images Docker embarquent leur runtime et ne demandent rien à l'utilisateur (ADR 0059 § Consequences ; [ADR 0069](ARCH-0069-backends-mcp-natif-et-docker.md)).
+- L'installateur Windows et les images Docker embarquent leur runtime et ne demandent rien à l'utilisateur (ADR 0059 § Consequences ; [ADR 0069](../ARCH-0069-backends-mcp-natif-et-docker.md)).
 - Le cœur reste léger à démarrer et à tester : aucune configuration ni abstraction réseau imposée par un framework (ADR 0004 § « Pourquoi pas de framework serveur dans le cœur »).
 
 ### Négatives
@@ -96,8 +98,8 @@ Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en v
 
 ## References
 
-- ADR remplacés : [0004](archive/0004-stack-java-maven-core-sans-framework.md) (décision C0 : Maven, cœur sans framework serveur), [0059](archive/0059-migrer-le-socle-vers-java-25-lts.md) (Java 25 LTS et gate de baseline) ; [0005](archive/0005-aligner-java-24-environnement-developpement.md) (Java 24, remplacé par 0059).
-- ADR liés : [0027](ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md) (plugin IntelliJ externe en Java 21), [0057](ARCH-0057-finaliser-les-frontieres-hexagonales.md) (aucun framework serveur), [0069](ARCH-0069-backends-mcp-natif-et-docker.md) (runtime embarqué de la distribution native).
-- Politique : [`docs/developer/TOOLCHAIN_POLICY.md`](../../developer/TOOLCHAIN_POLICY.md).
-- Audit : [`docs/project/audits/2026-10-10/findings.md`](../../project/audits/2026-10-10/findings.md) (AUD-DEP-01).
-- Historique de C0 : [`docs/project/history/c0/VALIDATION_C0.md`](../../project/history/c0/VALIDATION_C0.md).
+- ADR remplacés : [0004](0004-stack-java-maven-core-sans-framework.md) (décision C0 : Maven, cœur sans framework serveur), [0059](0059-migrer-le-socle-vers-java-25-lts.md) (Java 25 LTS et gate de baseline) ; [0005](0005-aligner-java-24-environnement-developpement.md) (Java 24, remplacé par 0059).
+- ADR liés : [0027](../ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md) (plugin IntelliJ externe en Java 21), [0057](../ARCH-0057-finaliser-les-frontieres-hexagonales.md) (aucun framework serveur), [0069](../ARCH-0069-backends-mcp-natif-et-docker.md) (runtime embarqué de la distribution native).
+- Politique : [`docs/developer/TOOLCHAIN_POLICY.md`](../../../developer/TOOLCHAIN_POLICY.md).
+- Audit : [`docs/project/audits/2026-10-10/findings.md`](../../../project/audits/2026-10-10/findings.md) (AUD-DEP-01).
+- Historique de C0 : [`docs/project/history/c0/VALIDATION_C0.md`](../../../project/history/c0/VALIDATION_C0.md).

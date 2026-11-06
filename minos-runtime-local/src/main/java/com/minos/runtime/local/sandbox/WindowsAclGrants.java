@@ -65,7 +65,7 @@ final class WindowsAclGrants {
             icacls.run(Objects.requireNonNull(target, "target"), List.of(operation, subject, "/q"),
                     "cannot change a sandbox grant");
             return true;
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             return false;
         }
     }

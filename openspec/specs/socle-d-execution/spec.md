@@ -1,7 +1,7 @@
 # socle-d-execution Specification
 
 ## Purpose
-Définit ce que MINOS garantit sur les runtimes qu'il livre ou sur lesquels il tourne : un runtime Node maintenu et de même majeur sur chaque plateforme, et un inventaire de provenance de l'image Docker qui reflète les binaires réellement installés plutôt que des versions recopiées. La baseline Java du produit et son gate relèvent du changement de migration vers Java 25, encore actif.
+Définit ce que MINOS garantit sur les runtimes qu'il livre ou sur lesquels il tourne : un runtime Node maintenu et de même majeur sur chaque plateforme, et un inventaire de provenance de l'image Docker qui reflète les binaires réellement installés plutôt que des versions recopiées. La baseline Java du produit est une exigence de cette capacité, et son gate relève de l'ADR GEN-0077.
 
 ## Requirements
 

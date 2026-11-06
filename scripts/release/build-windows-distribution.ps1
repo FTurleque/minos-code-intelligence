@@ -67,7 +67,7 @@ function Resolve-JdkModules {
     $Previous = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $Output = @(& $Jdeps '--multi-release' '25' '--ignore-missing-deps' '--print-module-deps' $Jar 2>&1 |
+        $Output = @(& $Jdeps '--multi-release' '21' '--ignore-missing-deps' '--print-module-deps' $Jar 2>&1 |
             ForEach-Object { $_.ToString().Trim() })
         $Exit = $LASTEXITCODE
     }
@@ -152,14 +152,14 @@ foreach ($Verifier in @(
 
 $JavaHome = $env:JAVA_HOME
 if ([string]::IsNullOrWhiteSpace($JavaHome)) {
-    throw 'JAVA_HOME must point to a JDK 25 installation.'
+    throw 'JAVA_HOME must point to a JDK 21 installation.'
 }
 $Java = Join-Path $JavaHome 'bin\java.exe'
 $Jpackage = Join-Path $JavaHome 'bin\jpackage.exe'
 $Jdeps = Join-Path $JavaHome 'bin\jdeps.exe'
 foreach ($RequiredJdkTool in @($Java, $Jpackage, $Jdeps)) {
     if (-not (Test-Path -LiteralPath $RequiredJdkTool -PathType Leaf)) {
-        throw "JAVA_HOME does not expose the required JDK 25 tool: $RequiredJdkTool"
+        throw "JAVA_HOME does not expose the required JDK 21 tool: $RequiredJdkTool"
     }
 }
 
@@ -179,8 +179,8 @@ if ($JavaVersionExitCode -ne 0) {
     throw "Unable to execute JAVA_HOME java.exe -version (exit=$JavaVersionExitCode): $JavaVersionOutput"
 }
 $JavaVersion = ($JavaVersionOutput -split "`r?`n" | Select-Object -First 1).Trim()
-if ($JavaVersion -notmatch '"25(?:\.|"|-)') {
-    throw "MINOS distribution requires JDK 25; found: $JavaVersion"
+if ($JavaVersion -notmatch '"21(?:\.|"|-)') {
+    throw "MINOS distribution requires JDK 21; found: $JavaVersion"
 }
 
 # M15-S2 makes the repository POM a real multi-module reactor. Release versions

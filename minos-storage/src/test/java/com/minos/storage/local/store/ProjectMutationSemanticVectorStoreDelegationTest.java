@@ -90,7 +90,7 @@ class ProjectMutationSemanticVectorStoreDelegationTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             Future<?> deletion;
-            try (var _ = SnapshotProjectLease.acquire(semanticRoot, project)) {
+            try (var ignored = SnapshotProjectLease.acquire(semanticRoot, project)) {
                 deletion = executor.submit(() -> {
                     deleter.set(Thread.currentThread());
                     started.countDown();

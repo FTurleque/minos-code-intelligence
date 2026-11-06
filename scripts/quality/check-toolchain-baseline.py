@@ -26,8 +26,9 @@ reference `N`. Rules:
 
 4. Maven Enforcer requires exactly `[N,N+1)`: a wider range would let a deliverable be built on another JDK.
 5. Every `java-version:` of a workflow is `N`. The steps of the IntelliJ plugin stay in Java 21 (its baseline
-   follows IntelliJ Platform, not the product): they are a closed list of (workflow, job) with the number of
-   Java 21 steps each may hold. Java 21 anywhere else, or any third version, is refused. One more closed list
+   follows IntelliJ Platform, not the product): when `N` is not 21 they are a closed list of (workflow, job)
+   with the number of Java 21 steps each may hold, and Java 21 anywhere else, or any third version, is refused.
+   When `N` is 21 the plugin steps are product steps and the list has nothing to keep. One more closed list
    names the jobs that qualify an upgrade from a candidate built for the previous baseline: they install that
    JDK too, once, and it is the only other version accepted there.
 6. Every `FROM eclipse-temurin:` of a Dockerfile of the repository has the major `N`.
@@ -105,7 +106,7 @@ PLUGIN_JAVA_STEPS = {
 # An A -> B upgrade qualification builds candidate A with the JDK of A. While a supported candidate A is still
 # built for the previous baseline, these jobs install it once, next to the current one. Empty this table (and
 # remove the steps) when `main` is built for the current baseline.
-PREVIOUS_JAVA = "24"
+PREVIOUS_JAVA = "25"
 PREVIOUS_JAVA_STEPS = {
     ("docker-upgrade-qualification.yml", "real-docker-upgrade"): 1,
     ("release-promotion-gate.yml", "docker-upgrade-qualification"): 1,

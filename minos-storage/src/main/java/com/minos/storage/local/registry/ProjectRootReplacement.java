@@ -118,7 +118,7 @@ final class ProjectRootReplacement {
                     ? existing.hostPathOf(existing.relativeForLegacyPath(legacy))
                     : existing.hostPathOf(relative);
             return Optional.of(new Planned(file, properties, hostRoot, false));
-        } catch (IOException | IllegalArgumentException _) {
+        } catch (IOException | IllegalArgumentException ignored) {
             return Optional.empty();
         }
     }

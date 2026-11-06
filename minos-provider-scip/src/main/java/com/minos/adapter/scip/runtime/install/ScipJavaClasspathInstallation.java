@@ -83,7 +83,7 @@ final class ScipJavaClasspathInstallation {
             Path jar;
             try {
                 jar = Path.of(entry);
-            } catch (java.nio.file.InvalidPathException _) {
+            } catch (java.nio.file.InvalidPathException ignored) {
                 return List.of(); // a progress line such as "Downloaded https://.../x.jar" is not a classpath
             }
             if (!jar.isAbsolute()) return List.of();
@@ -102,7 +102,7 @@ final class ScipJavaClasspathInstallation {
         try {
             ScipJavaClasspath.verify(listing, lock, verifyLauncher);
             return true;
-        } catch (IOException | RuntimeException _) {
+        } catch (IOException | RuntimeException ignored) {
             return false;
         }
     }

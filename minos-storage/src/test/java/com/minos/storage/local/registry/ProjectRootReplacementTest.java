@@ -162,6 +162,54 @@ class ProjectRootReplacementTest {
     }
 
     @Test
+    void anEntryWhoseRelativeRootEscapesTheMappingRefusesTheReplacementAndWritesNothing() throws Exception {
+        RegisteredProject app = register(Files.createDirectories(oldRoot.resolve("app")), "App");
+        String content = "id=" + UUID.randomUUID() + "\ndisplayName=Escaping\nrootRelativePath=../outside\n";
+        Path escaping = writeEntry(content);
+        byte[] before = Files.readAllBytes(entryOf(app.id()));
+
+        IOException refusal = assertThrows(IOException.class, () -> new LocalProjectPathMappings(home).replace(newMapping));
+
+        assertTrue(refusal.getMessage().contains("1 registry entry"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(oldRoot.toString()), refusal.getMessage());
+        assertEquals(oldMapping, new ProjectPathMappingStore(home).loadOptional().orElseThrow());
+        assertArrayEquals(before, Files.readAllBytes(entryOf(app.id())));
+        assertEquals(content, Files.readString(escaping, StandardCharsets.UTF_8));
+        assertTrue(backupsOf(app.id()).isEmpty());
+    }
+
+    @Test
+    void anEntryWhoseLegacyRootLiesOutsideBothRootsRefusesTheReplacementAndWritesNothing() throws Exception {
+        RegisteredProject app = register(Files.createDirectories(oldRoot.resolve("app")), "App");
+        writeEntry("id=" + UUID.randomUUID() + "\ndisplayName=Legacy\nrootPath="
+                + escaped(temp.resolve("elsewhere").toString()) + "\n");
+        byte[] before = Files.readAllBytes(entryOf(app.id()));
+
+        IOException refusal = assertThrows(IOException.class, () -> new LocalProjectPathMappings(home).replace(newMapping));
+
+        assertTrue(refusal.getMessage().contains("1 registry entry"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains("elsewhere"), refusal.getMessage());
+        assertEquals(oldMapping, new ProjectPathMappingStore(home).loadOptional().orElseThrow());
+        assertArrayEquals(before, Files.readAllBytes(entryOf(app.id())));
+        assertTrue(backupsOf(app.id()).isEmpty());
+    }
+
+    @Test
+    void anEntryThatCannotBeParsedRefusesTheReplacementAndWritesNothing() throws Exception {
+        RegisteredProject app = register(Files.createDirectories(oldRoot.resolve("app")), "App");
+        // A truncated unicode escape makes the properties file malformed: reading it fails with an IOException.
+        writeEntry("id=" + UUID.randomUUID() + "\ndisplayName=Broken\nrootRelativePath=\\u00zz\n");
+        byte[] before = Files.readAllBytes(entryOf(app.id()));
+
+        IOException refusal = assertThrows(IOException.class, () -> new LocalProjectPathMappings(home).replace(newMapping));
+
+        assertTrue(refusal.getMessage().contains("1 registry entry"), refusal.getMessage());
+        assertEquals(oldMapping, new ProjectPathMappingStore(home).loadOptional().orElseThrow());
+        assertArrayEquals(before, Files.readAllBytes(entryOf(app.id())));
+        assertTrue(backupsOf(app.id()).isEmpty());
+    }
+
+    @Test
     void postgresqlStorageRefusesTheReplacement() throws Exception {
         Files.createDirectories(home.resolve("config"));
         Files.writeString(home.resolve("config/minos.properties"), "minos.storage.backend=postgresql\n",
@@ -203,6 +251,14 @@ class ProjectRootReplacementTest {
     private LocalProjectRegistry reopen() throws IOException {
         return new LocalProjectRegistry(home.resolve("registry"), oldMappingOrCurrent(),
                 ProjectPathMapping.RuntimeLocation.NATIVE);
+    }
+
+    /** Writes a registry entry named after the identity it declares, and returns its file. */
+    private Path writeEntry(String content) throws IOException {
+        String id = content.lines().filter(line -> line.startsWith("id=")).findFirst().orElseThrow().substring(3);
+        Path file = home.resolve("registry/projects/" + id + ".properties");
+        Files.writeString(file, content, StandardCharsets.UTF_8);
+        return file;
     }
 
     private Path entryOf(UUID id) {

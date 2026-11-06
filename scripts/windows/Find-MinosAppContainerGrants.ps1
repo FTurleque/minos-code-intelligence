@@ -23,10 +23,10 @@
     Remove the reported entries (icacls /remove:g), each after confirmation.
 
 .EXAMPLE
-    .\Find-MinosAppContainerGrants.ps1 -Path 'C:\Program Files\Java\jdk-25'
+    .\Find-MinosAppContainerGrants.ps1 -Path 'C:\Program Files\Java\jdk-21'
 
 .EXAMPLE
-    .\Find-MinosAppContainerGrants.ps1 -Path 'C:\Program Files\Java\jdk-25' -Remove
+    .\Find-MinosAppContainerGrants.ps1 -Path 'C:\Program Files\Java\jdk-21' -Remove
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(

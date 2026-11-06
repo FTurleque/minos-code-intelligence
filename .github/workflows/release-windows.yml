@@ -118,11 +118,11 @@ jobs:
         shell: pwsh
         run: ./gradlew.bat --no-daemon verifyPlugin
 
-      - name: Set up Java 25 for MINOS release
+      - name: Set up Java 21 for MINOS release
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: maven
 
       - name: Installer Python 3.13

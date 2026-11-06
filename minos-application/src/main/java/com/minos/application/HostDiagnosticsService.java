@@ -88,7 +88,7 @@ public final class HostDiagnosticsService {
             String label = relative.isEmpty() ? "MINOS_HOME" : relative;
             try {
                 report.put(label, privacyReader.privacyOf(target).name());
-            } catch (IOException _) {
+            } catch (IOException ignored) {
                 report.put(label, "UNKNOWN");
             }
         }

@@ -44,7 +44,7 @@ Limites :
 
 | Image | Cible | Variable | Contenu | Services |
 |---|---|---|---|---|
-| Requête | `query` | `MINOS_QUERY_IMAGE` | JRE 25, `minos.jar`, notices ; **aucun** JDK, compilateur C, Rust, Go, .NET, Node, `pip`/`npm`, ni outil de provider | `minos-mcp` (persistant), `minos-bootstrap`, `minos-data-bootstrap`, `minos-ollama-bootstrap` |
+| Requête | `query` | `MINOS_QUERY_IMAGE` | JRE 21, `minos.jar`, notices ; **aucun** JDK, compilateur C, Rust, Go, .NET, Node, `pip`/`npm`, ni outil de provider | `minos-mcp` (persistant), `minos-bootstrap`, `minos-data-bootstrap`, `minos-ollama-bootstrap` |
 | Administration | `admin` | `MINOS_IMAGE` | l'image provider-complete décrite plus bas | `minos-admin`, `minos-tools-bootstrap`, `minos-provider-probe` |
 
 Règle de classement : un service qui lance un provider, copie les outils embarqués ou sonde les toolchains utilise l'image d'administration ; tout autre utilise l'image de requête. Chaque service des fichiers compose porte, au-dessus de sa ligne `image:`, la raison de son classement ; un test de contrat (`M29DockerQueryImageContractTest`) refuse un service non classé ou mal classé, et une cible `query` qui copierait une toolchain ou installerait un paquet.
@@ -139,7 +139,7 @@ rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
 Apache Maven         3.9.16
 ```
 
-Les toolchains nécessaires sont JDK 25, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
+Les toolchains nécessaires sont JDK 21, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
 
 Le bundle provider est initialisé dans le volume Docker nommé :
 

@@ -89,7 +89,7 @@ public final class IcaclsTestAccessControl implements PlatformAccessControl {
                 process.destroyForcibly();
                 throw new IOException(refusal + ": timed out");
             }
-        } catch (InterruptedException _) {
+        } catch (InterruptedException ignored) {
             process.destroyForcibly();
             Thread.currentThread().interrupt();
             throw new IOException(refusal + ": interrupted");

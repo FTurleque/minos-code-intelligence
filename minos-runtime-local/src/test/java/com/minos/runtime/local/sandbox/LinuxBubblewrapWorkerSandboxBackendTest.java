@@ -266,13 +266,13 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
                         Path status = process.resolve("status");
                         if (!account.equals(statusField(status, "Uid:"))) continue;
                         tasks += Long.parseLong(statusField(status, "Threads:"));
-                    } catch (IOException | RuntimeException _) {
+                    } catch (IOException | RuntimeException ignored) {
                         // The process exited while it was being read.
                     }
                 }
             }
             return tasks;
-        } catch (IOException | RuntimeException _) {
+        } catch (IOException | RuntimeException ignored) {
             return -1L;
         }
     }
@@ -280,7 +280,7 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
     private static void awaitQuietly(CountDownLatch release) {
         try {
             release.await();
-        } catch (InterruptedException _) {
+        } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
     }
