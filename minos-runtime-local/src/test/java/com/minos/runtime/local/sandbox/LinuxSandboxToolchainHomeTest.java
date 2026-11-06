@@ -184,7 +184,7 @@ class LinuxSandboxToolchainHomeTest {
         Set<Path> mounted = new HashSet<>();
 
         LinuxBubblewrapWorkerSandboxBackend.addToolchainHomeBinds(
-                command, mounted, "JAVA_HOME", "/opt/jdk-with-nul- -name", temporary.resolve("minos-home"));
+                command, mounted, "JAVA_HOME", "/opt/jdk-with-nul-\0-name", temporary.resolve("minos-home"));
 
         assertTrue(command.isEmpty(), command::toString);
         assertTrue(mounted.isEmpty(), mounted::toString);
@@ -193,7 +193,7 @@ class LinuxSandboxToolchainHomeTest {
     @Test
     void aProviderArgumentThatIsNotAPathStaysOpaqueAndNothingIsMountedForIt() throws Exception {
         Path jdk = fakeJdk(temporary.resolve("jdk"));
-        String opaque = "--option-with-nul- -value";
+        String opaque = "--option-with-nul-\0-value";
         Path working = Files.createDirectories(temporary.resolve("workspace"));
         Path run = Files.createDirectories(temporary.resolve("run"));
         IndexerProcessPlan raw = new IndexerProcessPlan(
