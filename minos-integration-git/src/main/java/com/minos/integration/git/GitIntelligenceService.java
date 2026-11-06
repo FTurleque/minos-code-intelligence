@@ -68,6 +68,7 @@ public final class GitIntelligenceService implements GitIntelligence {
     static final int OLDER_COMMIT_RUN_LIMIT = 1_000;
 
     private static final String FILTER_SECTION = "filter";
+    private static final String INVALID_CONFIGURATION = "The Git repository configuration is invalid";
     private static final String OWNER_PROBE_DIRECTORY = "owner-probe";
     /** The SCP form of a network remote; a one-letter host is a Windows drive, not a host. */
     private static final Pattern SCP_REMOTE =
@@ -227,7 +228,14 @@ public final class GitIntelligenceService implements GitIntelligence {
         if (builder.getGitDir() == null) {
             throw new IllegalArgumentException("projectRoot is not inside a Git repository: " + leafName(root));
         }
-        Repository repository = builder.build();
+        Repository repository;
+        try {
+            repository = builder.build();
+        } catch (IllegalArgumentException ignored) {
+            // JGit reports an unreadable configuration with the absolute path of the file, and the
+            // repository is not trusted: the refusal names neither the path nor the parser failure.
+            throw new IOException(INVALID_CONFIGURATION);
+        }
         try {
             // A linked worktree keeps its own git dir but shares configuration, objects and hooks with the
             // main repository (the common directory): both are written by whoever owns them.
@@ -318,7 +326,7 @@ public final class GitIntelligenceService implements GitIntelligence {
         try {
             declared.load();
         } catch (ConfigInvalidException ignored) {
-            throw new IOException("The Git repository configuration is invalid");
+            throw new IOException(INVALID_CONFIGURATION);
         }
         Set<String> drivers = declared.getSubsections(FILTER_SECTION);
         if (drivers.isEmpty()) {
