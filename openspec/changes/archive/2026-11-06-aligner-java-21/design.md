@@ -56,4 +56,4 @@
 | Étapes de workflow en Java 21 | `check-toolchain-baseline.py`, `test_check_toolchain_baseline.py` |
 | Images en Java 21 | `check-toolchain-baseline.py` (règle 6), `check-image-pins.py`, `check-audit-remediation-v2.py` |
 | Exécution du jar sous Java 21 | sonde MCP STDIO (tasks 4.2) |
-| Runtime embarqué en Java 21 | `docker-release-validation`, `windows-installer` (CI, hors de ce changement) |
+| Runtime embarqué en Java 21 | `docker-release-validation` (run 42215327960), `windows-installer` (run 42215328008), `windows-in-place-upgrade` (run 42215328011) sur la PR #665 ; `minos doctor` du candidat : `Java runtime: 21.0.12.1+1-LTS` |

@@ -75,7 +75,7 @@
     "verification": {
       "verdict": "fermé avec réserve",
       "preuve": "Revérifié le 06/11 sur develop 0e464f24 : la baseline passe à Java 21 (ADR GEN-0077, qui remplace GEN-0067 ; PR #665). pom.xml:43 `maven.compiler.release` 21 et :214 `[21,22)` ; eclipse-temurin 21.0.12.1_1 dans Dockerfile.mcp et Dockerfile.mcp.release ; ScipIndexerCatalog.java:332 « Java 21 JDK » ; docs/developer/TOOLCHAIN_POLICY.md. `python -I scripts/quality/check-toolchain-baseline.py` : SUCCESS (java=21, 38 places). `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts sur la PR.",
-      "reserve": "Candidat A : release-promotion-gate.yml:80 et docker-upgrade-qualification.yml:63 installent Java 25 tant que `main` est construit en Java 25 (exception tracée dans le gate, `PREVIOUS_JAVA = \"25\"`, à retirer quand `main` sera en Java 21). Les images Docker de release, l'installateur Windows, la promotion et une indexation réelle sous Java 21 ne sont pas requalifiés (tâche 4.5 du changement aligner-java-21). Fixture java-24-smoke voulue."
+      "reserve": "Candidat A : release-promotion-gate.yml:80 et docker-upgrade-qualification.yml:63 installent Java 25 tant que `main` est construit en Java 25 (exception tracée dans le gate, `PREVIOUS_JAVA = \"25\"`, à retirer quand `main` sera en Java 21). Images Docker de release, installateur Windows et mise à jour sur place vérifiés sous Java 21 par la CI de la PR #665 (runs 42215327960, 42215328008, 42215328011) ; indexation Java hors ligne sous bubblewrap dans Verify (ubuntu-24.04) (run 42230669977) ; l'indexation Java sous le bac à sable Windows reste hors de portée (scip-java BLOCKED, SEC-0074) ; release-promotion-gate ne se déclenche que sur une PR vers main. Fixture java-24-smoke voulue."
     }
   },
   {
