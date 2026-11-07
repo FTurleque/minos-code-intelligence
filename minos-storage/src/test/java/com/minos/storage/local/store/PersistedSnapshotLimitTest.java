@@ -113,7 +113,7 @@ class PersistedSnapshotLimitTest {
     @Test
     void theProductionCeilingIsFourHundredMebibytesAndTheRefusalNamesIt() {
         assertEquals(400L * 1024L * 1024L, SnapshotLimits.production().maxPersistedBytes());
-        assertEquals(SnapshotLimits.production().maxPersistedBytes(), SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES);
+        assertEquals(SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES, SnapshotLimits.production().maxPersistedBytes());
         assertEquals(" encoded bytes exceed the 419430400-byte limit (400 MiB); nothing was written",
                 refusalLimit(SnapshotLimits.production().maxPersistedBytes()));
     }

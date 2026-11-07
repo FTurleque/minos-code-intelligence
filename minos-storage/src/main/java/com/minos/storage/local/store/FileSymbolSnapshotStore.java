@@ -112,11 +112,11 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             ActiveQueryBuildHook activeQueryBuildHook
     ) throws IOException {
         Objects.requireNonNull(limits, "limits");
-        long maxQueryCacheWeightBytes = limits.maxQueryCacheWeightBytes();
+        long cacheWeightCeiling = limits.maxQueryCacheWeightBytes();
         if (maxQueryCacheEntries < 1) {
             throw new IllegalArgumentException("maxQueryCacheEntries must be greater than zero");
         }
-        if (maxQueryCacheWeightBytes < 1L) {
+        if (cacheWeightCeiling < 1L) {
             throw new IllegalArgumentException("maxQueryCacheWeightBytes must be greater than zero");
         }
         if (maxActiveQueryRetries < 0) {
@@ -130,8 +130,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this.limits = limits;
         this.codecV1 = new SnapshotCodecV1(limits);
         this.maxQueryCacheEntries = maxQueryCacheEntries;
-        this.maxQueryCacheWeightBytes = maxQueryCacheWeightBytes;
-        this.queryCache = new WeightedLruCache<>(maxQueryCacheEntries, maxQueryCacheWeightBytes);
+        this.maxQueryCacheWeightBytes = cacheWeightCeiling;
+        this.queryCache = new WeightedLruCache<>(maxQueryCacheEntries, cacheWeightCeiling);
         this.maxActiveQueryRetries = maxActiveQueryRetries;
         this.activeQueryBuildHook = Objects.requireNonNull(activeQueryBuildHook, "activeQueryBuildHook");
     }

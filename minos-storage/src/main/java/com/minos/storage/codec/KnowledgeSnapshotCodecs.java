@@ -15,6 +15,8 @@ import java.util.OptionalLong;
  */
 public final class KnowledgeSnapshotCodecs {
 
+    private static final String LIMITS = "limits";
+
     private KnowledgeSnapshotCodecs() {
     }
 
@@ -29,7 +31,7 @@ public final class KnowledgeSnapshotCodecs {
     /** As {@link #select(CodeKnowledgeSnapshot)}, refusing a snapshot above {@code limits.maxPersistedBytes()}. */
     public static Selection select(CodeKnowledgeSnapshot snapshot, SnapshotLimits limits) throws IOException {
         Objects.requireNonNull(snapshot, "snapshot");
-        Objects.requireNonNull(limits, "limits");
+        Objects.requireNonNull(limits, LIMITS);
         long ceiling = limits.maxPersistedBytes();
         SnapshotCodecV3 v3 = new SnapshotCodecV3(limits);
         OptionalLong utf8 = v3.encodedSizeIfEncodable(snapshot);
@@ -47,7 +49,7 @@ public final class KnowledgeSnapshotCodecs {
 
     /** Codec of a known format version, bound to the ceiling of {@code limits}. */
     public static SnapshotCodec forVersion(int formatVersion, SnapshotLimits limits) throws IOException {
-        Objects.requireNonNull(limits, "limits");
+        Objects.requireNonNull(limits, LIMITS);
         return switch (formatVersion) {
             case SnapshotBinaryCodecSupport.FORMAT_VERSION_V1 -> new SnapshotCodecV1(limits);
             case SnapshotBinaryCodecSupport.FORMAT_VERSION_V2 -> new SnapshotCodecV2(limits);
@@ -64,7 +66,7 @@ public final class KnowledgeSnapshotCodecs {
     /** Format version declared by a stored payload's header, refusing a payload above the ceiling of {@code limits}. */
     public static int formatVersionOf(Path payload, SnapshotLimits limits) throws IOException {
         return SnapshotBinaryCodecSupport.readFormatVersion(
-                Objects.requireNonNull(payload, "payload"), Objects.requireNonNull(limits, "limits").maxPersistedBytes());
+                Objects.requireNonNull(payload, "payload"), Objects.requireNonNull(limits, LIMITS).maxPersistedBytes());
     }
 
     /** Reads a stored payload in the format its header declares. */

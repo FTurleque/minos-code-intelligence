@@ -17,8 +17,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Admission of a view to the cache of the PostgreSQL store follows the estimated weight of its format, as in the
@@ -96,7 +96,7 @@ class PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest extends PostgresTestSu
         assertEquals(2L, store.queryCacheStats().misses());
         assertEquals(0L, store.queryCacheStats().hits());
         assertEquals(0, store.queryCacheStats().entries());
-        assertTrue(first != second, "a view that is not admitted is rebuilt");
+        assertNotSame(first, second, "a view that is not admitted is rebuilt");
         assertEquals(snapshot, second.snapshot());
     }
 }

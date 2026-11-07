@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Admission of a view to the cache of the file store follows the estimated weight of its format: a V3 snapshot
@@ -105,7 +105,7 @@ class FileSymbolSnapshotStoreViewAdmissionTest {
 
         assertEquals(2, store.cacheStats().fullSnapshotLoads());
         assertEquals(0, store.cacheStats().entries());
-        assertTrue(first != second, "a view that is not admitted is rebuilt");
+        assertNotSame(first, second, "a view that is not admitted is rebuilt");
         assertEquals(snapshot, second.snapshot());
     }
 }
