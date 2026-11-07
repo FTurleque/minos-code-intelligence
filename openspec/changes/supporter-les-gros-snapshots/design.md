@@ -139,7 +139,7 @@ Source : mesures du 2026-11-07 ci-dessus. Objectif [Proposition] : sur le snapsh
 
 ## Compatibilité, migration et retour arrière
 
-Additif. Un snapshot déjà persisté reste lisible ; le poids estimé des snapshots V3 existants baisse (amplification de 2 à 1,5 ou moins), ce qui ne peut que les admettre au cache. [Existant vérifié] Le plafond borne aussi la lecture (`SnapshotBinaryCodecSupport.java:412-417`) : retour arrière, un snapshot de plus de 256 Mio publié sous le nouveau plafond n'est plus lisible une fois les constantes remises. Le retour arrière suppose donc qu'aucun snapshot de cette taille n'ait été publié, ou qu'il soit réindexé ensuite ; la tâche 1.1 prouve ce comportement par un test.
+Additif. Un snapshot déjà persisté reste lisible ; le poids estimé des snapshots V3 existants baisse (amplification de 2 à 1,25), ce qui ne peut que les admettre au cache. [Existant vérifié] Le plafond borne aussi la lecture (`SnapshotBinaryCodecSupport.java:412-417`) : retour arrière, un snapshot de plus de 256 Mio publié sous le nouveau plafond n'est plus lisible une fois les constantes remises. Le retour arrière suppose donc qu'aucun snapshot de cette taille n'ait été publié, ou qu'il soit réindexé ensuite ; la tâche 1.1 prouve ce comportement par un test.
 
 ## Diagrammes
 
@@ -158,17 +158,17 @@ flowchart LR
     P -- oui --> Y["En cache : quelques ms"]
 ```
 
-C'est l'amplification forfaitaire qui rend la vue lourde (679,1 Mio), pas la somme des comptes (363,4 Mio). Avec 1,5 le poids tombe à 509,3 Mio, hors index des arêtes : sur la limite, d'où le relèvement conjoint du plafond du cache (D2).
+C'est l'amplification forfaitaire qui rend la vue lourde (679,1 Mio), pas la somme des comptes (363,4 Mio, à 1,02 fois le tas retenu mesuré). Avec 1,25 le poids tombe à 424,4 Mio, hors index des arêtes, sous le plafond de 512 Mio : la vue est admise sans relever le plafond du cache (D2).
 
 ## Décisions
 
-### D1 — Plafond de persistance à 512 Mio
+### D1 — Plafond de persistance à 400 Mio
 
-[Proposition] Le plafond passe de 256 à 512 Mio, pour les deux stores. Justification : le plus gros snapshot mesuré fait 356 Mo (339,5 Mio) ; 512 Mio laisse une marge d'environ 50 %. Alternatives écartées : 1 Gio (coût mémoire d'un cache à 1,5 Gio sans besoin mesuré) ; garder 256 Mio (refuse deux projets réels de 1 500 fichiers) ; format V4 d'abord (réduit le fichier à environ 0,35 fois, mais pas le tas : voir D3). Compromis : un tas et un disque plus gros pour les projets concernés ; un snapshot publié sous le nouveau plafond devient illisible si le plafond est rétabli (section Compatibilité). ADR justifié (filtre de `.claude/rules/adr.md`) : choix entre options réelles (1 Gio, V4, statu quo), portée sur deux stores, un format persisté et la mémoire du serveur, et retour arrière coûteux (snapshots illisibles) ; l'ADR consolidé `DATA-0066` remplace donc la décision 7 et les Risques, au lieu d'un simple changement de constante.
+[Proposition, révisée par les mesures du 2026-11-07] Le plafond passe de 256 à 400 Mio, pour les deux stores. Justification : le plus gros snapshot mesuré fait 339,5 Mio, soit 18 % de marge sous 400 Mio ; à 400 Mio et avec l'amplification de D2, le poids estimé d'une vue (500 Mio) tient sous le plafond du cache actuel (512 Mio), donc aucun relèvement du cache ni du tas n'est nécessaire. Alternatives écartées : 512 Mio (le poids estimé de 640 Mio exigerait de relever le cache) ; 1 Gio (coût mémoire d'un cache à 1,5 Gio sans besoin mesuré) ; garder 256 Mio (refuse deux projets réels de 1 500 fichiers) ; format V4 d'abord (réduit le fichier à environ 0,35 fois, mais pas le tas : voir D3). Compromis : un tas et un disque plus gros pour les projets concernés ; un snapshot publié sous le nouveau plafond devient illisible si le plafond est rétabli (section Compatibilité). ADR justifié (filtre de `.claude/rules/adr.md`) : choix entre options réelles (1 Gio, V4, statu quo), portée sur deux stores, un format persisté et la mémoire du serveur, et retour arrière coûteux (snapshots illisibles) ; l'ADR consolidé `DATA-0066` remplace donc la décision 7 et les Risques, au lieu d'un simple changement de constante.
 
 ### D2 — Amplification mesurée, plafond du cache couplé
 
-[Proposition] L'amplification de 2 est remplacée par la valeur mesurée sur un corpus de plus de 300 Mio, avec marge, sans descendre sous le maximum observé (1,46 sur le corpus synthétique) ; point de départ 1,5. Le plafond du cache est relevé à 768 Mio, de sorte que 512 Mio × 1,5 = 768 Mio : un snapshot persistable est toujours admissible au cache (invariant I2). Alternatives écartées : 1,25 (sous-évalue le corpus synthétique, viole `Le poids estimé d'une vue ne sous-évalue pas le tas qu'elle retient`) ; relever seulement le plafond du cache (garde une surestimation de 2 fois sans besoin). Si la mesure du groupe 1 donne plus de 1,5, l'amplification et le plafond du cache suivent. Deux précisions : (1) l'amplification mesurée ne vaut que pour le format courant (V3) ; V1 et V2 gardent 2, ce qui impose que le code lise `formatVersion` (écart E4) ; (2) le facteur 2 couvre aussi, selon le commentaire du code (`FileSymbolSnapshotStore.java:47-53`), une chaîne UTF-16 de caractères à deux octets : avant de poser 1,5, rejouer `QueryViewWeightTest` avec `-Dminos.queryViewWeight.print=true` (corpus ascii, latin1, cjk, mixte), car les chiffres 1,41 à 1,46 de l'ADR 0047 peuvent dater d'avant l'index des arêtes (AUD-PERF-11). Les trois valeurs (plafond de persistance, amplification, plafond du cache), aujourd'hui dupliquées dans trois fichiers, viennent d'une source unique pour que l'invariant I2 se teste. ADR : `DATA-0066` consolidé à écrire, planifié en tâche 3.1.
+[Proposition, révisée par les mesures du 2026-11-07] L'amplification de 2 est remplacée par 1,25 et le plafond du cache reste à 512 Mio. Justification : le poids estimé est le plus grand de la somme des comptes et du produit de l'amplification par le fichier ; la somme des comptes couvre déjà les deux corpus mesurés (1,02 fois le tas retenu réel de `morpheus-engine`, 1,45 fois celui du corpus synthétique), et le tas retenu réel vaut 1,05 à 1,14 fois le fichier, donc 1,25 laisse une marge d'au moins 10 % sur un corpus réel. L'invariant I2 devient : 400 Mio × 1,25 = 500 Mio ≤ 512 Mio. Limite connue : un corpus riche en relations (le synthétique : 669 Mio de somme des comptes) garde un poids estimé au-dessus du plafond du cache quelle que soit l'amplification ; sa vue n'est pas mise en cache et se recharge à chaque requête (voir Risques). Alternatives écartées : garder 1,5 et relever le cache à 768 Mio (la mesure montre que la somme des comptes suffit à protéger le cas synthétique, donc 1,5 coûterait de la mémoire sans protection supplémentaire) ; relever seulement le plafond du cache (garde une surestimation de 2 fois sans besoin). Si une mesure ultérieure donne un tas retenu supérieur à 1,25 fois le fichier sur un corpus réel, l'amplification suit. Deux précisions : (1) l'amplification mesurée ne vaut que pour le format courant (V3) ; V1 et V2 gardent 2, ce qui impose que le code lise `formatVersion` (écart E4) ; (2) le facteur 2 couvre aussi, selon le commentaire du code (`FileSymbolSnapshotStore.java:47-53`), une chaîne UTF-16 de caractères à deux octets : avant de poser 1,25, rejouer `QueryViewWeightTest` avec `-Dminos.queryViewWeight.print=true` (corpus ascii, latin1, cjk, mixte) : les 1,41 à 1,47 mesurés sur le corpus synthétique sont couverts par la somme des comptes, mais le test doit le prouver pour chaque vocabulaire, y compris les caractères à deux octets. Les trois valeurs (plafond de persistance, amplification, plafond du cache), aujourd'hui dupliquées dans trois fichiers, viennent d'une source unique pour que l'invariant I2 se teste. ADR : `DATA-0066` consolidé à écrire, planifié en tâche 3.1.
 
 ### D3 — Ne pas livrer le format V4 dans ce changement
 
@@ -176,7 +176,7 @@ C'est l'amplification forfaitaire qui rend la vue lourde (679,1 Mio), pas la som
 
 ### D4 — Dimensionnement du tas hors du changement
 
-[Décision] Le changement ne modifie pas les fichiers Compose. Il consigne dans le banc le tas maximal de la JVM mesurée, et recommande un changement `distribution-docker` si la mesure montre que 25 % de 3 Gio (768 Mio) ne contient pas un cache de 768 Mio avec le pic de décodage.
+[Décision] Le changement ne modifie pas les fichiers Compose. Il consigne dans le banc le tas maximal de la JVM mesurée, et recommande un changement `distribution-docker` : mesuré, une vue de 372 Mo se charge dans 512 Mo de tas, mais deux vues chargées en même temps échouent sous 640 Mo ; le tas par défaut d'un conteneur de 3 Gio (768 Mio) supporte donc une vue en cache et pas deux chargements simultanés.
 
 ## Qualification des capacités
 
@@ -186,7 +186,7 @@ C'est l'amplification forfaitaire qui rend la vue lourde (679,1 Mio), pas la som
 
 ## Risques et compromis
 
-- Le cache à 768 Mio, avec les autres caches (graphe de programme 256 Mio, corpus hybride 256 Mio, vecteurs 256 Mio), peut dépasser le tas par défaut d'un conteneur de 3 Gio → mesurer et, si besoin, relever le tas par un changement `distribution-docker` ; en attendant, la vue non admise reste servie (4 s), sans erreur.
+- Mesuré : plusieurs vues non mises en cache chargées en même temps (requêtes concurrentes sur un corpus riche en relations, ou sur un snapshot au-dessus du plafond du cache) coûtent 372 Mo de tas chacune et font échouer un tas de 640 Mo à deux chargements → limiter les chargements simultanés d'une vue non admise (exigence à proposer au propriétaire, question ouverte) ; le cache à 512 Mio et les autres caches (graphe de programme 256 Mio, corpus hybride 256 Mio, vecteurs 256 Mio) restent sous le tas par défaut de 3 Gio seulement si le tas est relevé (changement `distribution-docker`).
 - Un pic de décodage supérieur au tas retenu pourrait provoquer une erreur mémoire à l'import sous un conteneur d'administration de 2 Gio → tâche 1.3, mesure sous `-Xmx512m`.
 - Coût disque : un snapshot de 340 Mio par projet, plus la rétention → tâche 1.5, mesure de la rétention.
 - Retour arrière : un snapshot publié sous le nouveau plafond devient illisible si le plafond est rétabli → décrit en Compatibilité, test en tâche 1.1.
@@ -227,6 +227,7 @@ C'est l'amplification forfaitaire qui rend la vue lourde (679,1 Mio), pas la som
 
 ## Questions ouvertes
 
-- Valeurs finales : plafond de persistance (recommandation 512 Mio), plafond du cache (768 Mio), amplification (1,5 ou la valeur mesurée) : à valider par le propriétaire après la tâche 1.3.
+- Valeurs finales : plafond de persistance (recommandation 400 Mio), amplification (1,25), plafond du cache inchangé à 512 Mio : à valider par le propriétaire (mesures du groupe 1 faites le 2026-11-07).
+- Chargements simultanés d'une vue non mise en cache : borner leur nombre (par un verrou ou un sémaphore) pour éviter l'épuisement du tas ; nouvelle exigence à proposer, non incluse dans ce changement. Recommandation : l'ajouter, car la mesure montre une erreur mémoire à deux chargements simultanés.
 - Tas du conteneur MCP : recommandation de traiter par un changement `distribution-docker` si la tâche 1.3 montre que le tas par défaut est insuffisant.
 - Format V4 : recommandation de ne pas le déclencher pour ce besoin.

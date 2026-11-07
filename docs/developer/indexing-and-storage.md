@@ -226,6 +226,34 @@ Selon les fonctionnalités utilisées :
 
 Le code de requête dépend uniquement du snapshot MINOS actif, jamais du fichier SCIP brut.
 
+## Mesurer un gros snapshot
+
+Deux `main` et un test des sources de `minos-storage`, hors `verify` (leur nom ne correspond à aucun motif Surefire), mesurent ce qu'un snapshot de plusieurs centaines de Mio coûte à lire et à mettre en cache. Un snapshot au-dessus du plafond de persistance (256 Mio) ne se publie ni ne se lit avec un build non modifié : la mesure se fait avec un build dont le plafond (`SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES`) est relevé localement, jamais commité.
+
+| Outil | Rôle |
+|---|---|
+| `LargeSnapshotMeasurement` (`com.minos.storage.local.store`) | taille persistée, tas retenu par la vue avec l'index des arêtes, pic de tas au chargement, lectures successives et état du cache ; mode `synthetic <racine> <fichiers>` ou `existing <MINOS_HOME>/symbol-snapshots <projectId>` |
+| `LargePostgresSnapshotMeasurement` (`com.minos.storage.postgresql.snapshot`) | publication d'un snapshot du magasin fichier dans le store PostgreSQL géré (Docker, image pgvector épinglée déjà tirée), puis lectures successives ; lancé par `-Dtest=LargePostgresSnapshotMeasurement -Dminos.largeSnapshot.store=… -Dminos.largeSnapshot.project=…` |
+| `SnapshotReadCeilingTest` (`com.minos.storage.codec`) | exécuté par `verify` : le plafond borne aussi la lecture, sans chemin dans le message |
+
+Le classpath du `main` sur poste Windows ajoute `minos-storage/src/test/platform-access-control` (fournisseur de contrôle d'accès des tests du module).
+
+Mesures du 2026-11-07, `develop` `2e3da18b`, JDK 21.0.12.1, Windows, plafond relevé à 1 Gio dans un build jetable. Snapshot réel : `morpheus-engine` (1 488 fichiers Java, 60 472 symboles, 488 477 occurrences) ; snapshot synthétique : `QueryViewWeightFixtures`, 3 300 fichiers.
+
+| Mesure | `morpheus-engine` (réel) | Synthétique (3 300 fichiers) |
+|---|---|---|
+| Taille persistée | 356 038 984 octets (339,5 Mio) | 330 621 486 octets (315,3 Mio) |
+| Tas retenu par la vue, index des arêtes compris | 374 738 864 octets, soit 1,05 fois le fichier | 484 663 400 octets, soit 1,47 fois le fichier |
+| Somme des comptes du poids estimé (1 024 par symbole et par relation, 640 par occurrence) | 363,4 Mio, soit 1,02 fois le tas retenu | 669 Mio, soit 1,45 fois |
+| Lecture à froid, magasin fichier | 3,5 s | 4,2 s |
+| Lectures suivantes | 3,0 à 3,2 s : la vue est refusée par le cache (poids estimé au-dessus de 512 Mio), 5 chargements complets pour 5 lectures | 3,3 à 3,9 s, même refus |
+| Plus petit tas qui charge une vue | 512 Mo | non mesuré |
+| Deux vues chargées en même temps | `OutOfMemoryError` sous 512 et 640 Mo, passe sous 768 Mo | non mesuré |
+| Publication PostgreSQL (356 Mo), deux essais | 10,4 à 12,1 s | non mesuré |
+| Lecture PostgreSQL | 9,5 à 13,7 s à chaque lecture (aucune mise en cache) | non mesuré |
+
+Lecture : sur un corpus réel le tas retenu est proche de 1,05 à 1,14 fois le fichier (1,14 sur le code de production de MINOS, ADR 0047) ; le corpus synthétique, riche en relations, atteint 1,47. Le poids estimé est le plus grand de la somme des comptes et du produit d'une amplification par la taille du fichier : sur le corpus réel mesuré, la somme des comptes suffit déjà à ne pas sous-évaluer.
+
 ## Cohérence concurrente
 
 `IndexingLifecycleService` sérialise les runs par projet dans une instance : un projet déjà `INDEXING` ou `REFRESHING` ne peut pas démarrer un second run concurrent.
