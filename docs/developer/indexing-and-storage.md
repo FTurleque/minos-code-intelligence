@@ -228,7 +228,7 @@ Le code de requête dépend uniquement du snapshot MINOS actif, jamais du fichie
 
 ## Mesurer un gros snapshot
 
-Deux `main` et un test des sources de `minos-storage`, hors `verify` (leur nom ne correspond à aucun motif Surefire), mesurent ce qu'un snapshot de plusieurs centaines de Mio coûte à lire et à mettre en cache. Un snapshot au-dessus du plafond de persistance (256 Mio) ne se publie ni ne se lit avec un build non modifié : la mesure se fait avec un build dont le plafond (`SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES`) est relevé localement, jamais commité.
+Deux `main` et un test des sources de `minos-storage`, hors `verify` (leur nom ne correspond à aucun motif Surefire), mesurent ce qu'un snapshot de plusieurs centaines de Mio coûte à lire et à mettre en cache. Un snapshot au-dessus du plafond de persistance (400 Mio, `SnapshotLimits`) ne se publie ni ne se lit : le mesurer demande un build dont le plafond (`SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES`) est relevé localement, jamais commité.
 
 | Outil | Rôle |
 |---|---|
@@ -253,6 +253,18 @@ Mesures du 2026-11-07, `develop` `2e3da18b`, JDK 21.0.12.1, Windows, plafond rel
 | Lecture PostgreSQL | 9,5 à 13,7 s à chaque lecture (aucune mise en cache) | non mesuré |
 
 Lecture : sur un corpus réel le tas retenu est proche de 1,05 à 1,14 fois le fichier (1,14 sur le code de production de MINOS, ADR 0047) ; le corpus synthétique, riche en relations, atteint 1,47. Le poids estimé est le plus grand de la somme des comptes et du produit d'une amplification par la taille du fichier : sur le corpus réel mesuré, la somme des comptes suffit déjà à ne pas sous-évaluer.
+
+Mesures du 2026-11-07 avec un build non modifié de `develop` `bc2995a8` (persistance 400 Mio, cache 512 Mio), même JDK, poste de 48 Go (tas par défaut de la JVM : 12 Gio), import du SCIP de `morpheus-engine` (51,9 Mo) dans un `MINOS_HOME` temporaire :
+
+| Mesure | Résultat |
+|---|---|
+| `import-scip` sous `-Xmx512m` | refusé avant décodage, rien d'écrit : `SCIP index exceeds safe decode heap budget`, estimation de 196 274 198 octets pour un budget de 178 956 970 (le tiers du tas) |
+| `import-scip` sous `-Xmx576m`, `640m`, `768m`, `1g` et le tas par défaut | publié en 10,1 à 11,3 s |
+| Occupation du tas avant une collection, tas par défaut | 1 432 à 1 451 Mio ; la JVM laisse croître un grand tas, ce chiffre n'est pas un minimum |
+| Sonde MCP à trois appels `minos_find_symbols`, tas par défaut puis `-Xmx768m` | premier appel en 4 156 et 4 206 ms (chargement de la vue), deux suivants en 54 à 62 ms (vue en cache) |
+| Ré-import du même SCIP, trois fois | un seul snapshot, adressé par son contenu : 339,5 Mio sur disque |
+| Import de quatre variantes distinctes par `import-scip` | cinq snapshots conservés, 1 697,7 Mio : `import-scip` n'applique pas la rétention, seule l'indexation compacte |
+| `QueryViewWeightTest` avec `-Dminos.queryViewWeight.print=true` (150 fichiers, 14,8 à 15,0 Mo persistés) | tas retenu de 1,43 (ascii, latin1) à 1,48 (cjk) fois le fichier ; poids estimé de 1,53 à 1,57 fois le tas retenu ; amplification V3 seule de 0,84 à 0,88 |
 
 ## Cohérence concurrente
 

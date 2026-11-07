@@ -188,3 +188,7 @@ minos import-scip my-project --file .\index.scip --provider custom
 ```
 
 Ce chemin est destiné aux diagnostics, fixtures et providers qui ne disposent pas encore d'un executor MINOS.
+
+L'import décode l'artefact en mémoire. Il refuse, sans rien écrire, un artefact dont le décodage estimé dépasse le tiers du tas de la JVM ; le message commence par `SCIP index exceeds safe decode heap budget`. Mesuré, le SCIP de 52 Mo d'un projet Java de 1 488 fichiers est refusé sous un tas de 512 Mo et importé dès 576 Mo.
+
+`import-scip` n'applique pas la rétention des snapshots : chaque import d'un contenu différent ajoute un snapshot (340 Mio pour ce projet), et rien ne les supprime avant la prochaine indexation du projet par `minos index`. Ré-importer un artefact identique ne crée pas de snapshot supplémentaire.
