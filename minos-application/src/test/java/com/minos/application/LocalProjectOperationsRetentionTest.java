@@ -94,10 +94,11 @@ class LocalProjectOperationsRetentionTest {
     void aRefusedArtifactAppliesNoRetention() throws Exception {
         Fixture fixture = new Fixture(temp);
 
+        String projectId = fixture.project.id().toString();
+        Path missing = temp.resolve("missing.scip");
         try (LocalProjectOperations operations = new LocalProjectOperations(fixture.application())) {
-            assertThrows(IllegalArgumentException.class, () -> operations.importScip(
-                    fixture.project.id().toString(), temp.resolve("missing.scip"), "scip-java", "1.0", null,
-                    "snapshot-1"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> operations.importScip(projectId, missing, "scip-java", "1.0", null, "snapshot-1"));
         }
 
         assertEquals(List.of(), fixture.events);

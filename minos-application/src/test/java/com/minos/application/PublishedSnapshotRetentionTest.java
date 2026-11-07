@@ -53,7 +53,8 @@ class PublishedSnapshotRetentionTest {
             throw defect;
         });
 
-        assertSame(defect, assertThrows(IllegalStateException.class, () -> retention.compact(UUID.randomUUID())));
+        UUID project = UUID.randomUUID();
+        assertSame(defect, assertThrows(IllegalStateException.class, () -> retention.compact(project)));
     }
 
     @Test
