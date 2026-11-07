@@ -5,9 +5,7 @@ import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipTypeScriptProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
-import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedFileLease;
-import com.minos.io.BoundedInputStream;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -23,14 +21,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import static com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractDistribution;
 import static com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractZipBounded;
 import static com.minos.adapter.scip.runtime.install.ManagedToolInstallation.deleteRecursively;
@@ -57,7 +51,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     // The URL, version and SHA-256 of every pinned artifact below live in embedded-tools.json (the one
     // description shared with the Docker release image and the Windows distribution build); nothing here
     // repeats them.
-    private static final String COURSIER_ID = "coursier";
+    private static final String COURSIER_ID = CoursierLauncherInstallation.COURSIER_ID;
 
     // A project's own Maven wrapper or a host-installed `mvn` cannot be reached by the Windows
     // AppContainer sandbox in general: wrapper discovery walks ancestor directories the sandbox
@@ -71,13 +65,6 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private static final String JAVA_CLASSPATH_ID = "scip-java-classpath";
     private static final String EMBEDDED_TREE_SOURCE = "embedded-tools-manifest-sha256";
     private static final String CLASSPATH_DIRECTORY = "classpath";
-    private static final long MAX_COURSIER_ARCHIVE_BYTES = 64L * 1024L * 1024L;
-    private static final long MAX_COURSIER_LAUNCHER_BYTES = 256L * 1024L * 1024L;
-    private static final Set<PosixFilePermission> OWNER_ONLY_EXECUTABLE = EnumSet.of(
-            PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE);
-    private static final String COURSIER_INSTALL_FAILED = "Coursier launcher could not be installed";
-    private static final String COURSIER_INSTALL_HINT =
-            "; run `minos tools install scip-java` with network access, or put Coursier (`cs`) in PATH";
     private static final long MAX_MAVEN_ARCHIVE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_MAVEN_ARCHIVE_ENTRIES = 4_096L;
     private static final long MAX_MAVEN_EXTRACTED_BYTES = 64L * 1024L * 1024L;
@@ -117,6 +104,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private final Path home;
     private final Path toolsRoot;
     private final ToolOriginLedger origins;
+    private final CoursierLauncherInstallation coursierLauncher;
     private final ScipJavaMavenOffline mavenOffline;
     private volatile PinnedArtifactSource source;
 
@@ -128,6 +116,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.toolsRoot = home.resolve("tools");
         this.origins = new ToolOriginLedger(toolsRoot);
+        this.coursierLauncher = new CoursierLauncherInstallation(CATALOG, toolsRoot, origins, MINOS_USER_AGENT);
         this.mavenOffline = Objects.requireNonNull(mavenOffline, "mavenOffline");
     }
 
@@ -141,31 +130,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return current;
     }
 
-    /** The Coursier launcher the catalogue pins for this platform; empty where none is packaged. */
-    private static Optional<EmbeddedToolsCatalog.Artifact> coursierArtifact() {
-        String platform = EmbeddedToolsCatalog.currentPlatform();
-        if (!EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64.equals(platform)
-                && !EmbeddedToolsCatalog.PLATFORM_LINUX_X64.equals(platform)) {
-            return Optional.empty();
-        }
-        return CATALOG.findArtifact(COURSIER_ID, platform).filter(artifact -> platform.equals(artifact.platform()));
-    }
-
     private static EmbeddedToolsCatalog.Artifact mavenArtifact() {
         return CATALOG.artifact(MAVEN_ID, EmbeddedToolsCatalog.PLATFORM_ANY);
     }
 
     private static EmbeddedToolsCatalog.Artifact nodeArtifact() {
         return CATALOG.artifact(NODE_ID, EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64);
-    }
-
-    /** The folder of a managed launcher: its platform and the short commit of the launchers repository. */
-    private static String coursierLauncherId(EmbeddedToolsCatalog.Artifact artifact) {
-        return artifact.platform() + "-" + artifact.version().substring(0, 12);
-    }
-
-    private static String coursierExecutableName(EmbeddedToolsCatalog.Artifact artifact) {
-        return EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64.equals(artifact.platform()) ? "cs.exe" : "cs";
     }
 
     private static String nodeDistributionId() {
@@ -432,93 +402,14 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private Path ensureCoursier(boolean allowNetwork) throws Exception {
         Optional<Path> existing = coursierExecutable();
-        if (existing.isPresent()) return existing.orElseThrow();
-        EmbeddedToolsCatalog.Artifact artifact = coursierArtifact().orElseThrow(() -> new IllegalStateException(
-                "automatic Coursier installation is not packaged for this platform; install `cs` in PATH"));
-        return installManagedCoursier(source(), artifact, allowNetwork);
+        return existing.isPresent() ? existing.orElseThrow() : coursierLauncher.installForPlatform(source(), allowNetwork);
     }
 
-    /**
-     * Installs the Coursier launcher {@code artifact} from {@code artifactSource} under {@code MINOS_HOME/tools}: the
-     * archive is verified against its pinned SHA-256 before anything is extracted, and the launcher is published by
-     * an atomic move. Package-private so that a test can hand it a pinned source whose bytes it controls.
-     */
+    /** Installs the Coursier launcher {@code artifact} from {@code artifactSource} (see CoursierLauncherInstallation). */
     Path installManagedCoursier(
             PinnedArtifactSource artifactSource, EmbeddedToolsCatalog.Artifact artifact, boolean allowNetwork
     ) throws Exception {
-        Path directory = toolsRoot.resolve("coursier").resolve(coursierLauncherId(artifact));
-        if (!EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64.equals(artifact.platform())) {
-            return installGzipCoursier(artifactSource, artifact, directory, allowNetwork);
-        }
-        PrivateLocalStorage.ensurePrivateDirectory(directory);
-        Path destination = directory.resolve(coursierExecutableName(artifact));
-        Path archive = directory.resolve("cs-x86_64-pc-win32.zip");
-        Path archivePartial = directory.resolve("cs-x86_64-pc-win32.partial.zip");
-        Path executablePartial = directory.resolve("cs.partial.exe");
-        Files.deleteIfExists(archivePartial);
-        Files.deleteIfExists(executablePartial);
-
-        PinnedArtifactSource.Origin origin = artifactSource.acquire(
-                artifact, archivePartial, MAX_COURSIER_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
-        moveFile(archivePartial, archive);
-
-        int executableEntries = 0;
-        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                if (!entry.isDirectory() && entry.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) {
-                    executableEntries++;
-                    if (executableEntries == 1) writeNewFile(executablePartial, zip);
-                }
-            }
-        }
-        if (executableEntries != 1 || !Files.isRegularFile(executablePartial) || Files.size(executablePartial) == 0L) {
-            Files.deleteIfExists(executablePartial);
-            throw new IllegalStateException("Coursier launcher ZIP did not contain a Windows executable");
-        }
-        moveFile(executablePartial, destination);
-        origins.record(COURSIER_ID, origin);
-        return destination;
-    }
-
-    /**
-     * The Linux launcher is a single gzip-compressed executable. It is decompressed under a byte bound into a partial
-     * file created private, made executable for its owner only, then moved into place; the archive and the partial
-     * never outlive the call. A failure names Coursier and how to proceed, never a path.
-     */
-    private Path installGzipCoursier(
-            PinnedArtifactSource artifactSource, EmbeddedToolsCatalog.Artifact artifact, Path directory, boolean allowNetwork
-    ) throws Exception {
-        PrivateLocalStorage.ensurePrivateDirectory(directory);
-        Path destination = directory.resolve(coursierExecutableName(artifact));
-        Path archivePartial = directory.resolve("cs.partial.gz");
-        Path executablePartial = directory.resolve("cs.partial");
-        Files.deleteIfExists(archivePartial);
-        Files.deleteIfExists(executablePartial);
-        try {
-            PinnedArtifactSource.Origin origin = artifactSource.acquire(
-                    artifact, archivePartial, MAX_COURSIER_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
-            try (InputStream raw = ConfinedFileOpener.openRegularFileNoFollow(archivePartial);
-                 GZIPInputStream gzip = new GZIPInputStream(raw);
-                 BoundedInputStream launcher = new BoundedInputStream(gzip, MAX_COURSIER_LAUNCHER_BYTES, "Coursier launcher")) {
-                writeNewFile(executablePartial, launcher);
-            }
-            if (Files.size(executablePartial) == 0L) {
-                throw new IllegalStateException("the Coursier launcher archive is empty");
-            }
-            Files.setPosixFilePermissions(executablePartial, OWNER_ONLY_EXECUTABLE);
-            moveFile(executablePartial, destination);
-            origins.record(COURSIER_ID, origin);
-            return destination;
-        } catch (IllegalStateException refused) {
-            throw new IllegalStateException(COURSIER_INSTALL_FAILED + ": " + refused.getMessage() + COURSIER_INSTALL_HINT, refused);
-        } catch (IOException failure) {
-            throw new IllegalStateException(COURSIER_INSTALL_FAILED + " (" + failure.getClass().getSimpleName() + ")"
-                    + COURSIER_INSTALL_HINT, failure);
-        } finally {
-            Files.deleteIfExists(archivePartial);
-            Files.deleteIfExists(executablePartial);
-        }
+        return coursierLauncher.install(artifactSource, artifact, allowNetwork);
     }
 
     private Path mavenRoot() { return toolsRoot.resolve("maven").resolve(mavenArtifact().version()); }
@@ -781,11 +672,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return parts.isEmpty() ? Optional.empty() : Optional.of(TOOLS_ORIGIN_PREFIX + String.join(", ", parts));
     }
 
-    /** The managed launcher of this platform when it is installed, otherwise a `cs` found in PATH. */
     private Optional<Path> coursierExecutable() {
-        Optional<Path> managed = coursierArtifact().map(artifact -> toolsRoot.resolve("coursier")
-                .resolve(coursierLauncherId(artifact)).resolve(coursierExecutableName(artifact)));
-        return managed.filter(Files::isRegularFile).or(() -> CommandLocator.find("cs"));
+        return coursierLauncher.managedExecutable().or(() -> CommandLocator.find("cs"));
     }
 
     private Path typeScriptRoot() { return toolsRoot.resolve("scip-typescript").resolve(SCIP_TYPESCRIPT_VERSION); }
