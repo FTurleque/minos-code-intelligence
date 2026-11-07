@@ -33,13 +33,13 @@ public final class KnowledgeSnapshotCodecs {
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(limits, LIMITS);
         long ceiling = limits.maxPersistedBytes();
-        SnapshotCodecV3 v3 = new SnapshotCodecV3(limits);
-        OptionalLong utf8 = v3.encodedSizeIfEncodable(snapshot);
+        SnapshotCodecV3 currentCodec = new SnapshotCodecV3(limits);
+        OptionalLong utf8 = currentCodec.encodedSizeIfEncodable(snapshot);
         if (utf8.isPresent()) {
-            return new Selection(v3, SnapshotBinaryCodecSupport.requirePersistable(utf8.getAsLong(), ceiling));
+            return new Selection(currentCodec, SnapshotBinaryCodecSupport.requirePersistable(utf8.getAsLong(), ceiling));
         }
-        SnapshotCodec v2 = forVersion(SnapshotBinaryCodecSupport.FORMAT_VERSION_V2, limits);
-        return new Selection(v2, v2.requirePersistable(snapshot));
+        SnapshotCodec fallbackCodec = forVersion(SnapshotBinaryCodecSupport.FORMAT_VERSION_V2, limits);
+        return new Selection(fallbackCodec, fallbackCodec.requirePersistable(snapshot));
     }
 
     /** Codec of a known format version. */
