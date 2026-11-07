@@ -42,7 +42,8 @@ class WslIndexingRouteWiringTest {
         try (MinosApplication application = application(null)) {
             assertEquals(Optional.empty(), application.compositionRoot().wslIndexingRoute(home));
             assertEquals(Optional.empty(), ProjectIndexingUseCase.viaWsl(application, Optional.of("Ubuntu")));
-            assertThrows(NullPointerException.class, () -> application.compositionRoot().wslIndexingRoute(null));
+            MinosApplicationComposer composer = application.compositionRoot();
+            assertThrows(NullPointerException.class, () -> composer.wslIndexingRoute(null));
         }
     }
 

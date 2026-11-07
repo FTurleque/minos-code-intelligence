@@ -62,7 +62,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
      */
     @Override
     public IndexExecutionView executeViaWsl(String projectIdentifier, String providerOverride, boolean forceFull,
-                                            IndexingResumeChoice resumeChoice, String distribution) throws Exception {
+                                            IndexingResumeChoice resumeChoice, String distribution) throws IOException {
         ProjectIndexingUseCase viaWsl = ProjectIndexingUseCase.viaWsl(application, Optional.ofNullable(distribution))
                 .orElseThrow(() -> new IllegalArgumentException(VIA_WSL_UNAVAILABLE));
         return view(viaWsl.executeSummary(projectIdentifier, providerOverride, forceFull, resumeChoice));

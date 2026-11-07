@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -150,7 +151,7 @@ class IndexCommandViaWslTest {
 
         @Override public IndexExecutionView executeViaWsl(String projectIdentifier, String providerOverride,
                                                           boolean forceFull, IndexingResumeChoice resumeChoice,
-                                                          String distribution) throws Exception {
+                                                          String distribution) throws IOException {
             if (!offersRoute) {
                 return AutonomousIndexOperations.super.executeViaWsl(
                         projectIdentifier, providerOverride, forceFull, resumeChoice, distribution);

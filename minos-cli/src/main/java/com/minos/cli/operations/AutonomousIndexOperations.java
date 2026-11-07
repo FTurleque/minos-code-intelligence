@@ -3,6 +3,7 @@ package com.minos.cli.operations;
 import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.cli.support.CliCommandSupport;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
@@ -46,7 +47,7 @@ public interface AutonomousIndexOperations {
             boolean forceFull,
             IndexingResumeChoice resumeChoice,
             String distribution
-    ) throws Exception {
+    ) throws IOException {
         throw new IllegalArgumentException(VIA_WSL_UNAVAILABLE);
     }
 
