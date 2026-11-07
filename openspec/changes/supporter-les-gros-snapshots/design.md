@@ -229,8 +229,9 @@ C'est l'amplification forfaitaire qui rend la vue lourde (679,1 Mio), pas la som
 
 - **Snapshot de plus de 64 Mio, scénario « Snapshot de plus de 64 Mio persistés »** : non reproduit à cette taille en test ; les tests d'admission abaissent les plafonds. Une mesure réelle existe (339,5 Mio, `docs/developer/indexing-and-storage.md`).
 - **Scénario « Corpus de plus de 300 Mio persistés »** : prouvé par la mesure `LargeSnapshotMeasurement` du 2026-11-07 (tas retenu 1,05 fois le fichier, estimation portée par la somme des comptes), pas par un test de `verify` : un test à cette taille alourdirait les runners Windows et Linux.
-- **Sonde MCP sur `morpheus-engine` après import (tâche 2.5)** : manuelle, à faire avec le jar construit.
-- **Tâches 1.3 (import sous `-Xmx512m`, pic de décodage, rejeu de `QueryViewWeightTest` par vocabulaire) et 1.5 (disque de la rétention)** : ouvertes ; la valeur de la rétention (environ 1 Gio par projet de cette taille) est calculée, non mesurée.
+- **Sonde MCP sur `morpheus-engine` après import (tâche 2.5)** : faite avec le build de `develop` `bc2995a8`, deuxième et troisième appels en 54 à 62 ms contre 4,2 s au premier.
+- **Tâche 1.3** : mesures faites (import refusé sous `-Xmx512m` par le budget de décodage, publié dès `-Xmx576m` ; `QueryViewWeightTest` au maximum de 1,48) ; reste la validation des valeurs par le propriétaire.
+- **Rétention et `import-scip` (tâche 1.5)** : mesuré, `import-scip` ne compacte pas ; cinq snapshots distincts de `morpheus-engine` occupent 1 697,7 Mio. La correction est un changement à part.
 - **Exigences ADDED** (« Un snapshot de plus de 256 Mio est persisté jusqu'au plafond de persistance », « Un snapshot au-delà du plafond de persistance est refusé sans rien écrire », « Le plafond du cache de vues couvre tout snapshot persistable ») : leurs lignes de traçabilité entrent dans le dossier de capacité à l'archivage, quand elles rejoignent la spec de référence.
 - **Bornage des chargements simultanés d'une vue non mise en cache** : exigence à proposer, hors de ce changement ; mesuré, deux vues simultanées échouent sous 640 Mo.
 - **Linux** : non mesuré.
