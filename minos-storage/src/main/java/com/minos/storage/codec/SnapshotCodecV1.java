@@ -9,6 +9,23 @@ import java.util.Objects;
 /** Historical M2 symbol-only codec. */
 public final class SnapshotCodecV1 implements SnapshotCodec {
 
+    private final long maxPersistedBytes;
+
+    /** A codec bound to the production ceiling. */
+    public SnapshotCodecV1() {
+        this(SnapshotLimits.production());
+    }
+
+    /** A codec that writes and reads up to {@code limits.maxPersistedBytes()}. */
+    public SnapshotCodecV1(SnapshotLimits limits) {
+        this.maxPersistedBytes = java.util.Objects.requireNonNull(limits, "limits").maxPersistedBytes();
+    }
+
+    @Override
+    public long maxPersistedBytes() {
+        return maxPersistedBytes;
+    }
+
     @Override
     public int formatVersion() {
         return SnapshotBinaryCodecSupport.FORMAT_VERSION_V1;
@@ -24,7 +41,7 @@ public final class SnapshotCodecV1 implements SnapshotCodec {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(snapshot, "snapshot");
         SymbolSnapshot legacy = legacy(snapshot);
-        String checksum = SnapshotBinaryCodecSupport.writeSymbolSnapshotV1(file, legacy);
+        String checksum = SnapshotBinaryCodecSupport.writeSymbolSnapshotV1(file, legacy, maxPersistedBytes);
         return new SnapshotEncoding(checksum, legacy.symbols().size(), 0, 0);
     }
 
@@ -45,7 +62,7 @@ public final class SnapshotCodecV1 implements SnapshotCodec {
     public CodeKnowledgeSnapshot read(Path file) throws IOException {
         Objects.requireNonNull(file, "file");
         return SnapshotBinaryCodecSupport.fromLegacy(
-                SnapshotBinaryCodecSupport.readSymbolSnapshotV1(file)
+                SnapshotBinaryCodecSupport.readSymbolSnapshotV1(file, maxPersistedBytes)
         );
     }
 }

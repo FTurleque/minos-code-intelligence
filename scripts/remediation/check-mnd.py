@@ -97,7 +97,7 @@ def main() -> int:
         forbid("SemanticIndexBudget.java", semantic_budget, "Float.BYTES")
 
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres,
-                "activeMetadata(projectId)", "queryCache", "MAX_QUERY_CACHE_WEIGHT_BYTES", "buildLocks")
+                "activeMetadata(projectId)", "queryCache", "limits.maxQueryCacheWeightBytes()", "buildLocks")
         require("ProgramGraphService.java", graph_service,
                 "WeightedLruCache<CacheKey, GraphEntry> cache", "evidenceWeight", "stringWeight", "maximumWeight")
         require("FingerprintConstrainedJavaProgramGraphProvider.java", fingerprints,

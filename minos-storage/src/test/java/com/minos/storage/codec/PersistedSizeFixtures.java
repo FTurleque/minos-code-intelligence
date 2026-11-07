@@ -17,8 +17,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Snapshots sized against the persisted-snapshot ceiling. Every large symbol shares one ASCII string
- * instance, so a snapshot that encodes to more than 256 MiB costs only a few megabytes of heap.
+ * Snapshots sized against a persisted-snapshot ceiling. Every large symbol shares one ASCII string
+ * instance, so a snapshot that encodes to tens of megabytes costs only a few megabytes of heap. Tests lower
+ * the ceiling of the store under test ({@link SnapshotLimits}) instead of building a snapshot as large as
+ * the production ceiling.
  */
 public final class PersistedSizeFixtures {
 
@@ -30,12 +32,13 @@ public final class PersistedSizeFixtures {
     }
 
     /**
-     * Thirty-four symbols carrying an 8-million-character ASCII signature: about 272 MB in V3 (UTF-8), the
-     * format a store picks for it, and 544 MB in V2 — above 256 MiB either way.
+     * Large ASCII symbols, enough of them that the V3 (UTF-8) encoding, the format a store picks for it,
+     * exceeds {@code ceilingBytes}; the V2 encoding is twice as large.
      */
-    public static CodeKnowledgeSnapshot oversized(UUID projectId, String snapshotId) {
+    public static CodeKnowledgeSnapshot largerThan(UUID projectId, String snapshotId, long ceilingBytes) {
+        int count = (int) (ceilingBytes / LARGE_STRING_CHARS) + 1;
         List<Symbol> symbols = new ArrayList<>();
-        for (int index = 0; index < 34; index++) symbols.add(symbol(projectId, index, LARGE));
+        for (int index = 0; index < count; index++) symbols.add(symbol(projectId, index, LARGE));
         return new CodeKnowledgeSnapshot(projectId, snapshotId, symbols, List.of(), List.of());
     }
 
