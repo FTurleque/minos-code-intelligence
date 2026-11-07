@@ -39,7 +39,7 @@
 | [SEC-0061](../adr/SEC-0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité | Accepted | 2026-10-23 | — |
 | [ARCH-0064](../adr/ARCH-0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) | Cœur agnostique du langage et de l'indexeur, SCIP protocole privilégié | Accepted | 2026-10-23 | Remplace ADR-0001, ADR-0002 |
 | [BE-0065](../adr/BE-0065-providers-scip-polyglottes-livres-dans-le-paquet.md) | Providers SCIP polyglottes sous preuve, livrés dans le paquet | Accepted | 2026-10-23 | Remplace ADR-0032, ADR-0040 |
-| [DATA-0066](../adr/DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md) | Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage | Accepted | 2026-10-23 | Remplace ADR-0003, ADR-0023, ADR-0046, ADR-0047 |
+| [DATA-0078](../adr/DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md) | Port de connaissance et persistance des snapshots : format V3, plafonds de taille, compatibilité, dédoublonnage | Accepted | 2026-11-07 | Remplace DATA-0066 |
 | [GEN-0077](../adr/GEN-0077-socle-d-execution-java-21-et-maven.md) | Socle d'exécution : Java 21, Maven par le wrapper, sans framework serveur | Accepted | 2026-11-06 | Remplace GEN-0067 |
 | [ARCH-0068](../adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) | Modules, dépendances et propriété des packages | Accepted | 2026-10-23 | Remplace ADR-0022, ADR-0044, ADR-0055, ADR-0062 |
 | [ARCH-0069](../adr/ARCH-0069-backends-mcp-natif-et-docker.md) | Backends MCP natif et Docker | Accepted | 2026-10-23 | Remplace ADR-0021, ADR-0037 |
@@ -92,4 +92,5 @@ Remplacés, rejetés ou reclassés ; conservés dans `docs/architecture/adr/arch
 | [ADR-0062](../adr/archive/0062-confirmer-l-adr-0044-et-geler-les-racines-de-packages.md) | Confirmer les emplacements de l'ADR 0044 et ne créer de package que sous les racines de son module | Superseded by ADR-0068 |
 | [ADR-0063](../adr/archive/0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate dans le registre arc42 | Superseded by GEN-0073 |
 | [GEN-0067](../adr/archive/GEN-0067-socle-d-execution-java-25-et-maven.md) | Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur | Superseded by GEN-0077 |
+| [DATA-0066](../adr/archive/DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md) | Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage | Superseded by DATA-0078 |
 | [ADR-0060](../adr/archive/0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Superseded by SEC-0074 |

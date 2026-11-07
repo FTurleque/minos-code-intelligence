@@ -7,7 +7,7 @@ rules: false
 
 # 0047 — Snapshot en mémoire : dédoublonnage des chaînes, table de chaînes, pagination ou mappage
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](../DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted (2026-10-13) pour l'option A, mise en œuvre ; options B et C toujours conditionnelles ; mesures dans [`ARCHI-SUIVI.md`](../../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.3 et § A6.11).
 
