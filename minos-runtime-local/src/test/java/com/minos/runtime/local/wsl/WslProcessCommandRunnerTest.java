@@ -78,8 +78,12 @@ class WslProcessCommandRunnerTest {
     void relativeOrEmptyCommandsAreRefusedBeforeAnyLaunch() {
         ProcessWslCommandRunner runner = new ProcessWslCommandRunner();
 
-        assertThrows(IllegalArgumentException.class, () -> runner.run(List.of("wsl.exe", "-l", "-v"), Duration.ofSeconds(1)));
-        assertThrows(IllegalArgumentException.class, () -> runner.run(List.of(), Duration.ofSeconds(1)));
+        List<String> relative = List.of("wsl.exe", "-l", "-v");
+        List<String> empty = List.of();
+        Duration timeout = Duration.ofSeconds(1);
+
+        assertThrows(IllegalArgumentException.class, () -> runner.run(relative, timeout));
+        assertThrows(IllegalArgumentException.class, () -> runner.run(empty, timeout));
     }
 
     @Test

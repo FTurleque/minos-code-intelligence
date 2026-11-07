@@ -23,8 +23,8 @@ public record WslCommandResult(int exitCode, byte[] stdout) {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof WslCommandResult that && exitCode == that.exitCode
-                && Arrays.equals(stdout, that.stdout);
+        return other instanceof WslCommandResult(int otherExitCode, byte[] otherStdout) && exitCode == otherExitCode
+                && Arrays.equals(stdout, otherStdout);
     }
 
     @Override

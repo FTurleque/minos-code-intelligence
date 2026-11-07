@@ -209,7 +209,7 @@ public final class WslPrerequisiteProbe {
 
     /** Parses {@code wsl -l -v}: header (localized) skipped, name first, version last, {@code *} for default. */
     static List<Distribution> parseListing(byte[] utf16) {
-        String text = new String(utf16, StandardCharsets.UTF_16LE).replace("﻿", "").replace("\u0000", "");
+        String text = new String(utf16, StandardCharsets.UTF_16LE).replace("\uFEFF", "").replace("\u0000", "");
         List<Distribution> distributions = new ArrayList<>();
         for (String line : text.split("\\R")) {
             String trimmed = line.strip();

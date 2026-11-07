@@ -19,11 +19,11 @@ import java.util.Optional;
  */
 public final class WslCommandEnvironment {
 
+    private static final String SYSTEM_ROOT = "SystemRoot";
+
     /** Variables copied from the parent process, in their canonical Windows spelling. */
     static final List<String> ALLOWED_KEYS = List.of(
-            "SystemRoot", "WINDIR", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA");
-
-    private static final String SYSTEM_ROOT = "SystemRoot";
+            SYSTEM_ROOT, "WINDIR", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA");
 
     private WslCommandEnvironment() {
     }
