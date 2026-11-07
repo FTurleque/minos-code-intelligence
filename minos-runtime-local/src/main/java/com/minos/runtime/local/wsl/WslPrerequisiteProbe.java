@@ -72,6 +72,8 @@ public final class WslPrerequisiteProbe {
     private static final String DISTRIBUTION_UNREADABLE =
             "the distribution did not answer the probe; check that it starts, then rerun";
 
+    private static final System.Logger LOGGER = System.getLogger(WslPrerequisiteProbe.class.getName());
+
     private final Path wslExecutable;
     private final WslCommandRunner runner;
     private final WslJarProbe jarProbe;
@@ -116,8 +118,16 @@ public final class WslPrerequisiteProbe {
             }
             return Optional.of(candidate);
         } catch (InvalidPathException | IOException | SecurityException unavailable) {
+            LOGGER.log(System.Logger.Level.DEBUG, "wsl.exe not found in the system directory ({0})",
+                    unavailable.getClass().getSimpleName());
             return Optional.empty();
         }
+    }
+
+    /** Operator trace of a check that could not be observed: exception class only, never a path or cause. */
+    private static void logUnobserved(String check, Exception failure) {
+        LOGGER.log(System.Logger.Level.WARNING, "WSL prerequisite {0} could not be observed ({1})",
+                check, failure.getClass().getSimpleName());
     }
 
     /**
@@ -168,12 +178,18 @@ public final class WslPrerequisiteProbe {
         try {
             result = runner.run(List.of(wslExecutable.toString(), "-l", "-v"), LIST_TIMEOUT);
         } catch (IOException failure) {
+            logUnobserved(WslCheck.WSL_VERSION, failure);
             return new Resolution(requested, WslCheck.unknown(WslCheck.WSL_VERSION, "WSL2 " + RETRY));
         }
         List<Distribution> distributions = result.exitCode() == 0 ? parseListing(result.stdout()) : List.of();
         if (distributions.isEmpty()) {
             return new Resolution(requested, WslCheck.missing(WslCheck.WSL_VERSION, WSL_INSTALL));
         }
+        return select(distributions, requested);
+    }
+
+    /** Picks the requested (or default) distribution among those listed and checks its WSL version. */
+    private static Resolution select(List<Distribution> distributions, String requested) {
         Optional<Distribution> target = requested == null
                 ? distributions.stream().filter(Distribution::isDefault).findFirst()
                 : distributions.stream().filter(d -> d.name().equalsIgnoreCase(requested)).findFirst();
@@ -220,6 +236,7 @@ public final class WslPrerequisiteProbe {
                     "/bin/sh", "-c", DISTRIBUTION_SCRIPT), DISTRIBUTION_TIMEOUT);
             facts = result.exitCode() == 0 ? parseFacts(result.stdout()) : Map.of();
         } catch (IOException failure) {
+            logUnobserved(WslCheck.SYSTEMD, failure);
             facts = Map.of();
         }
         Map<String, WslCheck> checks = new LinkedHashMap<>();
@@ -304,6 +321,8 @@ public final class WslPrerequisiteProbe {
         try {
             reported = jarProbe.probe(distribution);
         } catch (RuntimeException failure) {
+            // A failing extension must not make the probe throw: its checks are reported unknown, never OK.
+            logUnobserved(WslCheck.MAVEN, failure);
             reported = List.of();
         }
         for (WslCheck check : reported == null ? List.<WslCheck>of() : reported) {

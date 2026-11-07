@@ -131,6 +131,20 @@ class WslPrerequisiteProbeTest {
     }
 
     @Test
+    void aFailingJarProbeLeavesItsChecksUnknown() {
+        WslJarProbe broken = distribution -> {
+            throw new IllegalStateException("C:\\private\\failure");
+        };
+        WslProbeReport report = new WslPrerequisiteProbe(WSL,
+                new FakeWsl(listing("* Ubuntu    Running         2\r\n"), 0, HEALTHY_DISTRIBUTION), broken).probe(null);
+
+        for (String id : List.of("maven", "project-jdk", "maven-repository")) {
+            assertEquals(WslCheckState.UNKNOWN, check(report, id).state(), id);
+        }
+        assertNoAbsolutePath(report);
+    }
+
+    @Test
     void allChecksOkIsReady() {
         WslJarProbe jar = distribution -> List.of(
                 new WslCheck("maven", WslCheckState.OK, ""),
