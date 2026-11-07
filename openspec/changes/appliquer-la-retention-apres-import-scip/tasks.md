@@ -15,16 +15,16 @@ Aucun constat d'audit (`AUD-…`) ne porte sur ce besoin : il vient de la tâche
 
 ## 3. Documentation produit
 
-- [ ] 3.1 Après la fusion de la PR #673 dans `develop` (et la mise à jour de la branche) : retirer de DATA-0078, « Écarts constatés », l'écart « rétention et `import-scip` », sans toucher au point 11 ; réécrire dans `docs/user/autonomous-indexing.md`, section « Import manuel », la phrase sur l'absence de rétention : un import qui publie un snapshot applique la même rétention que l'indexation (l'actif et deux historiques), et un verrou occupé laisse l'import réussi avec un diagnostic. Vérifier : `python scripts/docs/check-current-docs.py`, `python scripts/docs/product-facts.py --check`, liens relatifs des fichiers modifiés.
+- [x] 3.1 Après la fusion de la PR #673 dans `develop` (et la mise à jour de la branche) : retirer de DATA-0078, « Écarts constatés », l'écart « rétention et `import-scip` », sans toucher au point 11 ; réécrire dans `docs/user/autonomous-indexing.md`, section « Import manuel », la phrase sur l'absence de rétention : un import qui publie un snapshot applique la même rétention que l'indexation (l'actif et deux historiques), et un verrou occupé laisse l'import réussi avec un diagnostic. Vérifier : `python scripts/docs/check-current-docs.py`, `python scripts/docs/product-facts.py --check`, liens relatifs des fichiers modifiés. Fait : point 11 de DATA-0078 complété (compaction après import, preuves relues au HEAD) et écart retiré ; section « Import manuel » réécrite ; relevé de `docs/developer/indexing-and-storage.md` rattaché à son build et comportement actuel ajouté ; `SUIVI.md` renvoie à ce changement ; les deux gates documentaires passent.
 - [ ] 3.2 **(manuelle)** Mesurer sous Windows, avec le build de la branche, quatre imports distincts du SCIP de `morpheus-engine` dans un `MINOS_HOME` temporaire : nombre de snapshots et espace occupé. Vérifier : trois snapshots, chiffre consigné dans `docs/developer/indexing-and-storage.md` à côté du relevé du 2026-11-07, sans le réécrire.
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve
-- [ ] 4.2 Vérifier que le dossier durable de `persistance-snapshots` est à jour (vue de la tâche 1.4) ; vérifier par `python scripts/docs/check-capability-dossiers.py`
-- [ ] 4.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`
-- [ ] 4.4 Rejouer `python .claude/scripts/run_gates.py --fast` ; vérifier qu'il réussit
-- [ ] 4.5 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, `docs/user/`, `docs/developer/`, arc42, ADR) ; vérifier que chacun est fait ou nommé comme reste
+- [x] 4.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve Fait : aucune ligne « à écrire » ; la preuve PostgreSQL exige Docker.
+- [x] 4.2 Vérifier que le dossier durable de `persistance-snapshots` est à jour (vue de la tâche 1.4) ; vérifier par `python scripts/docs/check-capability-dossiers.py` Fait : vue de la tâche 1.4 ; les lignes de traçabilité des trois exigences entrent à l'archivage.
+- [x] 4.3 Valider les spécifications ; vérifier par `openspec validate --all --strict` Fait : 22 éléments valides.
+- [x] 4.4 Rejouer `python .claude/scripts/run_gates.py --fast` ; vérifier qu'il réussit Fait : 26/26.
+- [x] 4.5 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, `docs/user/`, `docs/developer/`, arc42, ADR) ; vérifier que chacun est fait ou nommé comme reste Fait : `docs/user/autonomous-indexing.md`, `docs/developer/indexing-and-storage.md`, DATA-0078, `SUIVI.md`, dossier de capacité. Restent : tâche 3.2 (mesure manuelle), lignes de traçabilité du dossier à l'archivage ; STATUS, ROADMAP et arc42 ne décrivent pas la rétention après import.
 
 ## Workflow follow-up
 

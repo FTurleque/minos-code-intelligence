@@ -263,8 +263,10 @@ Mesures du 2026-11-07 avec un build non modifié de `develop` `bc2995a8` (persis
 | Occupation du tas avant une collection, tas par défaut | 1 432 à 1 451 Mio ; la JVM laisse croître un grand tas, ce chiffre n'est pas un minimum |
 | Sonde MCP à trois appels `minos_find_symbols`, tas par défaut puis `-Xmx768m` | premier appel en 4 156 et 4 206 ms (chargement de la vue), deux suivants en 54 à 62 ms (vue en cache) |
 | Ré-import du même SCIP, trois fois | un seul snapshot, adressé par son contenu : 339,5 Mio sur disque |
-| Import de quatre variantes distinctes par `import-scip` | cinq snapshots conservés, 1 697,7 Mio : `import-scip` n'applique pas la rétention, seule l'indexation compacte |
+| Import de quatre variantes distinctes par `import-scip` | cinq snapshots conservés, 1 697,7 Mio : le build `bc2995a8` ne compacte qu'à l'indexation |
 | `QueryViewWeightTest` avec `-Dminos.queryViewWeight.print=true` (150 fichiers, 14,8 à 15,0 Mo persistés) | tas retenu de 1,43 (ascii, latin1) à 1,48 (cjk) fois le fichier ; poids estimé de 1,53 à 1,57 fois le tas retenu ; amplification V3 seule de 0,84 à 0,88 |
+
+Un import publié applique la même rétention que l'indexation : `PublishedSnapshotRetention` (`minos-application`) sert à `LocalProjectOperations.importScipLocked` et aux deux chemins de succès de `ProjectIndexingUseCase`. Quatre imports distincts laissent l'actif et deux historiques (`minos-cli/src/test/java/com/minos/cli/ImportScipRetentionTest.java`) ; un verrou occupé laisse l'import réussi avec un diagnostic sans cause ni chemin.
 
 ## Cohérence concurrente
 
