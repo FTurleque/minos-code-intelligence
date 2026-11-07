@@ -73,9 +73,11 @@ class CoursierLauncherInstallationTest {
         writePayload(archive);
         System.setProperty("minos.tools.platform", EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64);
         CoursierLauncherInstallation launcher = installation();
+        PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload);
+        EmbeddedToolsCatalog.Artifact pinned = pinnedTo(archive);
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class, () ->
-                launcher.install(PinnedArtifactSource.forPayloadDirectory(payload), pinnedTo(archive), false));
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> launcher.install(source, pinned, false));
 
         assertTrue(refused.getMessage().contains("Coursier"), refused.getMessage());
         assertTrue(launcher.managedExecutable().isEmpty());
@@ -87,8 +89,10 @@ class CoursierLauncherInstallationTest {
         System.setProperty("minos.tools.platform", "plan9-mips");
         CoursierLauncherInstallation launcher = installation();
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class, () ->
-                launcher.installForPlatform(PinnedArtifactSource.networkOnly(), false));
+        PinnedArtifactSource source = PinnedArtifactSource.networkOnly();
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> launcher.installForPlatform(source, false));
 
         assertTrue(launcher.artifact().isEmpty());
         assertTrue(launcher.managedExecutable().isEmpty());

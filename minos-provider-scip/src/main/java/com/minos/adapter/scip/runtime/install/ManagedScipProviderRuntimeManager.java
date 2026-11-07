@@ -408,7 +408,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     /** Installs the Coursier launcher {@code artifact} from {@code artifactSource} (see CoursierLauncherInstallation). */
     Path installManagedCoursier(
             PinnedArtifactSource artifactSource, EmbeddedToolsCatalog.Artifact artifact, boolean allowNetwork
-    ) throws Exception {
+    ) throws IOException, InterruptedException {
         return coursierLauncher.install(artifactSource, artifact, allowNetwork);
     }
 

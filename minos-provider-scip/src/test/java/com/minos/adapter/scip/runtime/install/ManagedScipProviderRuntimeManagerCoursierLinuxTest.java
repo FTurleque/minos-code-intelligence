@@ -88,9 +88,12 @@ class ManagedScipProviderRuntimeManagerCoursierLinuxTest {
     void aSourceThatServesOtherBytesIsRefusedAndLeavesNoCoursierFile() throws Exception {
         byte[] archive = gzip(LAUNCHER);
         writePayload(gzip("#!/bin/sh\necho tampered\n".getBytes(StandardCharsets.UTF_8)));
+        ManagedScipProviderRuntimeManager manager = manager();
+        PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload);
+        Artifact pinned = pinnedTo(archive);
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> manager().installManagedCoursier(
-                PinnedArtifactSource.forPayloadDirectory(payload), pinnedTo(archive), false));
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> manager.installManagedCoursier(source, pinned, false));
 
         assertTrue(refused.getMessage().contains("Coursier"), refused.getMessage());
         assertNoAbsolutePath(refused.getMessage());
@@ -101,9 +104,12 @@ class ManagedScipProviderRuntimeManagerCoursierLinuxTest {
     void aVerifiedArchiveThatIsNotGzipIsRefusedAndLeavesNoCoursierFile() throws Exception {
         byte[] notGzip = "not a gzip stream".getBytes(StandardCharsets.UTF_8);
         writePayload(notGzip);
+        ManagedScipProviderRuntimeManager manager = manager();
+        PinnedArtifactSource source = PinnedArtifactSource.forPayloadDirectory(payload);
+        Artifact pinned = pinnedTo(notGzip);
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> manager().installManagedCoursier(
-                PinnedArtifactSource.forPayloadDirectory(payload), pinnedTo(notGzip), false));
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> manager.installManagedCoursier(source, pinned, false));
 
         assertTrue(refused.getMessage().contains("Coursier"), refused.getMessage());
         assertNoAbsolutePath(refused.getMessage());
@@ -115,8 +121,11 @@ class ManagedScipProviderRuntimeManagerCoursierLinuxTest {
         System.setProperty(ToolsNetworkPolicy.SYSTEM_PROPERTY, "1");
         Artifact catalogued = EmbeddedToolsCatalog.load().artifact("coursier", EmbeddedToolsCatalog.PLATFORM_LINUX_X64);
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> manager().installManagedCoursier(
-                PinnedArtifactSource.networkOnly(), catalogued, true));
+        ManagedScipProviderRuntimeManager manager = manager();
+        PinnedArtifactSource source = PinnedArtifactSource.networkOnly();
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> manager.installManagedCoursier(source, catalogued, true));
 
         assertTrue(refused.getMessage().contains("Coursier"), refused.getMessage());
         assertTrue(refused.getMessage().contains(ToolsNetworkPolicy.ENVIRONMENT_VARIABLE), refused.getMessage());
