@@ -70,8 +70,9 @@ class SnapshotPersistenceCeilingTest {
         new FileSymbolSnapshotStore(root, CURRENT_LIMITS).publish(
                 projectId, "between", snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
 
-        IOException refused = assertThrows(IOException.class,
-                () -> new FileSymbolSnapshotStore(root, FORMER_LIMITS).loadActiveKnowledge(projectId));
+        FileSymbolSnapshotStore reader = new FileSymbolSnapshotStore(root, FORMER_LIMITS);
+
+        IOException refused = assertThrows(IOException.class, () -> reader.loadActiveKnowledge(projectId));
 
         assertTrue(refused.getMessage().startsWith("snapshot payload exceeds persisted byte limit"), refused.getMessage());
         assertFalse(refused.getMessage().contains(root.toString()), "the refusal must not carry a path");
