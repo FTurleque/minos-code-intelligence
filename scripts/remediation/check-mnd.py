@@ -118,7 +118,8 @@ def main() -> int:
         # D1: the pinned downloads (Coursier, Maven, Node, nupkg) go through PinnedArtifactSource, which streams the body
         # through a BoundedInputStream; the manager keeps the per-artifact byte ceiling it passes to it.
         require("ManagedScipProviderRuntimeManager.java", coursier,
-                "MAX_COURSIER_ARCHIVE_BYTES", "source().acquire(", "coursierArtifact(), archivePartial, MAX_COURSIER_ARCHIVE_BYTES")
+                "MAX_COURSIER_ARCHIVE_BYTES", "source().acquire(", "artifactSource.acquire(",
+                "artifact, archivePartial, MAX_COURSIER_ARCHIVE_BYTES")
         require("PinnedArtifactSource.java", pinned,
                 "BodyHandlers.ofInputStream()", "BoundedInputStream", "maxBytes")
         forbid("ManagedScipProviderRuntimeManager.java", coursier, "BodyHandlers.ofFile(archivePartial)")
