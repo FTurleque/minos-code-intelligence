@@ -95,6 +95,16 @@ build Maven exploitable
 
 L'indexeur est lancé depuis la racine du projet. Le `index.scip` éventuellement déjà présent est préservé et restauré après le run ; MINOS travaille sur une copie conservée dans son répertoire de run.
 
+## Taille d'un projet indexable
+
+MINOS garde pour chaque projet un snapshot de sa connaissance : fichiers, symboles, occurrences, relations. Il persiste un snapshot jusqu'à **400 Mio**. Mesuré sur un projet Java réel (`morpheus-engine`, 1 488 fichiers Java dont 769 de tests, environ 197 000 lignes), le snapshot fait 339,5 Mio, soit de l'ordre de 0,23 Mio par fichier Java, tests compris ; la taille varie avec le contenu, donc ce rapport est un ordre de grandeur, pas une garantie.
+
+Au-delà du plafond, l'indexation s'arrête sans rien écrire et l'index précédent reste actif. Le message commence par `knowledge snapshot is too large to persist:` et ne donne que deux tailles en octets, la taille encodée et le plafond. MINOS n'offre pas d'option pour exclure des fichiers de l'index : réduire la taille demande d'indexer un projet plus petit.
+
+Un snapshot s'interroge en mémoire : la vue d'un snapshot retient environ 1,05 à 1,5 fois la taille de son fichier (1,05 mesuré sur `morpheus-engine`). Le serveur MCP garde cette vue en cache tant qu'elle tient dans son plafond ; sinon il la recharge à chaque requête, ce qui prend de 3 à 4 s avec le stockage fichier et de 10 à 14 s avec PostgreSQL pour un snapshot de 340 Mio. Sous Docker, le tas de la JVM suit le plafond mémoire du conteneur : voir [docker-runtime.md](docker-runtime.md).
+
+Cette taille n'est pas qualifiée sous Linux : les mesures viennent de Windows.
+
 ## Provider TypeScript
 
 Le runtime géré installe `scip-typescript` localement dans `MINOS_HOME/tools`.

@@ -18,17 +18,17 @@
 
 ## 3. ADR et documentation
 
-- [ ] 3.1 Écrire l'ADR `DATA-0066` consolidé qui remplace la décision 7 et la section Risques (plafonds, amplification mesurée par format, invariant I2, retour arrière), placer l'ancien ADR en archive avec son bandeau, mettre à jour `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` ; vérifier par `archgate check` et `python scripts/docs/check-current-docs.py`.
-- [ ] 3.2 Écrire dans `docs/user/` la taille de projet indexable, ce que MINOS répond au-delà et ce que l'utilisateur peut faire ; corriger `docs/user/docker-runtime.md:380` (« deux fois cette taille », plafond de 512 Mio, « quatre fois le poids estimé ») ; ajouter la page ou la section à l'index de son espace ; vérifier par `python scripts/docs/check-current-docs.py` et l'absence de lien cassé.
-- [ ] 3.3 Dessiner dans `docs/architecture/diagrams/capacites/persistance-snapshots.md` les vues du plafond, de l'amplification et de l'invariant, et mettre à jour l'écart E4 ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
-- [ ] 3.4 Mettre à jour la limite d'indexation dans `docs/project/governance/STATUS.md` (lignes 61, 121 et 268) et `docs/project/governance/ROADMAP.md` (ligne 74), et la mesure dans `docs/developer/` ; vérifier par `python scripts/docs/product-facts.py --check` et `python scripts/docs/check-current-docs.py`.
+- [x] 3.1 Écrire l'ADR `DATA-0078` consolidé (remplace `DATA-0066`) qui remplace la décision 7 et la section Risques (plafonds, amplification mesurée par format, invariant I2, retour arrière), placer l'ancien ADR en archive avec son bandeau, mettre à jour `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` ; vérifier par `archgate check` et `python scripts/docs/check-current-docs.py`.
+- [x] 3.2 Écrire dans `docs/user/` la taille de projet indexable, ce que MINOS répond au-delà et ce que l'utilisateur peut faire ; corriger `docs/user/docker-runtime.md:380` (« deux fois cette taille », plafond de 512 Mio, « quatre fois le poids estimé ») ; ajouter la page ou la section à l'index de son espace ; vérifier par `python scripts/docs/check-current-docs.py` et l'absence de lien cassé.
+- [x] 3.3 Dessiner dans `docs/architecture/diagrams/capacites/persistance-snapshots.md` les vues du plafond, de l'amplification et de l'invariant, et mettre à jour l'écart E4 ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.4 Mettre à jour la limite d'indexation dans `docs/project/governance/STATUS.md` (lignes 61, 121 et 268) et `docs/project/governance/ROADMAP.md` (ligne 74), et la mesure dans `docs/developer/` ; vérifier par `python scripts/docs/product-facts.py --check` et `python scripts/docs/check-current-docs.py`.
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve
-- [ ] 4.2 Vérifier que le dossier durable de la capacité `persistance-snapshots` est à jour après les groupes 2 et 3 ; vérifier par `python scripts/docs/check-capability-dossiers.py`
-- [ ] 4.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`
-- [ ] 4.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, `docs/user/`, `docs/developer/`, arc42, ADR) ; vérifier que chacun est fait ou nommé comme reste
+- [x] 4.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve Fait : la matrice du design cite pour chaque scénario son test réel ou nomme la preuve manquante (section « Preuves manquantes et restes »).
+- [x] 4.2 Vérifier que le dossier durable de la capacité `persistance-snapshots` est à jour après les groupes 2 et 3 ; vérifier par `python scripts/docs/check-capability-dossiers.py` Fait : `check-capability-dossiers.py` réussit ; les deux exigences MODIFIED sont `partielle` (snapshot de plus de 64 Mio et corpus de plus de 300 Mio non rejoués en test, mesures réelles consignées).
+- [x] 4.3 Valider les spécifications ; vérifier par `openspec validate --all --strict` Fait : `openspec validate --all --strict` réussit (21 sur 21).
+- [x] 4.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, `docs/user/`, `docs/developer/`, arc42, ADR) ; vérifier que chacun est fait ou nommé comme reste Fait : faits ou à faire. Faits : `STATUS.md`, `ROADMAP.md`, `docs/user/autonomous-indexing.md` et `docker-runtime.md`, `docs/developer/indexing-and-storage.md`, arc42 §9, index des ADR, ADR `DATA-0078`, dossier de capacité, audit (`findings.json`, ÉTAT, SUIVI, AUD-PERF-03). Restent : lignes du dossier de capacité pour les trois exigences ADDED (à l'archivage), tâches 1.3, 1.5 et 2.5, bornage des chargements simultanés, mesure sous Linux.
 
 ## Workflow follow-up
 

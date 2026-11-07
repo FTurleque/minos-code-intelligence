@@ -576,8 +576,8 @@
     "changement": "ramener-le-poids-des-vues-a-la-mesure",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "FileSymbolSnapshotStore.java:51 et PostgresCodeKnowledgeSnapshotStore.java:58 QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L (les deux stores) ; fusionné PR #442 ; check-mne.py rc=0",
-      "reserve": "Facteur 2 (pas 1,4) ; mesure sur corpus réel (tâche 2.4) toujours en attente. Suivi dit 'Implémenté' : code bien fusionné dans develop."
+      "preuve": "FileSymbolSnapshotStore.java:51 et PostgresCodeKnowledgeSnapshotStore.java:58 QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L (les deux stores) ; fusionné PR #442 ; check-mne.py rc=0 Revérifié le 07/11 : facteur de V3 mesuré à 1,05 (snapshot réel de 339,5 Mio) et 1,47 (corpus synthétique) fois le fichier ; amplification V3 à 125 %, V1 et V2 à 200 %, plafond du cache inchangé à 512 Mio, plafond de persistance à 400 Mio (`SnapshotLimits`, DATA-0078).",
+      "reserve": "Mesure sur corpus réel faite (tâche 2.4, 2026-10-15, puis snapshot de 339,5 Mio le 2026-11-07). Restent : un corpus riche en relations garde un poids estimé au-dessus du plafond du cache et se recharge à chaque requête ; plusieurs chargements simultanés d'une vue non mise en cache épuisent le tas (deux vues échouent sous 640 Mo) ; Linux non mesuré."
     }
   },
   {

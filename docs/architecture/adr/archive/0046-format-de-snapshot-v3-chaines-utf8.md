@@ -7,7 +7,7 @@ rules: false
 
 # 0046 — Format de snapshot V3 : chaînes UTF-8, lecture de tous les formats antérieurs
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](../DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0066](DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Status: Accepted (2026-09-29) — mis en œuvre ; mesures, preuves et journal dans [`ARCHI-SUIVI.md`](../../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6, § A6.10 et § A6.11).
 

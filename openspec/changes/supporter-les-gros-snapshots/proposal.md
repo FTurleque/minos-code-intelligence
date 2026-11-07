@@ -53,7 +53,7 @@ Aucune. Le comportement relève de la capacité de persistance et de lecture des
 
 - **Modules du reactor** : `minos-storage` (codec, `FileSymbolSnapshotStore`, `PostgresCodeKnowledgeSnapshotStore`), `minos-engine` (`SnapshotReadView`, poids des vues), `minos-bootstrap` (banc de montée en charge, test) ; aucune dépendance ajoutée.
 - **Surfaces publiques** (CLI, API Java, MCP, IntelliJ, NEXUS) : additif. Aucun champ ne change ; un projet auparavant refusé devient indexable ; le message de refus au-delà du plafond garde son préfixe.
-- **ADR** : à écrire, `DATA-0066` consolidé remplaçant sa décision 7 et sa section Risques (plafonds, amplification mesurée, invariant) ; non créé pendant la spécification.
+- **ADR** : `DATA-0078` consolidé (remplace `DATA-0066`), écrit au groupe 3 (plafonds, amplification mesurée, invariant) ; non créé pendant la spécification.
 - **Gates à rejouer** : `scripts/remediation/check-mne.py` (chaînes du plafond, de l'amplification et de `estimateWeight`, à mettre à jour avec le code), `check-audit-remediation-v2.py`, `check-mnd.py`, `check-current-docs.py`, `product-facts.py --check`, `check-capability-dossiers.py`, `run_gates.py --fast` ; scopes JaCoCo `storage-codec-and-state` et celui de `minos-engine` ; tests `PersistedSnapshotLimitTest`, `QueryViewWeightTest`, `PostgresCodeKnowledgeSnapshotStoreTest`, `SnapshotEncodedSizeTest`, `SnapshotCodecV3Test`.
 - **Plateformes** : Windows et Linux ; le comportement ne dépend pas de la plateforme. PostgreSQL géré : non mesuré pour un payload de 356 Mo.
 - **Documentation durable et diagrammes** : dossier `docs/architecture/diagrams/capacites/persistance-snapshots.md` ; page `docs/user/` sur la taille indexable ; ADR DATA-0066 ; `docs/developer/` (banc de montée en charge).
