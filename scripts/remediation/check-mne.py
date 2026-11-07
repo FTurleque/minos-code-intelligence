@@ -36,6 +36,7 @@ def main() -> int:
         postgres_snapshot = read("minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java")
         snapshot_codec = read("minos-storage/src/main/java/com/minos/storage/codec/SnapshotBinaryCodecSupport.java")
         file_snapshot = read("minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java")
+        snapshot_limits = read("minos-storage/src/main/java/com/minos/storage/codec/SnapshotLimits.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java")
         semantic_service = read("minos-application/src/main/java/com/minos/application/semantic/SemanticIndexService.java")
         semantic_store = read("minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java")
@@ -81,11 +82,14 @@ def main() -> int:
                 "class DecodeBudget", "requireIndexFileSize", "Optional<IndexMetadata> metadata")
         forbid("FileSemanticVectorStore.java", semantic_store, "compact(indexed)")
         require("SnapshotBinaryCodecSupport.java", snapshot_codec,
-                "MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L", "requireSnapshotFileSize")
+                "MAX_PERSISTED_SNAPSHOT_BYTES = 400L * 1024L * 1024L", "requireSnapshotFileSize")
+        require("SnapshotLimits.java", snapshot_limits,
+                "currentFormatAmplificationPercent", "unmeasuredFormatAmplificationPercent",
+                "amplifiedBytes", "requireCacheCoversPersistable")
         require("FileSymbolSnapshotStore.java", file_snapshot,
-                "QUERY_VIEW_PERSISTED_AMPLIFICATION", "saturatingMultiply(Files.size(snapshot)")
+                "limits.amplifiedBytes(descriptor.formatVersion(), Files.size(snapshot)")
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
-                "QUERY_VIEW_PERSISTED_AMPLIFICATION", "estimateWeight(metadata, payloadBytes)")
+                "limits.amplifiedBytes(formatVersion, persistedBytes)", "estimateWeight(metadata, payloadBytes, decoded.formatVersion())")
 
         # MNE-05: preflight accounts length-delimited amplification before protobuf object materialization.
         require("ScipIngestionLimits.java", scip,
