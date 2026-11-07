@@ -2,6 +2,7 @@ package com.minos.application.indexing;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectIndexStateReconciler;
+import com.minos.application.PublishedSnapshotRetention;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.diagnostics.PublicErrorMessages;
@@ -75,6 +76,7 @@ public final class ProjectIndexingUseCase {
     private final IncrementalIndexingPlanner planner;
     private final Function<String, IndexerRegistry> indexerRegistries;
     private final StorageRetentionService retentionService;
+    private final PublishedSnapshotRetention publishedRetention;
     private final SemanticRefresh semanticRefresh;
     private final UnaryOperator<IndexerExecutor> executorDecorator;
 
@@ -196,6 +198,7 @@ public final class ProjectIndexingUseCase {
         this.planner = dependencies.planner();
         this.indexerRegistries = dependencies.indexerRegistries();
         this.retentionService = dependencies.retentionService();
+        this.publishedRetention = new PublishedSnapshotRetention(retentionService);
         this.semanticRefresh = dependencies.semanticRefresh();
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
     }
@@ -449,18 +452,9 @@ public final class ProjectIndexingUseCase {
         return recovered;
     }
 
-    /**
-     * Retention is maintenance after an index that already succeeded. Its lock is bounded, so it can time out
-     * behind a concurrent compaction: that must not turn a successful index into a failure. The diagnostic
-     * never carries the cause, which may name a path.
-     */
+    /** Retention after an index that already succeeded: a busy lock is a diagnostic, never a failure. */
     private String compactAfterSuccess(UUID projectId) {
-        try {
-            retentionService.compact(projectId);
-            return null;
-        } catch (IOException ignored) {
-            return "storage retention did not run (its lock was busy or unavailable); it runs after the next indexing";
-        }
+        return publishedRetention.compact(projectId).orElse(null);
     }
 
     private static String combineDiagnostics(String first, String second) {

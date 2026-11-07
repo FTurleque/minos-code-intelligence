@@ -74,6 +74,31 @@ class PostgresStorageRetentionServiceTest extends PostgresTestSupport {
     }
 
     @Test
+    void compactsSnapshotsImportedWithoutAnyRun() throws Exception {
+        // An explicit SCIP import publishes a knowledge snapshot and saves the project state, with no indexing run
+        // and no fingerprint: the retention applied after it must still bound the historical snapshots.
+        UUID projectId = UUID.randomUUID();
+        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
+        PostgresIndexStateStore states = new PostgresIndexStateStore(connections, new PostgresJsonCodec());
+        for (int index = 1; index <= 4; index++) {
+            knowledge.publish(projectId, "import-" + index, List.of(), List.of(), List.of());
+        }
+        states.saveProjectState(new ProjectIndexState(
+                projectId, ProjectIndexState.Availability.READY,
+                Optional.of("import-4"), Optional.empty(),
+                Instant.parse("2026-11-07T10:00:00Z"), Optional.of("imported")));
+
+        var result = new PostgresStorageRetentionService(connections)
+                .compact(projectId, PersistentRetentionPolicy.DEFAULT);
+
+        assertEquals(1, result.deletedKnowledgeSnapshots());
+        assertEquals(0, result.deletedIndexingRuns());
+        assertEquals(List.of("import-2", "import-3", "import-4"), snapshotIds(projectId));
+        assertEquals("import-4", new PostgresCodeKnowledgeSnapshotStore(connections, tempDir)
+                .loadActiveKnowledge(projectId).orElseThrow().snapshotId());
+    }
+
+    @Test
     void compactionProtectsTheRunOfferedForResumeLikeTheLatestRun() throws Exception {
         // ADR 0039 §2: the INTERRUPTED run offered for resume survives a zero non-succeeded cap.
         UUID projectId = UUID.randomUUID();
@@ -103,6 +128,20 @@ class PostgresStorageRetentionServiceTest extends PostgresTestSupport {
                 try (var result = statement.executeQuery()) {
                     result.next();
                     return result.getInt(1);
+                }
+            }
+        });
+    }
+
+    private List<String> snapshotIds(UUID projectId) throws Exception {
+        return connections.withConnection(connection -> {
+            try (var statement = connection.prepareStatement(
+                    "SELECT snapshot_id FROM knowledge_snapshots WHERE project_id=? ORDER BY snapshot_id")) {
+                statement.setObject(1, projectId);
+                try (var result = statement.executeQuery()) {
+                    List<String> ids = new ArrayList<>();
+                    while (result.next()) ids.add(result.getString(1));
+                    return ids;
                 }
             }
         });

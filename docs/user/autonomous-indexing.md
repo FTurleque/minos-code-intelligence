@@ -191,4 +191,6 @@ Ce chemin est destiné aux diagnostics, fixtures et providers qui ne disposent p
 
 L'import décode l'artefact en mémoire. Il refuse, sans rien écrire, un artefact dont le décodage estimé dépasse le tiers du tas de la JVM ; le message commence par `SCIP index exceeds safe decode heap budget`. Mesuré, le SCIP de 52 Mo d'un projet Java de 1 488 fichiers est refusé sous un tas de 512 Mo et importé dès 576 Mo.
 
-`import-scip` n'applique pas la rétention des snapshots : chaque import d'un contenu différent ajoute un snapshot (340 Mio pour ce projet), et rien ne les supprime avant la prochaine indexation du projet par `minos index`. Ré-importer un artefact identique ne crée pas de snapshot supplémentaire.
+Un import qui publie son snapshot applique ensuite la même rétention que `minos index` : le projet garde le snapshot actif et les deux snapshots historiques les plus récents, les plus anciens sont supprimés. Pour un projet de cette taille (340 Mio par snapshot), l'espace occupé reste ainsi de l'ordre de 1 Gio quel que soit le nombre d'imports. Ré-importer un artefact identique ne crée pas de snapshot supplémentaire. Un import refusé ou en échec ne supprime rien.
+
+Si la rétention ne peut pas s'exécuter (son verrou est pris par une autre opération sur le même projet), l'import reste réussi et le champ `diagnostic` de la sortie l'indique : `storage retention did not run (its lock was busy or unavailable); it runs after the next indexing`. Le prochain import ou la prochaine indexation l'applique.
