@@ -192,12 +192,12 @@ Aucun ADR nouveau : le changement applique une politique existante à un second 
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| persistance-snapshots › Un import manuel applique la même rétention que l'indexation | Quatre imports distincts sur le store fichier | D1, séquence | 1.3 | à écrire : `ImportScipRetentionTest` |
-| persistance-snapshots › Un import manuel applique la même rétention que l'indexation | Rétention après la publication | D1, séquence | 1.1, 1.2 | à écrire : `LocalProjectOperationsRetentionTest` |
-| persistance-snapshots › Un import manuel applique la même rétention que l'indexation | Import refusé | D3 | 1.1, 1.2 | à écrire : `LocalProjectOperationsRetentionTest` |
-| persistance-snapshots › Un verrou de rétention occupé ne fait pas échouer un import publié | Verrou occupé après un import | D2, séquence | 1.1, 1.2 | à écrire : `LocalProjectOperationsRetentionTest`, `PublishedSnapshotRetentionTest` |
-| persistance-snapshots › Un verrou de rétention occupé ne fait pas échouer un import publié | Verrou occupé et validation en attente | D2 | 1.1, 1.2 | à écrire : `LocalProjectOperationsRetentionTest` |
-| persistance-snapshots › La rétention après un import s'applique au store PostgreSQL | Snapshots importés sans run | Persistance et intégrité | 2.1 | à écrire : `PostgresStorageRetentionServiceTest#compactsSnapshotsImportedWithoutAnyRun` |
+| persistance-snapshots › Un import manuel applique la même rétention que l'indexation | Quatre imports distincts sur le store fichier | D1, séquence | 1.3 | `minos-cli/src/test/java/com/minos/cli/ImportScipRetentionTest.java#fourDistinctImportsKeepTheActiveSnapshotAndTwoHistoricalOnes` (rouge sans correctif : quatre snapshots) |
+| persistance-snapshots › Un import manuel applique la même rétention que l'indexation | Rétention après la publication | D1, séquence | 1.1, 1.2 | `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aPublishedImportCompactsTheProjectOnceAfterItsStateIsSaved` |
+| persistance-snapshots › Un import manuel applique la même rétention que l'indexation | Import refusé | D3 | 1.1, 1.2 | `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aRefusedArtifactAppliesNoRetention`, `#aFailedPublicationAppliesNoRetention` |
+| persistance-snapshots › Un verrou de rétention occupé ne fait pas échouer un import publié | Verrou occupé après un import | D2, séquence | 1.1, 1.2 | `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aBusyRetentionLeavesTheImportCommittedWithADiagnosticWithoutItsCause`, `minos-application/src/test/java/com/minos/application/PublishedSnapshotRetentionTest.java#anInputOutputFailureIsAFixedDiagnosticWithoutItsCause` |
+| persistance-snapshots › Un verrou de rétention occupé ne fait pas échouer un import publié | Verrou occupé et validation en attente | D2 | 1.1, 1.2 | `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aBusyRetentionAfterAPendingStateKeepsBothDiagnosticsInOrder` |
+| persistance-snapshots › La rétention après un import s'applique au store PostgreSQL | Snapshots importés sans run | Persistance et intégrité | 2.1 | `minos-storage/src/test/java/com/minos/storage/postgresql/project/PostgresStorageRetentionServiceTest.java#compactsSnapshotsImportedWithoutAnyRun` (Docker requis) |
 
 ## Questions ouvertes
 

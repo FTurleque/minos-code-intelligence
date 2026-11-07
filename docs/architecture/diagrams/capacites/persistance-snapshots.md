@@ -127,6 +127,48 @@ Les trois valeurs (plafond de persistance 400 Mio, amplifications, plafond du ca
 cache couvre le plafond de persistance multiplié par l'amplification de V3. La décision est dans
 `docs/architecture/adr/DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md` (points 12 à 14).
 
+### Quand l'import applique-t-il la rétention, et que rend-il si elle ne tourne pas ?
+
+Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « Un import manuel applique la même
+rétention que l'indexation », « Un verrou de rétention occupé ne fait pas échouer un import publié » (changement
+`appliquer-la-retention-apres-import-scip`, jusqu'à son archivage)
+
+```mermaid
+sequenceDiagram
+    participant CLI as "import-scip"
+    participant Ops as LocalProjectOperations
+    participant Imp as ScipArtifactImporter
+    participant State as IndexStateStore
+    participant Ret as PublishedSnapshotRetention
+    participant Port as StorageRetentionService
+    CLI->>Ops: importScip(projet, artefact, ...)
+    Ops->>State: acquireProjectLease(projectId)
+    alt artefact refusé ou import en échec
+        Ops-->>CLI: exception d'origine (aucune rétention)
+    else snapshot publié
+        Ops->>Imp: importSnapshot(...)
+        Imp-->>Ops: ScipSymbolSnapshotReport
+        Ops->>State: saveProjectState (2 essais)
+        Ops->>Ret: compact(projectId)
+        Ret->>Port: compact(projectId)
+        alt rétention appliquée
+            Port-->>Ret: RetentionResult
+            Ret-->>Ops: aucun diagnostic
+        else IOException (verrou occupé, base indisponible)
+            Port-->>Ret: IOException
+            Ret-->>Ops: "storage retention did not run ..."
+        end
+        Ops-->>CLI: IndexImportResult (commitStatus inchangé, diagnostic combiné)
+    end
+```
+
+L'import compacte sous le bail du projet, après l'enregistrement de l'état : le store fichier protège alors le snapshot
+importé par le pointeur actif et par l'état, et un état resté en attente protège encore celui qu'il désigne.
+`PublishedSnapshotRetention` (`minos-application/src/main/java/com/minos/application/PublishedSnapshotRetention.java`)
+sert aussi aux deux chemins de succès de l'indexation : une `IOException` y devient la même ligne de diagnostic, sans
+cause ni chemin, et le statut de validation n'en dépend pas. Sur PostgreSQL, la rétention réutilise la session du bail
+de cycle de vie et ne regarde que les pointeurs actifs, jamais les runs : un snapshot importé sans run est compacté.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

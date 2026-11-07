@@ -43,6 +43,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private final IndexStateStore stateStore;
     private final ProjectInspectionService inspectionService;
     private final ScipArtifactImporter scipArtifactImporter;
+    private final PublishedSnapshotRetention retention;
     private final Path historyDirectory;
 
     public LocalProjectOperations(Path home) throws IOException { this(MinosApplication.open(home), true); }
@@ -58,6 +59,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         this.stateStore = value.indexStateStore();
         this.inspectionService = value.projectInspectionService();
         this.scipArtifactImporter = value.scipArtifactImporter();
+        this.retention = new PublishedSnapshotRetention(value.retentionService());
         this.historyDirectory = home.resolve("cli-index-history");
     }
 
@@ -138,6 +140,9 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 == ScipSymbolSnapshotReport.CommitStatus.COMMITTED_DURABILITY_PENDING;
         CommitOutcome commitOutcome = saveCommittedState(
                 committedState, snapshotDurabilityPending, report.commitDiagnostic());
+        // The same retention as an indexing, once the state names the published snapshot: the file store then
+        // protects it twice, and a state left pending still protects the snapshot it names.
+        String importDiagnostic = diagnostic(commitOutcome.diagnostic(), retention.compact(project.id()).orElse(null));
         try {
             writeHistory(historyDirectory, project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
@@ -153,7 +158,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 blankToNull(providerVersion), report.normalizedSymbolCount(), report.occurrenceCount(),
                 report.relationshipCount(), report.relatedTestRelationshipCount(), report.unresolvedOccurrenceCount(),
                 report.unresolvedRelationshipCount(), completedAt.toString(), commitOutcome.status(),
-                commitOutcome.diagnostic());
+                importDiagnostic);
     }
 
     private CommitOutcome saveCommittedState(
