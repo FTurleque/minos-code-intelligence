@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql.snapshot;
 
+import com.minos.storage.codec.SnapshotLimits;
 import com.minos.storage.postgresql.PostgresTestSupport;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.Origin;
@@ -181,20 +182,24 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
                 "exception must describe the corruption: " + exception.getMessage());
     }
 
+    private static final long CEILING = 12L * 1024L * 1024L;
+    private static final long FORMER_CEILING = 8L * 1024L * 1024L;
+    private static final SnapshotLimits LIMITS = SnapshotLimits.production().withMaxPersistedBytes(CEILING);
+
     @Test
     void oversizedSnapshotIsRefusedBeforeAnyScratchFileOrRow() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir, LIMITS);
         store.publish(projectId, "small", List.of(symbol(projectId, "sym-a")), List.of(), List.of());
         String large = "s".repeat(8_000_000);
-        List<Symbol> symbols = IntStream.range(0, 34).mapToObj(index -> symbol(projectId, "big-" + index, large)).toList();
+        List<Symbol> symbols = IntStream.range(0, 2).mapToObj(index -> symbol(projectId, "big-" + index, large)).toList();
 
         IOException refused = assertThrows(IOException.class,
                 () -> store.publish(projectId, "oversized", symbols, List.of(), List.of()));
 
         String message = refused.getMessage();
         assertTrue(message.startsWith("knowledge snapshot is too large to persist: ")
-                && message.endsWith(" encoded bytes exceed the 268435456-byte limit (256 MiB); nothing was written"), message);
+                && message.endsWith(" encoded bytes exceed the " + CEILING + "-byte limit (12 MiB); nothing was written"), message);
         assertEquals(message, PublicErrorMessages.sanitize(message, "fallback"));
         try (Stream<Path> scratch = Files.list(tempDir.resolve("postgresql-snapshot-scratch"))) {
             assertEquals(0L, scratch.count(), "no scratch payload may be written");
@@ -209,6 +214,48 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
             }
         }));
         assertEquals("small", store.loadActiveKnowledge(projectId).orElseThrow().snapshotId());
+    }
+
+    /** About 9 MB in V3: above {@link #FORMER_CEILING}, below {@link #CEILING}. */
+    private static List<Symbol> betweenTheCeilings(UUID projectId) {
+        return List.of(symbol(projectId, "big-0", "s".repeat(8_000_000)), symbol(projectId, "big-1", "s".repeat(1_000_000)));
+    }
+
+    @Test
+    void aSnapshotAboveTheFormerCeilingIsPublishedUnderTheCurrentOneAndReadBack() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        List<Symbol> symbols = betweenTheCeilings(projectId);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir, LIMITS);
+
+        store.publish(projectId, "between", symbols, List.of(), List.of());
+
+        assertEquals(Optional.of("between"), store.activeSnapshotId(projectId));
+        CodeKnowledgeSnapshot loaded = store.loadActiveKnowledge(projectId).orElseThrow();
+        assertEquals(snapshot(projectId, "between", symbols.toArray(Symbol[]::new)), loaded);
+        assertEquals(loaded, new PostgresCodeKnowledgeSnapshotStore(connections, tempDir, LIMITS)
+                .loadActiveKnowledge(projectId).orElseThrow(), "a fresh store reads the stored payload, verified by its SHA-256");
+    }
+
+    @Test
+    void theFormerCeilingRefusesTheSameSnapshotAndItsReadAfterARollback() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        List<Symbol> symbols = betweenTheCeilings(projectId);
+        SnapshotLimits former = SnapshotLimits.production().withMaxPersistedBytes(FORMER_CEILING);
+        PostgresCodeKnowledgeSnapshotStore formerStore = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir, former);
+        IOException refusedWrite = assertThrows(IOException.class,
+                () -> formerStore.publish(projectId, "between", symbols, List.of(), List.of()));
+        assertTrue(refusedWrite.getMessage().endsWith(" encoded bytes exceed the " + FORMER_CEILING
+                + "-byte limit (8 MiB); nothing was written"), refusedWrite.getMessage());
+        assertEquals(Optional.empty(), formerStore.activeSnapshotId(projectId));
+
+        new PostgresCodeKnowledgeSnapshotStore(connections, tempDir, LIMITS)
+                .publish(projectId, "between", symbols, List.of(), List.of());
+        IOException refusedRead = assertThrows(IOException.class, () -> formerStore.loadActiveKnowledge(projectId));
+
+        assertEquals("PostgreSQL knowledge snapshot payload exceeds streaming limit", refusedRead.getMessage());
+        try (Stream<Path> scratch = Files.list(tempDir.resolve("postgresql-snapshot-scratch"))) {
+            assertEquals(0L, scratch.count(), "a refused read leaves no scratch payload");
+        }
     }
 
     private static CodeKnowledgeSnapshot snapshot(UUID projectId, String snapshotId, Symbol... symbols) {

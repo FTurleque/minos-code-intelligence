@@ -13,6 +13,23 @@ import java.util.OptionalLong;
  */
 public final class SnapshotCodecV3 implements SnapshotCodec {
 
+    private final long maxPersistedBytes;
+
+    /** A codec bound to the production ceiling. */
+    public SnapshotCodecV3() {
+        this(SnapshotLimits.production());
+    }
+
+    /** A codec that writes and reads up to {@code limits.maxPersistedBytes()}. */
+    public SnapshotCodecV3(SnapshotLimits limits) {
+        this.maxPersistedBytes = java.util.Objects.requireNonNull(limits, "limits").maxPersistedBytes();
+    }
+
+    @Override
+    public long maxPersistedBytes() {
+        return maxPersistedBytes;
+    }
+
     @Override
     public int formatVersion() {
         return SnapshotBinaryCodecSupport.FORMAT_VERSION_V3;
@@ -27,7 +44,7 @@ public final class SnapshotCodecV3 implements SnapshotCodec {
     public SnapshotEncoding write(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(snapshot, "snapshot");
-        String checksum = SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV3(file, snapshot);
+        String checksum = SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV3(file, snapshot, maxPersistedBytes);
         return new SnapshotEncoding(
                 checksum,
                 snapshot.symbols().size(),
@@ -39,13 +56,13 @@ public final class SnapshotCodecV3 implements SnapshotCodec {
     @Override
     public CodeKnowledgeSnapshot read(Path file) throws IOException {
         Objects.requireNonNull(file, "file");
-        return SnapshotBinaryCodecSupport.readKnowledgeSnapshotV3(file);
+        return SnapshotBinaryCodecSupport.readKnowledgeSnapshotV3(file, maxPersistedBytes);
     }
 
     @Override
     public CodeKnowledgeSnapshot readVerified(Path file, String expectedSha256) throws IOException {
         Objects.requireNonNull(file, "file");
-        return SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV3(file, expectedSha256);
+        return SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV3(file, expectedSha256, maxPersistedBytes);
     }
 
     @Override

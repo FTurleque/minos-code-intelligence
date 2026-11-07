@@ -42,11 +42,11 @@ class SnapshotBinaryCodecSupportLinkTest {
         Path sentinel = Files.writeString(temp.resolve("sentinel.txt"), "untouched", StandardCharsets.UTF_8);
 
         Path v1 = linkTo(sentinel, temp.resolve("v1.bin"));
-        assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport.writeSymbolSnapshotV1(v1, symbols));
+        assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport.writeSymbolSnapshotV1(v1, symbols, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
         Path v2 = linkTo(sentinel, temp.resolve("v2.bin"));
-        assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV2(v2, knowledge));
+        assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV2(v2, knowledge, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
         Path v3 = linkTo(sentinel, temp.resolve("v3.bin"));
-        assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV3(v3, knowledge));
+        assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV3(v3, knowledge, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
 
         assertEquals("untouched", Files.readString(sentinel));
     }
@@ -59,10 +59,10 @@ class SnapshotBinaryCodecSupportLinkTest {
                 projectId, "snapshot-1", List.of(), List.of(), List.of());
         Path file = Files.createFile(temp.resolve("v3.bin"));
 
-        String sha = SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV3(file, knowledge);
+        String sha = SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV3(file, knowledge, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES);
 
         assertEquals(64, sha.length());
         assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(file));
-        assertEquals(knowledge, SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV3(file, sha));
+        assertEquals(knowledge, SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV3(file, sha, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
     }
 }

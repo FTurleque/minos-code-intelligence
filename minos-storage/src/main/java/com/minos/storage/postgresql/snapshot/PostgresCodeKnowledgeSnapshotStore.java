@@ -10,7 +10,7 @@ import com.minos.domain.SymbolOccurrence;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import com.minos.storage.codec.KnowledgeSnapshotCodecs;
-import com.minos.storage.codec.SnapshotCodec;
+import com.minos.storage.codec.SnapshotLimits;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotDescriptor;
@@ -46,18 +46,8 @@ import java.util.function.Consumer;
 import static com.minos.domain.Preconditions.requireText;
 
 public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
-    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
     private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
-    /**
-     * Heap retained by a query view, as a multiple of its persisted size. With one instance per distinct
-     * string (ADR 0047, option A) a repository-shaped snapshot retains 1.41 to 1.46 times its V3 file
-     * (QueryViewWeightTest of the local backend, same codec); 2 leaves a margin and also bounds a string of two-byte characters, which
-     * takes at most twice its UTF-8 size. It was 8 before the strings were shared, when a reread view
-     * retained 2.5 to 3.3 times its file.
-     */
-    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L;
     private static final int MAX_QUERY_CACHE_ENTRIES = 32;
-    private static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
     private static final int BUILD_LOCK_STRIPES = 64;
     private static final int MAX_SCRATCH_NAME_ATTEMPTS = 8;
     private static final String SCRATCH_DIRECTORY = "postgresql-snapshot-scratch";
@@ -65,16 +55,22 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private final PostgresConnectionFactory connections;
     private final Path scratchRoot;
     private final Consumer<Path> afterScratchFileCreated;
-    private final PostgresSnapshotPayloadCodec codec = new PostgresSnapshotPayloadCodec();
+    private final SnapshotLimits limits;
+    private final PostgresSnapshotPayloadCodec codec;
     private final Object cacheLock = new Object();
-    private final WeightedLruCache<CacheKey, SnapshotReadView> queryCache =
-            new WeightedLruCache<>(MAX_QUERY_CACHE_ENTRIES, MAX_QUERY_CACHE_WEIGHT_BYTES);
+    private final WeightedLruCache<CacheKey, SnapshotReadView> queryCache;
     private final ReentrantLock[] buildLocks = buildLocks();
     private long cacheHits;
     private long cacheMisses;
 
     public PostgresCodeKnowledgeSnapshotStore(PostgresConnectionFactory connections, Path minosHome) throws IOException {
         this(connections, minosHome, created -> { });
+    }
+
+    /** A store bound to {@code limits}; tests lower the ceilings to exercise them without a snapshot of that size. */
+    PostgresCodeKnowledgeSnapshotStore(PostgresConnectionFactory connections, Path minosHome, SnapshotLimits limits)
+            throws IOException {
+        this(connections, minosHome, created -> { }, limits);
     }
 
     /**
@@ -85,6 +81,15 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     PostgresCodeKnowledgeSnapshotStore(
             PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated)
             throws IOException {
+        this(connections, minosHome, afterScratchFileCreated, SnapshotLimits.production());
+    }
+
+    private PostgresCodeKnowledgeSnapshotStore(
+            PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated,
+            SnapshotLimits limits) throws IOException {
+        this.limits = Objects.requireNonNull(limits, "limits");
+        this.codec = new PostgresSnapshotPayloadCodec(limits);
+        this.queryCache = new WeightedLruCache<>(MAX_QUERY_CACHE_ENTRIES, limits.maxQueryCacheWeightBytes());
         this.afterScratchFileCreated = Objects.requireNonNull(afterScratchFileCreated, "afterScratchFileCreated");
         this.connections = Objects.requireNonNull(connections, "connections");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
@@ -178,7 +183,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                             metadata.occurrenceCount(),
                             metadata.relationshipCount());
                     SnapshotReadView view = SnapshotReadView.indexed(descriptor, snapshot);
-                    cache(projectId, key, view, estimateWeight(metadata, payloadBytes));
+                    cache(projectId, key, view, estimateWeight(metadata, payloadBytes, decoded.formatVersion()));
                     return Optional.of(view);
                 }
             } finally {
@@ -189,10 +194,15 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                 + projectId + " after " + MAX_ACTIVE_QUERY_RETRIES + " attempts");
     }
 
+    /** Ceilings and weight factor this store applies. */
+    SnapshotLimits limits() {
+        return limits;
+    }
+
     QueryCacheStats queryCacheStats() {
         synchronized (cacheLock) {
             return new QueryCacheStats(cacheHits, cacheMisses, queryCache.evictions(), queryCache.size(),
-                    queryCache.weight(), MAX_QUERY_CACHE_WEIGHT_BYTES);
+                    queryCache.weight(), limits.maxQueryCacheWeightBytes());
         }
     }
 
@@ -232,7 +242,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             if (payloadBytes != encodedBytes) {
                 throw new IOException("PostgreSQL knowledge snapshot encoding length differs from its computed size");
             }
-            if (payloadBytes < 1L || payloadBytes > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            if (payloadBytes < 1L || payloadBytes > limits.maxPersistedBytes()) {
                 throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
             }
             try {
@@ -291,7 +301,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     }
 
     /** Copies the stored payload of the snapshot identity into {@code target} and returns its recorded SHA-256. */
-    private static String copyExistingPayload(Connection connection, CodeKnowledgeSnapshot snapshot, Path target)
+    private String copyExistingPayload(Connection connection, CodeKnowledgeSnapshot snapshot, Path target)
             throws SQLException, IOException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT payload, sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
@@ -301,7 +311,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                 if (!result.next()) throw new IOException("PostgreSQL snapshot identity vanished during publication");
                 try (InputStream input = result.getBinaryStream(1);
                      OutputStream output = PrivateLocalStorage.openPrivateOutputStream(target)) {
-                    copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+                    copyBounded(input, output, limits.maxPersistedBytes());
                 }
                 return result.getString(2);
             }
@@ -396,7 +406,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         MessageDigest digest = Sha256.newDigest();
         try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
              OutputStream output = PrivateLocalStorage.openPrivateOutputStream(payload)) {
-            copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+            copyBounded(input, output, limits.maxPersistedBytes());
         } catch (Exception exception) {
             Files.deleteIfExists(payload);
             throw exception;
@@ -469,12 +479,12 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
-    private static long estimateWeight(ActiveMetadata metadata, long persistedBytes) {
+    private long estimateWeight(ActiveMetadata metadata, long persistedBytes, int formatVersion) {
         long countWeight = 64L * 1024L;
         countWeight = saturatingAdd(countWeight, metadata.symbolCount() * 1024L);
         countWeight = saturatingAdd(countWeight, metadata.occurrenceCount() * 640L);
         countWeight = saturatingAdd(countWeight, metadata.relationshipCount() * 1024L);
-        long persistedWeight = saturatingMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
+        long persistedWeight = limits.amplifiedBytes(formatVersion, persistedBytes);
         // AUD-PERF-11: the derived index of incoming edges, built later, lives as long as the cached view.
         return saturatingAdd(Math.max(countWeight, persistedWeight),
                 SnapshotReadView.incomingRelationshipsWeightBytes(metadata.relationshipCount()));
@@ -482,14 +492,6 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
 
     private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
-    }
-
-    private static long saturatingMultiply(long left, long right) {
-        try {
-            return Math.multiplyExact(left, right);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
     }
 
     private static ReentrantLock[] buildLocks() {

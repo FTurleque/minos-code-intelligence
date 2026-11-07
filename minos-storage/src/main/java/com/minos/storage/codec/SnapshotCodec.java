@@ -7,8 +7,13 @@ import java.nio.file.Path;
 /** Version-specific binary snapshot codec, independent from file publication and active-pointer state. */
 public interface SnapshotCodec {
 
-    /** Ceiling of one persisted snapshot, in encoded bytes, shared by every store that uses these codecs. */
+    /** Production ceiling of one persisted snapshot, in encoded bytes, shared by every store that uses these codecs. */
     long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES;
+
+    /** Ceiling this codec applies to a snapshot it writes or reads: the production one unless it was given others. */
+    default long maxPersistedBytes() {
+        return MAX_PERSISTED_SNAPSHOT_BYTES;
+    }
 
     int formatVersion();
 
@@ -36,7 +41,7 @@ public interface SnapshotCodec {
 
     /**
      * Returns the encoded size, or refuses the snapshot when it exceeds
-     * {@link #MAX_PERSISTED_SNAPSHOT_BYTES}. Stores call it before creating any file, so a refused
+     * {@link #maxPersistedBytes()}. Stores call it before creating any file, so a refused
      * snapshot leaves nothing behind; the message carries sizes only and is safe to surface.
      *
      * <p>No earlier criterion is sound: the encoded-to-SCIP ratio ranges from 9 to 14 across real
@@ -44,7 +49,7 @@ public interface SnapshotCodec {
      * (ingestion may skip some), so any refusal before ingestion could reject a snapshot that fits.</p>
      */
     default long requirePersistable(CodeKnowledgeSnapshot snapshot) throws IOException {
-        return SnapshotBinaryCodecSupport.requirePersistable(encodedSize(snapshot));
+        return SnapshotBinaryCodecSupport.requirePersistable(encodedSize(snapshot), maxPersistedBytes());
     }
 
     record SnapshotEncoding(
