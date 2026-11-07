@@ -10,9 +10,9 @@ Aucun constat d'audit ne porte sur ce besoin : il vient d'un usage réel (projet
 
 ## What Changes
 
-- **Plafond de persistance** : un snapshot de connaissance jusqu'au nouveau plafond est persisté, par les deux stores (fichier et PostgreSQL) ; au-delà, le refus actuel est conservé (rien d'écrit, message de tailles seules, aucun chemin).
-- **Poids estimé d'une vue** : l'amplification forfaitaire de 2 fois la taille persistée est remplacée par une amplification mesurée sur un corpus réel de plus de 300 Mio, avec une marge ; le poids estimé reste supérieur ou égal au tas retenu (exigence existante).
-- **Plafond du cache de vues** : relevé pour qu'un snapshot persistable soit admis au cache. Invariant : plafond du cache ≥ plafond de persistance × amplification.
+- **Plafond de persistance** : un snapshot de connaissance jusqu'au nouveau plafond (400 Mio proposé) est persisté, par les deux stores (fichier et PostgreSQL) ; au-delà, le refus actuel est conservé (rien d'écrit, message de tailles seules, aucun chemin).
+- **Poids estimé d'une vue** : l'amplification forfaitaire de 2 fois la taille persistée est remplacée par une amplification mesurée (1,25 proposé) pour le format courant ; V1 et V2 gardent 2 ; le poids estimé reste supérieur ou égal au tas retenu (exigence existante).
+- **Plafond du cache de vues** : inchangé à 512 Mio. Invariant testé : plafond du cache ≥ plafond de persistance × amplification (400 Mio × 1,25 = 500 Mio).
 - **Mesure** : le banc `benchmarks/scalability/` couvre un corpus au-delà de 256 Mio ; la page `docs/user/` dit quelle taille de projet est indexable et ce que MINOS répond au-delà.
 - **Pas de nouveau format** : le format V4 (table de chaînes, option B de l'ADR 0047) n'est pas livré ici ; il réduit le fichier, pas le tas, donc ne règle pas l'admission au cache.
 
@@ -45,8 +45,9 @@ Aucune. Le comportement relève de la capacité de persistance et de lecture des
 | Sur un snapshot de 73 Mo, 3 requêtes MCP donnent 1 143 ms, 7 ms, 5 ms ; sur celui de 356 Mo, 4 559, 4 295, 4 374 ms (tas 1 Go) | [Existant vérifié] | sonde MCP STDIO du 2026-11-07, jar jetable, `MINOS_HOME` temporaire |
 | Une amplification de 1,25 sous-évaluerait le tas du corpus synthétique (1,41 à 1,46 fois le fichier V3) ; 1,14 sur le corpus réel de MINOS | [Existant vérifié] | ADR 0047 archivé, section Mise en œuvre (mesures) |
 | Aucun `-Xmx` ni pourcentage de tas n'est posé dans les fichiers Docker, de packaging ou d'installation ; le conteneur MCP a 3 Gio | [Existant vérifié] | recherche `Xmx`/`MaxRAM` dans `docker/`, `packaging/`, `scripts/install/` ; `docker/compose-mcp.prod.yaml:13` |
-| Le tas retenu par la vue de `morpheus-engine`, le pic de décodage et l'import sous un tas de 512 Mo ne sont pas mesurés | [Question] | à mesurer (design, tâches du groupe 1) |
-| Nouveau plafond de persistance de 512 Mio, plafond du cache de 768 Mio | [Proposition] | design, décisions D1 et D2 ; valeurs à valider par le propriétaire |
+| Tas retenu de la vue de `morpheus-engine` : 374 738 864 octets, soit 1,05 fois le fichier ; corpus synthétique de 3 300 fichiers : 1,47 fois ; un chargement tient dans 512 Mo de tas, deux chargements simultanés échouent sous 640 Mo ; publication PostgreSQL 12,1 s, lectures de 9,5 à 13,7 s sans cache | [Existant vérifié] | `LargeSnapshotMeasurement`, `LargePostgresSnapshotMeasurement`, `docs/developer/indexing-and-storage.md` (mesures du 2026-11-07) |
+| Le pic de décodage au-delà du tas minimal, l'import sous un tas de 512 Mo et l'espace disque de la rétention (par défaut 2 snapshots historiques et l'actif) ne sont pas mesurés | [Question] | tâches 1.3 et 1.5 |
+| Plafond de persistance de 400 Mio, amplification de 1,25, plafond du cache inchangé à 512 Mio | [Proposition, révisée par les mesures] | design, décisions D1 et D2 ; valeurs à valider par le propriétaire |
 
 ## Impact
 
@@ -62,6 +63,7 @@ Aucune. Le comportement relève de la capacité de persistance et de lecture des
 **Bloquantes** : aucune.
 
 **Non bloquantes**
-- Valeurs finales des plafonds (512 Mio de persistance, 768 Mio de cache) et marge de l'amplification : à valider par le propriétaire après la mesure du groupe 1.
-- Dimensionnement du tas du conteneur MCP (`MINOS_MCP_MEM_LIMIT`, `MaxRAMPercentage`) : un tas de 25 % de 3 Gio laisse 768 Mio pour un cache de 768 Mio, ce qui ne suffit pas ; décision et changement `distribution-docker` éventuel à part.
+- Valeurs finales (400 Mio de persistance, amplification 1,25, cache inchangé à 512 Mio) : à valider par le propriétaire ; les mesures du groupe 1 sont faites.
+- Dimensionnement du tas du conteneur MCP (`MINOS_MCP_MEM_LIMIT`, `MaxRAMPercentage`) : un tas de 25 % de 3 Gio laisse 768 Mio ; mesuré, une vue de 372 Mo tient, deux chargements simultanés non ; décision et changement `distribution-docker` éventuel à part.
+- Chargements simultanés d'une vue non mise en cache : exigence de bornage à proposer (le design la recommande), hors de ce changement.
 - Format V4 : le déclencheur de l'ADR 0047 (taille sur disque) est-il atteint par ce besoin ? Recommandation : non, tant que les plafonds relevés tiennent.
