@@ -50,7 +50,7 @@
 | [SEC-0074](../adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) | scip-java sous Windows : bloqué en natif, aucune voie d'indexation Java, WSL2 retenu pour la suite | Accepted | 2026-10-31 | Remplace ADR-0060 |
 | [SEC-0075](../adr/SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md) | Le runtime Docker n'expose que les projets inscrits | Accepted | 2026-11-01 | — |
 | [SEC-0076](../adr/SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md) | scip-java sous Linux : dépôt Maven désigné en lecture seule, Maven hors ligne, réseau fermé | Accepted | 2026-10-31 | Complète SEC-0074 |
-| [SEC-0079](../adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md) | Indexation Java depuis Windows par WSL2 : indexation locale, exécuteur de l'orchestration unique, artefact v3 vérifié | Proposed | 2026-11-07 | Complète SEC-0074 |
+| [SEC-0079](../adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md) | Indexation Java depuis Windows par WSL2 : indexation locale, providers routés de l'orchestration unique, artefact v3 vérifié | Proposed | 2026-11-07 | Complète SEC-0074 |
 
 ## ADR archivés
 
