@@ -1,9 +1,9 @@
 # Indexation Java depuis Windows par WSL2 : fonctionnement
 
 Cette page décrit comment la voie `minos index <projet> --via-wsl` est construite, pour qui la modifie ou la
-teste. Elle n'annonce pas de capacité : la voie n'est pas qualifiée tant que les critères de
-[SEC-0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) (décision 3) ne sont pas
-prouvés sur un poste réel. Décision : [SEC-0079](../architecture/adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md).
+teste. Mise en place côté utilisateur : [installation, §2 ter](../user/production-installation.md#2-ter-indexer-un-projet-java-depuis-windows-par-wsl2).
+Décisions : [SEC-0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) (décision 3) et
+[SEC-0079](../architecture/adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md).
 
 ## Principe
 
@@ -117,7 +117,22 @@ distante).
 | Import, délai, sorties | `WslIndexWorkerTest` |
 
 Ces tests simulent la distribution (sorties de `wsl.exe` factices). Aucun test de CI n'exécute une vraie
-distribution WSL2 : c'est l'objet de la qualification manuelle.
+distribution WSL2 : la qualification sur un poste réel, et ses mesures, sont consignées dans le dossier de capacité.
 
-La traçabilité exigence → preuve et les écarts sont tenus dans le dossier de capacité du changement OpenSpec
-`indexer-java-depuis-windows-par-wsl2`, qui rejoint `docs/architecture/diagrams/capacites/` à l'archivage.
+## Le build dans le bac à sable Linux
+
+Deux règles du plan et du bac à sable tiennent compte d'une distribution réelle :
+
+- le JDK désigné par `minos.scip.java.project-jdk` est le `JAVA_HOME` et la première entrée du `PATH` du build
+  (`ScipJavaProcessPlanFactory`) : le wrapper `javac` de scip-java lance `java` depuis le `PATH`, et le `java` par
+  défaut d'une distribution peut vivre hors des racines montées (`/usr`, `/bin`, `/lib`, `/lib64`, `/sbin`) ;
+- chaque processus du bac à sable reçoit `JAVA_TOOL_OPTIONS` avec `-XX:MaxRAM` égal à la mémoire du job et
+  `-XX:ActiveProcessorCount` égal à ses processeurs, au plus ceux de l'hôte
+  (`LinuxBubblewrapWorkerSandboxBackend.boundedJavaToolOptions`), après les options du plan : sans cela une JVM se
+  dimensionne sur l'hôte et ses réservations atteignent la limite d'espace d'adressage par processus.
+
+Tests : `ScipJavaProcessPlanFactoryProjectJdkTest`, `LinuxSandboxJvmBoundsTest`,
+`LinuxBubblewrapWorkerSandboxBackendTest` (Linux).
+
+La traçabilité exigence → preuve, les écarts et la qualification sont tenus dans le dossier de capacité
+[indexation-java-via-wsl](../architecture/diagrams/capacites/indexation-java-via-wsl.md).

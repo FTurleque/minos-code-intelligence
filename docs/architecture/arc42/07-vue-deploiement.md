@@ -102,6 +102,38 @@ graph TB
 
 ---
 
+## 7.3 bis Diagramme de déploiement — Indexation Java depuis Windows par WSL2
+
+`minos index <projet> --via-wsl` (ADR SEC-0079) : l'installation Windows lance scip-java dans une distribution WSL2,
+avec son propre jar, et importe l'artefact vérifié. La distribution n'exécute que le provider, sans promotion ni
+rétention ; ses réglages (JDK du projet, dépôt Maven désigné, scip-java installé) sont ceux de son `~/.minos`.
+
+```mermaid
+flowchart LR
+    subgraph win["«node» Poste Windows"]
+        cli_w["minos.exe : index --via-wsl"]
+        home_w[("MINOS_HOME Windows<br/>snapshots, wsl-exchange")]
+        jar_w[["lib/minos.jar"]]
+    end
+    subgraph wsl["«node» Distribution WSL2 (systemd)"]
+        scope["scope systemd utilisateur<br/>Delegate=yes"]
+        worker["java -cp minos.jar<br/>internal wsl-worker"]
+        sandbox["bubblewrap + cgroup v2<br/>réseau DENY"]
+        scip["scip-java, Maven hors ligne"]
+        home_l[("~/.minos de la distribution<br/>config, tools")]
+        repo[("dépôt Maven désigné<br/>lecture seule")]
+    end
+    cli_w -->|"wsl.exe --exec, environnement en liste d'autorisation"| scope
+    scope --> worker --> sandbox --> scip
+    worker --> home_l
+    scip --> repo
+    worker -. "jar et projet par /mnt/&lt;lecteur&gt;" .-> jar_w
+    worker -->|"bundle v3 par /mnt/&lt;lecteur&gt;"| home_w
+    cli_w -->|"vérification, copie sous le run, promotion atomique"| home_w
+```
+
+---
+
 ## 7.4 Protocoles
 
 | Protocole | Usage | Participants |

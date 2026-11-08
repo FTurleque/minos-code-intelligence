@@ -310,32 +310,32 @@ ADR SEC-0079 : voie WSL2 de l'indexation Java depuis Windows, mise en œuvre de 
 
 | Scénario | Conception | Tâche | Test ou preuve |
 |---|---|---|---|
-| Option refusée sous Linux | Contrats d'interface | 2.1, 2.2 | `IndexCommandViaWslTest` (à écrire) |
-| Option combinée à --scip | Contrats d'interface | 2.1, 2.2 | `IndexCommandViaWslTest` (à écrire) |
-| Distribution en WSL1 | D5 | 4.1, 4.2 | `WslPrerequisiteProbeTest` (à écrire) |
-| bubblewrap absent | D5 | 4.1, 4.2 | `WslPrerequisiteProbeTest` (à écrire) |
-| Aucune distribution WSL | D5 | 4.1, 4.2 | `WslPrerequisiteProbeTest` (à écrire) |
-| Section complète | Contrats d'interface | 4.3 | `DoctorCommandWslJavaTest` (à écrire) ; 6.2 (manuelle) |
-| Section absente sous Linux | Contrats d'interface | 4.3 | `DoctorCommandWslJavaTest` (à écrire) |
-| Cgroup non délégué | D4 | 5.1, 5.2 | test du worker Linux (à écrire) ; 6.2 (manuelle) |
-| Réseau du provider | Sécurité | 5.1, 5.2 | `WslIndexWorkerTest` (à écrire) ; 6.2 (manuelle) |
-| Jeton présent dans l'environnement de MINOS | D6 | 4.4 | `WslCommandEnvironmentTest` (à écrire) |
-| Dépôt non désigné | Sécurité, E1 | 5.1, 5.2 | test du worker Linux (à écrire) |
-| Empreinte altérée | D2 | 5.3 | `WslArtifactProvenanceTest` (à écrire) |
-| Projet différent | D3 | 5.3 | `WslArtifactProvenanceTest` (à écrire) |
-| Indexation réussie | Traitements | 5.4 ; 6.2 | 6.2 (manuelle) |
-| Échec après un index précédent | Transactions | 5.4 | `WslIndexWorkerTest` (à écrire) |
-| Délai dépassé | États | 5.5 | `WslIndexWorkerTest` (à écrire) |
-| Échec du provider dans la distribution | Observabilité | 5.5 | `WslIndexWorkerTest` (à écrire) |
-| Doctor sous Windows | D8 | 6.4 | `ManagedScipProviderRuntimeManagerToolchainTest` (à modifier) |
-| Indexation native refusée | D8 | 6.4 | `ManagedScipProviderRuntimeManagerToolchainTest` (à modifier) |
-| Linux inchangé | D8 | 6.4 | `ManagedScipProviderRuntimeManagerToolchainTest` (existant) |
-| Aucun cs dans le PATH | D7 | 3.1, 3.2 | `ManagedScipProviderRuntimeManagerCoursierLinuxTest` (à écrire) |
-| Empreinte non conforme | D7 | 3.1, 3.2 | `ManagedScipProviderRuntimeManagerCoursierLinuxTest` (à écrire) |
-| Hors ligne sans Coursier | D7 | 3.1, 3.2 | `ManagedScipProviderRuntimeManagerCoursierLinuxTest` (à écrire) |
+| Option refusée sous Linux | Contrats d'interface | 2.1, 2.2 | `IndexCommandViaWslTest#offWindowsTheOptionIsAUsageErrorThatNamesItBeforeReachingTheBackend` |
+| Option combinée à --scip | Contrats d'interface | 2.1, 2.2 | `IndexCommandViaWslTest#theRouteIsNotCombinableWithAScipImportAndTheMessageNamesBothOptions` |
+| Distribution en WSL1 | D5 | 4.1, 4.2 | `WslPrerequisiteProbeTest#wsl1DistributionNamesVersion2AndLaunchesNothingInside` |
+| bubblewrap absent | D5 | 4.1, 4.2 | `WslPrerequisiteProbeTest#bubblewrapAbsentIsMissingWithoutPath` |
+| Aucune distribution WSL | D5 | 4.1, 4.2 | `WslPrerequisiteProbeTest#noDistributionInstalledNamesWsl2` |
+| Section complète | Contrats d'interface, D5 | 4.3, 4.6, 6.2 | `DoctorCommandWslJavaTest#aDistributionWithEveryPrerequisiteListsEachCheckOk` ; qualification (huit contrôles `OK` sur l'hôte réel) |
+| Section absente sous Linux | Contrats d'interface | 4.3 | `DoctorCommandWslJavaTest#theRealHostHasNoWslJavaSectionUnderLinux` |
+| Cgroup non délégué | D4 | 5.1, 5.2 | `WslLinuxWorkerTest#withoutADelegatedCgroupTheProviderIsNotLaunched` |
+| Réseau du provider | Sécurité | 5.1, 5.2, 6.2 | `WslLinuxWorkerTest#theProviderRunsUnderTheManagedSandboxWithDenyAndTheBundleIsV3` ; qualification (build hors ligne sous `DENY`) |
+| Jeton présent dans l'environnement de MINOS | D6 | 4.4 | `WslCommandEnvironmentTest#secretsAndInheritedWslenvNeverReachTheCommand` |
+| Dépôt non désigné | Sécurité, E1 | 5.1, 5.2 | `WslLinuxWorkerTest#withoutADesignatedRepositoryTheWorkerRefusesByTheSettingAndRunsNoMaven` |
+| Empreinte altérée | D2 | 5.3 | `WslArtifactProvenanceTest#aBundleWhoseArtifactDoesNotMatchItsManifestChecksumIsRejectedAndDeleted` |
+| Projet différent | D3 | 5.3 | `WslArtifactProvenanceTest#everyProvenanceFieldThatDiffersFromTheRequestRejectsTheBundle` |
+| Indexation réussie | Traitements | 5.4, 6.2a, 6.2b, 6.2 | `WslIndexWorkerTest#aConformingArtifactIsImportedByStagingAndPromotionAndNothingStaysInTheExchange` ; qualification (`java-simple` et projet Maven réel, `index-status`, `find-usages`) |
+| Échec après un index précédent | Transactions | 5.4 | `WslIndexWorkerTest#anImportThatFailsLeavesThePreviousSnapshotActive` |
+| Délai dépassé | États | 5.5 | `WslIndexWorkerTest#aWorkerPastItsTimeoutHasItsScopeStoppedAndLeavesNoArtifact` ; arrêt réel du scope non observé |
+| Échec du provider dans la distribution | Observabilité | 5.5 | `WslIndexWorkerTest#aProviderFailureInTheDistributionIsReportedWithoutAnyAbsolutePath` |
+| Doctor sous Windows | D8 | 6.3, 6.4 | `ManagedScipProviderRuntimeManagerToolchainTest#onWindowsAnInstalledScipJavaIsBlockedUntilItsSandboxedExecutionIsQualified` |
+| Indexation native refusée | D8 | 6.3, 6.4 | `ManagedScipProviderRuntimeManagerToolchainTest#onWindowsAnInstalledScipJavaIsBlockedUntilItsSandboxedExecutionIsQualified` (refus de l'exécuteur qui nomme `--via-wsl`) |
+| Linux inchangé | D8 | 6.4 | `ManagedScipProviderRuntimeManagerToolchainTest#onLinuxScipJavaIsNotBlockedByTheWindowsSandboxQualification` |
+| Aucun cs dans le PATH | D7 | 3.1, 3.2 | `ManagedScipProviderRuntimeManagerCoursierLinuxTest#theLauncherIsInstalledFromThePinnedSourceAsAnOwnerOnlyExecutable` |
+| Empreinte non conforme | D7 | 3.1, 3.2 | `ManagedScipProviderRuntimeManagerCoursierLinuxTest#aSourceThatServesOtherBytesIsRefusedAndLeavesNoCoursierFile` |
+| Hors ligne sans Coursier | D7 | 3.1, 3.2 | `ManagedScipProviderRuntimeManagerCoursierLinuxTest#withTheNetworkRefusedTheDiagnosticNamesCoursierAndIsActionable` |
 
 ## Questions ouvertes
 
-- **Q1** — Le JDK des paquets Ubuntu fonctionne-t-il désormais dans le bac à sable (E3) ? Mesure en tâche 6.1 ; selon le résultat, consigner un écart dans SEC-0074 ou garder la règle. Ne change ni les specs ni les tâches.
-- **Q2** — L'aide provisoire limite le worker aux cœurs 0 à 3 (`taskset -c 0-3`), sans raison écrite. À mesurer en qualification ; recommandation : ne pas reprendre la limite sans cause démontrée.
+- **Q1** — Mesurée le 2026-11-08 : le JDK du paquet `openjdk-21-jdk-headless` sert au build dans le bac à sable une fois désigné par `minos.scip.java.project-jdk`, ce JDK étant aussi la première entrée du `PATH` du build (tâche 6.2a). SEC-0074 n'a pas d'écart à consigner.
+- **Q2** — Mesurée le 2026-11-08 : aucune limite de cœurs n'est reprise. Sur un hôte de 16 cœurs, la cause d'échec était le dimensionnement des JVM sur l'hôte ; chaque JVM du bac à sable se dimensionne sur la mémoire et les processeurs du job (tâche 6.2b).
 - **Q3** — Domaine de l'ADR (`security` ou `architecture`) : à trancher à l'écriture (tâche 1.1). Recommandation : `security`, comme SEC-0074 qu'il met en œuvre.
