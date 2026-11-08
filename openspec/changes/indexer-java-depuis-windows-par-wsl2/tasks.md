@@ -4,13 +4,13 @@ Aucun constat d'audit n'est à l'origine de ce changement : il met en œuvre ADR
 
 ## 1. Décision d'architecture
 
-- [ ] 1.1 Écrire l'ADR 0079 (commande `/minos:adr`) : voie WSL2 de l'indexation Java depuis Windows, classement en indexation locale et exécuteur de l'orchestration unique (design D2), format de transport `minos-distributed-artifact-v3` (D3), scope délégué (D4), environnement de `wsl.exe` (D6), limite de `networkDenyEnforced` et lecture de SEC-0074 décision 3 (E5) ; statut `Proposed` ; index `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` ; « Complété par » dans SEC-0074. Vérifier par `archgate check` et `python .claude/scripts/run_gates.py --fast`.
+- [x] 1.1 Écrire l'ADR 0079 (commande `/minos:adr`) : voie WSL2 de l'indexation Java depuis Windows, classement en indexation locale et exécuteur de l'orchestration unique (design D2), format de transport `minos-distributed-artifact-v3` (D3), scope délégué (D4), environnement de `wsl.exe` (D6), limite de `networkDenyEnforced` et lecture de SEC-0074 décision 3 (E5) ; statut `Proposed` ; index `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` ; « Complété par » dans SEC-0074. Vérifier par `archgate check` et `python .claude/scripts/run_gates.py --fast`.
 - [ ] 1.2 **(manuelle)** Faire relire D2 et D3 par l'agent `minos-architecture-reviewer` et le propriétaire, puis passer l'ADR `Accepted` avant le groupe 5.
 
 ## 2. Option `--via-wsl` du CLI
 
-- [ ] 2.1 Rouge : `IndexCommandViaWslTest` (`minos-cli`) — refus d'usage hors Windows, refus combiné à `--scip` ou `--dry-run`, `--wsl-distro` refusé sans `--via-wsl`, aucun run créé (indexation-java-via-wsl › L'indexation via WSL n'est offerte que sous Windows). Vérifier qu'il échoue sur l'option inconnue.
-- [ ] 2.2 Correction : options dans `IndexCommand` (`CliOptions.Spec`, usage), port de sélection de la voie dans `minos-application` qui fournit un autre `IndexerExecutor` à `ProjectIndexingUseCase` (aucun second coordinateur : decouverte-et-negociation › Le produit n'a qu'une orchestration d'indexation), aucun type `com.minos.remote` nommé par la CLI, câblage par `minos-bootstrap` ; vérifier `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=IndexCommandViaWslTest"` ; rejouer `check-module-boundaries.py` et `check-comment-language.py`.
+- [x] 2.1 Rouge : `IndexCommandViaWslTest` (`minos-cli`) — refus d'usage hors Windows, refus combiné à `--scip` ou `--dry-run`, `--wsl-distro` refusé sans `--via-wsl`, aucun run créé (indexation-java-via-wsl › L'indexation via WSL n'est offerte que sous Windows). Vérifier qu'il échoue sur l'option inconnue.
+- [x] 2.2 Correction : options dans `IndexCommand` (`CliOptions.Spec`, usage), port de sélection de la voie dans `minos-application` qui fournit un autre `IndexerExecutor` à `ProjectIndexingUseCase` (aucun second coordinateur : decouverte-et-negociation › Le produit n'a qu'une orchestration d'indexation), aucun type `com.minos.remote` nommé par la CLI, câblage par `minos-bootstrap` ; vérifier `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=IndexCommandViaWslTest"` ; rejouer `check-module-boundaries.py` et `check-comment-language.py`.
 
 ## 3. Coursier sous Linux
 
