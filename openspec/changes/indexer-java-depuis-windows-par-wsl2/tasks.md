@@ -24,7 +24,7 @@ Aucun constat d'audit n'est à l'origine de ce changement : il met en œuvre ADR
 - [x] 4.2 Correction : `WslPrerequisiteProbe` en trois étapes (design D5 : `wsl.exe -l -v` décodé en UTF-16, commande shell constante pour systemd, bus utilisateur, contrôleurs, `bwrap` et JVM 21 avant tout lancement du jar, puis sonde du jar pour Maven, JDK et dépôt), `wsl.exe` résolu dans le répertoire système ; vérifier le test 4.1 ; rejouer `check-private-io.py`.
 - [ ] 4.3 Rouge puis correction : `DoctorCommandWslJavaTest` (`minos-cli`) puis section `wslJava` de `DoctorCommand`, texte et JSON, absente sous Linux (indexation-java-via-wsl › doctor rapporte la voie WSL sous Windows) ; vérifier le test.
 - [x] 4.4 Rouge puis correction : `WslCommandEnvironmentTest` — `MINOS_TEAM_TOKEN`, `GITHUB_TOKEN` et un `WSLENV` hérité n'atteignent pas la commande ; puis liste d'autorisation de la voie filtrée par la méthode publique `ProviderProcessEnvironment.sanitize(Map, Map)`, sans ouvrir `isDeniedName` (indexation-java-via-wsl › wsl.exe reçoit un environnement en liste d'autorisation ; design D6) ; vérifier le test.
-- [ ] 4.5 Documentation : vues « composants » et « séquence » du nouveau dossier `docs/architecture/diagrams/capacites/indexation-java-via-wsl.md`, indexé dans `docs/architecture/diagrams/capacites/README.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 4.5 Documentation : vues « composants » et « séquence » du dossier de capacité, écrit en brouillon dans le changement (`openspec/changes/indexer-java-depuis-windows-par-wsl2/dossier-indexation-java-via-wsl.md`) parce que `check-capability-dossiers.py` n'accepte un dossier sous `docs/architecture/diagrams/capacites/` que pour une capacité présente dans `openspec/specs/` ; la tâche 7.2 le déplace et l'indexe à l'archivage ; vérifier par `python scripts/docs/check-capability-dossiers.py` (aucun dossier ajouté sous `capacites/`) et `openspec validate --all --strict`.
 
 ## 5. Worker et import
 
@@ -46,7 +46,7 @@ Aucun constat d'audit n'est à l'origine de ce changement : il met en œuvre ADR
 ## 7. Clôture
 
 - [ ] 7.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 7.2 Mettre à jour les dossiers `indexation-java-via-wsl.md` et `installation-des-providers.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [ ] 7.2 À l'archivage : déplacer le brouillon `dossier-indexation-java-via-wsl.md` du changement vers `docs/architecture/diagrams/capacites/indexation-java-via-wsl.md`, l'indexer dans `docs/architecture/diagrams/capacites/README.md`, compléter sa traçabilité sur la spec archivée et ajouter la section `## Documentation liée` de `openspec/specs/indexation-java-via-wsl/spec.md` ; mettre à jour `installation-des-providers.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 - [ ] 7.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`.
 - [ ] 7.4 Rejouer `python .claude/scripts/run_gates.py` et `./mvnw -B -ntp verify` sur Windows et Linux (CI des deux plateformes).
 - [ ] 7.5 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, docs/user, docs/developer, arc42, ADR 0079 passé `Accepted`, SEC-0074) ; vérifier que chacun est fait ou nommé comme reste.
