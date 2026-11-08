@@ -36,13 +36,22 @@ Un projet polyglotte garde donc ses autres providers natifs.
 
 `WslPrerequisiteProbe` procède en trois étapes : `wsl.exe -l -v` (sortie UTF-16), puis un script constant dans la
 distribution (systemd, bus utilisateur, contrôleurs `memory`, `pids` et `cpu` délégables, `bwrap`, JVM 21), puis
-les contrôles du jar (Maven, JDK du projet, dépôt Maven désigné) par le point d'extension `WslJarProbe`. `wsl.exe`
-n'est résolu que dans le répertoire système de Windows.
+les contrôles du jar (Maven, JDK du projet, dépôt Maven désigné). `wsl.exe` n'est résolu que dans le répertoire
+système de Windows.
 
-La route bloque sur un contrôle de l'hôte `MISSING` ou `UNKNOWN`. Aucune sonde du jar n'est fournie en production :
-les trois contrôles du jar restent `UNKNOWN`, ne bloquent pas la route et sont tranchés par le worker dans la
-distribution. `minos doctor` affiche le même rapport dans sa section `wslJava` (Windows seulement), par
-`HostDiagnosticsService.wslJava` et `LocalWslPrerequisiteDiagnostics`.
+La troisième étape est le mode sonde de la commande interne. `WslCommandJarProbe` lance
+`wsl.exe -d <distribution> --exec java -cp <jar> <classe principale> internal wsl-worker --probe`, sans shell ni
+scope systemd : la sonde ne fait que lire des fichiers. Dans la distribution, `LocalWslJarChecks` applique
+`ScipJavaMavenOffline.mavenProblem`, `ScipJavaProjectJdk.problem` et `ScipJavaMavenOffline.repositoryProblem` sur
+les réglages MINOS que lit aussi le worker, sans lancer Maven, et écrit une ligne `minos-wsl-probe-v1 <id> <état>
+<action>` par contrôle (`WslJarProbeProtocol`). Une action qui cite un chemin est remplacée par l'action fixe du
+contrôle, des deux côtés. Un jar qui ne répond pas, échoue ou dépasse 90 secondes laisse ses contrôles `UNKNOWN`.
+Sans installation empaquetée, ou sans `wsl.exe`, la sonde du jar est `WslJarProbe.NOT_AVAILABLE`.
+
+La route bloque sur tout contrôle `MISSING` et sur un contrôle de l'hôte `UNKNOWN`. Un contrôle du jar `UNKNOWN` ne
+bloque pas : le worker applique les mêmes contrôles avant de lancer le provider. `minos doctor` affiche le même
+rapport dans sa section `wslJava` (Windows seulement), par `HostDiagnosticsService.wslJava` et
+`LocalWslPrerequisiteDiagnostics`.
 
 ## Lancement de la distribution
 
@@ -66,7 +75,8 @@ wsl.exe -d <distribution> --exec systemd-run --user --scope -p Delegate=yes --un
 ## Côté Linux : le worker
 
 La commande interne `internal wsl-worker` n'apparaît pas dans l'aide. `WslWorkerLaunch` (`minos-cli`) la relie au
-port `WslIndexingWorker`, que `minos-bootstrap` n'offre que sous Linux (`WslLinuxWorker`). Le worker :
+port `WslIndexingWorker`, que `minos-bootstrap` n'offre que sous Linux : `run` pour une requête (`WslLinuxWorker`),
+`probe` pour l'option `--probe` (`LocalWslJarChecks`). Le worker :
 
 1. refuse tout autre provider que scip-java, une autre version que celle du jar, un projet inaccessible ;
 2. refuse si le backend choisi par `strongestAvailableForManagedLocalProvider` ne prend pas en charge le provider
@@ -100,8 +110,9 @@ distante).
 | Option du CLI | `IndexCommandViaWslTest`, `IndexViaWslSideEffectsTest` |
 | Route et runtimes routés | `LocalWslIndexingRouteTest`, `WslRoutedRuntimesTest`, `WslIndexingRouteWiringTest` |
 | Prérequis et doctor | `WslPrerequisiteProbeTest`, `LocalWslPrerequisiteDiagnosticsTest`, `DoctorCommandWslJavaTest` |
+| Sonde du jar | `WslJarProbeProtocolTest`, `WslCommandJarProbeTest`, `LocalWslJarChecksTest`, `ScipJavaMavenOfflineTest` (Linux seulement) |
 | Lancement de `wsl.exe` | `WslCommandEnvironmentTest`, `WslProcessCommandRunnerTest`, `WslWorkerProtocolTest` |
-| Worker Linux | `WslLinuxWorkerTest` (exécution réelle sous le bac à sable : Linux seulement), `WslWorkerLaunchTest` |
+| Worker Linux et mode sonde | `WslLinuxWorkerTest` (exécution réelle sous le bac à sable : Linux seulement), `WslWorkerLaunchTest` |
 | Transport et provenance | `DistributedArtifactManifestTest`, `DistributedIndexingWorkerRequestTest`, `WslArtifactProvenanceTest`, `DistributedIndexerExecutorProvenanceTest` |
 | Import, délai, sorties | `WslIndexWorkerTest` |
 

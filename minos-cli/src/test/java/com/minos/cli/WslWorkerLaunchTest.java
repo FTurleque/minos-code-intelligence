@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -35,11 +36,7 @@ class WslWorkerLaunchTest {
     @Test
     void theWorkerRunsTheRequestAndPrintsItsStatusLine() throws Exception {
         List<Path> requests = new ArrayList<>();
-        WslIndexingWorker worker = (request, output) -> {
-            requests.add(request);
-            output.append("minos-wsl-worker-v1 OK\n");
-            return 0;
-        };
+        WslIndexingWorker worker = new RecordingWorker(requests);
         Streams streams = new Streams();
 
         int code = WslWorkerLaunch.run(new String[]{"internal", "wsl-worker", "request.properties"},
@@ -51,11 +48,31 @@ class WslWorkerLaunchTest {
     }
 
     @Test
+    void theProbeOptionRunsTheProbeModeAndReadsNoRequest() throws Exception {
+        List<Path> requests = new ArrayList<>();
+        Streams streams = new Streams();
+
+        int code = WslWorkerLaunch.run(new String[]{"internal", "wsl-worker", "--probe"},
+                composer(Optional.of(new RecordingWorker(requests))), home, streams.out, streams.err);
+
+        assertEquals(0, code);
+        assertEquals(List.of(), requests, "the probe mode reads no request file");
+        assertEquals("minos-wsl-probe-v1 maven OK\n", streams.out());
+        assertEquals("", streams.err());
+
+        Streams unavailable = new Streams();
+        assertEquals(FindSymbolCommand.EXECUTION_ERROR, WslWorkerLaunch.run(
+                new String[]{"internal", "wsl-worker", "--probe"}, composer(Optional.empty()), home,
+                unavailable.out, unavailable.err));
+        assertTrue(unavailable.err().contains("only inside a Linux distribution"), unavailable.err());
+    }
+
+    @Test
     void aMissingRequestIsAUsageErrorAndAHostWithoutWorkerRefuses() throws Exception {
         Streams usage = new Streams();
         assertEquals(FindSymbolCommand.USAGE_ERROR, WslWorkerLaunch.run(new String[]{"internal", "wsl-worker"},
                 composer(Optional.empty()), home, usage.out, usage.err));
-        assertTrue(usage.err().contains("exactly one request file"), usage.err());
+        assertTrue(usage.err().contains("exactly one request file or --probe"), usage.err());
 
         Streams unavailable = new Streams();
         assertEquals(FindSymbolCommand.EXECUTION_ERROR, WslWorkerLaunch.run(
@@ -63,6 +80,22 @@ class WslWorkerLaunchTest {
                 composer(Optional.empty()), home, unavailable.out, unavailable.err));
         assertTrue(unavailable.err().contains("only inside a Linux distribution"), unavailable.err());
         assertFalse(unavailable.err().contains(home.toString()), unavailable.err());
+    }
+
+    /** A worker that records its requests and answers OK, and whose probe reports Maven ready. */
+    private record RecordingWorker(List<Path> requests) implements WslIndexingWorker {
+        @Override
+        public int run(Path request, Appendable output) throws IOException {
+            requests.add(request);
+            output.append("minos-wsl-worker-v1 OK\n");
+            return 0;
+        }
+
+        @Override
+        public int probe(Appendable output) throws IOException {
+            output.append("minos-wsl-probe-v1 maven OK\n");
+            return 0;
+        }
     }
 
     private static Function<Path, Optional<WslIndexingWorker>> composer(Optional<WslIndexingWorker> worker) {

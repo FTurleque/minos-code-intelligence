@@ -15,7 +15,10 @@ import java.util.List;
 @FunctionalInterface
 public interface WslJarProbe {
 
-    /** Placeholder used until the internal worker command exists: the jar checks are reported unknown. */
+    /**
+     * Used when no installation jar can run in the distribution (a run from class directories): the jar checks are
+     * reported unknown. A packaged Windows installation uses {@link WslCommandJarProbe}.
+     */
     WslJarProbe NOT_AVAILABLE = distribution -> List.of();
 
     /** Runs the jar-level checks in {@code distribution}, a validated WSL distribution name. */
