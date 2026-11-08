@@ -110,6 +110,70 @@ class DistributedArtifactManifestTest {
         assertThrows(IllegalArgumentException.class, () -> scopeManifest("a".repeat(1025)));
     }
 
+    @Test
+    void v3CarriesALocalProjectFingerprintInsteadOfARemoteRevision() {
+        DistributedArtifactManifest local = localManifest("c".repeat(64));
+
+        assertEquals(DistributedArtifactManifest.FORMAT_V3, local.format());
+        assertEquals(new DistributedArtifactSource.LocalProject("c".repeat(64)), local.source());
+        assertEquals(DistributedArtifactSource.LocalProject.KIND, local.source().kind());
+        assertEquals("c".repeat(64), local.projectFingerprint());
+        assertThrows(IllegalStateException.class, local::sourceRepository);
+        assertThrows(IllegalStateException.class, local::sourceCommit);
+        DistributedArtifactManifest remote = manifest(WorkerNetworkPolicy.DENY, true);
+        assertEquals(DistributedArtifactSource.RemoteRevision.KIND, remote.source().kind());
+        assertThrows(IllegalStateException.class, remote::projectFingerprint);
+    }
+
+    @Test
+    void v3RejectsARemoteRevisionAMalformedFingerprintAndAnUnenforcedDeny() {
+        assertThrows(IllegalArgumentException.class, () -> localManifest("c".repeat(40)));
+        assertThrows(IllegalArgumentException.class, () -> localManifest("C".repeat(64)));
+        assertThrows(IllegalArgumentException.class, () -> localManifest(null));
+        DistributedArtifactManifest valid = localManifest("c".repeat(64));
+        assertThrows(IllegalArgumentException.class, () -> new DistributedArtifactManifest(
+                valid.format(), valid.runId(), valid.projectId(), valid.projectRelativeRoot(),
+                "https://github.com/acme/demo.git", "a".repeat(40), valid.language(),
+                valid.providerId(), valid.providerVersion(), valid.workerId(), valid.isolation(),
+                valid.networkPolicy(), valid.networkDenyEnforced(), valid.startedAt(), valid.completedAt(),
+                valid.artifactPath(), valid.artifactSize(), valid.artifactSha256()));
+        assertThrows(IllegalArgumentException.class, () -> new DistributedArtifactManifest(
+                valid.format(), valid.runId(), valid.projectId(), valid.projectRelativeRoot(),
+                valid.source(), valid.language(),
+                valid.providerId(), valid.providerVersion(), valid.workerId(), valid.isolation(),
+                WorkerNetworkPolicy.DENY, false, valid.startedAt(), valid.completedAt(),
+                valid.artifactPath(), valid.artifactSize(), valid.artifactSha256()));
+    }
+
+    @Test
+    void remoteFormatsRejectAProjectFingerprint() {
+        DistributedArtifactManifest valid = manifest(WorkerNetworkPolicy.DENY, true);
+        assertThrows(IllegalArgumentException.class, () -> new DistributedArtifactManifest(
+                valid.format(), valid.runId(), valid.projectId(), valid.projectRelativeRoot(),
+                new DistributedArtifactSource.LocalProject("c".repeat(64)), valid.language(),
+                valid.providerId(), valid.providerVersion(), valid.workerId(), valid.isolation(),
+                valid.networkPolicy(), valid.networkDenyEnforced(), valid.startedAt(), valid.completedAt(),
+                valid.artifactPath(), valid.artifactSize(), valid.artifactSha256()));
+    }
+
+    private static DistributedArtifactManifest localManifest(String fingerprint) {
+        return DistributedArtifactManifest.localWsl(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "services/catalog",
+                fingerprint,
+                Language.JAVA,
+                "scip-java",
+                "0.13.2",
+                "wsl:Ubuntu",
+                WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
+                Instant.parse("2026-11-08T00:00:00Z"),
+                Instant.parse("2026-11-08T00:00:01Z"),
+                5,
+                "b".repeat(64)
+        );
+    }
+
     private static DistributedArtifactManifest manifest(WorkerNetworkPolicy policy, boolean enforced) {
         return new DistributedArtifactManifest(
                 DistributedArtifactManifest.FORMAT_V2,
