@@ -11,6 +11,7 @@ import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.application.MinosApplicationComposer;
 import com.minos.application.WslIndexingRoute;
 import com.minos.application.WslIndexingWorker;
+import com.minos.application.WslPrerequisiteDiagnostics;
 import com.minos.git.GitIntelligence;
 import com.minos.integration.git.GitIntelligenceService;
 import com.minos.integration.git.JGitRemoteRepositoryMaterializer;
@@ -42,6 +43,7 @@ import com.minos.storage.local.store.FileSymbolSnapshotStore;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -156,6 +158,18 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     @Override
     public HostCommandLocator hostCommandLocator() {
         return new LocalHostCommandLocator();
+    }
+
+    /** The WSL2 route exists only under Windows: no probe, hence no {@code wslJava} section, anywhere else. */
+    @Override
+    public Optional<WslPrerequisiteDiagnostics> wslPrerequisiteDiagnostics() {
+        return wslPrerequisiteDiagnostics(System.getProperty("os.name", ""));
+    }
+
+    static Optional<WslPrerequisiteDiagnostics> wslPrerequisiteDiagnostics(String osName) {
+        return osName.toLowerCase(Locale.ROOT).startsWith("windows")
+                ? Optional.of(LocalWslPrerequisiteDiagnostics.forSystem())
+                : Optional.empty();
     }
 
     /** JGit materialization in MINOS_HOME. */
