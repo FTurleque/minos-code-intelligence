@@ -6,8 +6,11 @@ import com.minos.adapter.scip.runtime.install.ManagedPolyglotScipRuntimeManager;
 import com.minos.adapter.scip.runtime.install.ManagedScipProviderRuntimeManager;
 import com.minos.adapter.scip.runtime.install.ManagedScipPythonRuntimeManager;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
+import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.application.MinosApplicationComposer;
+import com.minos.application.WslIndexingRoute;
+import com.minos.application.WslIndexingWorker;
 import com.minos.application.WslPrerequisiteDiagnostics;
 import com.minos.git.GitIntelligence;
 import com.minos.integration.git.GitIntelligenceService;
@@ -23,6 +26,8 @@ import com.minos.registry.ProjectPathMappings;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.runtime.local.CompositeProviderRuntimeManager;
+import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
+import com.minos.runtime.local.wsl.WslLinuxWorker;
 import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.WorkerSandboxProbe;
@@ -39,6 +44,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -76,24 +82,28 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     }
 
     /**
-     * Managers in the order scip-java, python, polyglot. The Maven repository of scip-java comes from the MINOS
-     * settings (JVM property, environment, {@code MINOS_HOME/config/minos.properties}), never from the analysed project.
+     * Managers in the order scip-java, python, polyglot. The Maven repository and the project JDK of scip-java come
+     * from the MINOS settings (JVM property, environment, {@code MINOS_HOME/config/minos.properties}), never from the
+     * analysed project; without its setting, the project JDK is the one of {@code JAVA_HOME}.
      */
     @Override
     public ProviderRuntimeManager providerRuntimeManager(Path home) {
         return new CompositeProviderRuntimeManager(List.of(
                 new ManagedScipProviderRuntimeManager(
                         home, ScipJavaMavenOffline.configured(
-                                scipJavaMavenRepository(home), home, () -> hostCommandLocator().find("mvn"))),
+                                scipJavaSetting(home, ScipJavaMavenOffline.REPOSITORY_SETTING,
+                                        ScipJavaMavenOffline.REPOSITORY_ENVIRONMENT),
+                                home, () -> hostCommandLocator().find("mvn")),
+                        ScipJavaProjectJdk.configured(scipJavaSetting(home, ScipJavaProjectJdk.SETTING,
+                                ScipJavaProjectJdk.ENVIRONMENT))),
                 new ManagedScipPythonRuntimeManager(home),
                 new ManagedPolyglotScipRuntimeManager(home)));
     }
 
-    /** The designated Maven repository of scip-java; an unreadable configuration is refused, never ignored. */
-    private static String scipJavaMavenRepository(Path home) {
+    /** One setting of scip-java; an unreadable configuration is refused, never ignored. */
+    private static String scipJavaSetting(Path home, String setting, String environmentVariable) {
         try {
-            return MinosRuntimeSettings.load(home).value(
-                    ScipJavaMavenOffline.REPOSITORY_SETTING, ScipJavaMavenOffline.REPOSITORY_ENVIRONMENT);
+            return MinosRuntimeSettings.load(home).value(setting, environmentVariable);
         } catch (IOException unreadable) {
             throw new IllegalStateException("MINOS runtime configuration cannot be read", unreadable);
         }
@@ -172,6 +182,23 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     @Override
     public RemoteIndexingRuntime remoteIndexingRuntime(Path home) throws IOException {
         return LocalRemoteIndexingRuntime.production(home);
+    }
+
+    /** Windows only: scip-java run in a WSL2 distribution, its verified artifact imported here. */
+    @Override
+    public Optional<WslIndexingRoute> wslIndexingRoute(Path home) {
+        return LocalWslIndexingRoute.forHost(home);
+    }
+
+    /** Linux only: the worker the Windows route runs in the distribution, on the provider runtimes of this home. */
+    @Override
+    public Optional<WslIndexingWorker> wslIndexingWorker(Path home) {
+        Objects.requireNonNull(home, "home");
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) {
+            return Optional.empty();
+        }
+        return Optional.of((request, output) -> WslLinuxWorker.production(home)
+                .run(request, providerRuntimeManager(home), qualifiedIndexerDescriptors(), output));
     }
 
     /** The file store and local registry of MINOS_HOME. */

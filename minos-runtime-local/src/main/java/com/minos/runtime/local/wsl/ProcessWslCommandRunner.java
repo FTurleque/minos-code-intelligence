@@ -57,7 +57,7 @@ public final class ProcessWslCommandRunner implements WslCommandRunner {
         try {
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 destroyTree(process);
-                throw new IOException("wsl.exe command timed out");
+                throw new WslCommandTimeoutException("wsl.exe command timed out");
             }
             if (!reader.join(timeout.isZero() ? Duration.ofMillis(1) : timeout)) {
                 destroyTree(process);

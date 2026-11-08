@@ -1,24 +1,27 @@
 package com.minos.application;
 
-import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.runtime.ProviderRuntimeManager;
 
 import java.util.Optional;
-import java.util.function.UnaryOperator;
 
 /**
- * Port of the Windows route that runs the selected providers in a WSL2 distribution, under the Linux sandbox, and
- * hands back a verified artifact.
+ * Port of the Windows route that runs scip-java in a WSL2 distribution, under the Linux sandbox, and hands back a
+ * verified artifact (ADR SEC-0079).
  *
- * <p>The route is not a second orchestration: it only supplies the executor decorator that the single indexing use
- * case ({@code com.minos.application.indexing.ProjectIndexingUseCase}) applies to its executors, so preparation,
- * promotion and retention stay there.</p>
+ * <p>The route is not a second orchestration: the single indexing use case
+ * ({@code com.minos.application.indexing.ProjectIndexingUseCase}) keeps preparation, lease, promotion and retention,
+ * and only receives other provider runtimes. They route scip-java (readiness from the WSL prerequisite probe,
+ * executor run in the distribution) and delegate every other provider to the native runtimes, whose refusal of
+ * scip-java stays intact.</p>
  */
+@FunctionalInterface
 public interface WslIndexingRoute {
 
     /**
-     * Returns the decorator that replaces each selected executor by one that runs in the given distribution.
+     * The provider runtimes of the route for one indexing; nothing is probed or launched yet.
      *
-     * @param distribution the WSL distribution name, or empty for the default distribution of WSL
+     * @param nativeRuntimes the runtimes of this installation, which answer for every non-routed provider
+     * @param distribution   the WSL distribution name, or empty for the default distribution of WSL
      */
-    UnaryOperator<IndexerExecutor> executorDecorator(Optional<String> distribution);
+    ProviderRuntimeManager runtimes(ProviderRuntimeManager nativeRuntimes, Optional<String> distribution);
 }
