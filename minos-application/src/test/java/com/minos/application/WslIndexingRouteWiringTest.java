@@ -6,7 +6,6 @@ import com.minos.git.GitIntelligence;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.orchestration.InMemoryIndexStateStore;
 import com.minos.orchestration.IndexerProviderCatalog;
-import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableRunMarkers;
@@ -26,7 +25,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,20 +42,27 @@ class WslIndexingRouteWiringTest {
             assertEquals(Optional.empty(), ProjectIndexingUseCase.viaWsl(application, Optional.of("Ubuntu")));
             MinosApplicationComposer composer = application.compositionRoot();
             assertThrows(NullPointerException.class, () -> composer.wslIndexingRoute(null));
+            assertEquals(Optional.empty(), composer.wslIndexingWorker(home));
+            assertThrows(NullPointerException.class, () -> composer.wslIndexingWorker(null));
+            assertThrows(NullPointerException.class, () -> WslIndexingWorker.forHome(null));
         }
     }
 
     @Test
-    void anOfferedRouteReceivesTheDistributionAndYieldsTheSingleUseCase() throws Exception {
+    void anOfferedRouteReceivesTheNativeRuntimesAndTheDistributionAndYieldsTheSingleUseCase() throws Exception {
         List<Optional<String>> requested = new ArrayList<>();
-        WslIndexingRoute route = distribution -> {
+        List<ProviderRuntimeManager> natives = new ArrayList<>();
+        WslIndexingRoute route = (nativeRuntimes, distribution) -> {
+            natives.add(nativeRuntimes);
             requested.add(distribution);
-            return UnaryOperator.<IndexerExecutor>identity();
+            return nativeRuntimes;
         };
         try (MinosApplication application = application(route)) {
             assertTrue(ProjectIndexingUseCase.viaWsl(application, Optional.of("Ubuntu-24.04")).isPresent());
             assertTrue(ProjectIndexingUseCase.viaWsl(application, Optional.empty()).isPresent());
             assertEquals(List.of(Optional.of("Ubuntu-24.04"), Optional.empty()), requested);
+            assertEquals(List.of(application.providerRuntimeManager(), application.providerRuntimeManager()), natives,
+                    "the route delegates every non-routed provider to the native runtimes");
             assertThrows(NullPointerException.class, () -> ProjectIndexingUseCase.viaWsl(application, null));
         }
     }
@@ -91,6 +96,7 @@ class WslIndexingRouteWiringTest {
             case "wslIndexingRoute" -> route == null
                     ? InvocationHandler.invokeDefault(self, method, arguments)
                     : Optional.of(route);
+            case "wslIndexingWorker" -> InvocationHandler.invokeDefault(self, method, arguments);
             case "resumableRunMarkers" -> unused(ResumableRunMarkers.class);
             case "toString" -> "composer";
             case "hashCode" -> System.identityHashCode(self);

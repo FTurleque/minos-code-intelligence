@@ -95,6 +95,15 @@ public interface MinosApplicationComposer {
         return Optional.empty();
     }
 
+    /**
+     * Worker de la voie WSL2 exécuté dans la distribution, vide quand l'hôte ne l'offre pas (hors Linux). Il
+     * n'ouvre pas l'application : seuls les runtimes de providers de ce MINOS_HOME servent.
+     */
+    default Optional<WslIndexingWorker> wslIndexingWorker(Path home) {
+        Objects.requireNonNull(home, "home");
+        return Optional.empty();
+    }
+
     /** Correspondance persistée des racines hôte/conteneur de ce MINOS_HOME (plan Docker). */
     ProjectPathMappings projectPathMappings(Path home);
 
