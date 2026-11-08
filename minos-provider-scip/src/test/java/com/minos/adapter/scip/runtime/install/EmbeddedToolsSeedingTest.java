@@ -95,7 +95,8 @@ class EmbeddedToolsSeedingTest {
     }
 
     private ProviderRuntimeStatus inspect() {
-        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home), ScipJavaProjectJdk.fromEnvironment()).inspect("scip-typescript");
+        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home),
+                ScipJavaProjectJdk.fromEnvironment()).inspect("scip-typescript");
     }
 
     @Test

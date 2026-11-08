@@ -237,10 +237,12 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
     @Test
     void theManagerRequiresAHomeDirectory() {
         ScipJavaMavenOffline unconfigured = ScipJavaMavenOfflineFixtures.unconfigured(Path.of("unused"));
-        assertThrows(NullPointerException.class, () -> new ManagedScipProviderRuntimeManager(null, unconfigured, ScipJavaProjectJdk.fromEnvironment()));
+        assertThrows(NullPointerException.class, () -> new ManagedScipProviderRuntimeManager(null, unconfigured,
+                ScipJavaProjectJdk.fromEnvironment()));
     }
 
     private static ManagedScipProviderRuntimeManager manager(Path directory) {
-        return new ManagedScipProviderRuntimeManager(directory, ScipJavaMavenOfflineFixtures.unconfigured(directory), ScipJavaProjectJdk.fromEnvironment());
+        return new ManagedScipProviderRuntimeManager(directory, ScipJavaMavenOfflineFixtures.unconfigured(directory),
+                ScipJavaProjectJdk.fromEnvironment());
     }
 }

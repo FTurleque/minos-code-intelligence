@@ -136,7 +136,8 @@ class ManagedScipProviderRuntimeManagerCoursierLinuxTest {
     }
 
     private ManagedScipProviderRuntimeManager manager() {
-        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home), ScipJavaProjectJdk.fromEnvironment());
+        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home),
+                ScipJavaProjectJdk.fromEnvironment());
     }
 
     /** The catalogue's Linux launcher, re-pinned to {@code archive} and served by the fake payload. */

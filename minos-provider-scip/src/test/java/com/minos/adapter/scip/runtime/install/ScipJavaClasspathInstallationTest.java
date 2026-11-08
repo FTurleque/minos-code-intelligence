@@ -36,7 +36,8 @@ class ScipJavaClasspathInstallationTest {
     Path temp;
 
     private ManagedScipProviderRuntimeManager manager() {
-        return new ManagedScipProviderRuntimeManager(temp.resolve("home"), ScipJavaMavenOfflineFixtures.unconfigured(temp.resolve("home")), ScipJavaProjectJdk.fromEnvironment());
+        return new ManagedScipProviderRuntimeManager(temp.resolve("home"), ScipJavaMavenOfflineFixtures.unconfigured(temp.resolve("home")),
+                ScipJavaProjectJdk.fromEnvironment());
     }
 
     private static String pinned(String name, byte[] content) {

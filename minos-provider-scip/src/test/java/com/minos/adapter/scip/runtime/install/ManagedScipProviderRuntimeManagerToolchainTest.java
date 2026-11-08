@@ -51,7 +51,8 @@ class ManagedScipProviderRuntimeManagerToolchainTest {
     }
 
     private ManagedScipProviderRuntimeManager manager() {
-        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home), ScipJavaProjectJdk.fromEnvironment());
+        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home),
+                ScipJavaProjectJdk.fromEnvironment());
     }
 
     /** The scip-typescript package tree as npm leaves it: entry script and command shim. */
