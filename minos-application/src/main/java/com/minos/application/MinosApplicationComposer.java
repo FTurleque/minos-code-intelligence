@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Port de la racine de composition (ADR 0042) : fournit les adaptateurs concrets par défaut que
@@ -87,6 +88,12 @@ public interface MinosApplicationComposer {
      * worker isolé et transport d'artefacts vérifiés.
      */
     RemoteIndexingRuntime remoteIndexingRuntime(Path home) throws IOException;
+
+    /** Voie d'indexation par WSL2, vide quand l'hôte ne l'offre pas (hors Windows ou voie non livrée). */
+    default Optional<WslIndexingRoute> wslIndexingRoute(Path home) {
+        Objects.requireNonNull(home, "home");
+        return Optional.empty();
+    }
 
     /** Correspondance persistée des racines hôte/conteneur de ce MINOS_HOME (plan Docker). */
     ProjectPathMappings projectPathMappings(Path home);

@@ -229,6 +229,19 @@ public final class ProjectIndexingUseCase {
         return of(application, UnaryOperator.identity());
     }
 
+    /**
+     * The production wiring of the WSL2 route: the same orchestration, with the executor decorator of the route that
+     * the composition root offers. Empty when this installation does not offer the route; nothing is resolved then.
+     *
+     * @param distribution the WSL distribution name, or empty for the default distribution of WSL
+     */
+    public static Optional<ProjectIndexingUseCase> viaWsl(MinosApplication application, Optional<String> distribution) {
+        Objects.requireNonNull(application, "application");
+        Objects.requireNonNull(distribution, "distribution");
+        return application.compositionRoot().wslIndexingRoute(application.home())
+                .map(route -> of(application, route.executorDecorator(distribution)));
+    }
+
     /** The semantic refresh of the product: skipped without an embedding provider, never fatal to the index. */
     public static SemanticRefresh semanticRefresh(SemanticIndexService semanticIndexService) {
         Objects.requireNonNull(semanticIndexService, "semanticIndexService");

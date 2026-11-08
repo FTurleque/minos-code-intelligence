@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Autonomous indexing over the selected MINOS storage backend. The orchestration is the application use case
@@ -52,6 +53,19 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull,
                                       IndexingResumeChoice resumeChoice) throws Exception {
         return view(indexing.executeSummary(projectIdentifier, providerOverride, forceFull, resumeChoice));
+    }
+
+    /**
+     * Runs the single indexing use case with the executor decorator of the WSL2 route. The route is looked up before
+     * any project resolution, so an installation that does not offer it refuses without creating a run. The refusal
+     * is an {@link IllegalArgumentException}; raised after option parsing, the command reports it as a failure.
+     */
+    @Override
+    public IndexExecutionView executeViaWsl(String projectIdentifier, String providerOverride, boolean forceFull,
+                                            IndexingResumeChoice resumeChoice, String distribution) throws IOException {
+        ProjectIndexingUseCase viaWsl = ProjectIndexingUseCase.viaWsl(application, Optional.ofNullable(distribution))
+                .orElseThrow(() -> new IllegalArgumentException(VIA_WSL_UNAVAILABLE));
+        return view(viaWsl.executeSummary(projectIdentifier, providerOverride, forceFull, resumeChoice));
     }
 
     @Override public List<ProviderView> providers() {
