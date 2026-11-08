@@ -24,11 +24,11 @@ public final class ScipJavaProjectJdk {
     static final String JAVA_HOME = "JAVA_HOME";
 
     private final String designation;
-    private final Function<String, String> environment;
+    private final Function<String, String> processEnvironment;
 
     private ScipJavaProjectJdk(String designation, Function<String, String> environment) {
         this.designation = designation == null || designation.isBlank() ? null : designation.trim();
-        this.environment = Objects.requireNonNull(environment, "environment");
+        this.processEnvironment = Objects.requireNonNull(environment, "environment");
     }
 
     /** The project JDK of this installation: {@code designation} is the value of {@link #SETTING}, null when unset. */
@@ -60,7 +60,7 @@ public final class ScipJavaProjectJdk {
             return containsJavac(designation) ? Optional.empty()
                     : Optional.of("the project JDK designated by " + SETTING + " does not contain javac");
         }
-        String javaHome = environment.apply(JAVA_HOME);
+        String javaHome = processEnvironment.apply(JAVA_HOME);
         if (javaHome == null || javaHome.isBlank()) {
             return Optional.of("JAVA_HOME is not set to the project JDK and " + SETTING + " is not set");
         }
@@ -81,7 +81,7 @@ public final class ScipJavaProjectJdk {
             }
             return Path.of(designation).toAbsolutePath().normalize();
         }
-        String javaHome = environment.apply(JAVA_HOME);
+        String javaHome = processEnvironment.apply(JAVA_HOME);
         if (javaHome == null || javaHome.isBlank()) {
             throw new IllegalStateException(
                     "scip-java requires a project JDK: JAVA_HOME is not set and " + SETTING + " is not set");

@@ -472,7 +472,7 @@ public final class DistributedArtifactBundleStore {
         if (!properties.stringPropertyNames().equals(expected)) {
             throw new IOException("distributed artifact manifest fields do not match format v3");
         }
-        if (!DistributedArtifactSource.LocalProject.KIND.equals(properties.getProperty(PROP_SOURCE_KIND))) {
+        if (!DistributedArtifactSource.LocalProject.SOURCE_KIND.equals(properties.getProperty(PROP_SOURCE_KIND))) {
             throw new IOException("distributed artifact manifest v3 names an unknown source kind");
         }
         try {

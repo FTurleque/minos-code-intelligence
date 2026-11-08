@@ -116,12 +116,12 @@ class DistributedArtifactManifestTest {
 
         assertEquals(DistributedArtifactManifest.FORMAT_V3, local.format());
         assertEquals(new DistributedArtifactSource.LocalProject("c".repeat(64)), local.source());
-        assertEquals(DistributedArtifactSource.LocalProject.KIND, local.source().kind());
+        assertEquals(DistributedArtifactSource.LocalProject.SOURCE_KIND, local.source().kind());
         assertEquals("c".repeat(64), local.projectFingerprint());
         assertThrows(IllegalStateException.class, local::sourceRepository);
         assertThrows(IllegalStateException.class, local::sourceCommit);
         DistributedArtifactManifest remote = manifest(WorkerNetworkPolicy.DENY, true);
-        assertEquals(DistributedArtifactSource.RemoteRevision.KIND, remote.source().kind());
+        assertEquals(DistributedArtifactSource.RemoteRevision.SOURCE_KIND, remote.source().kind());
         assertThrows(IllegalStateException.class, remote::projectFingerprint);
     }
 

@@ -16,7 +16,7 @@ public sealed interface DistributedArtifactSource
     /** A canonical, secret-free repository and a complete lowercase Git SHA-1 commit. */
     record RemoteRevision(String repository, String commit) implements DistributedArtifactSource {
 
-        public static final String KIND = "REMOTE_GIT";
+        public static final String SOURCE_KIND = "REMOTE_GIT";
 
         public RemoteRevision {
             repository = requireText(repository, "sourceRepository");
@@ -30,14 +30,14 @@ public sealed interface DistributedArtifactSource
 
         @Override
         public String kind() {
-            return KIND;
+            return SOURCE_KIND;
         }
     }
 
     /** The lowercase SHA-256 fingerprint of a local project, captured by the coordinator before the launch. */
     record LocalProject(String fingerprint) implements DistributedArtifactSource {
 
-        public static final String KIND = "LOCAL_WSL";
+        public static final String SOURCE_KIND = "LOCAL_WSL";
 
         public LocalProject {
             if (fingerprint == null || !fingerprint.matches("[0-9a-f]{64}")) {
@@ -47,7 +47,7 @@ public sealed interface DistributedArtifactSource
 
         @Override
         public String kind() {
-            return KIND;
+            return SOURCE_KIND;
         }
     }
 }
