@@ -37,4 +37,21 @@ public final class WslProbeReport {
     public Optional<WslCheck> firstMissing() {
         return checks.stream().filter(check -> check.state() == WslCheckState.MISSING).findFirst();
     }
+
+    /**
+     * Why an indexing run must not start, as an actionable message without a path: the first missing check, or the
+     * first host check (WSL, systemd, cgroup delegation, bubblewrap, JVM) that could not be observed. The jar-level
+     * checks (Maven, project JDK, designated repository) may stay unknown here: the worker applies the same checks
+     * in the distribution before it starts the provider, and refuses without running Maven.
+     */
+    public Optional<String> runRefusal() {
+        Optional<WslCheck> blocking = firstMissing().or(() -> checks.stream()
+                .filter(check -> check.state() == WslCheckState.UNKNOWN && !JAR_CHECKS.contains(check.id()))
+                .findFirst());
+        return blocking.map(check -> "WSL route prerequisite " + check.id() + " is "
+                + check.state().name().toLowerCase(java.util.Locale.ROOT) + ": " + check.action());
+    }
+
+    private static final List<String> JAR_CHECKS =
+            List.of(WslCheck.MAVEN, WslCheck.PROJECT_JDK, WslCheck.MAVEN_REPOSITORY);
 }
