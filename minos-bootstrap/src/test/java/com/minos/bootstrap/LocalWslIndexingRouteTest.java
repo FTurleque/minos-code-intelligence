@@ -6,7 +6,9 @@ import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.runtime.local.wsl.WslCommandResult;
 import com.minos.runtime.local.wsl.WslCommandRunner;
+import com.minos.runtime.local.wsl.WslCommandJarProbe;
 import com.minos.runtime.local.wsl.WslIndexerExecutor;
+import com.minos.runtime.local.wsl.WslJarProbe;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -109,6 +111,51 @@ class LocalWslIndexingRouteTest {
 
         assertInstanceOf(WslIndexerExecutor.class, executor);
         assertEquals("scip-java", executor.indexerId());
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void aJarCheckMissingInTheDistributionBlocksScipJavaBeforeAnyRun() throws Exception {
+        List<List<String>> commands = new ArrayList<>();
+        WslCommandRunner runner = (command, timeout) -> {
+            commands.add(command);
+            if (command.contains("-l")) {
+                return new WslCommandResult(0, LISTING.getBytes(StandardCharsets.UTF_16LE));
+            }
+            if (command.contains("--probe")) {
+                return new WslCommandResult(0, ("minos-wsl-probe-v1 maven MISSING install Maven 3.9.x\n"
+                        + "minos-wsl-probe-v1 project-jdk OK\n"
+                        + "minos-wsl-probe-v1 maven-repository OK\n").getBytes(StandardCharsets.UTF_8));
+            }
+            return new WslCommandResult(0, HEALTHY.getBytes(StandardCharsets.UTF_8));
+        };
+        ProviderRuntimeManager runtimes = route(Optional.of(temp.resolve("wsl.exe")), runner, jar())
+                .runtimes(new NativeRuntimes(), Optional.empty());
+
+        ProviderRuntimeStatus status = runtimes.inspect("scip-java");
+
+        assertEquals(ProviderRuntimeStatus.State.BLOCKED, status.state());
+        assertTrue(status.diagnostics().getFirst().startsWith("WSL route prerequisite maven is missing"),
+                status.diagnostics().toString());
+        List<String> probe = commands.stream().filter(command -> command.contains("--probe")).findFirst()
+                .orElseThrow();
+        assertEquals(List.of("internal", "wsl-worker", "--probe"), probe.subList(probe.size() - 3, probe.size()));
+        assertFalse(probe.contains("systemd-run"), "the probe runs no scope: it reads files only");
+    }
+
+    @Test
+    void withoutWslOrInstallationJarTheJarChecksAreNotProbed() {
+        WslCommandRunner forbidden = (command, timeout) -> {
+            throw new AssertionError("no command");
+        };
+
+        assertSame(WslJarProbe.NOT_AVAILABLE,
+                LocalWslIndexingRoute.jarProbe(Optional.empty(), forbidden, Optional.of(temp.resolve("minos.jar"))));
+        assertSame(WslJarProbe.NOT_AVAILABLE,
+                LocalWslIndexingRoute.jarProbe(Optional.of(temp.resolve("wsl.exe")), forbidden, Optional.empty()));
+        assertInstanceOf(WslCommandJarProbe.class, LocalWslIndexingRoute.jarProbe(
+                Optional.of(temp.resolve("wsl.exe").toAbsolutePath()), forbidden,
+                Optional.of(temp.resolve("minos.jar"))));
     }
 
     @Test

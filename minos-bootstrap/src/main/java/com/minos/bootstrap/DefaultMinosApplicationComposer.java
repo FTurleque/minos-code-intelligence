@@ -89,15 +89,23 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     @Override
     public ProviderRuntimeManager providerRuntimeManager(Path home) {
         return new CompositeProviderRuntimeManager(List.of(
-                new ManagedScipProviderRuntimeManager(
-                        home, ScipJavaMavenOffline.configured(
-                                scipJavaSetting(home, ScipJavaMavenOffline.REPOSITORY_SETTING,
-                                        ScipJavaMavenOffline.REPOSITORY_ENVIRONMENT),
-                                home, () -> hostCommandLocator().find("mvn")),
-                        ScipJavaProjectJdk.configured(scipJavaSetting(home, ScipJavaProjectJdk.SETTING,
-                                ScipJavaProjectJdk.ENVIRONMENT))),
+                new ManagedScipProviderRuntimeManager(home, scipJavaMavenOffline(home), scipJavaProjectJdk(home)),
                 new ManagedScipPythonRuntimeManager(home),
                 new ManagedPolyglotScipRuntimeManager(home)));
+    }
+
+    /** The offline Maven build of scip-java, from the MINOS settings of {@code home} and the Maven of the PATH. */
+    private ScipJavaMavenOffline scipJavaMavenOffline(Path home) {
+        return ScipJavaMavenOffline.configured(
+                scipJavaSetting(home, ScipJavaMavenOffline.REPOSITORY_SETTING,
+                        ScipJavaMavenOffline.REPOSITORY_ENVIRONMENT),
+                home, () -> hostCommandLocator().find("mvn"));
+    }
+
+    /** The project JDK of scip-java, from the MINOS settings of {@code home} or {@code JAVA_HOME}. */
+    private static ScipJavaProjectJdk scipJavaProjectJdk(Path home) {
+        return ScipJavaProjectJdk.configured(scipJavaSetting(home, ScipJavaProjectJdk.SETTING,
+                ScipJavaProjectJdk.ENVIRONMENT));
     }
 
     /** One setting of scip-java; an unreadable configuration is refused, never ignored. */
@@ -190,15 +198,29 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
         return LocalWslIndexingRoute.forHost(home);
     }
 
-    /** Linux only: the worker the Windows route runs in the distribution, on the provider runtimes of this home. */
+    /**
+     * Linux only: the worker the Windows route runs in the distribution, on the provider runtimes of this home; its
+     * probe mode applies the scip-java checks of the same settings.
+     */
     @Override
     public Optional<WslIndexingWorker> wslIndexingWorker(Path home) {
         Objects.requireNonNull(home, "home");
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) {
             return Optional.empty();
         }
-        return Optional.of((request, output) -> WslLinuxWorker.production(home)
-                .run(request, providerRuntimeManager(home), qualifiedIndexerDescriptors(), output));
+        return Optional.of(new WslIndexingWorker() {
+            @Override
+            public int run(Path request, Appendable output) throws IOException {
+                return WslLinuxWorker.production(home)
+                        .run(request, providerRuntimeManager(home), qualifiedIndexerDescriptors(), output);
+            }
+
+            @Override
+            public int probe(Appendable output) throws IOException {
+                return new LocalWslJarChecks(() -> scipJavaMavenOffline(home), () -> scipJavaProjectJdk(home))
+                        .probe(output);
+            }
+        });
     }
 
     /** The file store and local registry of MINOS_HOME. */

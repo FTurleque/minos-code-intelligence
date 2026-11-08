@@ -9,6 +9,7 @@ import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.local.distributed.DistributedArtifactBundleStore;
 import com.minos.runtime.local.process.CommandLocator;
 import com.minos.runtime.local.wsl.ProcessWslCommandRunner;
+import com.minos.runtime.local.wsl.WslCommandJarProbe;
 import com.minos.runtime.local.wsl.WslCommandRunner;
 import com.minos.runtime.local.wsl.WslIndexWorker;
 import com.minos.runtime.local.wsl.WslIndexerExecutor;
@@ -115,7 +116,18 @@ final class LocalWslIndexingRoute implements WslIndexingRoute {
             return WslRoutedRuntimes.Readiness.refused(NOT_PACKAGED);
         }
         return WslRoutedRuntimes.Readiness.of(new WslPrerequisiteProbe(wslExecutable.orElse(null), runner,
-                WslJarProbe.NOT_AVAILABLE).probe(distribution.orElse(null)));
+                jarProbe(wslExecutable, runner, jar)).probe(distribution.orElse(null)));
+    }
+
+    /**
+     * The jar-level step of the prerequisite probe: the installation jar run in its probe mode in the distribution,
+     * or {@link WslJarProbe#NOT_AVAILABLE} without {@code wsl.exe} or without an installation jar.
+     */
+    static WslJarProbe jarProbe(Optional<Path> wslExecutable, WslCommandRunner runner, Optional<Path> jar) {
+        if (wslExecutable.isEmpty() || jar.isEmpty()) {
+            return WslJarProbe.NOT_AVAILABLE;
+        }
+        return new WslCommandJarProbe(wslExecutable.orElseThrow(), runner, jar.orElseThrow(), MAIN_CLASS);
     }
 
     private IndexerExecutor executor(String version, String distribution) {

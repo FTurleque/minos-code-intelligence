@@ -90,12 +90,6 @@ public final class WslPrerequisiteProbe {
         this.jarProbe = Objects.requireNonNull(jarProbe, "jarProbe");
     }
 
-    /** Probe of this Windows host: system {@code wsl.exe}, real processes with the route environment. */
-    public static WslPrerequisiteProbe forSystem(WslJarProbe jarProbe) {
-        return new WslPrerequisiteProbe(systemWslExecutable(System.getenv()).orElse(null),
-                new ProcessWslCommandRunner(), jarProbe);
-    }
-
     /**
      * Resolves {@code wsl.exe} in {@code %SystemRoot%\System32} only. {@code PATH} is never a trust source; a
      * relative, blank or missing {@code SystemRoot}, or a candidate escaping it, gives an empty result.
@@ -332,7 +326,7 @@ public final class WslPrerequisiteProbe {
         }
         for (String id : List.of(WslCheck.MAVEN, WslCheck.PROJECT_JDK, WslCheck.MAVEN_REPOSITORY)) {
             checks.putIfAbsent(id, WslCheck.unknown(id,
-                    "not checked: the probe of the MINOS jar in the distribution is not available"));
+                    "not checked: the MINOS jar did not report this check from the distribution; rerun minos doctor"));
         }
         return checks;
     }

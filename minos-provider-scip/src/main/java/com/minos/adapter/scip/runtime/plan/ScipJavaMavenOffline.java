@@ -149,9 +149,19 @@ public final class ScipJavaMavenOffline {
     /** Path-free diagnostics of everything the offline build lacks; empty when it can run. */
     public List<String> problems() {
         List<String> problems = new ArrayList<>();
-        maven().problem().ifPresent(problems::add);
-        repository().problem().ifPresent(problems::add);
+        mavenProblem().ifPresent(problems::add);
+        repositoryProblem().ifPresent(problems::add);
         return problems;
+    }
+
+    /** Path-free diagnostic of the Maven of the PATH; empty when it is a qualified 3.9.x visible to the sandbox. */
+    public Optional<String> mavenProblem() {
+        return maven().problem();
+    }
+
+    /** Path-free diagnostic of the designated Maven repository; empty when it may be mounted. */
+    public Optional<String> repositoryProblem() {
+        return repository().problem();
     }
 
     /** Decides whether the designation may be mounted (ADR SEC-0076, decision 3). */

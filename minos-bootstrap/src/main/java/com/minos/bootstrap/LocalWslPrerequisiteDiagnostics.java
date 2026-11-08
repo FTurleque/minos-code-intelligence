@@ -2,18 +2,21 @@ package com.minos.bootstrap;
 
 import com.minos.application.WslJavaDiagnosis;
 import com.minos.application.WslPrerequisiteDiagnostics;
+import com.minos.runtime.local.wsl.ProcessWslCommandRunner;
 import com.minos.runtime.local.wsl.WslCheck;
 import com.minos.runtime.local.wsl.WslCheckState;
-import com.minos.runtime.local.wsl.WslJarProbe;
+import com.minos.runtime.local.wsl.WslCommandRunner;
 import com.minos.runtime.local.wsl.WslPrerequisiteProbe;
 import com.minos.runtime.local.wsl.WslProbeReport;
 
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The WSL2 route prerequisites of this Windows host, through the system {@code wsl.exe}. The checks run by the jar
- * inside the distribution are reported unknown until the worker command offers its probe mode.
+ * The WSL2 route prerequisites of this Windows host, through the system {@code wsl.exe}. The scip-java checks are run
+ * by the installation jar inside the distribution, in the probe mode of its worker command; a run without an
+ * installation jar (class directories) reports them unknown.
  *
  * <p>The route is optional: a probe that fails unexpectedly reports every check unknown instead of failing the whole
  * diagnostic, and the operator trace names the exception class only.</p>
@@ -29,9 +32,14 @@ final class LocalWslPrerequisiteDiagnostics implements WslPrerequisiteDiagnostic
         this.probe = Objects.requireNonNull(probe, "probe");
     }
 
-    /** The real host probe: system {@code wsl.exe}, route environment, no jar probe. */
+    /** The real host probe: system {@code wsl.exe}, route environment, and the probe of the installation jar. */
     static LocalWslPrerequisiteDiagnostics forSystem() {
-        return new LocalWslPrerequisiteDiagnostics(WslPrerequisiteProbe.forSystem(WslJarProbe.NOT_AVAILABLE));
+        Optional<Path> wsl = WslPrerequisiteProbe.systemWslExecutable(System.getenv());
+        WslCommandRunner runner = new ProcessWslCommandRunner();
+        Optional<Path> jar = LocalWslIndexingRoute.installationJar(
+                LocalWslPrerequisiteDiagnostics.class.getProtectionDomain().getCodeSource());
+        return new LocalWslPrerequisiteDiagnostics(new WslPrerequisiteProbe(wsl.orElse(null), runner,
+                LocalWslIndexingRoute.jarProbe(wsl, runner, jar)));
     }
 
     @Override
