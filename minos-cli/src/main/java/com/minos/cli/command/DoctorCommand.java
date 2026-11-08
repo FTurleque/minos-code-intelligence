@@ -2,6 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.application.HostDiagnosticsService;
 import com.minos.application.WorkerSandboxDiagnosis;
+import com.minos.application.WslJavaDiagnosis;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.CliJson;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Installation and provider-runtime diagnostics.
@@ -30,6 +32,10 @@ import java.util.function.Function;
  * final, and a missing sandbox prerequisite does not block local indexing of managed providers.
  * The executor-capability cause is per provider and belongs to the worker's own refusal, not to
  * this host-level report. The section carries identifiers and codes only, never a path.</p>
+ *
+ * <p>The {@code wslJava} section, present only where the host offers the WSL2 route (Windows), gives the state and
+ * expected action of each prerequisite of that route. The route is optional: the section never changes the
+ * verdict, and it carries identifiers and actions only, never a path.</p>
  */
 public final class DoctorCommand {
     public static final String NAME = "doctor";
@@ -41,6 +47,7 @@ public final class DoctorCommand {
     private final AutonomousIndexOperations operations;
     private final Function<Path, WorkerSandboxReport> sandboxProbe;
     private final Function<String, Optional<Path>> commandLocator;
+    private final Supplier<Optional<WslJavaDiagnosis>> wslJavaProbe;
 
     /**
      * Production wiring: the sandbox probe and the command lookup are the real host ones, through the host
@@ -48,15 +55,25 @@ public final class DoctorCommand {
      * another probe.
      */
     public DoctorCommand(Path home, AutonomousIndexOperations operations) {
-        this(home, operations, DoctorCommand::probeWorkerSandbox);
+        this(home, operations, DoctorCommand::probeWorkerSandbox, DoctorCommand::probeWslJava);
     }
 
-    /** Package-private seam: the sandbox probe is injectable so the report can be tested without an OS probe. */
+    /**
+     * Package-private seam: the sandbox probe is injectable so the report can be tested without an OS probe; no
+     * WSL route is probed then.
+     */
     DoctorCommand(Path home, AutonomousIndexOperations operations, Function<Path, WorkerSandboxReport> sandboxProbe) {
+        this(home, operations, sandboxProbe, Optional::empty);
+    }
+
+    /** Package-private seam: the WSL route probe is injectable so the section can be tested on any host. */
+    DoctorCommand(Path home, AutonomousIndexOperations operations, Function<Path, WorkerSandboxReport> sandboxProbe,
+                  Supplier<Optional<WslJavaDiagnosis>> wslJavaProbe) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.operations = Objects.requireNonNull(operations, "operations");
         this.sandboxProbe = Objects.requireNonNull(sandboxProbe, "sandboxProbe");
         this.commandLocator = DoctorCommand::locateCommand;
+        this.wslJavaProbe = Objects.requireNonNull(wslJavaProbe, "wslJavaProbe");
     }
 
     /**
@@ -110,6 +127,10 @@ public final class DoctorCommand {
                 diagnosis.reason());
     }
 
+    private static Optional<WslJavaDiagnosis> probeWslJava() {
+        return HostDiagnosticsService.defaults().wslJava();
+    }
+
     private static Optional<Path> locateCommand(String command) {
         return HostDiagnosticsService.defaults().locateCommand(command);
     }
@@ -123,14 +144,15 @@ public final class DoctorCommand {
             }
             Map<String, String> privateStorage = privateStorageDiagnostics();
             WorkerSandboxReport sandbox = Objects.requireNonNull(sandboxProbe.apply(home), "worker sandbox report");
+            Optional<WslJavaDiagnosis> wslJava = Objects.requireNonNull(wslJavaProbe.get(), "wslJava report");
             // Remote indexing being closed by decision (ADR 0041) is a fact to expose, not an action to require.
             boolean ready = providers.stream()
                     .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
                     .noneMatch(ToolsCommand::blocksReadiness);
             if (format == SymbolOutputFormat.JSON) {
-                renderJson(output, providers, commands, privateStorage, sandbox, ready);
+                renderJson(output, providers, commands, privateStorage, sandbox, wslJava, ready);
             } else {
-                renderText(output, providers, commands, privateStorage, sandbox, ready);
+                renderText(output, providers, commands, privateStorage, sandbox, wslJava, ready);
             }
             return ready ? FindSymbolCommand.SUCCESS : FindSymbolCommand.EXECUTION_ERROR;
         });
@@ -146,6 +168,7 @@ public final class DoctorCommand {
             Map<String, String> commands,
             Map<String, String> privateStorage,
             WorkerSandboxReport sandbox,
+            Optional<WslJavaDiagnosis> wslJava,
             boolean ready
     ) throws IOException {
         Map<String, Object> map = new LinkedHashMap<>();
@@ -167,6 +190,7 @@ public final class DoctorCommand {
         map.put("providers", values);
         map.put("privateStoragePermissions", privateStorage);
         map.put("workerSandbox", sandboxJson(sandbox));
+        wslJava.ifPresent(diagnosis -> map.put("wslJava", wslJavaJson(diagnosis)));
         map.put("ready", ready);
         output.append(CliJson.render(map)).append('\n');
     }
@@ -191,6 +215,34 @@ public final class DoctorCommand {
         return map;
     }
 
+    private static Map<String, Object> wslJavaJson(WslJavaDiagnosis diagnosis) {
+        List<Map<String, Object>> checks = new ArrayList<>();
+        for (WslJavaDiagnosis.Check check : diagnosis.checks()) {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("id", check.id());
+            value.put("state", check.state().name());
+            if (check.state() != WslJavaDiagnosis.State.OK) {
+                value.put("action", check.action());
+            }
+            checks.add(value);
+        }
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("distribution", diagnosis.distribution().orElse(null));
+        map.put("checks", checks);
+        return map;
+    }
+
+    private static void renderWslJavaText(Appendable output, WslJavaDiagnosis diagnosis) throws IOException {
+        output.append("wslJava[distribution]: ").append(diagnosis.distribution().orElse("NONE")).append('\n');
+        for (WslJavaDiagnosis.Check check : diagnosis.checks()) {
+            output.append("wslJava[").append(check.id()).append("]: ").append(check.state().name());
+            if (check.state() != WslJavaDiagnosis.State.OK) {
+                output.append(" (").append(check.action()).append(')');
+            }
+            output.append('\n');
+        }
+    }
+
     private static String availability(boolean available) {
         return available ? "AVAILABLE" : "UNAVAILABLE";
     }
@@ -201,6 +253,7 @@ public final class DoctorCommand {
             Map<String, String> commands,
             Map<String, String> privateStorage,
             WorkerSandboxReport sandbox,
+            Optional<WslJavaDiagnosis> wslJava,
             boolean ready
     ) throws IOException {
         output.append("MINOS_HOME: ").append(home.toString()).append('\n');
@@ -224,6 +277,9 @@ public final class DoctorCommand {
         if (!sandbox.remoteIndexingAvailable()) {
             output.append("workerSandbox[cause]: ").append(sandbox.cause()).append('\n');
             output.append("workerSandbox[reason]: ").append(sandbox.reason()).append('\n');
+        }
+        if (wslJava.isPresent()) {
+            renderWslJavaText(output, wslJava.get());
         }
         output.append("verdict: ").append(ready ? "READY" : "ACTION_REQUIRED").append('\n');
     }

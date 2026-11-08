@@ -116,6 +116,35 @@ class HostDiagnosticsServiceTest {
 
     // ------------------------------------------------------------------------------ helpers
 
+    @Test
+    void aHostWithoutTheWslRouteReportsNoWslJavaDiagnosis() {
+        HostDiagnosticsService service = service(probe(new WorkerSandboxProbe.UntrustedCodeSandbox(
+                "none", false, "NO_OS_BACKEND_AVAILABLE", Optional.empty(), List.of(), "")));
+
+        assertEquals(Optional.empty(), service.wslJava());
+    }
+
+    @Test
+    void theWslRouteIsProbedAtEachCallThroughThePort() {
+        WslJavaDiagnosis diagnosis = new WslJavaDiagnosis(Optional.of("Ubuntu"), List.of(
+                new WslJavaDiagnosis.Check("wsl-version", WslJavaDiagnosis.State.OK, ""),
+                new WslJavaDiagnosis.Check("systemd", WslJavaDiagnosis.State.MISSING, "enable systemd")));
+        int[] calls = {0};
+        WslPrerequisiteDiagnostics port = () -> {
+            calls[0]++;
+            return diagnosis;
+        };
+        HostDiagnosticsService service = new HostDiagnosticsService(probe(new WorkerSandboxProbe.UntrustedCodeSandbox(
+                "none", false, "NO_OS_BACKEND_AVAILABLE", Optional.empty(), List.of(), "")), new FakeLocator(),
+                location -> PrivateLocalStorage.Privacy.ENFORCED, Optional.of(port));
+
+        assertEquals(Optional.of(diagnosis), service.wslJava());
+        assertEquals(Optional.of(diagnosis), service.wslJava());
+        assertEquals(2, calls[0]);
+        assertThrows(NullPointerException.class, () -> new WslJavaDiagnosis(null, List.of()));
+        assertThrows(NullPointerException.class, () -> new WslJavaDiagnosis.Check("systemd", null, ""));
+    }
+
     private HostDiagnosticsService service(WorkerSandboxProbe probe) {
         return new HostDiagnosticsService(probe, new FakeLocator());
     }

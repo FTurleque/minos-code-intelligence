@@ -1212,9 +1212,6 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
         "public NEXUS semantic signal v2 surface (docs/developer/public-surfaces.md), not qualified by a client",
     "minos-storage/com.minos.storage.codec.CodeKnowledgeSnapshotBinaryCodec":
         "declared snapshot codec boundary, excluded by AUD-QUA-02 itself",
-    "minos-runtime-local/com.minos.runtime.local.wsl.WslPrerequisiteProbe":
-        "WSL route probe delivered before its wiring: doctor and the WSL executor call it "
-        "(indexer-java-depuis-windows-par-wsl2, tasks 4.3 and 5); remove this entry with that wiring",
 }
 TOP_LEVEL_PUBLIC_TYPE = re.compile(
     r"^public\s+(?:(?:abstract|final|sealed|non-sealed|static|strictfp)\s+)*"
