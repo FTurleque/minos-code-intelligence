@@ -57,12 +57,17 @@ sequenceDiagram
 ```
 
 `ManagedScipProviderRuntimeManager.installJava`
-(`minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java:352-370`)
+(`minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java:341-359`)
 enchaîne l'acquisition vérifiée de Coursier, la lecture du verrou du classpath, la résolution par `fetch` seule et
 la vérification jar par jar, puis la publication atomique (`DurableAtomicFile.moveDirectory`, sans repli par
 copie). L'environnement de chaque commande est construit par `InstallationProcessEnvironment`, dont le motif de
-refus est unique (`ProviderProcessEnvironment.isDeniedName`). Sous Linux, Coursier n'est jamais téléchargé : il
-doit être sur le `PATH`.
+refus est unique (`ProviderProcessEnvironment.isDeniedName`). L'entrée Coursier du catalogue suit la plateforme
+(`windows-x64` ou `linux-x64`). Sous Linux, `CoursierLauncherInstallation` acquiert l'archive `gz` par
+`PinnedArtifactSource` (borne `MAX_COURSIER_ARCHIVE_BYTES`, empreinte vérifiée sur l'archive), la décompresse avec
+une borne de taille dans un fichier partiel créé privé, ne donne le droit d'exécution qu'au propriétaire, puis
+publie `cs` par déplacement atomique sous `MINOS_HOME/tools/coursier/linux-x64-<commit court>/` et inscrit son
+origine au registre des outils. Tout échec supprime l'archive et le partiel, et le diagnostic nomme Coursier sans
+chemin. Un `cs` du `PATH` reste accepté quand aucun Coursier géré n'est installé.
 
 ### Quand scip-java est-il déclaré prêt ?
 
@@ -122,9 +127,10 @@ que par le job `Verify` du système concerné.
 | E1 | L'exigence veut qu'un test qui dépend du `JAVA_HOME` de l'hôte échoue sur tout système ; un test lit ce `JAVA_HOME` et se saute en silence quand il manque | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactoryTargetRootTest.java:40` | [Proposition] Fournir au test un JDK de projet qu'il pose lui-même, sans `assumeTrue` |
 | E2 | La spec situe le test Windows de propagation Kotlin dans la classe du gestionnaire de runtime ; il vit dans la classe de la fabrique du plan | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java:308` | [Proposition] Corriger la référence du scénario |
 | E3 | L'exigence couvre les journaux WARNING ; aucun journal n'existe dans les classes concernées, donc rien à observer ni à tester | `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaMavenOffline.java` | [Question] Retirer la mention des journaux ou en prévoir ? |
-| E4 | « Verrou absent… sans lancer Coursier » : sous Windows, Coursier peut être acquis avant la lecture du verrou (il n'est lancé qu'après) ; aucun test ne le prouve | `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java:355-362` | [Proposition] Test du verrou absent |
+| E4 | « Verrou absent… sans lancer Coursier » : sous Windows, Coursier peut être acquis avant la lecture du verrou (il n'est lancé qu'après) ; aucun test ne le prouve | `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java:344-351` | [Proposition] Test du verrou absent |
 | E5 | Les dossiers système refusés ne sont testés que pour `/` et `/etc` | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/ScipJavaMavenOfflineTest.java:117` | [Proposition] Énumérer les autres dossiers système dans le test |
 | E6 | Le scénario « Sonde de toolchain » nomme `dotnet --version` et `go version` ; le test passe un programme Java par la même méthode | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/InstallationEnvironmentIsolationTest.java` | Aucun : le chemin de code est le même ; à préciser dans le scénario |
+| E7 | L'exigence « Sous Linux, l'installation de scip-java installe Coursier depuis le catalogue » est ajoutée par le changement `indexer-java-depuis-windows-par-wsl2`, pas encore archivé ; ses tests (Linux seulement) ne tournent que dans `Verify (ubuntu-24.04)` et simulent la source épinglée par une charge utile (téléchargement réel non exercé) | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManagerCoursierLinuxTest.java` | Ligne de traçabilité à ajouter à l'archivage du changement |
 
 ## Questions ouvertes
 
