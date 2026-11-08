@@ -136,8 +136,9 @@ class DistributedArtifactManifestTest {
         DistributedArtifactSource remote = new DistributedArtifactSource.RemoteRevision(
                 "https://github.com/acme/demo.git", "a".repeat(40));
         DistributedArtifactSource local = valid.source();
-        assertThrows(IllegalArgumentException.class,
-                () -> copyWith(valid, remote, valid.networkPolicy(), valid.networkDenyEnforced()));
+        WorkerNetworkPolicy policy = valid.networkPolicy();
+        boolean enforced = valid.networkDenyEnforced();
+        assertThrows(IllegalArgumentException.class, () -> copyWith(valid, remote, policy, enforced));
         assertThrows(IllegalArgumentException.class, () -> copyWith(valid, local, WorkerNetworkPolicy.DENY, false));
     }
 
