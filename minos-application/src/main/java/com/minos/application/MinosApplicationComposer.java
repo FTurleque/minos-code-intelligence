@@ -95,6 +95,15 @@ public interface MinosApplicationComposer {
         return Optional.empty();
     }
 
+    /**
+     * WSL2 route worker run inside the distribution, empty when the host does not offer it (outside Linux). It does
+     * not open the application: only the provider runtimes of this MINOS_HOME are used.
+     */
+    default Optional<WslIndexingWorker> wslIndexingWorker(Path home) {
+        Objects.requireNonNull(home, "home");
+        return Optional.empty();
+    }
+
     /** Probe of the WSL2 route prerequisites (doctor), empty when the host does not offer the route. */
     default Optional<WslPrerequisiteDiagnostics> wslPrerequisiteDiagnostics() {
         return Optional.empty();

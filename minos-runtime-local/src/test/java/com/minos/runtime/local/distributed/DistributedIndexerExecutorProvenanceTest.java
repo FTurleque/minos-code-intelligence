@@ -183,6 +183,25 @@ class DistributedIndexerExecutorProvenanceTest {
     }
 
     @Test
+    void aLocalV3ManifestOfTheWslRouteIsRejectedByTheRemoteExecutor() {
+        FixtureWorker worker = new FixtureWorker(true, draft -> {
+            draft.format = DistributedArtifactManifest.FORMAT_V3;
+            draft.repository = null;
+            draft.commit = null;
+            draft.fingerprint = "c".repeat(64);
+        });
+        DistributedIndexerExecutor executor = executor(registeredRoot, WorkerNetworkPolicy.DENY, worker);
+        IndexingExecutionRequest request = execution(PROVIDER, registeredRoot, registeredRoot, "");
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> executor.execute(request));
+
+        assertEquals("verified distributed artifact provenance requires scope-aware manifest format v2",
+                refusal.getMessage());
+        assertTrue(executor.verifiedArtifacts().isEmpty());
+        assertFalse(Files.exists(worker.bundles.getFirst()), "the rejected v3 envelope is removed");
+    }
+
+    @Test
     void aResponseManifestThatDiffersFromTheTransportedOneIsRejected() {
         FixtureWorker worker = new FixtureWorker(false, draft -> { });
         worker.announced = draft -> draft.providerVersion = "9.9.9";
@@ -302,6 +321,7 @@ class DistributedIndexerExecutorProvenanceTest {
         private String scope;
         private String repository;
         private String commit;
+        private String fingerprint;
         private Language language;
         private String providerId;
         private String providerVersion;
@@ -315,8 +335,9 @@ class DistributedIndexerExecutorProvenanceTest {
                     runId,
                     projectId,
                     scope,
-                    repository,
-                    commit,
+                    fingerprint != null
+                            ? new com.minos.remote.DistributedArtifactSource.LocalProject(fingerprint)
+                            : new com.minos.remote.DistributedArtifactSource.RemoteRevision(repository, commit),
                     language,
                     providerId,
                     providerVersion,

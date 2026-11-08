@@ -11,14 +11,20 @@ import java.util.UUID;
 
 import static com.minos.domain.Preconditions.requireText;
 
-/** Versioned, secret-free provenance envelope for one transported provider artifact. */
+/**
+ * Versioned, secret-free provenance envelope for one transported provider artifact.
+ *
+ * <p>The {@link DistributedArtifactSource source} is sealed: formats v1 and v2 carry a
+ * {@link DistributedArtifactSource.RemoteRevision remote revision}; format v3 carries the
+ * {@link DistributedArtifactSource.LocalProject fingerprint of a local project} indexed through the WSL2 route.
+ * Each format is accepted only by the executor of its route.</p>
+ */
 public record DistributedArtifactManifest(
         String format,
         UUID runId,
         UUID projectId,
         String projectRelativeRoot,
-        String sourceRepository,
-        String sourceCommit,
+        DistributedArtifactSource source,
         Language language,
         String providerId,
         String providerVersion,
@@ -35,6 +41,7 @@ public record DistributedArtifactManifest(
 
     public static final String FORMAT_V1 = "minos-distributed-artifact-v1";
     public static final String FORMAT_V2 = "minos-distributed-artifact-v2";
+    public static final String FORMAT_V3 = "minos-distributed-artifact-v3";
     public static final String ARTIFACT_PATH = "index.scip";
 
     public DistributedArtifactManifest {
@@ -43,12 +50,10 @@ public record DistributedArtifactManifest(
         Objects.requireNonNull(projectId, "projectId");
         projectRelativeRoot = normalizeManifestScope(projectRelativeRoot);
         requireRootScopeForV1(format, projectRelativeRoot);
-        sourceRepository = requireText(sourceRepository, "sourceRepository");
-        if (sourceRepository.contains("@") || sourceRepository.contains("?") || sourceRepository.contains("#")) {
-            throw new IllegalArgumentException("sourceRepository must be canonical and secret-free");
-        }
-        if (sourceCommit == null || !sourceCommit.matches("[0-9a-f]{40}")) {
-            throw new IllegalArgumentException("sourceCommit must be a lowercase complete Git SHA-1");
+        Objects.requireNonNull(source, "source");
+        if (FORMAT_V3.equals(format) != source instanceof DistributedArtifactSource.LocalProject) {
+            throw new IllegalArgumentException(
+                    "format v3 names a local project, formats v1 and v2 a remote revision");
         }
         Objects.requireNonNull(language, "language");
         providerId = requireText(providerId, "providerId");
@@ -73,6 +78,83 @@ public record DistributedArtifactManifest(
         if (artifactSha256 == null || !artifactSha256.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("artifactSha256 must be a lowercase SHA-256 value");
         }
+    }
+
+    /** A remote manifest (formats v1 and v2): a canonical repository and a complete Git commit. */
+    public DistributedArtifactManifest(
+            String format,
+            UUID runId,
+            UUID projectId,
+            String projectRelativeRoot,
+            String sourceRepository,
+            String sourceCommit,
+            Language language,
+            String providerId,
+            String providerVersion,
+            String workerId,
+            WorkerIsolation isolation,
+            WorkerNetworkPolicy networkPolicy,
+            boolean networkDenyEnforced,
+            Instant startedAt,
+            Instant completedAt,
+            String artifactPath,
+            long artifactSize,
+            String artifactSha256
+    ) {
+        this(format, runId, projectId, projectRelativeRoot,
+                new DistributedArtifactSource.RemoteRevision(sourceRepository, sourceCommit), language, providerId,
+                providerVersion, workerId, isolation, networkPolicy, networkDenyEnforced, startedAt, completedAt,
+                artifactPath, artifactSize, artifactSha256);
+    }
+
+    /**
+     * A format v3 manifest: a local project identified by its fingerprint, produced under an enforced {@code DENY}
+     * network policy.
+     */
+    public static DistributedArtifactManifest localWsl(
+            UUID runId,
+            UUID projectId,
+            String projectRelativeRoot,
+            String projectFingerprint,
+            Language language,
+            String providerId,
+            String providerVersion,
+            String workerId,
+            WorkerIsolation isolation,
+            Instant startedAt,
+            Instant completedAt,
+            long artifactSize,
+            String artifactSha256
+    ) {
+        return new DistributedArtifactManifest(FORMAT_V3, runId, projectId, projectRelativeRoot,
+                new DistributedArtifactSource.LocalProject(projectFingerprint), language, providerId,
+                providerVersion, workerId, isolation, WorkerNetworkPolicy.DENY, true, startedAt, completedAt,
+                ARTIFACT_PATH, artifactSize, artifactSha256);
+    }
+
+    /** The repository of a remote source; a local source has none and is refused. */
+    public String sourceRepository() {
+        return remote().repository();
+    }
+
+    /** The commit of a remote source; a local source has none and is refused. */
+    public String sourceCommit() {
+        return remote().commit();
+    }
+
+    /** The project fingerprint of a local source; a remote source has none and is refused. */
+    public String projectFingerprint() {
+        if (source instanceof DistributedArtifactSource.LocalProject local) {
+            return local.fingerprint();
+        }
+        throw new IllegalStateException("a remote artifact source has no project fingerprint");
+    }
+
+    private DistributedArtifactSource.RemoteRevision remote() {
+        if (source instanceof DistributedArtifactSource.RemoteRevision remote) {
+            return remote;
+        }
+        throw new IllegalStateException("a local artifact source has no remote revision");
     }
 
     private static String normalizeManifestScope(String value) {
@@ -110,7 +192,7 @@ public record DistributedArtifactManifest(
     }
 
     private static void requireKnownFormat(String format) {
-        if (!FORMAT_V1.equals(format) && !FORMAT_V2.equals(format)) {
+        if (!FORMAT_V1.equals(format) && !FORMAT_V2.equals(format) && !FORMAT_V3.equals(format)) {
             throw new IllegalArgumentException("unsupported distributed artifact format: " + format);
         }
     }

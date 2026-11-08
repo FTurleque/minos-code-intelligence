@@ -121,6 +121,17 @@ Sous Linux, `scip-java` s'exécute dans le bac à sable bubblewrap avec un egres
 - **le JDK désigné par `JAVA_HOME`** (ou `JDK_HOME`), entier, où qu'il soit : JDK de paquet (`apt install openjdk-21-jdk`, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`) ou JDK autonome extrait dans le profil (Temurin, archive) ;
 - **la configuration Java de `/etc` que ce JDK lie**, fichier par fichier, et seulement sous `/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java` ou `/etc/pki/ca-trust/extracted`. `/etc` n'est jamais monté en entier ; un lien du JDK vers un autre emplacement n'est pas suivi et le journal le signale (« did not mount … link target(s) of JAVA_HOME »).
 
+Le JDK du projet peut aussi être désigné par le réglage `minos.scip.java.project-jdk`, qui prime alors sur `JAVA_HOME` ; sans lui, `JAVA_HOME` reste la source. Le définir, au choix :
+
+```bash
+# MINOS_HOME/config/minos.properties
+minos.scip.java.project-jdk=/usr/lib/jvm/java-21-openjdk-amd64
+# ou dans l'environnement de MINOS
+export MINOS_SCIP_JAVA_PROJECT_JDK=/usr/lib/jvm/java-21-openjdk-amd64
+```
+
+Le JDK désigné devient le `JAVA_HOME` du provider et passe par les mêmes contrôles : il doit contenir `bin/javac`, et le bac à sable le monte comme ci-dessus. Un JDK désigné sans `javac` est refusé par le nom du réglage (« the project JDK designated by minos.scip.java.project-jdk does not contain javac »), jamais par son chemin. Sans le réglage ni `JAVA_HOME`, `minos doctor` rapporte « JAVA_HOME is not set to the project JDK and minos.scip.java.project-jdk is not set ».
+
 `JAVA_HOME` doit désigner **le répertoire du JDK lui-même**. Une valeur trop large (`/`, `/opt`, `/home`, le répertoire personnel, `MINOS_HOME`, un répertoire sous `/etc`, `/proc`, `/sys`, `/dev` ou `/run`) est refusée avant le lancement : « JAVA_HOME names a directory too broad to mount in the Linux sandbox ».
 
 Vérifier :

@@ -10,6 +10,7 @@ import com.minos.io.SharedCacheLeaseRegistry;
 import com.minos.io.StaleScratchReclamation;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.remote.DistributedArtifactManifest;
+import com.minos.remote.DistributedArtifactSource;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
@@ -60,6 +61,8 @@ public final class DistributedArtifactBundleStore {
     private static final String PROP_PROJECT_RELATIVE_ROOT = "projectRelativeRoot";
     private static final String PROP_SOURCE_REPOSITORY = "sourceRepository";
     private static final String PROP_SOURCE_COMMIT = "sourceCommit";
+    private static final String PROP_SOURCE_KIND = "sourceKind";
+    private static final String PROP_PROJECT_FINGERPRINT = "projectFingerprint";
     private static final String PROP_LANGUAGE = "language";
     private static final String PROP_PROVIDER_ID = "providerId";
     private static final String PROP_PROVIDER_VERSION = "providerVersion";
@@ -329,11 +332,19 @@ public final class DistributedArtifactBundleStore {
         properties.setProperty(PROP_RUN_ID, manifest.runId().toString());
         properties.setProperty(PROP_PROJECT_ID, manifest.projectId().toString());
         // FORMAT_V1 wire format does not carry projectRelativeRoot; decodeV1 rejects extra fields
-        if (DistributedArtifactManifest.FORMAT_V2.equals(manifest.format())) {
+        if (!DistributedArtifactManifest.FORMAT_V1.equals(manifest.format())) {
             properties.setProperty(PROP_PROJECT_RELATIVE_ROOT, manifest.projectRelativeRoot());
         }
-        properties.setProperty(PROP_SOURCE_REPOSITORY, manifest.sourceRepository());
-        properties.setProperty(PROP_SOURCE_COMMIT, manifest.sourceCommit());
+        switch (manifest.source()) {
+            case DistributedArtifactSource.LocalProject local -> {
+                properties.setProperty(PROP_SOURCE_KIND, local.kind());
+                properties.setProperty(PROP_PROJECT_FINGERPRINT, local.fingerprint());
+            }
+            case DistributedArtifactSource.RemoteRevision remote -> {
+                properties.setProperty(PROP_SOURCE_REPOSITORY, remote.repository());
+                properties.setProperty(PROP_SOURCE_COMMIT, remote.commit());
+            }
+        }
         properties.setProperty(PROP_LANGUAGE, manifest.language().name());
         properties.setProperty(PROP_PROVIDER_ID, manifest.providerId());
         properties.setProperty(PROP_PROVIDER_VERSION, manifest.providerVersion());
@@ -362,6 +373,8 @@ public final class DistributedArtifactBundleStore {
             return decodeV1(properties);
         } else if (DistributedArtifactManifest.FORMAT_V2.equals(format)) {
             return decodeV2(properties);
+        } else if (DistributedArtifactManifest.FORMAT_V3.equals(format)) {
+            return decodeV3(properties);
         } else {
             throw new IOException("unsupported distributed artifact manifest format: " + format);
         }
@@ -444,6 +457,75 @@ public final class DistributedArtifactBundleStore {
         } catch (RuntimeException exception) {
             throw new IOException("distributed artifact manifest is invalid", exception);
         }
+    }
+
+    /** Format v3: a local project named by its fingerprint, with neither repository nor commit on the wire. */
+    private static DistributedArtifactManifest decodeV3(Properties properties) throws IOException {
+        Set<String> expected = Set.of(
+                PROP_FORMAT, PROP_RUN_ID, PROP_PROJECT_ID, PROP_PROJECT_RELATIVE_ROOT,
+                PROP_SOURCE_KIND, PROP_PROJECT_FINGERPRINT, PROP_LANGUAGE,
+                PROP_PROVIDER_ID, PROP_PROVIDER_VERSION, PROP_WORKER_ID,
+                PROP_ISOLATION, PROP_NETWORK_POLICY, PROP_NETWORK_DENY_ENFORCED,
+                PROP_STARTED_AT, PROP_COMPLETED_AT, PROP_ARTIFACT_PATH,
+                PROP_ARTIFACT_SIZE, PROP_ARTIFACT_SHA256
+        );
+        if (!properties.stringPropertyNames().equals(expected)) {
+            throw new IOException("distributed artifact manifest fields do not match format v3");
+        }
+        if (!DistributedArtifactSource.LocalProject.SOURCE_KIND.equals(properties.getProperty(PROP_SOURCE_KIND))) {
+            throw new IOException("distributed artifact manifest v3 names an unknown source kind");
+        }
+        try {
+            return new DistributedArtifactManifest(
+                    required(properties, PROP_FORMAT),
+                    UUID.fromString(required(properties, PROP_RUN_ID)),
+                    UUID.fromString(required(properties, PROP_PROJECT_ID)),
+                    properties.getProperty(PROP_PROJECT_RELATIVE_ROOT),
+                    new DistributedArtifactSource.LocalProject(required(properties, PROP_PROJECT_FINGERPRINT)),
+                    Language.valueOf(required(properties, PROP_LANGUAGE)),
+                    required(properties, PROP_PROVIDER_ID),
+                    required(properties, PROP_PROVIDER_VERSION),
+                    required(properties, PROP_WORKER_ID),
+                    WorkerIsolation.valueOf(required(properties, PROP_ISOLATION)),
+                    WorkerNetworkPolicy.valueOf(required(properties, PROP_NETWORK_POLICY)),
+                    parseBooleanStrict(required(properties, PROP_NETWORK_DENY_ENFORCED)),
+                    Instant.parse(required(properties, PROP_STARTED_AT)),
+                    Instant.parse(required(properties, PROP_COMPLETED_AT)),
+                    required(properties, PROP_ARTIFACT_PATH),
+                    Long.parseLong(required(properties, PROP_ARTIFACT_SIZE)),
+                    required(properties, PROP_ARTIFACT_SHA256)
+            );
+        } catch (RuntimeException exception) {
+            throw new IOException("distributed artifact manifest is invalid", exception);
+        }
+    }
+
+    /**
+     * Reads and decodes only the manifest entry of a bundle, bounded like {@link #accept}. It verifies neither the
+     * artifact nor its checksum: the caller still accepts the bundle before trusting it.
+     */
+    public static DistributedArtifactManifest readManifest(Path bundle) throws IOException {
+        Path source = Objects.requireNonNull(bundle, "bundle").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("distributed artifact bundle is missing or is not a regular file");
+        }
+        byte[] manifest = null;
+        try (ZipInputStream zip = new ZipInputStream(ConfinedFileOpener.openRegularFileNoFollow(source))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (MANIFEST_ENTRY.equals(entry.getName()) && !entry.isDirectory()) {
+                    if (manifest != null) {
+                        throw new IOException("distributed artifact bundle contains an unsafe or duplicate entry");
+                    }
+                    manifest = readBounded(zip, MAX_MANIFEST_BYTES);
+                }
+                zip.closeEntry();
+            }
+        }
+        if (manifest == null) {
+            throw new IOException("distributed artifact bundle must contain exactly manifest.properties and index.scip");
+        }
+        return decodeManifest(manifest);
     }
 
     private boolean validCached(Path entry, DistributedArtifactManifest expected) {
@@ -531,8 +613,15 @@ public final class DistributedArtifactBundleStore {
     private static String cacheKey(DistributedArtifactManifest manifest) {
         return Sha256.hex(String.join("\n",
                 manifest.format(),
-                manifest.sourceRepository(),
-                manifest.sourceCommit(),
+                // A v3 manifest has no revision: its source kind and project fingerprint take its place.
+                switch (manifest.source()) {
+                    case DistributedArtifactSource.RemoteRevision remote -> remote.repository();
+                    case DistributedArtifactSource.LocalProject local -> local.kind();
+                },
+                switch (manifest.source()) {
+                    case DistributedArtifactSource.RemoteRevision remote -> remote.commit();
+                    case DistributedArtifactSource.LocalProject local -> local.fingerprint();
+                },
                 manifest.projectRelativeRoot(),
                 manifest.language().name(),
                 manifest.providerId(),

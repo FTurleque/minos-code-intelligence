@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
@@ -53,7 +54,7 @@ public final class ManagedRuntimeScenarios {
         ProviderRuntimeManager runtime = switch (manager) {
             case "python" -> new ManagedScipPythonRuntimeManager(home);
             case "polyglot" -> new ManagedPolyglotScipRuntimeManager(home);
-            case "provider" -> new ManagedScipProviderRuntimeManager(home, mavenOffline(home));
+            case "provider" -> new ManagedScipProviderRuntimeManager(home, mavenOffline(home), ScipJavaProjectJdk.fromEnvironment());
             default -> throw new IllegalArgumentException("unknown manager: " + manager);
         };
         if (actions.contains("inspect")) {
