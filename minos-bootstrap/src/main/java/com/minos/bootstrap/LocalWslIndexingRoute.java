@@ -27,6 +27,7 @@ import java.security.CodeSource;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.zip.ZipFile;
 
 /**
  * The WSL2 route of a Windows installation (ADR SEC-0079): scip-java runs in a distribution through the jar of this
@@ -57,28 +58,41 @@ final class LocalWslIndexingRoute implements WslIndexingRoute {
         this.jar = Objects.requireNonNull(jar, "jar");
     }
 
-    /** The route of this host: offered on Windows only, with the system {@code wsl.exe} and real processes. */
+    /**
+     * The route of this host: offered on Windows only, by a packaged installation (the distribution runs its jar),
+     * with the system {@code wsl.exe} and real processes. Anywhere else the installation does not offer the route.
+     */
     static Optional<WslIndexingRoute> forHost(Path home) {
         Objects.requireNonNull(home, "home");
         if (!CommandLocator.isWindows()) {
             return Optional.empty();
         }
-        return Optional.of(new LocalWslIndexingRoute(home, WslPrerequisiteProbe.systemWslExecutable(System.getenv()),
-                new ProcessWslCommandRunner(), installationJar(LocalWslIndexingRoute.class.getProtectionDomain()
-                        .getCodeSource())));
+        Optional<Path> jar = installationJar(LocalWslIndexingRoute.class.getProtectionDomain().getCodeSource());
+        return jar.map(installation -> new LocalWslIndexingRoute(home,
+                WslPrerequisiteProbe.systemWslExecutable(System.getenv()), new ProcessWslCommandRunner(),
+                Optional.of(installation)));
     }
 
-    /** The jar this code runs from, or empty when it runs from class directories (development, tests). */
+    /**
+     * The packaged jar this code runs from: a regular {@code .jar} file that also holds the entry point
+     * {@link #MAIN_CLASS}. Empty for class directories or a module jar (development, tests), which the distribution
+     * could not run.
+     */
     static Optional<Path> installationJar(CodeSource source) {
         if (source == null || source.getLocation() == null) {
             return Optional.empty();
         }
         try {
             Path location = Path.of(source.getLocation().toURI());
-            return Files.isRegularFile(location, LinkOption.NOFOLLOW_LINKS)
-                    && location.getFileName().toString().endsWith(".jar")
-                    ? Optional.of(location) : Optional.empty();
-        } catch (URISyntaxException | RuntimeException unusable) {
+            if (!Files.isRegularFile(location, LinkOption.NOFOLLOW_LINKS)
+                    || !location.getFileName().toString().endsWith(".jar")) {
+                return Optional.empty();
+            }
+            try (ZipFile jar = new ZipFile(location.toFile())) {
+                return jar.getEntry(MAIN_CLASS.replace('.', '/') + ".class") == null
+                        ? Optional.empty() : Optional.of(location);
+            }
+        } catch (URISyntaxException | IOException | RuntimeException unusable) {
             return Optional.empty();
         }
     }

@@ -109,18 +109,33 @@ class LocalWslIndexingRouteTest {
         DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
 
-        assertEquals(os.startsWith("windows"), composer.wslIndexingRoute(temp).isPresent());
+        // Tests run from module jars or class directories, which hold no CLI entry point: no route is offered.
+        assertTrue(composer.wslIndexingRoute(temp).isEmpty());
         assertEquals(os.startsWith("linux"), composer.wslIndexingWorker(temp).isPresent());
     }
 
     @Test
-    void onlyARegularJarIsTheInstallationJar() throws Exception {
-        Path jar = jar().orElseThrow();
+    void onlyAJarHoldingTheCliEntryPointIsTheInstallationJar() throws Exception {
+        Path packaged = zip("minos.jar", "com/minos/cli/MinosLauncher.class");
+        Path module = zip("minos-bootstrap.jar", "com/minos/bootstrap/LocalWslIndexingRoute.class");
         Path classes = Files.createDirectories(temp.resolve("classes"));
 
-        assertEquals(Optional.of(jar), LocalWslIndexingRoute.installationJar(source(jar)));
+        assertEquals(Optional.of(packaged), LocalWslIndexingRoute.installationJar(source(packaged)));
+        assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(source(module)));
+        assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(
+                source(Files.writeString(temp.resolve("empty.jar"), "not a zip"))),
+                "an unreadable jar is not an installation");
         assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(source(classes)));
         assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(null));
+    }
+
+    private Path zip(String name, String entry) throws Exception {
+        Path file = temp.resolve(name);
+        try (java.util.zip.ZipOutputStream output = new java.util.zip.ZipOutputStream(Files.newOutputStream(file))) {
+            output.putNextEntry(new java.util.zip.ZipEntry(entry));
+            output.closeEntry();
+        }
+        return file;
     }
 
     private WslIndexingRoute route(Optional<Path> wsl, WslCommandRunner runner, Optional<Path> jar) {
