@@ -15,7 +15,7 @@ de la spec. La vue « états », la traçabilité et les écarts sont complété
 WSL2, sous le bac à sable Linux (bubblewrap et cgroup v2, réseau `DENY`), puis importe un artefact vérifié par la
 promotion atomique existante. Décisions : [SEC-0074](../../../docs/architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)
 (décision 3) et [SEC-0079](../../../docs/architecture/adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md)
-(`Proposed`). Hors périmètre : le peuplement du dépôt Maven (fait par l'utilisateur, SEC-0076), le stockage et le
+(`Accepted`). Hors périmètre : le peuplement du dépôt Maven (fait par l'utilisateur, SEC-0076), le stockage et le
 MCP dans WSL, tout autre provider que scip-java.
 
 **État au HEAD : non supportée.** L'option et ses refus d'usage existent ; aucune racine de composition ne fournit
