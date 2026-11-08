@@ -80,22 +80,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             ScipJavaClasspath.Verifier classpathVerifier,
             ScipJavaMavenOffline mavenOffline
     ) {
-        this(coursier, coordinate, windowsRunner, windowsManagedMaven, classpathFile, classpathVerifier, mavenOffline,
-                ScipJavaProjectJdk.fromEnvironment());
-    }
-
-    /** @param projectJdk the project JDK: {@link ScipJavaProjectJdk#SETTING}, otherwise {@code JAVA_HOME}. */
-    public ScipJavaProcessPlanFactory(
-            Path coursier,
-            String coordinate,
-            Path windowsRunner,
-            Path windowsManagedMaven,
-            Path classpathFile,
-            ScipJavaClasspath.Verifier classpathVerifier,
-            ScipJavaMavenOffline mavenOffline,
-            ScipJavaProjectJdk projectJdk
-    ) {
-        this.projectJdk = Objects.requireNonNull(projectJdk, "projectJdk");
+        this.projectJdk = ScipJavaProjectJdk.fromEnvironment();
         this.coursier = Objects.requireNonNull(coursier, "coursier").toAbsolutePath().normalize();
         if (coordinate == null || coordinate.isBlank()) {
             throw new IllegalArgumentException("coordinate must not be blank");
@@ -107,6 +92,22 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         this.classpathFile = classpathFile == null ? null : classpathFile.toAbsolutePath().normalize();
         this.classpathVerifier = Objects.requireNonNull(classpathVerifier, "classpathVerifier");
         this.mavenOffline = Objects.requireNonNull(mavenOffline, "mavenOffline");
+    }
+
+    /** The same plan factory with another project JDK (ADR 0045: a named entry, not a longer constructor). */
+    public ScipJavaProcessPlanFactory withProjectJdk(ScipJavaProjectJdk jdk) {
+        return new ScipJavaProcessPlanFactory(this, jdk);
+    }
+
+    private ScipJavaProcessPlanFactory(ScipJavaProcessPlanFactory base, ScipJavaProjectJdk jdk) {
+        this.coursier = base.coursier;
+        this.coordinate = base.coordinate;
+        this.windowsRunner = base.windowsRunner;
+        this.windowsManagedMaven = base.windowsManagedMaven;
+        this.classpathFile = base.classpathFile;
+        this.classpathVerifier = base.classpathVerifier;
+        this.mavenOffline = base.mavenOffline;
+        this.projectJdk = Objects.requireNonNull(jdk, "projectJdk");
     }
 
     @Override

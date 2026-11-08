@@ -62,12 +62,16 @@ class WslWorkerProtocolTest {
 
     @Test
     void aRequestRefusesUnsafeIdentifiersAndAnotherWorker() {
-        assertThrows(IllegalArgumentException.class, () -> new WslWorkerRequest(UUID.randomUUID(), UUID.randomUUID(),
-                "/mnt/c/p", "", Language.JAVA, "scip java", "1", "a".repeat(64), "wsl:Ubuntu"));
-        assertThrows(IllegalArgumentException.class, () -> new WslWorkerRequest(UUID.randomUUID(), UUID.randomUUID(),
-                "/mnt/c/p", "", Language.JAVA, "scip-java", "1", "a".repeat(40), "wsl:Ubuntu"));
-        assertThrows(IllegalArgumentException.class, () -> new WslWorkerRequest(UUID.randomUUID(), UUID.randomUUID(),
-                "/mnt/c/p", "", Language.JAVA, "scip-java", "1", "a".repeat(64), "remote-worker"));
+        UUID run = UUID.randomUUID();
+        UUID project = UUID.randomUUID();
+        String fingerprint = "a".repeat(64);
+        String shortFingerprint = "a".repeat(40);
+        assertThrows(IllegalArgumentException.class, () -> new WslWorkerRequest(run, project,
+                "/mnt/c/p", "", Language.JAVA, "scip java", "1", fingerprint, "wsl:Ubuntu"));
+        assertThrows(IllegalArgumentException.class, () -> new WslWorkerRequest(run, project,
+                "/mnt/c/p", "", Language.JAVA, "scip-java", "1", shortFingerprint, "wsl:Ubuntu"));
+        assertThrows(IllegalArgumentException.class, () -> new WslWorkerRequest(run, project,
+                "/mnt/c/p", "", Language.JAVA, "scip-java", "1", fingerprint, "remote-worker"));
     }
 
     @Test

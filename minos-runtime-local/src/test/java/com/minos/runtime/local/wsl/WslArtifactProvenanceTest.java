@@ -87,7 +87,7 @@ class WslArtifactProvenanceTest {
     }
 
     @Test
-    void everyProvenanceFieldThatDiffersFromTheRequestRejectsTheBundle() throws Exception {
+    void everyProvenanceFieldThatDiffersFromTheRequestRejectsTheBundle() {
         Map<String, Consumer<Draft>> forgeries = new LinkedHashMap<>();
         forgeries.put("runId", draft -> draft.runId = UUID.randomUUID());
         forgeries.put("projectId (another project)", draft -> draft.projectId = UUID.randomUUID());
@@ -115,7 +115,7 @@ class WslArtifactProvenanceTest {
     }
 
     @Test
-    void remoteManifestsV1AndV2AreRefusedByTheWslRoute() throws Exception {
+    void remoteManifestsV1AndV2AreRefusedByTheWslRoute() {
         for (String format : List.of(DistributedArtifactManifest.FORMAT_V1, DistributedArtifactManifest.FORMAT_V2)) {
             FakeWorker worker = new FakeWorker(draft -> {
                 draft.format = format;
@@ -134,7 +134,7 @@ class WslArtifactProvenanceTest {
     }
 
     @Test
-    void aBundleWhoseArtifactDoesNotMatchItsManifestChecksumIsRejectedAndDeleted() throws Exception {
+    void aBundleWhoseArtifactDoesNotMatchItsManifestChecksumIsRejectedAndDeleted() {
         FakeWorker worker = new FakeWorker(draft -> { });
         worker.tamper = true;
         WslIndexerExecutor executor = executor(worker);
@@ -147,7 +147,7 @@ class WslArtifactProvenanceTest {
     }
 
     @Test
-    void aResponseManifestThatDiffersFromTheTransportedOneIsRejected() throws Exception {
+    void aResponseManifestThatDiffersFromTheTransportedOneIsRejected() {
         FakeWorker worker = new FakeWorker(draft -> { });
         worker.announced = draft -> draft.providerVersion = "9.9.9";
         WslIndexerExecutor executor = executor(worker);
@@ -160,15 +160,16 @@ class WslArtifactProvenanceTest {
     }
 
     @Test
-    void anotherProviderIsRefusedBeforeTheWorkerRuns() throws Exception {
+    void anotherProviderIsRefusedBeforeTheWorkerRuns() {
         FakeWorker worker = new FakeWorker(draft -> { });
         WslIndexerExecutor executor = executor(worker);
         IndexingExecutionRequest request = request("scip-typescript");
 
         assertThrows(IllegalArgumentException.class, () -> executor.execute(request));
         assertTrue(worker.requests.isEmpty());
+        Path home = temp.resolve("home");
         assertThrows(IllegalArgumentException.class,
-                () -> new WslIndexerExecutor(" ", VERSION, worker, store, fingerprints, temp.resolve("home")));
+                () -> new WslIndexerExecutor(" ", VERSION, worker, store, fingerprints, home));
     }
 
     private WslIndexerExecutor executor(Worker worker) {

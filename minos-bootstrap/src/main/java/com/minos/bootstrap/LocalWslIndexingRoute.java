@@ -119,8 +119,8 @@ final class LocalWslIndexingRoute implements WslIndexingRoute {
     }
 
     private IndexerExecutor executor(String version, String distribution) {
-        WslIndexWorker worker = new WslIndexWorker(wslExecutable.orElseThrow(), distribution, runner, home,
-                jar.orElseThrow(), MAIN_CLASS, WORKER_TIMEOUT);
+        WslIndexWorker worker = new WslIndexWorker(new WslIndexWorker.Launch(wslExecutable.orElseThrow(), distribution,
+                jar.orElseThrow(), MAIN_CLASS, WORKER_TIMEOUT), runner, home);
         try {
             return new WslIndexerExecutor(WslLinuxWorker.ACCEPTED_PROVIDER, version, worker,
                     new DistributedArtifactBundleStore(home), new ProjectFingerprintService(), home);

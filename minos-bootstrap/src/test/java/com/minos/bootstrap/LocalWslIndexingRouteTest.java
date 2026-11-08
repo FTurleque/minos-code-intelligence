@@ -34,8 +34,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LocalWslIndexingRouteTest {
 
     private static final String LISTING = "  NAME      STATE           VERSION\r\n* Ubuntu    Running         2\r\n";
-    private static final String HEALTHY = "systemd=yes\nuserbus=yes\ncgroup2=yes\ncontrollers=cpuset cpu io memory pids\n"
-            + "bwrap=yes\njvm=java.specification.version = 21\nend=ok\n";
+    private static final String HEALTHY = """
+            systemd=yes
+            userbus=yes
+            cgroup2=yes
+            controllers=cpuset cpu io memory pids
+            bwrap=yes
+            jvm=java.specification.version = 21
+            end=ok
+            """;
 
     @TempDir Path temp;
 

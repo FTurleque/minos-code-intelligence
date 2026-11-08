@@ -5,7 +5,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * The project JDK scip-java builds with: the JDK designated by {@link #SETTING} (JVM property, environment variable
@@ -24,9 +24,9 @@ public final class ScipJavaProjectJdk {
     static final String JAVA_HOME = "JAVA_HOME";
 
     private final String designation;
-    private final Function<String, String> processEnvironment;
+    private final UnaryOperator<String> processEnvironment;
 
-    private ScipJavaProjectJdk(String designation, Function<String, String> environment) {
+    private ScipJavaProjectJdk(String designation, UnaryOperator<String> environment) {
         this.designation = designation == null || designation.isBlank() ? null : designation.trim();
         this.processEnvironment = Objects.requireNonNull(environment, "environment");
     }
@@ -42,7 +42,7 @@ public final class ScipJavaProjectJdk {
     }
 
     /** Test seam: the environment that {@code JAVA_HOME} is read from is supplied. */
-    static ScipJavaProjectJdk of(String designation, Function<String, String> environment) {
+    static ScipJavaProjectJdk of(String designation, UnaryOperator<String> environment) {
         return new ScipJavaProjectJdk(designation, environment);
     }
 
@@ -95,7 +95,7 @@ public final class ScipJavaProjectJdk {
     /** The {@code java} launcher of the project JDK ({@code java.exe} when the JDK is a Windows one). */
     public Path java() {
         Path bin = home().resolve("bin");
-        return Files.isRegularFile(bin.resolve("java.exe")) ? bin.resolve("java.exe") : bin.resolve("java");
+        return bin.resolve(Files.isRegularFile(bin.resolve("java.exe")) ? "java.exe" : "java");
     }
 
     private static boolean containsJavac(String home) {

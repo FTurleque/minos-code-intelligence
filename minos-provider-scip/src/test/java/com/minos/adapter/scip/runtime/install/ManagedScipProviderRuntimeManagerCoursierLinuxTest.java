@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
 import com.minos.adapter.scip.runtime.install.EmbeddedToolsCatalog.Artifact;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import com.minos.io.Sha256;
@@ -135,7 +136,7 @@ class ManagedScipProviderRuntimeManagerCoursierLinuxTest {
     }
 
     private ManagedScipProviderRuntimeManager manager() {
-        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home));
+        return new ManagedScipProviderRuntimeManager(home, ScipJavaMavenOfflineFixtures.unconfigured(home), ScipJavaProjectJdk.fromEnvironment());
     }
 
     /** The catalogue's Linux launcher, re-pinned to {@code archive} and served by the fake payload. */

@@ -97,7 +97,7 @@ class ScipJavaProjectJdkTest {
         return home;
     }
 
-    private static java.util.function.Function<String, String> env(String javaHome) {
-        return javaHome == null ? name -> null : Map.of("JAVA_HOME", javaHome)::get;
+    private static java.util.function.UnaryOperator<String> env(String javaHome) {
+        return javaHome == null ? name -> null : name -> Map.of("JAVA_HOME", javaHome).get(name);
     }
 }

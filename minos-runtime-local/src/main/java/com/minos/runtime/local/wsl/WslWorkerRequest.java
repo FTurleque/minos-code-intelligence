@@ -69,12 +69,12 @@ record WslWorkerRequest(
         projectRoot = WslPaths.requireDistributionPath(projectRoot);
         projectRelativeRoot = WslPaths.requireRelativeScope(projectRelativeRoot);
         Objects.requireNonNull(language, KEY_LANGUAGE);
-        providerId = requireSafe(providerId, KEY_PROVIDER_ID);
-        providerVersion = requireSafe(providerVersion, KEY_PROVIDER_VERSION);
+        requireSafe(providerId, KEY_PROVIDER_ID);
+        requireSafe(providerVersion, KEY_PROVIDER_VERSION);
         if (projectFingerprint == null || !SHA256.matcher(projectFingerprint).matches()) {
             throw new IllegalArgumentException("projectFingerprint must be a lowercase SHA-256 value");
         }
-        workerId = requireSafe(workerId, KEY_WORKER_ID);
+        requireSafe(workerId, KEY_WORKER_ID);
         if (!workerId.startsWith(WslIndexWorker.WORKER_ID_PREFIX)) {
             throw new IllegalArgumentException("workerId must name a WSL distribution");
         }
@@ -129,10 +129,9 @@ record WslWorkerRequest(
         }
     }
 
-    private static String requireSafe(String value, String label) {
+    private static void requireSafe(String value, String label) {
         if (value == null || !SAFE_TEXT.matcher(value).matches()) {
             throw new IllegalArgumentException(label + " must be a short identifier");
         }
-        return value;
     }
 }

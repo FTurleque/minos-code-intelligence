@@ -66,10 +66,11 @@ class WslRoutedRuntimesTest {
 
     @Test
     void aReadinessIsEitherADistributionOrARefusal() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new WslRoutedRuntimes.Readiness(Optional.empty(), Optional.empty()));
-        assertThrows(IllegalArgumentException.class,
-                () -> new WslRoutedRuntimes.Readiness(Optional.of("Ubuntu"), Optional.of("refused")));
+        Optional<String> none = Optional.empty();
+        Optional<String> ubuntu = Optional.of("Ubuntu");
+        Optional<String> refused = Optional.of("refused");
+        assertThrows(IllegalArgumentException.class, () -> new WslRoutedRuntimes.Readiness(none, none));
+        assertThrows(IllegalArgumentException.class, () -> new WslRoutedRuntimes.Readiness(ubuntu, refused));
         List<WslCheck> ready = WslCheck.IDENTIFIERS.stream().map(WslCheck::ok).toList();
         assertEquals(WslRoutedRuntimes.Readiness.ready("Ubuntu"),
                 WslRoutedRuntimes.Readiness.of(new WslProbeReport("Ubuntu", ready)));

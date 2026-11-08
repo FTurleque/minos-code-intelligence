@@ -127,33 +127,35 @@ class DistributedArtifactManifestTest {
 
     @Test
     void v3RejectsARemoteRevisionAMalformedFingerprintAndAnUnenforcedDeny() {
-        assertThrows(IllegalArgumentException.class, () -> localManifest("c".repeat(40)));
-        assertThrows(IllegalArgumentException.class, () -> localManifest("C".repeat(64)));
+        String gitLength = "c".repeat(40);
+        String uppercase = "C".repeat(64);
+        assertThrows(IllegalArgumentException.class, () -> localManifest(gitLength));
+        assertThrows(IllegalArgumentException.class, () -> localManifest(uppercase));
         assertThrows(IllegalArgumentException.class, () -> localManifest(null));
         DistributedArtifactManifest valid = localManifest("c".repeat(64));
-        assertThrows(IllegalArgumentException.class, () -> new DistributedArtifactManifest(
-                valid.format(), valid.runId(), valid.projectId(), valid.projectRelativeRoot(),
-                "https://github.com/acme/demo.git", "a".repeat(40), valid.language(),
-                valid.providerId(), valid.providerVersion(), valid.workerId(), valid.isolation(),
-                valid.networkPolicy(), valid.networkDenyEnforced(), valid.startedAt(), valid.completedAt(),
-                valid.artifactPath(), valid.artifactSize(), valid.artifactSha256()));
-        assertThrows(IllegalArgumentException.class, () -> new DistributedArtifactManifest(
-                valid.format(), valid.runId(), valid.projectId(), valid.projectRelativeRoot(),
-                valid.source(), valid.language(),
-                valid.providerId(), valid.providerVersion(), valid.workerId(), valid.isolation(),
-                WorkerNetworkPolicy.DENY, false, valid.startedAt(), valid.completedAt(),
-                valid.artifactPath(), valid.artifactSize(), valid.artifactSha256()));
+        DistributedArtifactSource remote = new DistributedArtifactSource.RemoteRevision(
+                "https://github.com/acme/demo.git", "a".repeat(40));
+        DistributedArtifactSource local = valid.source();
+        assertThrows(IllegalArgumentException.class,
+                () -> copyWith(valid, remote, valid.networkPolicy(), valid.networkDenyEnforced()));
+        assertThrows(IllegalArgumentException.class, () -> copyWith(valid, local, WorkerNetworkPolicy.DENY, false));
     }
 
     @Test
     void remoteFormatsRejectAProjectFingerprint() {
         DistributedArtifactManifest valid = manifest(WorkerNetworkPolicy.DENY, true);
-        assertThrows(IllegalArgumentException.class, () -> new DistributedArtifactManifest(
-                valid.format(), valid.runId(), valid.projectId(), valid.projectRelativeRoot(),
-                new DistributedArtifactSource.LocalProject("c".repeat(64)), valid.language(),
-                valid.providerId(), valid.providerVersion(), valid.workerId(), valid.isolation(),
-                valid.networkPolicy(), valid.networkDenyEnforced(), valid.startedAt(), valid.completedAt(),
-                valid.artifactPath(), valid.artifactSize(), valid.artifactSha256()));
+        DistributedArtifactSource local = new DistributedArtifactSource.LocalProject("c".repeat(64));
+        assertThrows(IllegalArgumentException.class, () -> copyWith(valid, local, WorkerNetworkPolicy.DENY, true));
+    }
+
+    /** {@code value} with another source and network policy, everything else unchanged. */
+    private static DistributedArtifactManifest copyWith(DistributedArtifactManifest value,
+                                                        DistributedArtifactSource source,
+                                                        WorkerNetworkPolicy policy, boolean enforced) {
+        return new DistributedArtifactManifest(value.format(), value.runId(), value.projectId(),
+                value.projectRelativeRoot(), source, value.language(), value.providerId(), value.providerVersion(),
+                value.workerId(), value.isolation(), policy, enforced, value.startedAt(), value.completedAt(),
+                value.artifactPath(), value.artifactSize(), value.artifactSha256());
     }
 
     private static DistributedArtifactManifest localManifest(String fingerprint) {

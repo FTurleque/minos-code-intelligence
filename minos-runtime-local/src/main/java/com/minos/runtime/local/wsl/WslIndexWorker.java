@@ -70,43 +70,57 @@ public final class WslIndexWorker implements Worker {
     private final Function<Path, String> distributionPaths;
 
     /**
+     * What is launched for one run: the system {@code wsl.exe}, the distribution, the installation jar and its entry
+     * point, and the time after which the scope of the run is stopped.
+     *
      * @param wslExecutable absolute {@code wsl.exe} of the Windows system directory
      * @param distribution  resolved distribution name (validated by {@link WslPrerequisiteProbe#DISTRIBUTION_NAME})
-     * @param minosHome     MINOS_HOME of the Windows installation, which holds the exchange directory
      * @param jar           absolute Windows path of the installation jar run in the distribution
      * @param mainClass     entry point of that jar
      * @param timeout       time after which the scope of the run is stopped
      */
-    public WslIndexWorker(Path wslExecutable, String distribution, WslCommandRunner runner, Path minosHome,
-                          Path jar, String mainClass, Duration timeout) {
-        this(wslExecutable, distribution, runner, minosHome, jar, mainClass, timeout,
-                path -> WslPaths.toDistribution(path.toString()));
+    public record Launch(Path wslExecutable, String distribution, Path jar, String mainClass, Duration timeout) {
+
+        public Launch {
+            Objects.requireNonNull(wslExecutable, "wslExecutable");
+            if (!wslExecutable.isAbsolute()) {
+                throw new IllegalArgumentException("wsl.exe must be an absolute path");
+            }
+            if (distribution == null || !WslPrerequisiteProbe.DISTRIBUTION_NAME.matcher(distribution).matches()) {
+                throw new IllegalArgumentException("invalid WSL distribution name");
+            }
+            jar = Objects.requireNonNull(jar, "jar").toAbsolutePath().normalize();
+            Objects.requireNonNull(mainClass, "mainClass");
+            Objects.requireNonNull(timeout, "timeout");
+            if (timeout.isNegative() || timeout.isZero()) {
+                throw new IllegalArgumentException("timeout must be positive");
+            }
+        }
+    }
+
+    /**
+     * @param launch    what is launched for one run
+     * @param minosHome MINOS_HOME of the Windows installation, which holds the exchange directory
+     */
+    public WslIndexWorker(Launch launch, WslCommandRunner runner, Path minosHome) {
+        this(launch, runner, minosHome, path -> WslPaths.toDistribution(path.toString()));
     }
 
     /**
      * Test seam: the mapping of a Windows path of this host to its path in the distribution is supplied, so that
      * the route can be exercised with a fake distribution on any host.
      */
-    WslIndexWorker(Path wslExecutable, String distribution, WslCommandRunner runner, Path minosHome, Path jar,
-                   String mainClass, Duration timeout, Function<Path, String> distributionPaths) {
+    WslIndexWorker(Launch launch, WslCommandRunner runner, Path minosHome, Function<Path, String> distributionPaths) {
+        Objects.requireNonNull(launch, "launch");
         this.distributionPaths = Objects.requireNonNull(distributionPaths, "distributionPaths");
-        this.wslExecutable = Objects.requireNonNull(wslExecutable, "wslExecutable");
-        if (!wslExecutable.isAbsolute()) {
-            throw new IllegalArgumentException("wsl.exe must be an absolute path");
-        }
-        if (distribution == null || !WslPrerequisiteProbe.DISTRIBUTION_NAME.matcher(distribution).matches()) {
-            throw new IllegalArgumentException("invalid WSL distribution name");
-        }
-        this.distribution = distribution;
+        this.wslExecutable = launch.wslExecutable();
+        this.distribution = launch.distribution();
         this.runner = Objects.requireNonNull(runner, "runner");
         this.exchangeRoot = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize()
                 .resolve(EXCHANGE_DIRECTORY);
-        this.jar = distributionPaths.apply(Objects.requireNonNull(jar, "jar").toAbsolutePath().normalize());
-        this.mainClass = Objects.requireNonNull(mainClass, "mainClass");
-        this.timeout = Objects.requireNonNull(timeout, "timeout");
-        if (timeout.isNegative() || timeout.isZero()) {
-            throw new IllegalArgumentException("timeout must be positive");
-        }
+        this.jar = distributionPaths.apply(launch.jar());
+        this.mainClass = launch.mainClass();
+        this.timeout = launch.timeout();
     }
 
     @Override

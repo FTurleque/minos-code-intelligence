@@ -52,13 +52,16 @@ class DistributedIndexingWorkerRequestTest {
 
     @Test
     void aRequestRefusesAMixedOrMalformedSource() {
+        IndexingExecutionRequest execution = execution();
+        String gitLength = "d".repeat(40);
+        String commit = "a".repeat(40);
         assertThrows(IllegalArgumentException.class,
-                () -> WorkerRequest.local(execution(), "0.13.2", "d".repeat(40), WorkerNetworkPolicy.DENY));
+                () -> WorkerRequest.local(execution, "0.13.2", gitLength, WorkerNetworkPolicy.DENY));
         assertThrows(IllegalArgumentException.class,
-                () -> WorkerRequest.local(execution(), "0.13.2", null, WorkerNetworkPolicy.DENY));
-        assertThrows(IllegalArgumentException.class, () -> new WorkerRequest(execution(), "0.13.2",
-                "https://token@github.com/acme/demo.git", "a".repeat(40), WorkerNetworkPolicy.DENY));
-        assertThrows(NullPointerException.class, () -> new WorkerRequest(execution(), "0.13.2",
+                () -> WorkerRequest.local(execution, "0.13.2", null, WorkerNetworkPolicy.DENY));
+        assertThrows(IllegalArgumentException.class, () -> new WorkerRequest(execution, "0.13.2",
+                "https://token@github.com/acme/demo.git", commit, WorkerNetworkPolicy.DENY));
+        assertThrows(NullPointerException.class, () -> new WorkerRequest(execution, "0.13.2",
                 (DistributedArtifactSource) null, WorkerNetworkPolicy.DENY));
     }
 

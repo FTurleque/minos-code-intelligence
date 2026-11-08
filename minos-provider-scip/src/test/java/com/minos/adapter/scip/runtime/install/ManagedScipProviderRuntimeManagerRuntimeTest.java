@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -236,10 +237,10 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
     @Test
     void theManagerRequiresAHomeDirectory() {
         ScipJavaMavenOffline unconfigured = ScipJavaMavenOfflineFixtures.unconfigured(Path.of("unused"));
-        assertThrows(NullPointerException.class, () -> new ManagedScipProviderRuntimeManager(null, unconfigured));
+        assertThrows(NullPointerException.class, () -> new ManagedScipProviderRuntimeManager(null, unconfigured, ScipJavaProjectJdk.fromEnvironment()));
     }
 
     private static ManagedScipProviderRuntimeManager manager(Path directory) {
-        return new ManagedScipProviderRuntimeManager(directory, ScipJavaMavenOfflineFixtures.unconfigured(directory));
+        return new ManagedScipProviderRuntimeManager(directory, ScipJavaMavenOfflineFixtures.unconfigured(directory), ScipJavaProjectJdk.fromEnvironment());
     }
 }

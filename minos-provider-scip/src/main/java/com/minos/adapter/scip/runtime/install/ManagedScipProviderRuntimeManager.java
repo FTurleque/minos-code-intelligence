@@ -113,13 +113,6 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     /**
      * @param mavenOffline the offline Maven build of scip-java outside Windows: the designated repository and the
      *     Maven of the PATH ({@link ScipJavaMavenOffline#configured}).
-     */
-    public ManagedScipProviderRuntimeManager(Path minosHome, ScipJavaMavenOffline mavenOffline) {
-        this(minosHome, mavenOffline, ScipJavaProjectJdk.fromEnvironment());
-    }
-
-    /**
-     * @param mavenOffline the offline Maven build of scip-java outside Windows
      * @param projectJdk   the project JDK: {@link ScipJavaProjectJdk#SETTING}, otherwise {@code JAVA_HOME}
      */
     public ManagedScipProviderRuntimeManager(Path minosHome, ScipJavaMavenOffline mavenOffline,
@@ -191,8 +184,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
                             CommandLocator.isWindows() ? mavenExecutable() : null,
-                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars), mavenOffline,
-                            projectJdk));
+                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars), mavenOffline)
+                            .withProjectJdk(projectJdk));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }

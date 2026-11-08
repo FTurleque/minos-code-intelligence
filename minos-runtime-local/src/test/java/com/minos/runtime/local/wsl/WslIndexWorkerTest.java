@@ -166,7 +166,8 @@ class WslIndexWorkerTest {
         assertTrue(missing.getMessage().contains("the WSL worker failed"), missing.getMessage());
 
         distribution.behaviour = Behaviour.UNAVAILABLE;
-        IllegalStateException unavailable = assertThrows(IllegalStateException.class, () -> executor.execute(request()));
+        IndexingExecutionRequest another = request();
+        IllegalStateException unavailable = assertThrows(IllegalStateException.class, () -> executor.execute(another));
         assertEquals("the WSL worker could not be run in distribution " + DISTRIBUTION + " (IOException)",
                 unavailable.getMessage());
         assertTrue(exchangeIsEmpty());
@@ -174,19 +175,21 @@ class WslIndexWorkerTest {
 
     @Test
     void theWorkerRefusesAnInvalidConfigurationOrARemoteRequest() {
-        assertThrows(IllegalArgumentException.class, () -> worker("bad name;rm"));
-        assertThrows(IllegalArgumentException.class, () -> new WslIndexWorker(Path.of("wsl.exe"), DISTRIBUTION,
-                distribution, home, jar, "Main", Duration.ofMinutes(1)));
-        assertThrows(IllegalArgumentException.class, () -> new WslIndexWorker(wsl, DISTRIBUTION, distribution, home,
-                jar, "Main", Duration.ZERO, distribution::map));
+        Duration minute = Duration.ofMinutes(1);
+        Path relative = Path.of("wsl.exe");
+        assertThrows(IllegalArgumentException.class, () -> launch("bad name;rm"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new WslIndexWorker.Launch(relative, DISTRIBUTION, jar, "Main", minute));
+        assertThrows(IllegalArgumentException.class,
+                () -> new WslIndexWorker.Launch(wsl, DISTRIBUTION, jar, "Main", Duration.ZERO));
         WslIndexWorker worker = worker(DISTRIBUTION);
         assertTrue(worker.enforcesNetworkDeny());
         assertEquals(WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE, worker.isolation());
         assertEquals(DISTRIBUTION, worker.distribution());
-        assertThrows(IllegalArgumentException.class, () -> worker.execute(
-                new com.minos.remote.DistributedIndexing.WorkerRequest(request(), VERSION,
-                        "https://github.com/acme/demo", "a".repeat(40),
-                        com.minos.remote.DistributedIndexing.WorkerNetworkPolicy.DENY)));
+        var remote = new com.minos.remote.DistributedIndexing.WorkerRequest(request(), VERSION,
+                "https://github.com/acme/demo", "a".repeat(40),
+                com.minos.remote.DistributedIndexing.WorkerNetworkPolicy.DENY);
+        assertThrows(IllegalArgumentException.class, () -> worker.execute(remote));
     }
 
     @Test
@@ -200,8 +203,11 @@ class WslIndexWorkerTest {
     }
 
     private WslIndexWorker worker(String name) {
-        return new WslIndexWorker(wsl, name, distribution, home, jar, "com.minos.cli.MinosLauncher",
-                Duration.ofMinutes(5), distribution::map);
+        return new WslIndexWorker(launch(name), distribution, home, distribution::map);
+    }
+
+    private WslIndexWorker.Launch launch(String name) {
+        return new WslIndexWorker.Launch(wsl, name, jar, "com.minos.cli.MinosLauncher", Duration.ofMinutes(5));
     }
 
     private WslIndexerExecutor executor() throws IOException {
@@ -287,7 +293,9 @@ class WslIndexWorkerTest {
                 case TIMEOUT -> throw new WslCommandTimeoutException("wsl.exe command timed out");
                 case INTERRUPTED -> throw new InterruptedIOException("wsl.exe command interrupted");
                 case UNAVAILABLE -> throw new IOException("cannot start " + temp);
-                default -> { }
+                default -> {
+                    // OK, PROVIDER_FAILURE and NO_BUNDLE read the request below.
+                }
             }
             Path requestFile = mounts.get(command.getLast());
             String text = Files.readString(requestFile);

@@ -83,8 +83,7 @@ public final class WslIndexerExecutor implements IndexerExecutor {
             WslArtifactProvenance.verify(workerRequest, worker, indexerId, providerVersion, verified.manifest());
             Path copy = copyUnderRun(request, verified);
             String scope = verified.manifest().projectRelativeRoot();
-            artifact = new IndexingArtifact(request.selection().language(), indexerId, copy,
-                    scope.isEmpty() ? Path.of("") : Path.of(scope));
+            artifact = new IndexingArtifact(request.selection().language(), indexerId, copy, Path.of(scope));
         } catch (Exception failure) {
             releaseQuietly(verified, response.bundle(), failure);
             throw failure;
