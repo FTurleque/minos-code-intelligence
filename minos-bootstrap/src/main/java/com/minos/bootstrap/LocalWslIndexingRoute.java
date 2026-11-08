@@ -46,6 +46,8 @@ final class LocalWslIndexingRoute implements WslIndexingRoute {
     static final String NOT_PACKAGED =
             "the WSL route runs only from a packaged MINOS installation, whose jar the distribution executes";
 
+    private static final System.Logger LOGGER = System.getLogger(LocalWslIndexingRoute.class.getName());
+
     private final Path home;
     private final Optional<Path> wslExecutable;
     private final WslCommandRunner runner;
@@ -93,6 +95,8 @@ final class LocalWslIndexingRoute implements WslIndexingRoute {
                         ? Optional.empty() : Optional.of(location);
             }
         } catch (URISyntaxException | IOException | RuntimeException unusable) {
+            LOGGER.log(System.Logger.Level.DEBUG, "the WSL route is not offered: installation jar unreadable ({0})",
+                    unusable.getClass().getSimpleName());
             return Optional.empty();
         }
     }
