@@ -64,7 +64,7 @@ class LocalWslJarChecksTest {
     }
 
     @Test
-    void anUnreadableConfigurationLeavesEveryCheckUnknownInsteadOfFailing() throws Exception {
+    void anUnreadableConfigurationLeavesEveryCheckUnknownInsteadOfFailing() {
         LocalWslJarChecks checks = new LocalWslJarChecks(() -> {
             throw new IllegalStateException("MINOS runtime configuration cannot be read");
         }, () -> ScipJavaProjectJdk.configured(null));

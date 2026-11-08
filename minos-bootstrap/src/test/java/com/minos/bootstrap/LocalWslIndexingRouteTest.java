@@ -123,9 +123,11 @@ class LocalWslIndexingRouteTest {
                 return new WslCommandResult(0, LISTING.getBytes(StandardCharsets.UTF_16LE));
             }
             if (command.contains("--probe")) {
-                return new WslCommandResult(0, ("minos-wsl-probe-v1 maven MISSING install Maven 3.9.x\n"
-                        + "minos-wsl-probe-v1 project-jdk OK\n"
-                        + "minos-wsl-probe-v1 maven-repository OK\n").getBytes(StandardCharsets.UTF_8));
+                return new WslCommandResult(0, """
+                        minos-wsl-probe-v1 maven MISSING install Maven 3.9.x
+                        minos-wsl-probe-v1 project-jdk OK
+                        minos-wsl-probe-v1 maven-repository OK
+                        """.getBytes(StandardCharsets.UTF_8));
             }
             return new WslCommandResult(0, HEALTHY.getBytes(StandardCharsets.UTF_8));
         };

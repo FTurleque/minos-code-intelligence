@@ -79,7 +79,8 @@ class WslCommandJarProbeTest {
                 .probe("Ubuntu");
 
         assertEquals("/mnt/c/Program Files/MINOS/lib/minos.jar", commands.getFirst().get(6));
-        assertThrows(IllegalArgumentException.class, () -> new WslCommandJarProbe(Path.of("wsl.exe"), runner, JAR,
-                MAIN), "wsl.exe must be absolute");
+        Path relativeWsl = Path.of("wsl.exe");
+        assertThrows(IllegalArgumentException.class, () -> new WslCommandJarProbe(relativeWsl, runner, JAR, MAIN),
+                "wsl.exe must be absolute");
     }
 }
