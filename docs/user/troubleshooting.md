@@ -108,6 +108,12 @@ minos.cmd doctor
 minos.cmd index <project> --dry-run
 ```
 
+## Linux : Coursier de `scip-java`
+
+Sous Linux, `minos tools install scip-java` installe lui-même le lanceur Coursier épinglé par le catalogue des outils : l'archive est téléchargée par MINOS, son empreinte SHA-256 est vérifiée avant toute décompression, puis `cs` est publié sous `MINOS_HOME/tools/coursier/`, exécutable par son seul propriétaire. Un `cs` présent dans le `PATH` n'est **pas requis** ; s'il existe et qu'aucun Coursier géré n'est installé, il est utilisé tel quel.
+
+Sans réseau (`MINOS_TOOLS_OFFLINE=1`, ou connexion refusée), l'installation échoue en nommant Coursier (« Coursier launcher could not be installed ») : autoriser le réseau le temps de l'installation, ou placer un `cs` dans le `PATH`. Une archive dont l'empreinte diffère de celle du catalogue est refusée et ne laisse aucun fichier sous `MINOS_HOME/tools/coursier/`.
+
 ## Linux : JDK et Maven de `scip-java` dans le bac à sable
 
 Sous Linux, `scip-java` s'exécute dans le bac à sable bubblewrap avec un egress `DENY`. Le bac à sable ne voit que `/usr`, `/bin`, `/lib`, `/lib64`, `/sbin`, les outils gérés de `MINOS_HOME/tools`, le projet et le run. Il ajoute, en lecture seule :

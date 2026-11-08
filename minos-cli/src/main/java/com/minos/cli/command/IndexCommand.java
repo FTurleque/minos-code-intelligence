@@ -13,16 +13,19 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
-/** Commande d'indexation autonome M14 avec compatibilité d'import M9. */
+/** Autonomous indexing command, with the deprecated SCIP import kept for compatibility. */
 public final class IndexCommand {
 
     public static final String NAME = "index";
     private static final CliOptions.Spec OPTIONS = CliOptions.spec()
-            .text("--provider", "--format", "--scip", "--provider-version", "--module", "--snapshot")
-            .flag("--force-full", "--dry-run", "--no-resume", "--resume-only");
+            .text("--provider", "--format", "--scip", "--provider-version", "--module", "--snapshot", "--wsl-distro")
+            .flag("--force-full", "--dry-run", "--no-resume", "--resume-only", "--via-wsl");
+    private static final Pattern WSL_DISTRIBUTION = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
     private static final String USAGE = """
             Usage: minos index <project> [options]
 
@@ -35,6 +38,10 @@ public final class IndexCommand {
                                             (implies --force-full)
               --resume-only                 Fail without creating a run unless an interrupted run can be resumed
               --format <text|json>          Output format (default: text)
+              --via-wsl                     Windows only: run the providers in a WSL2 distribution under the
+                                            Linux sandbox, then import the verified artifact
+                                            (not combinable with --scip or --dry-run)
+              --wsl-distro <name>           WSL distribution for --via-wsl (default: the default distribution)
 
             An interrupted run (crash, kill, reboot) is reopened by default and only the providers
             without a valid checkpoint are re-executed. A provider that fails explicitly during the
@@ -81,7 +88,11 @@ public final class IndexCommand {
             if (autonomousOperations == null) {
                 throw new IllegalStateException("autonomous indexing is not configured in this CLI bootstrap");
             }
-            if (options.dryRun()) {
+            if (options.viaWsl()) {
+                output.append(renderExecution(autonomousOperations.executeViaWsl(
+                        options.project(), options.providerId(), options.forceFull(), options.resumeChoice(),
+                        options.wslDistribution()), options.format())).append('\n');
+            } else if (options.dryRun()) {
                 output.append(renderPlan(autonomousOperations.plan(
                         options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
             } else {
@@ -230,7 +241,9 @@ public final class IndexCommand {
             String providerVersion,
             String moduleId,
             String snapshotId,
-            IndexingResumeChoice resumeChoice
+            IndexingResumeChoice resumeChoice,
+            boolean viaWsl,
+            String wslDistribution
     ) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 1) {
@@ -248,6 +261,22 @@ public final class IndexCommand {
             String providerVersion = options.text("--provider-version");
             String module = options.text("--module");
             String snapshot = options.text("--snapshot");
+            boolean viaWsl = options.has("--via-wsl");
+            String wslDistribution = options.text("--wsl-distro");
+            validateWslRoute(viaWsl, wslDistribution, scip != null, dryRun);
+            validateResumeFlags(dryRun, noResume, resumeOnly);
+            if (scip != null) {
+                validateScipImport(provider, forceFull || dryRun || noResume || resumeOnly);
+            } else if (providerVersion != null || module != null || snapshot != null) {
+                throw new IllegalArgumentException("--provider-version/--module/--snapshot require --scip");
+            }
+            IndexingResumeChoice resumeChoice = noResume ? IndexingResumeChoice.NO_RESUME
+                    : resumeOnly ? IndexingResumeChoice.RESUME_ONLY : IndexingResumeChoice.RESUME;
+            return new Options(project, provider, forceFull, dryRun, options.format(), scip, providerVersion, module,
+                    snapshot, resumeChoice, viaWsl, wslDistribution);
+        }
+
+        private static void validateResumeFlags(boolean dryRun, boolean noResume, boolean resumeOnly) {
             if (noResume && resumeOnly) {
                 throw new IllegalArgumentException("--no-resume and --resume-only are mutually exclusive");
             }
@@ -255,21 +284,44 @@ public final class IndexCommand {
                 throw new IllegalArgumentException("--dry-run executes nothing, so it cannot be combined with "
                         + "--no-resume/--resume-only (`minos index-status <project>` shows the run that could be resumed)");
             }
-            if (scip != null) {
-                if (provider == null || provider.isBlank()) {
-                    throw new IllegalArgumentException("--provider is required with --scip");
-                }
-                if (forceFull || dryRun || noResume || resumeOnly) {
-                    throw new IllegalArgumentException(
-                            "--force-full/--dry-run/--no-resume/--resume-only cannot be combined with --scip");
-                }
-            } else if (providerVersion != null || module != null || snapshot != null) {
-                throw new IllegalArgumentException("--provider-version/--module/--snapshot require --scip");
+        }
+
+        private static void validateScipImport(String provider, boolean executionFlags) {
+            if (provider == null || provider.isBlank()) {
+                throw new IllegalArgumentException("--provider is required with --scip");
             }
-            IndexingResumeChoice resumeChoice = noResume ? IndexingResumeChoice.NO_RESUME
-                    : resumeOnly ? IndexingResumeChoice.RESUME_ONLY : IndexingResumeChoice.RESUME;
-            return new Options(project, provider, forceFull, dryRun, options.format(), scip, providerVersion, module,
-                    snapshot, resumeChoice);
+            if (executionFlags) {
+                throw new IllegalArgumentException(
+                        "--force-full/--dry-run/--no-resume/--resume-only cannot be combined with --scip");
+            }
+        }
+
+        /** Usage checks of the WSL2 route, run before anything else so a refusal never resolves the project. */
+        private static void validateWslRoute(boolean viaWsl, String distribution, boolean scip, boolean dryRun) {
+            if (!viaWsl) {
+                if (distribution != null) {
+                    throw new IllegalArgumentException("--wsl-distro requires --via-wsl");
+                }
+                return;
+            }
+            if (scip) {
+                throw new IllegalArgumentException("--via-wsl cannot be combined with --scip");
+            }
+            if (dryRun) {
+                throw new IllegalArgumentException("--via-wsl cannot be combined with --dry-run");
+            }
+            if (distribution != null && !WSL_DISTRIBUTION.matcher(distribution).matches()) {
+                throw new IllegalArgumentException(
+                        "--wsl-distro must be a WSL distribution name (letters, digits, '.', '_' or '-')");
+            }
+            if (!hostIsWindows()) {
+                throw new IllegalArgumentException("--via-wsl is only available on a Windows installation");
+            }
+        }
+
+        /** The route exists only for a Windows host, so this usage check needs no application. */
+        static boolean hostIsWindows() {
+            return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
         }
     }
 }

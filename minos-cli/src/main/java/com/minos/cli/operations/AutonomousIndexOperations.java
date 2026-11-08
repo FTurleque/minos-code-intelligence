@@ -3,6 +3,7 @@ package com.minos.cli.operations;
 import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.cli.support.CliCommandSupport;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
@@ -32,6 +33,27 @@ public interface AutonomousIndexOperations {
         }
         return execute(projectIdentifier, providerOverride, forceFull);
     }
+
+    /**
+     * Executes through the WSL2 route of a Windows installation. Backends that do not offer the route refuse with an
+     * error that names {@code --via-wsl}, before any project resolution and without creating a run. (Off Windows the
+     * command refuses the option as a usage error before reaching this method.)
+     *
+     * @param distribution the WSL distribution name, or {@code null} for the default distribution of WSL
+     */
+    default IndexExecutionView executeViaWsl(
+            String projectIdentifier,
+            String providerOverride,
+            boolean forceFull,
+            IndexingResumeChoice resumeChoice,
+            String distribution
+    ) throws IOException {
+        throw new IllegalArgumentException(VIA_WSL_UNAVAILABLE);
+    }
+
+    /** Usage error of an installation that does not offer the WSL2 route. */
+    String VIA_WSL_UNAVAILABLE = "--via-wsl is not available on this installation: "
+            + "the WSL2 indexing route is offered only by a Windows installation that ships it";
 
     List<ProviderView> providers();
 
