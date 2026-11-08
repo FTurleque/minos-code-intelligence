@@ -164,7 +164,7 @@ La section `wslJava` de `doctor` doit lister les huit contrôles à l'état `OK`
 - la voie n'existe que depuis une installation empaquetée (setup ou ZIP) et pour un projet sur un lecteur local (`X:\…`) ;
 - la ligne d'échec d'un run renvoie à `runs/<run>/scip-java/provider.stderr.log` de la distribution, que le worker supprime à la fin du run : pour lire la cause, rejouer l'indexation dans la distribution (`minos index` du jar, lancé dans un scope `systemd-run --user --scope -p Delegate=yes`) ;
 - chaque JVM du build se dimensionne sur les limites du bac à sable (8 Gio, 8 processeurs au plus) ;
-- mesure de référence (Ubuntu 24.04, WSL2, 16 cœurs, 24 Gio) : `fixtures/java/java-simple` en 14 s, un projet Maven multi-module d'environ 1 500 fichiers Java en 190 s.
+- mesure de référence (Ubuntu 24.04, WSL2, 16 cœurs, 24 Gio) : `fixtures/java/java-simple` en 14 s, un projet Maven multi-module d'environ 1 500 fichiers Java en 190 à 430 s, et le code Java de MINOS (15 modules, sans `fixtures/`, `scripts/` ni `docs/`, écartés par un `.minosignore`) en 12 min.
 
 ## 3. Programme et données
 

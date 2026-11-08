@@ -126,13 +126,15 @@ Deux règles du plan et du bac à sable tiennent compte d'une distribution réel
 - le JDK désigné par `minos.scip.java.project-jdk` est le `JAVA_HOME` et la première entrée du `PATH` du build
   (`ScipJavaProcessPlanFactory`) : le wrapper `javac` de scip-java lance `java` depuis le `PATH`, et le `java` par
   défaut d'une distribution peut vivre hors des racines montées (`/usr`, `/bin`, `/lib`, `/lib64`, `/sbin`) ;
-- chaque processus du bac à sable reçoit `JAVA_TOOL_OPTIONS` avec `-XX:MaxRAM` égal à la mémoire du job et
-  `-XX:ActiveProcessorCount` égal à ses processeurs, au plus ceux de l'hôte
-  (`LinuxBubblewrapWorkerSandboxBackend.boundedJavaToolOptions`), après les options du plan : sans cela une JVM se
-  dimensionne sur l'hôte et ses réservations atteignent la limite d'espace d'adressage par processus.
+- le cgroup du job est monté en lecture seule sur `/sys/fs/cgroup` dans le bac à sable
+  (`LinuxBubblewrapWorkerSandboxBackend.jobCgroupView`) : chaque JVM du build y lit la mémoire et les processeurs de
+  son job et s'y dimensionne ; sans cela elle se dimensionne sur l'hôte et ses réservations atteignent la limite
+  d'espace d'adressage par processus. Aucune variable n'est posée : une variable lue par la JVM
+  (`JAVA_TOOL_OPTIONS`) lui ferait écrire un bandeau sur stderr, qui casse les tests d'un build qui compare la sortie
+  d'un `java` fils.
 
-Tests : `ScipJavaProcessPlanFactoryProjectJdkTest`, `LinuxSandboxJvmBoundsTest`,
-`LinuxBubblewrapWorkerSandboxBackendTest` (Linux).
+Tests : `ScipJavaProcessPlanFactoryProjectJdkTest`, `LinuxSandboxJobCgroupViewTest`,
+`LinuxCgroupJobContainmentTest#theProviderReadsItsOwnJobLimitsReadOnlyAndCannotRelaxThem` (Linux).
 
 La traçabilité exigence → preuve, les écarts et la qualification sont tenus dans le dossier de capacité
 [indexation-java-via-wsl](../architecture/diagrams/capacites/indexation-java-via-wsl.md).
