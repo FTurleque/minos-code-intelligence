@@ -168,8 +168,10 @@ class LinuxCgroupJobContainmentTest {
             IndexerProcessPlan plan = new IndexerProcessPlan(
                     List.of("/bin/sh", "-c",
                             "cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max > \"$1\";"
-                                    + " if (echo max > /sys/fs/cgroup/memory.max) 2>/dev/null;"
-                                    + " then echo writable >> \"$1\"; fi",
+                                    + " for f in memory.max pids.max cpu.max cgroup.procs cgroup.subtree_control; do"
+                                    + " if (echo max > /sys/fs/cgroup/$f) 2>/dev/null; then echo \"writable $f\" >> \"$1\"; fi;"
+                                    + " done;"
+                                    + " if mkdir /sys/fs/cgroup/escape 2>/dev/null; then echo child >> \"$1\"; fi",
                             "sh", artifact.toString()),
                     working, Map.of(), artifact, Duration.ofSeconds(20));
 
@@ -184,6 +186,8 @@ class LinuxCgroupJobContainmentTest {
             assertEquals(List.of(Long.toString(256 * MEBIBYTE), "200000 " + LinuxCgroupJob.CPU_PERIOD_MICROS), seen,
                     "the provider sees the limits of its own job, nothing else, and cannot write them");
             assertEquals(Long.toString(256 * MEBIBYTE), read(job, "memory.max"));
+            assertEquals("64", read(job, "pids.max"));
+            assertFalse(Files.exists(job.directory().resolve("escape")), "no child cgroup can be created from inside");
         } finally {
             job.close();
         }
