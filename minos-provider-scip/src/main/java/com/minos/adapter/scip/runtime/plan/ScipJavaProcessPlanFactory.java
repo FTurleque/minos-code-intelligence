@@ -11,6 +11,7 @@ import com.minos.runtime.local.process.IndexerProcessPlanFactory;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -197,7 +198,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         return new IndexerProcessPlan(
                 command,
                 executionRoot,
-                jdkEnvironment(),
+                portableJdkEnvironment(),
                 output,
                 Duration.ofHours(1),
                 maven.readOnlyRoots(),
@@ -382,6 +383,21 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
      */
     private Map<String, String> jdkEnvironment() {
         return projectJdk.designated() ? Map.of("JAVA_HOME", projectJdk.home().toString()) : Map.of();
+    }
+
+    /**
+     * The provider environment of the project JDK outside Windows: a designated JDK is also the first entry of the
+     * {@code PATH}. The compiler wrapper scip-java generates runs {@code java} from the {@code PATH}, and the
+     * {@code java} of the host may live in a directory the Linux sandbox does not mount.
+     */
+    private Map<String, String> portableJdkEnvironment() {
+        if (!projectJdk.designated()) {
+            return Map.of();
+        }
+        String bin = projectJdk.home().resolve("bin").toString();
+        String inherited = System.getenv("PATH");
+        String path = inherited == null || inherited.isBlank() ? bin : bin + File.pathSeparator + inherited;
+        return Map.of("JAVA_HOME", projectJdk.home().toString(), "PATH", path);
     }
     /**
      * The Windows PowerShell of the system directory, the one the AppContainer sandbox trusts. PATH is not a source:
