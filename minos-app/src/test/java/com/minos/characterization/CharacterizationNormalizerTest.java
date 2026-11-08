@@ -102,6 +102,34 @@ class CharacterizationNormalizerTest {
     }
 
     @Test
+    void doctorWslJavaSectionOfAWindowsHostIsDropped() {
+        String windowsText = """
+                workerSandbox[remoteIndexing]: UNAVAILABLE (decision: ADR 0041)
+                wslJava[distribution]: Ubuntu
+                wslJava[wsl-version]: OK
+                wslJava[maven]: UNKNOWN (run the probe [step 3] first)
+                verdict: ACTION_REQUIRED
+                """;
+        String linuxText = """
+                workerSandbox[remoteIndexing]: UNAVAILABLE
+                verdict: ACTION_REQUIRED
+                """;
+        String windowsJson = "{\"workerSandbox\":{\"decision\":\"ADR 0041\"},\"wslJava\":{\"distribution\":\"Ubuntu\","
+                + "\"checks\":[{\"id\":\"wsl-version\",\"state\":\"OK\"},{\"id\":\"maven\",\"state\":\"UNKNOWN\","
+                + "\"action\":\"run \\\"probe\\\" [step 3]\"}]},\"ready\":false}";
+        String linuxJson = "{\"workerSandbox\":{\"decision\":null},\"ready\":false}";
+
+        assertEquals(CharacterizationNormalizer.normalizeHostFacts(linuxText),
+                CharacterizationNormalizer.normalizeHostFacts(windowsText));
+        assertEquals(CharacterizationNormalizer.normalizeHostFacts(linuxJson),
+                CharacterizationNormalizer.normalizeHostFacts(windowsJson));
+        assertEquals("{\"workerSandbox\":{\"decision\":\"<host>\"},\"ready\":false}",
+                CharacterizationNormalizer.normalizeHostFacts(
+                        "{\"workerSandbox\":{\"decision\":null},\"wslJava\":{\"distribution\":null,\"checks\":[]},"
+                                + "\"ready\":false}"));
+    }
+
+    @Test
     void providersTableMasksOnlyTheRuntimeStateColumn() {
         String windows = "rust-analyzer-scip\t0.3.2989\tQUALIFIED_WITH_CONSTRAINTS\tBLOCKED\tscore=45\n"
                 + "scip-java\t0.13.1\tQUALIFIED_WITH_CONSTRAINTS\tNOT_INSTALLED\tscore=69\n";

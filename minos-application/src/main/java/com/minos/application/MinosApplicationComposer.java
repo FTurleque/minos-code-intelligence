@@ -26,79 +26,84 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Port de la racine de composition (ADR 0042) : fournit les adaptateurs concrets par défaut que
- * {@link MinosApplication#open(Path)} et {@link MinosApplication.Builder#build()} ne reçoivent pas
- * explicitement. {@code minos-application} ne connaît que ce contrat ; son unique implémentation vit
- * dans le module {@code minos-bootstrap} et est découverte par {@link java.util.ServiceLoader}
+ * Port of the composition root (ADR 0042): supplies the default concrete adapters that
+ * {@link MinosApplication#open(Path)} and {@link MinosApplication.Builder#build()} do not receive
+ * explicitly. {@code minos-application} only knows this contract; its single implementation lives
+ * in the {@code minos-bootstrap} module and is discovered by {@link java.util.ServiceLoader}
  * ({@link MinosApplicationComposers}).
  *
- * <p>Chaque méthode est appelée exactement au point où l'assembleur instanciait l'adaptateur
- * concret, avec les mêmes arguments : l'ordre d'initialisation ne dépend pas de ce port.</p>
+ * <p>Each method is called exactly where the assembler instantiated the concrete adapter, with the
+ * same arguments: the initialization order does not depend on this port.</p>
  */
 public interface MinosApplicationComposer {
 
-    /** Backend configuré : {@code local} intégré, les autres découverts par {@code ServiceLoader}. */
+    /** Configured backend: {@code local} built in, the others discovered by {@code ServiceLoader}. */
     StorageBackend openStorageBackend(StorageBackendConfiguration configuration) throws IOException;
 
-    /** Backend local de repli, quand seuls certains magasins sont surchargés. */
+    /** Fallback local backend, when only some stores are overridden. */
     StorageBackend openLocalStorageBackend(Path home) throws IOException;
 
-    /** Descripteurs des indexeurs qualifiés par défaut. */
+    /** Descriptors of the default qualified indexers. */
     List<IndexerDescriptor> qualifiedIndexerDescriptors();
 
-    /** Catalogue des providers qualifiés, lu à la demande. */
+    /** Catalog of the qualified providers, read on demand. */
     IndexerProviderCatalog providerCatalog();
 
-    /** Gestionnaire composite des runtimes de providers gérés, pour ce MINOS_HOME. */
+    /** Composite manager of the managed provider runtimes, for this MINOS_HOME. */
     ProviderRuntimeManager providerRuntimeManager(Path home);
 
-    /** Cycle de vie par défaut des snapshots (préparation et promotion). */
+    /** Default snapshot lifecycle (staging and promotion). */
     SnapshotLifecycle snapshotLifecycle(
             Path home,
             CodeKnowledgeSnapshotStore snapshots,
             List<IndexerDescriptor> descriptors
     ) throws IOException;
 
-    /** Intelligence Git factuelle. */
+    /** Factual Git intelligence. */
     GitIntelligence gitIntelligence();
 
-    /** Import SCIP explicite ({@code import-scip}). */
+    /** Explicit SCIP import ({@code import-scip}). */
     ScipArtifactImporter scipArtifactImporter();
 
-    /** Magasin du plan de contrôle hébergé, sous le répertoire donné. */
+    /** Hosted control plane store, under the given directory. */
     HostedControlPlaneStore hostedControlPlaneStore(Path directory, HostedTenantKeyProvider keys) throws IOException;
 
-    /** Clés hébergées lues depuis l'environnement de l'opérateur (mode hébergé activé). */
+    /** Hosted keys read from the operator environment (hosted mode enabled). */
     HostedTenantKeyProvider environmentHostedTenantKeyProvider();
 
-    /** Marqueurs de run reprenable (R1, ADR 0039 § 5), rangés dans le répertoire de run de ce MINOS_HOME. */
+    /** Resumable run markers (ADR 0039 section 5), kept in the run directory of this MINOS_HOME. */
     ResumableRunMarkers resumableRunMarkers(Path home);
 
-    /** Sonde des sandboxes de worker de l'hôte réel (doctor, remote index). */
+    /** Worker sandbox probe of the real host (doctor, remote index). */
     WorkerSandboxProbe workerSandboxProbe();
 
-    /** Localisation et invocation des exécutables de l'hôte réel. */
+    /** Lookup and invocation of the executables of the real host. */
     HostCommandLocator hostCommandLocator();
 
-    /** Matérialisation des révisions distantes (M25), pour ce MINOS_HOME. */
+    /** Materialization of remote revisions, for this MINOS_HOME. */
     RemoteRepositoryMaterializer remoteRepositoryMaterializer(Path home) throws IOException;
 
     /**
-     * Moteur d'indexation distante (M25) pour ce MINOS_HOME : sélection de sandbox de l'hôte réel,
-     * worker isolé et transport d'artefacts vérifiés.
+     * Remote indexing engine for this MINOS_HOME: sandbox selection of the real host, isolated worker
+     * and verified artifact transport.
      */
     RemoteIndexingRuntime remoteIndexingRuntime(Path home) throws IOException;
 
-    /** Voie d'indexation par WSL2, vide quand l'hôte ne l'offre pas (hors Windows ou voie non livrée). */
+    /** WSL2 indexing route, empty when the host does not offer it (outside Windows, or route not shipped). */
     default Optional<WslIndexingRoute> wslIndexingRoute(Path home) {
         Objects.requireNonNull(home, "home");
         return Optional.empty();
     }
 
-    /** Correspondance persistée des racines hôte/conteneur de ce MINOS_HOME (plan Docker). */
+    /** Probe of the WSL2 route prerequisites (doctor), empty when the host does not offer the route. */
+    default Optional<WslPrerequisiteDiagnostics> wslPrerequisiteDiagnostics() {
+        return Optional.empty();
+    }
+
+    /** Persisted host/container root mapping of this MINOS_HOME (Docker plan). */
     ProjectPathMappings projectPathMappings(Path home);
 
-    /** Préparation et promotion des snapshots, fournies ensemble. */
+    /** Snapshot staging and promotion, supplied together. */
     record SnapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {
         public SnapshotLifecycle {
             Objects.requireNonNull(stager, "stager");

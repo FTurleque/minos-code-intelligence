@@ -36,23 +36,31 @@ public final class HostDiagnosticsService {
     private final WorkerSandboxProbe sandboxProbe;
     private final HostCommandLocator commandLocator;
     private final PrivacyReader privacyReader;
+    private final Optional<WslPrerequisiteDiagnostics> wslDiagnostics;
 
     /** A service over the given probe and locator; production goes through {@link #defaults()}. */
     HostDiagnosticsService(WorkerSandboxProbe sandboxProbe, HostCommandLocator commandLocator) {
-        this(sandboxProbe, commandLocator, PrivateLocalStorage::privacyOf);
+        this(sandboxProbe, commandLocator, PrivateLocalStorage::privacyOf, Optional.empty());
     }
 
     HostDiagnosticsService(WorkerSandboxProbe sandboxProbe, HostCommandLocator commandLocator,
                            PrivacyReader privacyReader) {
+        this(sandboxProbe, commandLocator, privacyReader, Optional.empty());
+    }
+
+    HostDiagnosticsService(WorkerSandboxProbe sandboxProbe, HostCommandLocator commandLocator,
+                           PrivacyReader privacyReader, Optional<WslPrerequisiteDiagnostics> wslDiagnostics) {
         this.sandboxProbe = Objects.requireNonNull(sandboxProbe, "sandboxProbe");
         this.commandLocator = Objects.requireNonNull(commandLocator, "commandLocator");
         this.privacyReader = Objects.requireNonNull(privacyReader, "privacyReader");
+        this.wslDiagnostics = Objects.requireNonNull(wslDiagnostics, "wslDiagnostics");
     }
 
     /** The real host: the probe and the locator of the composition root (ADR 0042), resolved at this call. */
     public static HostDiagnosticsService defaults() {
         MinosApplicationComposer root = MinosApplicationComposers.resolve();
-        return new HostDiagnosticsService(root.workerSandboxProbe(), root.hostCommandLocator());
+        return new HostDiagnosticsService(root.workerSandboxProbe(), root.hostCommandLocator(),
+                PrivateLocalStorage::privacyOf, root.wslPrerequisiteDiagnostics());
     }
 
     /** The worker sandboxes of this host: managed local providers first, then untrusted code. */
@@ -68,6 +76,14 @@ public final class HostDiagnosticsService {
                 untrusted.rejectedBackendId(),
                 untrusted.rejectionReasons(),
                 untrusted.refusalReport());
+    }
+
+    /**
+     * The prerequisites of the WSL2 route for Java indexing, probed now; empty when the host does not offer the
+     * route (any host other than Windows).
+     */
+    public Optional<WslJavaDiagnosis> wslJava() {
+        return wslDiagnostics.map(WslPrerequisiteDiagnostics::diagnose);
     }
 
     /** The executable the host resolves for {@code command}, absent if there is none. */
