@@ -153,7 +153,9 @@ sequenceDiagram
 Le rapport de `doctor` contient aussi les commandes trouvées, le stockage privé et l'état du sandbox des workers
 (`workerSandbox`, ADR-0041). La CLI les obtient par `HostDiagnosticsService` (`minos-application`), qui interroge
 la sonde des sandboxes et le localisateur de commandes de la racine de composition, et lit la confidentialité des
-emplacements de `MINOS_HOME` sans rien écrire.
+emplacements de `MINOS_HOME` sans rien écrire. Sous Windows seulement, la section `wslJava` donne l'état des
+prérequis de la voie WSL2 de l'indexation Java : `HostDiagnosticsService.wslJava()` interroge le port
+`wslPrerequisiteDiagnostics()` de la racine de composition, que `minos-bootstrap` ne fournit que sous Windows.
 
 ---
 

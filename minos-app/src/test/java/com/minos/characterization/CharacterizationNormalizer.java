@@ -152,6 +152,7 @@ final class CharacterizationNormalizer {
         // seule sa cause (décision ou prérequis absent) dépend de l'hôte.
         result = result.replaceAll("(?m)^(workerSandbox\\[remoteIndexing\\]: [A-Z]+).*$", "$1<host>");
         result = result.replaceAll("(?m)^(workerSandbox\\[(?!remoteIndexing\\])[^\\]]+\\]): .*$", "$1: <host>");
+        result = result.replaceAll("(?m)^wslJava\\[[^\\]]+\\]: .*\\R", "");
         // Rendu JSON.
         result = result.replaceAll("(\"(?:javaRuntime|javaHome)\":)\"[^\"]*\"", "$1\"<host>\"");
         result = result.replaceAll("(\"commands\":)\\{[^}]*\\}", "$1<host>");
@@ -165,6 +166,9 @@ final class CharacterizationNormalizer {
         result = result.replaceAll("(\"(?:cause|rejectedBackend|decision)\":)(?:null|\"[^\"]*\")", "$1\"<host>\"");
         result = result.replaceAll("(\"reasons\":)\\[[^\\]]*\\]", "$1<host>");
         result = result.replaceAll("(\"reason\":)\"(?:[^\"\\\\]|\\\\.)*\"", "$1\"<host>\"");
+        result = result.replaceAll(
+                ",\"wslJava\":\\{\"distribution\":(?:null|\"[^\"]*\"),\"checks\":\\[(?:[^\\[\\]\"]|\"(?:[^\"\\\\]|\\\\.)*\")*\\]\\}",
+                "");
         return result;
     }
 

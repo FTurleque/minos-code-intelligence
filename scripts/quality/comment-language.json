@@ -18,7 +18,7 @@
   },
   "outOfLanguageMaximum": {
     "minos-app": 1,
-    "minos-application": 48,
+    "minos-application": 47,
     "minos-bootstrap": 4,
     "minos-cli": 12,
     "minos-domain": 21,
@@ -30,7 +30,7 @@
   "milestoneCommentMaximum": {
     "minos-api": 10,
     "minos-app": 2,
-    "minos-application": 29,
+    "minos-application": 28,
     "minos-bootstrap": 1,
     "minos-cli": 8,
     "minos-domain": 3,
