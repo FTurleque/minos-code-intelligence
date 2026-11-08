@@ -75,7 +75,7 @@ Le principe *capability-honest* interdit de déclarer prête une capacité absen
 
 ## Compliance and Enforcement
 
-- Tests `ManagedScipProviderRuntimeManagerToolchainTest` (`minos-provider-scip`, build Maven des jobs `Verify`) : `onWindowsAnInstalledScipJavaIsBlockedUntilItsSandboxedExecutionIsQualified` (Windows seulement : `BLOCKED`, diagnostic « no supported way to index Java projects from a Windows host », aucune mention du runtime Docker, indexation refusée avant lancement) et `onLinuxScipJavaIsNotBlockedByTheWindowsSandboxQualification`.
+- Tests `ManagedScipProviderRuntimeManagerToolchainTest` (`minos-provider-scip`, build Maven des jobs `Verify`) : `onWindowsAnInstalledScipJavaIsBlockedUntilItsSandboxedExecutionIsQualified` (Windows seulement : `BLOCKED`, diagnostic qui renvoie vers `minos index <project> --via-wsl`, aucune mention du runtime Docker, indexation native refusée avant lancement en nommant `--via-wsl`) et `onLinuxScipJavaIsNotBlockedByTheWindowsSandboxQualification`.
 - `StrongProcessOwnershipIndexerExecutorTest` verrouille le refus de lancer un provider dans le plan d'administration Docker.
 - Aucun gate `scripts/**/check-*.py` dédié.
 - Revue : aucun octroi AppContainer, aucune élévation, aucun conteneur privilégié ; la levée du blocage natif cite le test de bout en bout du point 2 ; l'annonce de la voie WSL2 cite sa qualification.

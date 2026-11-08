@@ -73,6 +73,11 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         assertTrue(discovered.orElseThrow().enforcesNetworkDeny());
         assertFalse(discovered.orElseThrow().qualification().sandboxClaimPermitted(),
                 "sampled filesystem limits must not qualify execution of untrusted code");
+        int setenv = command.indexOf("--setenv");
+        assertTrue(setenv > 0 && "JAVA_TOOL_OPTIONS".equals(command.get(setenv + 1)), command::toString);
+        assertTrue(command.get(setenv + 2).contains("-XX:MaxRAM=" + LinuxBubblewrapWorkerSandboxBackend.MAX_JOB_MEMORY_BYTES),
+                "a JVM of the provider sizes itself on the job memory, not on the host memory");
+        assertTrue(setenv < command.lastIndexOf("--"), "the variable is set by bubblewrap, before the provider command");
     }
 
     @Test

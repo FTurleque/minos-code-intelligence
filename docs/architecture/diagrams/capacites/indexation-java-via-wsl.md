@@ -1,32 +1,27 @@
-# Capacité `indexation-java-via-wsl` — brouillon du dossier durable
+# Capacité `indexation-java-via-wsl` — dossier durable
 
-Spec proposée : [specs/indexation-java-via-wsl/spec.md](specs/indexation-java-via-wsl/spec.md) (delta du
-changement `indexer-java-depuis-windows-par-wsl2`) · Conception : [design.md](design.md) · Fonctionnement pour les
-contributeurs : [docs/developer/java-indexing-via-wsl.md](../../../docs/developer/java-indexing-via-wsl.md) ·
-Relevé au commit `43724a2a` (2026-11-08).
-
-**Brouillon.** La capacité n'existe pas encore dans `openspec/specs/` : ce dossier vit dans le changement tant
-que celui-ci n'est pas archivé. La tâche 7.2 le déplace dans `docs/architecture/diagrams/capacites/` sous le nom
-`indexation-java-via-wsl.md`, l'indexe dans le README de ce répertoire et ajoute la section `## Documentation liée`
-de la spec. La tâche 6.2 y ajoute les mesures et preuves de qualification.
+Spec de référence : [openspec/specs/indexation-java-via-wsl/spec.md](../../../../openspec/specs/indexation-java-via-wsl/spec.md)
+· Conception : [design du changement archivé](../../../../openspec/changes/archive/2026-11-08-indexer-java-depuis-windows-par-wsl2/design.md)
+· Fonctionnement pour les contributeurs : [java-indexing-via-wsl.md](../../../developer/java-indexing-via-wsl.md)
+· Mise en place : [installation, §2 ter](../../../user/production-installation.md#2-ter-indexer-un-projet-java-depuis-windows-par-wsl2) ·
+Relevé au commit `85754ed8` (2026-11-08).
 
 ## Objet et périmètre
 
-[Exigence proposée] Sous Windows, `minos index <projet> --via-wsl` fait tourner scip-java dans une distribution
+[Exigence] Sous Windows, `minos index <projet> --via-wsl` fait tourner scip-java dans une distribution
 WSL2, sous le bac à sable Linux (bubblewrap et cgroup v2, réseau `DENY`), puis importe un artefact vérifié par la
-promotion atomique existante. Décisions : [SEC-0074](../../../docs/architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)
-(décision 3) et [SEC-0079](../../../docs/architecture/adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md)
+promotion atomique existante. Décisions : [SEC-0074](../../adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)
+(décision 3) et [SEC-0079](../../adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md)
 (`Accepted`). Hors périmètre : le peuplement du dépôt Maven (fait par l'utilisateur, SEC-0076), le stockage et le
 MCP dans WSL, tout autre provider que scip-java.
 
-**État au HEAD : partielle, non qualifiée.** La voie est implémentée de bout en bout : option du CLI, runtimes
-routés fournis par `minos-bootstrap` sous Windows, sonde des prérequis, worker Linux dans un scope systemd
-délégué, manifeste v3, vérification de provenance, recopie sous le run et import par la promotion atomique. Elle
-n'est offerte que depuis une installation empaquetée (le jar exécuté par la distribution). Aucune exécution réelle
-n'est prouvée : les tests utilisent une distribution simulée, et la qualification exige la tâche 6.2. Le
-diagnostic natif de scip-java sous Windows ne cite pas encore la voie (tâches 6.3 et 6.4, après 6.2). Les
-contrôles du jar (Maven, JDK du projet, dépôt) sont faits dans la distribution par le jar de l'installation, en mode
-sonde de sa commande interne.
+**État au HEAD : qualifiée** sur un poste réel (section « Qualification »). La voie est implémentée de bout en
+bout : option du CLI, runtimes routés fournis par `minos-bootstrap` sous Windows, sonde des prérequis dont les
+contrôles du jar faits dans la distribution, worker Linux dans un scope systemd délégué, manifeste v3,
+vérification de provenance, recopie sous le run et import par la promotion atomique. Elle n'est offerte que
+depuis une installation empaquetée (le jar exécuté par la distribution). Le diagnostic natif de scip-java sous
+Windows renvoie vers `minos index <project> --via-wsl`. L'arrêt du scope sur délai ou interruption n'est observé
+que sur une distribution simulée.
 
 ## Vues
 
@@ -226,26 +221,54 @@ ni promotion ni rétention.
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
 |---|---|---|---|---|
 | L'indexation via WSL n'est offerte que sous Windows | 2/2 | séquence | `minos-cli/src/test/java/com/minos/cli/command/IndexCommandViaWslTest.java#offWindowsTheOptionIsAUsageErrorThatNamesItBeforeReachingTheBackend`, `IndexCommandViaWslTest.java#theRouteIsNotCombinableWithAScipImportAndTheMessageNamesBothOptions`, `IndexCommandViaWslTest.java#theRouteIsNotCombinableWithADryRun`, `minos-cli/src/test/java/com/minos/cli/IndexViaWslSideEffectsTest.java#anInstallationWithoutTheRouteRefusesWithoutTouchingTheHome` | couverte |
-| Les prérequis de WSL sont vérifiés avant tout lancement d'indexation | 3/3 au niveau de la sonde et de la route ; « aucun run créé » non asserté de bout en bout | composants, séquence, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslPrerequisiteProbeTest.java#wsl1DistributionNamesVersion2AndLaunchesNothingInside`, `WslPrerequisiteProbeTest.java#bubblewrapAbsentIsMissingWithoutPath`, `WslPrerequisiteProbeTest.java#noWslExecutableNamesWsl2AndRunsNothing`, `WslPrerequisiteProbeTest.java#noDistributionInstalledNamesWsl2`, `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalWslIndexingRouteTest.java#aDistributionWithoutBubblewrapBlocksScipJavaWithoutAnyPath`, `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslRoutedRuntimesTest.java#aRefusedRouteBlocksScipJavaWithItsActionAndBuildsNoExecutor`, `LocalWslIndexingRouteTest.java#aJarCheckMissingInTheDistributionBlocksScipJavaBeforeAnyRun`, `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslCommandJarProbeTest.java#theJarRunsItsProbeModeInTheDistributionWithoutShellOrScope`, `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalWslJarChecksTest.java#eachScipJavaPrerequisiteBecomesItsOwnCheck` | partielle |
-| doctor rapporte la voie WSL sous Windows | 1/2 sur l'hôte réel (section absente sous Linux) ; « section complète » prouvée sur une distribution simulée, sonde du jar comprise | composants | `minos-cli/src/test/java/com/minos/cli/command/DoctorCommandWslJavaTest.java#aDistributionWithEveryPrerequisiteListsEachCheckOk`, `DoctorCommandWslJavaTest.java#theRealHostHasNoWslJavaSectionUnderLinux`, `DoctorCommandWslJavaTest.java#theRealHostReportsEveryWslPrerequisiteUnderWindows`, `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalWslPrerequisiteDiagnosticsTest.java#anUnexpectedProbeFailureReportsEveryCheckUnknownInsteadOfFailingDoctor`, `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslJarProbeProtocolTest.java#anActionThatNamesAPathIsReplacedByTheFixedActionOfItsCheck` | partielle (6.2) |
-| Le provider tourne dans la distribution sous le bac à sable Linux, réseau coupé | 2/2 sur une distribution simulée et le bac à sable Linux de la CI | composants, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslLinuxWorkerTest.java#withoutADelegatedCgroupTheProviderIsNotLaunched`, `WslLinuxWorkerTest.java#theProviderRunsUnderTheManagedSandboxWithDenyAndTheBundleIsV3`, `minos-engine/src/test/java/com/minos/remote/DistributedArtifactManifestTest.java#v3RejectsARemoteRevisionAMalformedFingerprintAndAnUnenforcedDeny` | partielle (exécution réelle : 6.2) |
+| Les prérequis de WSL sont vérifiés avant tout lancement d'indexation | 3/3 au niveau de la sonde et de la route ; « aucun run créé » vérifié par `doctor` et le refus de la route sur l'hôte réel (qualification) | composants, séquence, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslPrerequisiteProbeTest.java#wsl1DistributionNamesVersion2AndLaunchesNothingInside`, `WslPrerequisiteProbeTest.java#bubblewrapAbsentIsMissingWithoutPath`, `WslPrerequisiteProbeTest.java#noWslExecutableNamesWsl2AndRunsNothing`, `WslPrerequisiteProbeTest.java#noDistributionInstalledNamesWsl2`, `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalWslIndexingRouteTest.java#aDistributionWithoutBubblewrapBlocksScipJavaWithoutAnyPath`, `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslRoutedRuntimesTest.java#aRefusedRouteBlocksScipJavaWithItsActionAndBuildsNoExecutor`, `LocalWslIndexingRouteTest.java#aJarCheckMissingInTheDistributionBlocksScipJavaBeforeAnyRun`, `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslCommandJarProbeTest.java#theJarRunsItsProbeModeInTheDistributionWithoutShellOrScope`, `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalWslJarChecksTest.java#eachScipJavaPrerequisiteBecomesItsOwnCheck`, qualification (contrôles `project-jdk` et `maven-repository` `MISSING` avant la mise en place) | couverte |
+| doctor rapporte la voie WSL sous Windows | 2/2 ; « section complète » prouvée sur l'hôte réel (huit contrôles `OK`) | composants | `minos-cli/src/test/java/com/minos/cli/command/DoctorCommandWslJavaTest.java#aDistributionWithEveryPrerequisiteListsEachCheckOk`, `DoctorCommandWslJavaTest.java#theRealHostHasNoWslJavaSectionUnderLinux`, `DoctorCommandWslJavaTest.java#theRealHostReportsEveryWslPrerequisiteUnderWindows`, `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalWslPrerequisiteDiagnosticsTest.java#anUnexpectedProbeFailureReportsEveryCheckUnknownInsteadOfFailingDoctor`, `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslJarProbeProtocolTest.java#anActionThatNamesAPathIsReplacedByTheFixedActionOfItsCheck`, qualification (`doctor --format json`) | couverte |
+| Le provider tourne dans la distribution sous le bac à sable Linux, réseau coupé | 2/2 ; exécution réelle dans un scope délégué, build Maven hors ligne | composants, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslLinuxWorkerTest.java#withoutADelegatedCgroupTheProviderIsNotLaunched`, `WslLinuxWorkerTest.java#theProviderRunsUnderTheManagedSandboxWithDenyAndTheBundleIsV3`, `minos-engine/src/test/java/com/minos/remote/DistributedArtifactManifestTest.java#v3RejectsARemoteRevisionAMalformedFingerprintAndAnUnenforcedDeny`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/LinuxSandboxJvmBoundsTest.java#theJvmsSeeTheJobMemoryAndAtMostTheJobProcessors`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactoryProjectJdkTest.java#theDesignatedJdkIsTheJavaHomeAndTheFirstPathEntryOfTheLinuxPlan`, qualification | couverte |
 | wsl.exe reçoit un environnement en liste d'autorisation | 1/1 | composants | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslCommandEnvironmentTest.java#secretsAndInheritedWslenvNeverReachTheCommand`, `WslCommandEnvironmentTest.java#onlyTheRouteAllowlistIsKeptAndPathIsTheSystemDirectory`, `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslProcessCommandRunnerTest.java#returnsExitCodeAndStdoutWithTheRouteEnvironment` | couverte |
 | MINOS ne peuple pas le dépôt Maven désigné | 1/1 | états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslLinuxWorkerTest.java#withoutADesignatedRepositoryTheWorkerRefusesByTheSettingAndRunsNoMaven`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#onLinuxWithoutADesignatedMavenRepositoryThePlanIsRefusedBeforeTheProjectIsStaged` | couverte |
 | L'artefact reçu de WSL est vérifié avant tout import | 2/2 | séquence, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslArtifactProvenanceTest.java#everyProvenanceFieldThatDiffersFromTheRequestRejectsTheBundle`, `WslArtifactProvenanceTest.java#aBundleWhoseArtifactDoesNotMatchItsManifestChecksumIsRejectedAndDeleted`, `WslArtifactProvenanceTest.java#remoteManifestsV1AndV2AreRefusedByTheWslRoute`, `minos-runtime-local/src/test/java/com/minos/runtime/local/distributed/DistributedIndexerExecutorProvenanceTest.java#aLocalV3ManifestOfTheWslRouteIsRejectedByTheRemoteExecutor` | couverte |
-| Un artefact conforme est importé par la promotion atomique | 1/2 (échec d'import) ; « indexation réussie » avec `index-status` et `find-usages` réels exige 6.2 | séquence, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslIndexWorkerTest.java#aConformingArtifactIsImportedByStagingAndPromotionAndNothingStaysInTheExchange`, `WslIndexWorkerTest.java#anImportThatFailsLeavesThePreviousSnapshotActive` | partielle (6.2) |
-| Un run via WSL interrompu ne laisse rien tourner | 1/1 sur une distribution simulée (arrêt du scope commandé, non observé dans une vraie distribution) | séquence, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslIndexWorkerTest.java#aWorkerPastItsTimeoutHasItsScopeStoppedAndLeavesNoArtifact`, `WslIndexWorkerTest.java#anInterruptedWorkerHasItsScopeStoppedAndKeepsTheInterruption` | partielle (6.2) |
+| Un artefact conforme est importé par la promotion atomique | 2/2 ; indexation réussie suivie de `index-status` `READY` et de `find-usages` sur l'hôte réel | séquence, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslIndexWorkerTest.java#aConformingArtifactIsImportedByStagingAndPromotionAndNothingStaysInTheExchange`, `WslIndexWorkerTest.java#anImportThatFailsLeavesThePreviousSnapshotActive`, qualification | couverte |
+| Un run via WSL interrompu ne laisse rien tourner | 1/1 sur une distribution simulée ; arrêt réel du scope non observé dans une vraie distribution | séquence, états | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslIndexWorkerTest.java#aWorkerPastItsTimeoutHasItsScopeStoppedAndLeavesNoArtifact`, `WslIndexWorkerTest.java#anInterruptedWorkerHasItsScopeStoppedAndKeepsTheInterruption` | partielle |
 | Les sorties de la voie WSL ne contiennent aucun chemin absolu | 1/1 | séquence | `minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/WslIndexWorkerTest.java#aProviderFailureInTheDistributionIsReportedWithoutAnyAbsolutePath`, `WslIndexWorkerTest.java#statusLinesAreReadFromTheLastProtocolLineAndPathsAreWithheld` | couverte |
 
 Les exigences de `installation-des-providers` modifiées par le changement relèvent du dossier
-[installation-des-providers](../../../docs/architecture/diagrams/capacites/installation-des-providers.md) : Coursier
-sous Linux y est tracé (tâche 3.3) ; le diagnostic Windows qui cite la voie attend les tâches 6.3 et 6.4.
+[installation-des-providers](installation-des-providers.md) : Coursier
+sous Linux et le diagnostic Windows qui cite la voie y sont tracés.
 
 ## Écarts
 
 - **E1 à E5** : voir le design. E1, E2 et E4 portent sur l'aide provisoire et sont sans objet pour le produit ;
-  E3 (JDK des paquets Ubuntu) reste à mesurer en qualification (Q1) ; E5 est tranché par SEC-0079, décision 7.
+  E3 est mesuré (le JDK des paquets Ubuntu sert au build une fois désigné, voir « Qualification ») ; E5 est tranché
+  par SEC-0079, décision 7.
+- **Journal du provider en cas d'échec.** La ligne d'échec renvoie à `runs/<run>/scip-java/provider.stderr.log` du
+  `MINOS_HOME` de la distribution, que le worker supprime à la fin du run (`WslLinuxWorker.java:117-121`) : la cause
+  détaillée ne se lit qu'en rejouant l'indexation dans la distribution. Limite déclarée dans
+  `docs/user/production-installation.md` (§2 ter).
+
+## Qualification
+
+Poste réel du 2026-11-08 (critères de SEC-0074, décision 3) : Windows 10 Pro 22H2, Ubuntu 24.04.3 sous WSL2
+(noyau 6.18.54.1), systemd 255, bubblewrap 0.9.0, OpenJDK 21.0.12.1 du paquet `openjdk-21-jdk-headless`,
+Maven 3.9.16 sous `/usr/local`, scip-java 0.13.2 installé dans la distribution par le jar, 16 cœurs, 24 Gio.
+
+| Critère | Preuve |
+|---|---|
+| Installation | candidat 1.3.0 installé (`VERSION` : commit `65f59ec6`) ; `minos.cmd doctor` |
+| Scope systemd délégué | `systemd-run --user --scope -p Delegate=yes` : contrôleurs `cpu memory pids`, 16 processeurs, `cpu.max` sans plafond |
+| JDK et dépôt Maven visibles sans réseau | JDK `/usr/lib/jvm/java-21-openjdk-amd64` et dépôt dédié `~/minos-maven-repo` désignés dans `~/.minos/config/minos.properties` ; build `--offline` réussi sous `DENY` |
+| Propriétaire des fichiers sur `/mnt/<lecteur>` | DrvFs `uid=1000,gid=1000` : projet et `MINOS_HOME` Windows vus comme appartenant à l'utilisateur de la distribution |
+| Indexation réelle | `minos index <projet> --via-wsl` : `fixtures/java/java-simple` `SUCCEEDED` en 14 s ; projet Maven multi-module d'environ 1 500 fichiers Java `SUCCEEDED` en 190 s ; `index-status` `READY` ; `find-usages` résout les usages (origine `scip-java`/SCIP) ; aucun run laissé dans la distribution |
+
+`doctor` : avant la mise en place, `project-jdk` et `maven-repository` `MISSING` avec leur action ; après, huit
+contrôles `OK` en 6 s.
+
+La qualification a mis au jour deux défauts, corrigés et couverts par test : le `java` par défaut de la
+distribution (`/opt/jdk-24`, non monté) servait au wrapper `javac` de scip-java, et les JVM du build se
+dimensionnaient sur l'hôte au point d'atteindre la limite d'espace d'adressage par processus (8 Gio). Les deux
+indexations réelles ci-dessus ont été faites avec le jar complet de la branche corrigée, dans un `MINOS_HOME`
+temporaire.
 
 ## Suite
 
-Mesures et preuves de qualification : tâche 6.2. Diagnostic natif qui cite la voie : tâches 6.3 et 6.4.
-Déplacement et indexation du dossier : tâche 7.2.
+Observer l'arrêt du scope sur délai ou interruption dans une vraie distribution ; garder le journal du provider
+d'un run en échec lisible depuis Windows.

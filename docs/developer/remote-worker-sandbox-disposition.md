@@ -51,6 +51,8 @@ Concrètement (`ProviderRuntimeStatus.State`, `com.minos.runtime`) :
 
 Une limite **par processus** (`RLIMIT_AS`, `RLIMIT_NOFILE`, `RLIMIT_CPU`) est multipliée par chaque `fork` : elle reste une défense en profondeur et n’est jamais déclarée `OS_ENFORCED` sur une dimension agrégée. `RLIMIT_NPROC` n’est pas posé : il compte toutes les tâches de l’utilisateur réel, hôte compris, et ferait échouer le lancement d’un compte déjà chargé (MINOS-AUD-H17, ADR 0038) ; le nombre de processus est borné par `pids.max`.
 
+Sous Linux, chaque processus du bac à sable reçoit `JAVA_TOOL_OPTIONS` avec `-XX:MaxRAM` égal à la mémoire du job et `-XX:ActiveProcessorCount` égal à ses processeurs (au plus ceux de l'hôte), après les options déclarées par le plan : une JVM dimensionne alors son tas et ses threads sur le job et non sur l'hôte, et ses réservations restent sous la limite `RLIMIT_AS`. Ce n'est pas une limite : la mémoire et la CPU restent bornées par `memory.max` et `cpu.max`.
+
 `UNTRUSTED_CODE_SUPPORTED` exige (`WorkerResourceContainment.unmetRequirements()`) :
 
 - `OS_ENFORCED` sur le nombre de processus agrégé, la mémoire agrégée, la CPU agrégée et la terminaison des descendants ;
