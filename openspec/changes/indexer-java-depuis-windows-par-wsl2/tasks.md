@@ -33,7 +33,7 @@ Aucun constat d'audit n'est à l'origine de ce changement : il met en œuvre ADR
 - [x] 5.3 Rouge puis correction : `WslArtifactProvenanceTest` — empreinte altérée, projet différent, empreinte d'entrée différente, manifeste v1/v2 refusé par la voie et v3 refusé par `DistributedIndexerExecutor`, bundle supprimé, instantané inchangé ; puis format `minos-distributed-artifact-v3`, variante locale de `WorkerRequest`, `WslIndexerExecutor` et son vérificateur (design D2, D3) (indexation-java-via-wsl › L'artefact reçu de WSL est vérifié avant tout import) ; vérifier le test.
 - [x] 5.4 Rouge puis correction : `WslIndexWorkerTest` avec une fausse distribution — import par staging et promotion, échec d'import qui laisse l'instantané précédent (indexation-java-via-wsl › Un artefact conforme est importé par la promotion atomique) ; vérifier le test.
 - [x] 5.5 Rouge puis correction : `WslIndexWorkerTest` — délai dépassé : arrêt du scope, aucun artefact partiel ; diagnostic d'échec sans `C:\`, `/mnt/` ni `/home/` (indexation-java-via-wsl › Un run via WSL interrompu ne laisse rien tourner ; › Les sorties de la voie WSL ne contiennent aucun chemin absolu) ; vérifier le test ; rejouer le scope JaCoCo de `minos-runtime-local` et `minos-cli`.
-- [ ] 5.6 Documentation : vue « états » et traçabilité du dossier de capacité ; page `docs/developer/` sur le fonctionnement de la voie (sans annonce produit) ; vérifier les liens.
+- [x] 5.6 Documentation : vue « états » et traçabilité du dossier de capacité ; page `docs/developer/` sur le fonctionnement de la voie (sans annonce produit) ; vérifier les liens.
 
 ## 6. Qualification et annonce
 
