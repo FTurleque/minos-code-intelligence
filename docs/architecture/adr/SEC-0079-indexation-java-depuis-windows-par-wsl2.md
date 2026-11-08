@@ -7,9 +7,9 @@ rules: false
 
 # Indexation Java depuis Windows par WSL2 : indexation locale, providers routés de l'orchestration unique, artefact v3 vérifié
 
-- **Statut** : Proposed
+- **Statut** : Accepted
 - **Date** : 2026-11-08
-- **Origine** : changement OpenSpec `indexer-java-depuis-windows-par-wsl2` (tâche 1.1, design D2 à D6, écart E5) ; option CLI choisie par le propriétaire le 2026-11-07 (design D1) ; revue d'architecture de D2 et D3 du 2026-11-08 (tâche 1.2)
+- **Origine** : changement OpenSpec `indexer-java-depuis-windows-par-wsl2` (tâche 1.1, design D2 à D6, écart E5) ; option CLI choisie par le propriétaire le 2026-11-07 (design D1) ; revue d'architecture de D2 et D3 et acceptation par le propriétaire le 2026-11-08 (tâche 1.2)
 - **Complète** : [SEC-0074](SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) (décision 3), qui reste actif ; met en œuvre cette décision sans changer les décisions 1, 2 et 4
 
 ## Context
