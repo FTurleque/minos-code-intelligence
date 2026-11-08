@@ -348,7 +348,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
     static String boundedJavaToolOptions(String declared, int availableProcessors) {
         long jobProcessors = MAX_CPU_MICROS_PER_PERIOD / LinuxCgroupJob.CPU_PERIOD_MICROS;
         String bounds = "-XX:MaxRAM=" + MAX_JOB_MEMORY_BYTES
-                + " -XX:ActiveProcessorCount=" + Math.max(1L, Math.min(jobProcessors, availableProcessors));
+                + " -XX:ActiveProcessorCount=" + Math.clamp(availableProcessors, 1L, jobProcessors);
         return declared == null || declared.isBlank() ? bounds : declared.strip() + " " + bounds;
     }
 
