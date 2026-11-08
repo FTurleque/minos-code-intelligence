@@ -2,6 +2,7 @@ package com.minos.adapter.scip.runtime.install;
 
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
+import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipTypeScriptProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
@@ -106,6 +107,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private final ToolOriginLedger origins;
     private final CoursierLauncherInstallation coursierLauncher;
     private final ScipJavaMavenOffline mavenOffline;
+    private final ScipJavaProjectJdk projectJdk;
     private volatile PinnedArtifactSource source;
 
     /**
@@ -113,6 +115,16 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
      *     Maven of the PATH ({@link ScipJavaMavenOffline#configured}).
      */
     public ManagedScipProviderRuntimeManager(Path minosHome, ScipJavaMavenOffline mavenOffline) {
+        this(minosHome, mavenOffline, ScipJavaProjectJdk.fromEnvironment());
+    }
+
+    /**
+     * @param mavenOffline the offline Maven build of scip-java outside Windows
+     * @param projectJdk   the project JDK: {@link ScipJavaProjectJdk#SETTING}, otherwise {@code JAVA_HOME}
+     */
+    public ManagedScipProviderRuntimeManager(Path minosHome, ScipJavaMavenOffline mavenOffline,
+                                             ScipJavaProjectJdk projectJdk) {
+        this.projectJdk = Objects.requireNonNull(projectJdk, "projectJdk");
         this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.toolsRoot = home.resolve("tools");
         this.origins = new ToolOriginLedger(toolsRoot);
@@ -179,7 +191,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
                             CommandLocator.isWindows() ? mavenExecutable() : null,
-                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars), mavenOffline));
+                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars), mavenOffline,
+                            projectJdk));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }
@@ -286,16 +299,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         diagnostics.add(SANDBOXED_EXECUTION_NOT_QUALIFIED);
     }
 
-    private static void addProjectJdkDiagnostics(List<String> diagnostics) {
-        String javaHome = System.getenv("JAVA_HOME");
-        if (javaHome == null || javaHome.isBlank()) {
-            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME is not set to the project JDK"));
-            return;
-        }
-        Path javac = Path.of(javaHome).resolve("bin").resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
-        if (!Files.isRegularFile(javac)) {
-            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME does not contain javac: " + javaHome));
-        }
+    /** The project JDK: {@link ScipJavaProjectJdk#SETTING} when designated, otherwise {@code JAVA_HOME}. */
+    private void addProjectJdkDiagnostics(List<String> diagnostics) {
+        projectJdk.problem().ifPresent(problem -> diagnostics.add(ExternalPrerequisite.of(problem)));
     }
 
     private ProviderRuntimeStatus installTypeScript() throws Exception {
