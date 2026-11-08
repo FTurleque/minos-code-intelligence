@@ -4,7 +4,7 @@ Aucun constat d'audit n'est à l'origine de ce changement : il met en œuvre ADR
 
 ## 1. Décision d'architecture
 
-- [ ] 1.1 Écrire l'ADR 0079 (commande `/minos:adr`) : voie WSL2 de l'indexation Java depuis Windows, classement en indexation locale et exécuteur de l'orchestration unique (design D2), format de transport `minos-distributed-artifact-v3` (D3), scope délégué (D4), environnement de `wsl.exe` (D6), limite de `networkDenyEnforced` et lecture de SEC-0074 décision 3 (E5) ; statut `Proposed` ; index `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` ; « Complété par » dans SEC-0074. Vérifier par `archgate check` et `python .claude/scripts/run_gates.py --fast`.
+- [x] 1.1 Écrire l'ADR 0079 (commande `/minos:adr`) : voie WSL2 de l'indexation Java depuis Windows, classement en indexation locale et exécuteur de l'orchestration unique (design D2), format de transport `minos-distributed-artifact-v3` (D3), scope délégué (D4), environnement de `wsl.exe` (D6), limite de `networkDenyEnforced` et lecture de SEC-0074 décision 3 (E5) ; statut `Proposed` ; index `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` ; « Complété par » dans SEC-0074. Vérifier par `archgate check` et `python .claude/scripts/run_gates.py --fast`.
 - [ ] 1.2 **(manuelle)** Faire relire D2 et D3 par l'agent `minos-architecture-reviewer` et le propriétaire, puis passer l'ADR `Accepted` avant le groupe 5.
 
 ## 2. Option `--via-wsl` du CLI
