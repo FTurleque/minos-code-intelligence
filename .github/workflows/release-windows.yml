@@ -288,13 +288,16 @@ jobs:
         run: .\scripts\release\publish-windows-release.ps1 -Version $env:RELEASE_VERSION -TargetCommit $env:TARGET_COMMIT -PublishOnly
 
   # AUD-DEP-07: the release is created with the workflow token, which triggers no `release:` event. The plugin is
-  # therefore built from the published tag and attached by a direct call; the caller grants the write permission the
-  # attaching job of the called workflow asks for (check-ci-wiring.py, rule 5).
+  # therefore built from the published tag and attached by a direct call; the caller grants every permission the
+  # attaching job of the called workflow asks for, the provenance attestation included (check-ci-wiring.py, rules 5
+  # and 6).
   plugin:
     name: Build and attach the IntelliJ plugin
     needs: publish
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/intellij-plugin-release.yml
     with:
       tag: v${{ inputs.version }}
