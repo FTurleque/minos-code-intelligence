@@ -397,6 +397,70 @@ def check_releases_publish_the_plugin(root: Path) -> list[str]:
     return failures
 
 
+PERMISSION_LEVELS = {"none": 0, "read": 1, "write": 2}
+LOCAL_WORKFLOW_CALL = re.compile(rf"^    uses:\s*['\"]?\./{re.escape(WORKFLOWS)}/([\w.-]+\.ya?ml)['\"]?\s*$")
+
+
+def permission_block(lines: list[str], indent: int) -> dict[str, str] | None:
+    """The scopes of the ``permissions:`` block written at ``indent`` among ``lines``, None when there is none."""
+    header = re.compile(rf"^{' ' * indent}permissions:\s*(.*?)\s*$")
+    entry = re.compile(rf"^{' ' * (indent + 2)}([\w-]+):\s*(\w+)\s*$")
+    for index, line in enumerate(lines):
+        match = header.match(line)
+        if not match:
+            continue
+        inline = match.group(1)
+        if inline in ("read-all", "write-all"):
+            level = inline.split("-")[0]
+            return {scope: level for scope in ("actions", "attestations", "checks", "contents", "deployments",
+                                               "id-token", "issues", "packages", "pages", "pull-requests",
+                                               "security-events", "statuses")}
+        scopes: dict[str, str] = {}
+        for following in lines[index + 1:]:
+            scope = entry.match(following)
+            if not scope:
+                break
+            scopes[scope.group(1)] = scope.group(2)
+        return scopes
+    return None
+
+
+def check_called_workflows_get_their_permissions(root: Path) -> list[str]:
+    """Rule 6: a job of a called workflow never asks more permissions than the calling job grants.
+
+    GitHub refuses to start a run whose called job asks a scope above what the caller grants; the run ends in
+    ``startup_failure`` before any job, which no other check sees.
+    """
+    failures: list[str] = []
+    workflows = root / WORKFLOWS
+    for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
+        text = workflow.read_text(encoding="utf-8")
+        caller_lines = [line for _, line in code_lines(text)]
+        caller_default = permission_block(caller_lines, 0)
+        for job_id, job in jobs_of(text).items():
+            job_lines = [line for _, line in job["lines"]]
+            called = next((match.group(1) for line in job_lines if (match := LOCAL_WORKFLOW_CALL.match(line))), None)
+            if called is None or not (workflows / called).is_file():
+                continue
+            granted = permission_block(job_lines, 4)
+            if granted is None:
+                granted = caller_default
+            if granted is None:
+                continue
+            called_text = (workflows / called).read_text(encoding="utf-8")
+            called_default = permission_block([line for _, line in code_lines(called_text)], 0) or {}
+            for called_job, called_body in jobs_of(called_text).items():
+                asked = permission_block([line for _, line in called_body["lines"]], 4)
+                asked = called_default if asked is None else asked
+                excess = sorted(f"{scope}: {level}" for scope, level in asked.items()
+                                if PERMISSION_LEVELS.get(level, 0) > PERMISSION_LEVELS.get(granted.get(scope, "none"), 0))
+                if excess:
+                    failures.append(f"{WORKFLOWS}/{workflow.name}: job '{job_id}' calls ./{WORKFLOWS}/{called}, whose "
+                                    f"job '{called_job}' asks {', '.join(excess)} beyond what the calling job grants: "
+                                    f"GitHub refuses to start the run")
+    return failures
+
+
 def check(root: Path) -> tuple[list[str], int, int, int]:
     failures, resolved = check_required_checks(root)
     wiring_failures, wired = check_self_tests_are_wired(root)
@@ -405,6 +469,7 @@ def check(root: Path) -> tuple[list[str], int, int, int]:
     lockfile_failures, lockfiles = check_shipped_lockfiles_are_scanned(root)
     failures += lockfile_failures
     failures += check_releases_publish_the_plugin(root)
+    failures += check_called_workflows_get_their_permissions(root)
     return failures, resolved, wired, lockfiles
 
 
