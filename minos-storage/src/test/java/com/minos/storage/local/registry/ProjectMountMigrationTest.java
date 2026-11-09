@@ -90,6 +90,31 @@ class ProjectMountMigrationTest {
     }
 
     @Test
+    void anEntryWhoseRelativeRootEscapesTheMappingRefusesTheListingWithoutAPath() throws Exception {
+        register(Files.createDirectories(root.resolve("a")), "A");
+        writeEntry("displayName=Escaping\nrootRelativePath=../outside\n");
+
+        assertListingRefused();
+    }
+
+    @Test
+    void anEntryWhoseLegacyRootLiesOutsideBothRootsRefusesTheListingWithoutAPath() throws Exception {
+        register(Files.createDirectories(root.resolve("a")), "A");
+        writeEntry("displayName=Legacy\nrootPath=" + escaped(temp.resolve("elsewhere").toString()) + "\n");
+
+        assertListingRefused();
+    }
+
+    @Test
+    void anEntryThatCannotBeParsedRefusesTheListingWithoutAPath() throws Exception {
+        register(Files.createDirectories(root.resolve("a")), "A");
+        // A truncated unicode escape makes the properties file malformed: reading it fails with an IOException.
+        writeEntry("displayName=Broken\nrootRelativePath=\\u00zz\n");
+
+        assertListingRefused();
+    }
+
+    @Test
     void theMigrationSavesTheSingleRootFileThenWritesTheTable() throws Exception {
         RegisteredProject app = register(Files.createDirectories(root.resolve("a")), "A");
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
@@ -135,6 +160,29 @@ class ProjectMountMigrationTest {
         IOException refusal = assertThrows(IOException.class, () -> mappings.replace(single));
 
         assertTrue(refusal.getMessage().contains("AddProject"), refusal.getMessage());
+    }
+
+    /** Adds an entry with a fresh identity to the registry; the listing must then be refused as a whole. */
+    private void writeEntry(String content) throws IOException {
+        UUID id = UUID.randomUUID();
+        Files.writeString(home.resolve("registry/projects/" + id + ".properties"), "id=" + id + "\n" + content,
+                StandardCharsets.UTF_8);
+    }
+
+    private void assertListingRefused() throws IOException {
+        List<byte[]> before = entries();
+
+        IOException refusal = assertThrows(IOException.class, () -> new LocalProjectPathMappings(home).registeredRoots());
+
+        assertTrue(refusal.getMessage().contains("1 registry entry"), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains(root.toString()), refusal.getMessage());
+        assertFalse(refusal.getMessage().contains("elsewhere"), refusal.getMessage());
+        assertBytesEqual(before, entries());
+    }
+
+    /** Properties escaping of a path value (a Windows path holds backslashes and a colon). */
+    private static String escaped(String value) {
+        return value.replace("\\", "\\\\").replace(":", "\\:");
     }
 
     private RegisteredProject register(Path project, String name) throws IOException {

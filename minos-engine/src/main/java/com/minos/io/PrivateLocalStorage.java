@@ -171,7 +171,7 @@ public final class PrivateLocalStorage {
         try {
             Path home = Path.of(value);
             return home.isAbsolute() && Files.isDirectory(home, LinkOption.NOFOLLOW_LINKS) ? home : null;
-        } catch (java.nio.file.InvalidPathException _) {
+        } catch (java.nio.file.InvalidPathException ignored) {
             return null;
         }
     }
@@ -330,7 +330,7 @@ public final class PrivateLocalStorage {
     static void createNameOrRefuse(Path target, Creation creation, String message) throws IOException {
         try {
             creation.run();
-        } catch (FileAlreadyExistsException _) {
+        } catch (FileAlreadyExistsException ignored) {
             throw new FileAlreadyExistsException(null, null, message);
         } catch (AccessDeniedException denied) {
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {

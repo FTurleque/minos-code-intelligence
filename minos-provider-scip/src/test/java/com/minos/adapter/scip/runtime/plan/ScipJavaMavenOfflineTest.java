@@ -91,6 +91,21 @@ class ScipJavaMavenOfflineTest {
     }
 
     @Test
+    void eachPrerequisiteIsReportedOnItsOwnForTheWslProbe() throws Exception {
+        ScipJavaMavenOffline qualified = ScipJavaMavenOfflineFixtures.qualified(temp.resolve("qualified"));
+        ScipJavaMavenOffline undesignated = ScipJavaMavenOfflineFixtures.designating(temp.resolve("undesignated"), null);
+        ScipJavaMavenOffline unconfigured = ScipJavaMavenOfflineFixtures.unconfigured(temp.resolve("home"));
+
+        assertEquals(java.util.Optional.empty(), qualified.mavenProblem());
+        assertEquals(java.util.Optional.empty(), qualified.repositoryProblem());
+        assertEquals(java.util.Optional.empty(), undesignated.mavenProblem());
+        assertTrue(undesignated.repositoryProblem().orElseThrow().contains(ScipJavaMavenOffline.REPOSITORY_SETTING));
+        assertTrue(unconfigured.mavenProblem().orElseThrow().contains("Maven 3.9.x is required in PATH"));
+        assertEquals(List.of(unconfigured.mavenProblem().orElseThrow(), unconfigured.repositoryProblem().orElseThrow()),
+                unconfigured.problems());
+    }
+
+    @Test
     void withoutADesignationThePlanIsRefusedBeforeTheProjectIsStaged() throws Exception {
         IllegalStateException refused = refusedBy(ScipJavaMavenOfflineFixtures.designating(temp.resolve("maven"), null));
 

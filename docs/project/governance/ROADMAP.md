@@ -71,7 +71,7 @@ Sous Windows, la JVM hôte n'est jamais traitée comme runtime provider ; toute 
 
 ### Secrets, formats persistés et hosted control plane
 
-Les secrets relatifs restent physiquement confinés à `MINOS_HOME`. Tous les fichiers secrets utilisent désormais un lecteur UTF-8 borné et strict. Les snapshots structurés v1/v2/v3 imposent leur plafond **256 MiB pendant l'I/O** au moyen de flux d'entrée/sortie bornés, en complément des cardinalités déjà limitées.
+Les secrets relatifs restent physiquement confinés à `MINOS_HOME`. Tous les fichiers secrets utilisent désormais un lecteur UTF-8 borné et strict. Les snapshots structurés v1/v2/v3 imposent leur plafond **400 MiB pendant l'I/O** au moyen de flux d'entrée/sortie bornés, en complément des cardinalités déjà limitées.
 
 Le hosted control plane conserve AES-256-GCM + AAD ; les buffers de clé maître et de clé dérivée temporaires sont nettoyés après usage.
 
@@ -128,7 +128,7 @@ Le blocage historique `docker compose` interactif de #246 est ainsi couvert par 
 
 ## Supply-chain et toolchains
 
-- cœur : Java 25 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
+- cœur : Java 21 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
 - IntelliJ : Java 21 / Gradle 9.8.2 / IntelliJ Platform 2026.1 ;
 - Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
 - workflows GitHub : actions épinglées par SHA ;

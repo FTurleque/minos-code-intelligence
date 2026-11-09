@@ -2,7 +2,7 @@
 
 Le plugin **MINOS Code Intelligence** ajoute une surface IDE native au moteur MINOS local. Il ne remplace ni l'index IntelliJ ni le MCP : il consomme les faits et services MINOS via le protocole externe versionné `minos-ide`.
 
-M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité et recherche sémantique/hybride, **sans embarquer ni réimplémenter le moteur Java 25 dans le plugin**.
+M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité et recherche sémantique/hybride, **sans embarquer ni réimplémenter le moteur Java 21 dans le plugin**.
 
 ## Prérequis
 
@@ -11,7 +11,7 @@ M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité e
 3. disposer d'un projet local ouvrable par IntelliJ ;
 4. installer le ZIP du plugin produit par le build MINOS.
 
-Le plugin et le moteur sont volontairement séparés : le plugin s'exécute en Java 21 avec la JVM IntelliJ, tandis que MINOS reste un processus local Java 25 indépendant.
+Le plugin et le moteur sont volontairement séparés : le plugin s'exécute en Java 21 avec la JVM IntelliJ, tandis que MINOS reste un processus local Java 21 indépendant.
 
 ### Ownership OS des commandes CLI
 
@@ -304,7 +304,7 @@ Le score hybride est une **sélection/ranking dérivé**, pas un nouveau fact de
 
 ### Build hybrid context…
 
-Construit un contexte borné en documents/tokens à partir du ranking hybride. Le plugin transmet uniquement la requête et les bornes ; la sélection et la troncature restent exécutées dans MINOS Java 25.
+Construit un contexte borné en documents/tokens à partir du ranking hybride. Le plugin transmet uniquement la requête et les bornes ; la sélection et la troncature restent exécutées dans MINOS Java 21.
 
 ## Frontière d'architecture
 
@@ -318,7 +318,7 @@ IntelliJ Java 21
     └── JSON minos-ide v1
             │
             ▼
-MINOS Java 25
+MINOS Java 21
     ├── ProgramGraphService
     ├── AdvancedImpactService
     ├── SecurityAnalysisService

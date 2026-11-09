@@ -100,7 +100,8 @@ class ScipJavaProcessPlanFactoryToolchainTest {
         ChildJvm.Outcome outcome = plan(project(), temp.resolve("cs"), temp.resolve("runner.ps1"), null, null,
                 Map.of("JAVA_HOME", ""));
 
-        assertEquals("IllegalStateException: scip-java requires a project JDK: JAVA_HOME is not set",
+        assertEquals("IllegalStateException: scip-java requires a project JDK: JAVA_HOME is not set and "
+                        + "minos.scip.java.project-jdk is not set",
                 outcome.get("plan.failure"));
         assertFalse(Files.exists(run()));
     }

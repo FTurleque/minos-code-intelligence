@@ -92,6 +92,7 @@ Il distingue notamment :
 - Docker, qui reste optionnel ;
 - les actions nécessaires pour rendre un provider utilisable ;
 - la sandbox worker (section `workerSandbox`, texte et JSON) : backend retenu pour les providers locaux gérés, disponibilité de l'indexation distante de code non fiable (`remoteIndexing: AVAILABLE|UNAVAILABLE`) et, si elle est indisponible, la **cause** — `NO_OS_BACKEND_AVAILABLE` (prérequis opérateur manquant, nommé par code) ou `REJECTED_BY_DECISION` (backend OS écarté, dimensions non OS-enforced, décision `ADR 0041`). Cette section ne contient jamais de chemin. Une indexation distante indisponible ne change pas le verdict `READY` : ce n'est pas une action requise.
+- sous Windows seulement, la voie WSL2 de l'indexation Java (section `wslJava`, texte et JSON, absente sous Linux) : distribution WSL par défaut (`null` ou `NONE` si aucune n'est trouvée) puis, pour chaque prérequis (`wsl-version`, `systemd`, `cgroup-delegation`, `bubblewrap`, `minos-jvm`, `maven`, `project-jdk`, `maven-repository`), un état `OK`, `MISSING` ou `UNKNOWN` et, s'il n'est pas `OK`, l'action attendue. La sonde ne lance ni Maven ni provider, mais elle démarre la distribution par défaut : sous Windows, `doctor` peut donc attendre ce démarrage (délais bornés : 30 s pour lister les distributions, 90 s pour les contrôles dans la distribution) ; les trois derniers contrôles sont faits dans la distribution par le jar de l'installation (délai borné : 90 s), et restent `UNKNOWN` si le jar ne répond pas. La voie est facultative : la section ne change pas le verdict et ne contient jamais de chemin.
 
 Le verdict de `doctor` (`READY` ou `ACTION_REQUIRED`, code 0 ou 1) est le même que celui de `minos tools verify` : un provider requis qui n'est ni `READY` ni `UNSUPPORTED_BY_BACKEND` bloque ; `UNSUPPORTED_BY_BACKEND` (capacité volontairement absente du backend sélectionné, par exemple le plan Docker) est affiché tel quel, jamais présenté comme `READY`, mais ne rend pas l'installation « action requise » ([disposition des sandboxes](../developer/remote-worker-sandbox-disposition.md)).
 
@@ -149,8 +150,12 @@ Options structurantes :
 --dry-run             calculer le plan sans lancer le provider (n'écrit rien dans MINOS_HOME)
 --no-resume           ne rouvre jamais un run interrompu : le supplante et lance un index complet (implique --force-full)
 --resume-only         échoue sans créer de run si aucun run interrompu ne peut être repris
+--via-wsl             Windows : exécuter scip-java dans une distribution WSL2 (les autres providers restent natifs)
+--wsl-distro <nom>    avec --via-wsl : distribution WSL à utiliser (défaut : la distribution WSL par défaut)
 --format <text|json>
 ```
+
+`--via-wsl` est une erreur d'usage (code 2) hors Windows, avec `--scip` ou avec `--dry-run`, et `--wsl-distro` sans `--via-wsl` aussi ; une installation qui n'offre pas la voie (lancée hors d'un setup ou d'un ZIP) la refuse. Prérequis de la distribution : [installation, §2 ter](production-installation.md#2-ter-indexer-un-projet-java-depuis-windows-par-wsl2).
 
 Un run interrompu (arrêt brutal, redémarrage) est repris par défaut ; `minos index-status <projet>` indique le run reprenable. `--dry-run` n'exécute rien : le combiner avec `--no-resume` ou `--resume-only` est une erreur d'usage (code 2).
 

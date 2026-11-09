@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.adapter.scip.runtime.plan.RustAnalyzerScipProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipClangProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipDotnetProcessPlanFactory;
@@ -107,7 +108,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         ProviderRuntimeStatus status = inspect(providerId);
         if (!status.ready()) {
             throw new IllegalStateException("provider runtime is not ready: " + providerId + " -> "
-                    + String.join("; ", status.diagnostics()));
+                    + PublicErrorMessages.joinedPublicDetails(status.diagnostics()));
         }
         Path executable = status.executable().orElseThrow();
         return switch (providerId) {

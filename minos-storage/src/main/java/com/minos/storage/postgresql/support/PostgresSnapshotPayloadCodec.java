@@ -3,9 +3,11 @@ package com.minos.storage.postgresql.support;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.storage.codec.KnowledgeSnapshotCodecs;
 import com.minos.storage.codec.SnapshotCodec;
+import com.minos.storage.codec.SnapshotLimits;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * PostgreSQL payloads are the file-store encodings, self-described by their header (magic and format
@@ -13,8 +15,19 @@ import java.nio.file.Path;
  */
 public final class PostgresSnapshotPayloadCodec {
 
+    private final SnapshotLimits limits;
+
+    public PostgresSnapshotPayloadCodec() {
+        this(SnapshotLimits.production());
+    }
+
+    /** A codec that writes and reads payloads up to {@code limits.maxPersistedBytes()}. */
+    public PostgresSnapshotPayloadCodec(SnapshotLimits limits) {
+        this.limits = Objects.requireNonNull(limits, "limits");
+    }
+
     public KnowledgeSnapshotCodecs.Selection select(CodeKnowledgeSnapshot snapshot) throws IOException {
-        return KnowledgeSnapshotCodecs.select(snapshot);
+        return KnowledgeSnapshotCodecs.select(snapshot, limits);
     }
 
     public SnapshotCodec.SnapshotEncoding encode(KnowledgeSnapshotCodecs.Selection selection, Path target,
@@ -23,10 +36,10 @@ public final class PostgresSnapshotPayloadCodec {
     }
 
     public int formatVersion(Path payload) throws IOException {
-        return KnowledgeSnapshotCodecs.formatVersionOf(payload);
+        return KnowledgeSnapshotCodecs.formatVersionOf(payload, limits);
     }
 
     public CodeKnowledgeSnapshot decode(Path payload) throws IOException {
-        return KnowledgeSnapshotCodecs.read(payload);
+        return KnowledgeSnapshotCodecs.read(payload, limits);
     }
 }

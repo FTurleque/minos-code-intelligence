@@ -7,7 +7,7 @@ rules: false
 
 # ADR 0059 — Migrer le socle MINOS vers Java 25 LTS et garder la baseline par un gate
 
-> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0067](../GEN-0067-socle-d-execution-java-25-et-maven.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
+> **Archivé le 2026-10-23** (tri du registre, [ADR 0063](0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md)) : Superseded by [ADR-0067](GEN-0067-socle-d-execution-java-25-et-maven.md). Ce document est conservé pour l'historique ; il n'est plus lu par Archgate.
 
 Date : 2026-10-13. Statut : **Accepted**. Remplace : **ADR-0005** (Java 24).
 

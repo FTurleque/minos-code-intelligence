@@ -62,7 +62,7 @@ final class WriteDenyDiagnosis {
     private static boolean carriesWriteDenyForOwner(AclFileAttributeView view) {
         try {
             return carriesWriteDenyForOwner(view.getAcl(), view.getOwner());
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // Nothing more precise than the original refusal can be said.
             return false;
         }

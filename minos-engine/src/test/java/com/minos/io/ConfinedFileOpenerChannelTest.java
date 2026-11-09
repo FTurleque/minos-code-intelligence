@@ -75,7 +75,7 @@ class ConfinedFileOpenerChannelTest {
         Path link = root.resolve("link.bin");
         try {
             Files.createSymbolicLink(link, secret);
-        } catch (UnsupportedOperationException | IOException _) {
+        } catch (UnsupportedOperationException | IOException ignored) {
             assumeTrue(false, "this platform/account cannot create symbolic links");
         }
 
@@ -93,7 +93,7 @@ class ConfinedFileOpenerChannelTest {
         try {
             Files.createSymbolicLink(probe, secret);
             Files.delete(probe);
-        } catch (UnsupportedOperationException | IOException _) {
+        } catch (UnsupportedOperationException | IOException ignored) {
             assumeTrue(false, "this platform/account cannot create symbolic links");
         }
         AtomicBoolean swapped = new AtomicBoolean();

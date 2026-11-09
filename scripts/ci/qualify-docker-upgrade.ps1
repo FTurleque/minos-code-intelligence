@@ -395,7 +395,24 @@ public final class UpgradeFixture {
         throw 'Expected the Docker admin plane to capability-honestly refuse managed-provider indexing (see docs/developer/remote-worker-sandbox-disposition.md), but the index command succeeded.'
     }
     if ($IndexAttempt.Output -notmatch 'UNSUPPORTED_BY_BACKEND|provider runtime is not ready') {
-        throw "Managed-provider indexing failed inside the Docker admin plane for an unexpected reason (expected the documented capability-honest UNSUPPORTED_BY_BACKEND refusal): $($IndexAttempt.Output)"
+        # A release whose refusal line carried a diagnostic naming a system directory printed only the exception
+        # class. The reason is then proven by the tool verification of the same plane: the scip-java runtime of the
+        # Maven fixture is UNSUPPORTED_BY_BACKEND. Any other failure is still unexpected.
+        $Providers = Invoke-AdminCommandCapture @('tools', 'verify', '--all', '--format', 'json')
+        Set-Content -LiteralPath (Join-Path $EvidenceRoot 'tools-verify-a.json') -Value $Providers.Output -Encoding utf8
+        $ScipJavaState = $null
+        try {
+            $JsonStart = $Providers.Output.IndexOf('{')
+            $JsonEnd = $Providers.Output.LastIndexOf('}')
+            $ProvidersJson = $Providers.Output.Substring($JsonStart, $JsonEnd - $JsonStart + 1) | ConvertFrom-Json
+            $ScipJavaState = @($ProvidersJson.providers | Where-Object { $_.id -eq 'scip-java' } | Select-Object -First 1).state
+        }
+        catch {
+            $ScipJavaState = $null
+        }
+        if ($IndexAttempt.Output -notmatch 'index failed: IllegalStateException' -or $ScipJavaState -ne 'UNSUPPORTED_BY_BACKEND') {
+            throw "Managed-provider indexing failed inside the Docker admin plane for an unexpected reason (expected the documented capability-honest UNSUPPORTED_BY_BACKEND refusal): $($IndexAttempt.Output)"
+        }
     }
 
     Invoke-DockerWorkflow -Action Admin -MinosArguments @(

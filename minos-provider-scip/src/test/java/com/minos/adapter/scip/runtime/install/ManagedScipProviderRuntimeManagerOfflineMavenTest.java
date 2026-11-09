@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOfflineFixtures;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -72,6 +73,6 @@ class ManagedScipProviderRuntimeManagerOfflineMavenTest {
     }
 
     private ProviderRuntimeStatus inspect(ScipJavaMavenOffline offline) {
-        return new ManagedScipProviderRuntimeManager(home, offline).inspect(JAVA);
+        return new ManagedScipProviderRuntimeManager(home, offline, ScipJavaProjectJdk.fromEnvironment()).inspect(JAVA);
     }
 }

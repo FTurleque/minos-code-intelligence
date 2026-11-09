@@ -67,6 +67,8 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
      * an account that already runs that many threads (MINOS-AUD-H17).
      */
     static final int MAX_PROCESSES = 128;
+    /** Where a JVM looks for its container limits; the job cgroup is bound there read-only by {@link #jobCgroupView}. */
+    static final String JOB_CGROUP_VIEW = "/sys/fs/cgroup";
     static final int MAX_OPEN_FILES = 2048;
     /** Aggregate CPU bandwidth per {@link LinuxCgroupJob#CPU_PERIOD_MICROS}, enforced by {@code cpu.max}. */
     static final long MAX_CPU_MICROS_PER_PERIOD = 8L * LinuxCgroupJob.CPU_PERIOD_MICROS;
@@ -323,6 +325,9 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         // Declared read-only roots come after every writable bind, so that no writable mount can cover them,
         // and masked files come last, so that no later mount can expose them again.
         LinuxSandboxReadOnlyRoots.addDeclaredMounts(sandbox, plan, List.of(working, artifactParent, run), minosHome, run);
+        if (job != null) {
+            sandbox.addAll(jobCgroupView(job.directory()));
+        }
         sandbox.add("--chdir");
         sandbox.add(working.toString());
         sandbox.add("--");
@@ -330,6 +335,17 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
 
         List<String> command = job == null ? List.copyOf(sandbox) : job.enterThenExec(shell, sandbox);
         return plan.withCommand(command);
+    }
+
+    /**
+     * The read-only view of the job cgroup given to the provider at {@link #JOB_CGROUP_VIEW}. In its cgroup namespace
+     * the provider's cgroup is the root of that view, so a JVM reads {@code memory.max} and {@code cpu.max} of its job
+     * and sizes its heap and its thread pools on them; otherwise it sizes them on the host, and its reservations alone
+     * reach {@link #MAX_ADDRESS_SPACE_BYTES} on a large host. The view is read-only: the provider cannot relax a limit.
+     * No option or variable is set, so no JVM prints a banner into the output of the analysed build.
+     */
+    static List<String> jobCgroupView(Path jobDirectory) {
+        return List.of(RO_BIND, jobDirectory.toString(), JOB_CGROUP_VIEW);
     }
 
     private boolean probeOsIsolation() {
@@ -432,7 +448,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         for (String argument : providerCommand) {
             try {
                 addProviderArgumentBind(command, mounted, argument, tools);
-            } catch (InvalidPathException _) {
+            } catch (InvalidPathException ignored) {
                 // Non-path provider arguments stay opaque.
             }
         }
@@ -507,7 +523,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         try {
             Path named = Path.of(value);
             return named.isAbsolute() && Files.isDirectory(named) ? Optional.of(named) : Optional.empty();
-        } catch (InvalidPathException _) {
+        } catch (InvalidPathException ignored) {
             // A value that is not a path names no toolchain root: nothing to mount, nothing granted.
             return Optional.empty();
         }
@@ -552,7 +568,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
             try {
                 home = home.toRealPath();
                 tools = home.resolve(TOOLS_DIRECTORY);
-            } catch (IOException _) {
+            } catch (IOException ignored) {
                 // The normalized spelling is compared instead; it is never broader.
             }
         }
@@ -596,7 +612,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         Path target;
         try {
             target = link.toRealPath();
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // A dangling link resolves to nothing inside the sandbox either: there is nothing to mount.
             return true;
         }

@@ -175,8 +175,10 @@ def workflow(*jobs: tuple[str, str]) -> str:
         f"          distribution: temurin\n          java-version: '{version}'\n" for job, version in jobs)
 
 
-POLICY_JAVA = ("### Core\n\n- Java: **25**, enforced as `[25,26)` by Maven Enforcer.\n"
-               "- Java support: Temurin **25** receives updates until at least **2031-09**.\n\n"
+# The fixtures model a product on a Java that is neither the plugin's (21) nor the previous baseline of the upgrade
+# qualifications (PREVIOUS_JAVA), so every closed list is exercised; one test covers the product on 21.
+POLICY_JAVA = ("### Core\n\n- Java: **27**, enforced as `[27,28)` by Maven Enforcer.\n"
+               "- Java support: Temurin **27** receives updates until at least **2031-09**.\n\n"
                "### IntelliJ plugin\n\n- Java: **21**.\n")
 
 
@@ -186,15 +188,15 @@ class JavaBaselineTest(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
-        self.write(gate.POM, pom("25", "[25,26)"))
+        self.write(gate.POM, pom("27", "[27,28)"))
         self.write(gate.POLICY, POLICY_JAVA)
-        self.write(gate.AGENTS, "| Noyau, CLI, MCP, stockage, providers | Java **25**, Maven **3.9+** |\n"
+        self.write(gate.AGENTS, "| Noyau, CLI, MCP, stockage, providers | Java **27**, Maven **3.9+** |\n"
                                 "| Plugin `minos-intellij` | Java **21**, Gradle **9.8.1** |\n")
-        self.write(gate.OPENSPEC_CONFIG, "context: |\n  - Noyau, CLI, MCP, stockage, providers : Java 25 et Maven 3.9.x\n"
+        self.write(gate.OPENSPEC_CONFIG, "context: |\n  - Noyau, CLI, MCP, stockage, providers : Java 27 et Maven 3.9.x\n"
                                          "  - Plugin minos-intellij : Java 21\n")
-        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", workflow(("verify", "25")))
+        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", workflow(("verify", "27")))
         self.write(f"{gate.WORKFLOWS}/intellij-plugin.yml", workflow(("plugin", "21"), ("windows-ownership", "21")))
-        self.write("docker/Dockerfile.mcp", "# syntax=docker/dockerfile:1\nFROM eclipse-temurin:25.0.4.1_1-jre@sha256:" + "a" * 64 + "\n")
+        self.write("docker/Dockerfile.mcp", "# syntax=docker/dockerfile:1\nFROM eclipse-temurin:27.0.1_1-jre@sha256:" + "a" * 64 + "\n")
 
     def write(self, relative: str, content: str) -> None:
         path = self.root / relative
@@ -207,43 +209,43 @@ class JavaBaselineTest(unittest.TestCase):
     def test_a_tree_in_agreement_with_its_pom_is_accepted(self):
         failures, version, compared = gate.check_java(self.root)
         self.assertEqual([], failures)
-        self.assertEqual("25", version)
+        self.assertEqual("27", version)
         self.assertEqual(9, compared, "enforcer, three workflow steps, one image, policy (version and support), AGENTS.md, openspec config")
 
     def test_a_workflow_left_on_the_previous_java_is_refused(self):
-        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", workflow(("verify", "24")))
-        self.assertEqual([f"{gate.WORKFLOWS}/pr-ci.yml:7 installs Java 24, the POM compiles for 25"], self.failures())
+        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", workflow(("verify", "26")))
+        self.assertEqual([f"{gate.WORKFLOWS}/pr-ci.yml:7 installs Java 26, the POM compiles for 27"], self.failures())
 
     def test_an_enforcer_left_on_the_previous_java_is_refused(self):
-        self.write(gate.POM, pom("25", "[24,25)"))
-        self.assertEqual([f"{gate.POM} enforces Java [24,25), the POM compiles for 25 (expected [25,26))"], self.failures())
+        self.write(gate.POM, pom("27", "[26,27)"))
+        self.assertEqual([f"{gate.POM} enforces Java [26,27), the POM compiles for 27 (expected [27,28))"], self.failures())
 
     def test_a_widened_enforcer_range_is_refused(self):
-        self.write(gate.POM, pom("25", "[25,27)"))
-        self.assertEqual([f"{gate.POM} enforces Java [25,27), the POM compiles for 25 (expected [25,26))"], self.failures())
+        self.write(gate.POM, pom("27", "[27,29)"))
+        self.assertEqual([f"{gate.POM} enforces Java [27,29), the POM compiles for 27 (expected [27,28))"], self.failures())
 
     def test_an_image_left_on_the_previous_java_is_refused(self):
-        self.write("docker/Dockerfile.mcp", "FROM eclipse-temurin:24.0.2_12-jre@sha256:" + "b" * 64 + "\n")
-        self.assertEqual(["docker/Dockerfile.mcp:1 is built on eclipse-temurin 24, the POM compiles for 25"], self.failures())
+        self.write("docker/Dockerfile.mcp", "FROM eclipse-temurin:26.0.2_12-jre@sha256:" + "b" * 64 + "\n")
+        self.assertEqual(["docker/Dockerfile.mcp:1 is built on eclipse-temurin 26, the POM compiles for 27"], self.failures())
 
     def test_a_policy_without_an_end_of_support_date_is_refused(self):
-        self.write(gate.POLICY, "### Core\n\n- Java: **25**, enforced as `[25,26)` by Maven Enforcer.\n")
+        self.write(gate.POLICY, "### Core\n\n- Java: **27**, enforced as `[27,28)` by Maven Enforcer.\n")
         self.assertEqual([f"{gate.POLICY} does not date the end of support of the Java baseline "
-                          "(expected `Java support: ... **25** ... until [at least] **YYYY-MM**`)"], self.failures())
+                          "(expected `Java support: ... **27** ... until [at least] **YYYY-MM**`)"], self.failures())
 
     def test_a_support_line_about_another_java_is_refused(self):
-        self.write(gate.POLICY, POLICY_JAVA.replace("Temurin **25**", "Temurin **24**"))
-        self.assertEqual([f"{gate.POLICY} dates the support of Java 24, the POM compiles for 25"], self.failures())
+        self.write(gate.POLICY, POLICY_JAVA.replace("Temurin **27**", "Temurin **26**"))
+        self.assertEqual([f"{gate.POLICY} dates the support of Java 26, the POM compiles for 27"], self.failures())
 
     def test_a_policy_that_states_another_java_is_refused(self):
-        self.write(gate.POLICY, POLICY_JAVA.replace("- Java: **25**, enforced as `[25,26)`", "- Java: **24**, enforced as `[24,25)`"))
-        self.assertEqual([f"{gate.POLICY} states Java 24 enforced as [24,25), the POM compiles for 25"], self.failures())
+        self.write(gate.POLICY, POLICY_JAVA.replace("- Java: **27**, enforced as `[27,28)`", "- Java: **26**, enforced as `[26,27)`"))
+        self.assertEqual([f"{gate.POLICY} states Java 26 enforced as [26,27), the POM compiles for 27"], self.failures())
 
     def test_an_agents_file_or_an_openspec_config_with_another_java_is_refused(self):
-        self.write(gate.AGENTS, "| Noyau, CLI, MCP, stockage, providers | Java **24**, Maven **3.9+** |\n")
-        self.write(gate.OPENSPEC_CONFIG, "  - Noyau, CLI, MCP, stockage, providers : Java 24 et Maven 3.9.x\n")
-        self.assertEqual([f"{gate.AGENTS} states Java 24 for the product, the POM compiles for 25",
-                          f"{gate.OPENSPEC_CONFIG} states Java 24 for the product, the POM compiles for 25"], self.failures())
+        self.write(gate.AGENTS, "| Noyau, CLI, MCP, stockage, providers | Java **26**, Maven **3.9+** |\n")
+        self.write(gate.OPENSPEC_CONFIG, "  - Noyau, CLI, MCP, stockage, providers : Java 26 et Maven 3.9.x\n")
+        self.assertEqual([f"{gate.AGENTS} states Java 26 for the product, the POM compiles for 27",
+                          f"{gate.OPENSPEC_CONFIG} states Java 26 for the product, the POM compiles for 27"], self.failures())
 
     def test_a_file_that_no_longer_states_the_java_baseline_is_refused(self):
         self.write(gate.AGENTS, "| Plugin `minos-intellij` | Java **21** |\n")
@@ -253,9 +255,20 @@ class JavaBaselineTest(unittest.TestCase):
         self.assertIn(("intellij-plugin.yml", "plugin"), gate.PLUGIN_JAVA_STEPS)
         self.assertEqual([], self.failures())
 
+    def test_a_product_on_the_java_of_the_plugin_has_no_closed_list_to_keep(self):
+        self.write(gate.POM, pom("21", "[21,22)"))
+        self.write(gate.POLICY, POLICY_JAVA.replace("**27**", "**21**").replace("[27,28)", "[21,22)"))
+        self.write(gate.AGENTS, "| Noyau, CLI, MCP, stockage, providers | Java **21**, Maven **3.9+** |\n")
+        self.write(gate.OPENSPEC_CONFIG, "  - Noyau, CLI, MCP, stockage, providers : Java 21 et Maven 3.9.x\n")
+        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", workflow(("verify", "21")))
+        self.write("docker/Dockerfile.mcp", "FROM eclipse-temurin:21.0.12.1_1-jre@sha256:" + "a" * 64 + "\n")
+        self.assertEqual([], self.failures())
+        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", workflow(("verify", "25")))
+        self.assertEqual([f"{gate.WORKFLOWS}/pr-ci.yml:7 installs Java 25, the POM compiles for 21"], self.failures())
+
     def test_java_21_outside_the_closed_list_is_refused(self):
         self.write(f"{gate.WORKFLOWS}/pr-ci.yml", workflow(("verify", "21")))
-        self.assertEqual([f"{gate.WORKFLOWS}/pr-ci.yml:7 installs Java 21, the POM compiles for 25"], self.failures())
+        self.assertEqual([f"{gate.WORKFLOWS}/pr-ci.yml:7 installs Java 21, the POM compiles for 27"], self.failures())
 
     def test_a_second_java_21_step_in_a_listed_job_is_refused(self):
         self.write(f"{gate.WORKFLOWS}/intellij-plugin.yml",
@@ -265,12 +278,12 @@ class JavaBaselineTest(unittest.TestCase):
 
     def test_a_plugin_job_raised_above_21_without_the_list_is_refused(self):
         self.write(f"{gate.WORKFLOWS}/intellij-plugin.yml", workflow(("plugin", "22")))
-        self.assertEqual([f"{gate.WORKFLOWS}/intellij-plugin.yml:7 installs Java 22, the POM compiles for 25"], self.failures())
+        self.assertEqual([f"{gate.WORKFLOWS}/intellij-plugin.yml:7 installs Java 22, the POM compiles for 27"], self.failures())
 
     def test_an_upgrade_qualification_may_install_the_previous_baseline_once(self):
         self.assertIn(("docker-upgrade-qualification.yml", "real-docker-upgrade"), gate.PREVIOUS_JAVA_STEPS)
         both = workflow(("real-docker-upgrade", gate.PREVIOUS_JAVA)) + (
-            "      - uses: actions/setup-java@abc # v5\n        with:\n          java-version: '25'\n")
+            "      - uses: actions/setup-java@abc # v5\n        with:\n          java-version: '27'\n")
         self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", both)
         self.assertEqual([], self.failures())
 
@@ -284,7 +297,7 @@ class JavaBaselineTest(unittest.TestCase):
     def test_the_previous_baseline_outside_an_upgrade_qualification_is_refused(self):
         self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", workflow(("another-job", gate.PREVIOUS_JAVA)))
         self.assertEqual([f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml:7 installs Java {gate.PREVIOUS_JAVA}, "
-                          "the POM compiles for 25"], self.failures())
+                          "the POM compiles for 27"], self.failures())
 
     def test_a_pom_without_a_single_release_is_refused(self):
         self.write(gate.POM, "<project/>\n")

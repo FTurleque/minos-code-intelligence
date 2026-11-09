@@ -399,6 +399,22 @@ class RepositoryTest(TreeTest):
             self.assertTrue(any(expected in failure for failure in failures), (expected, failures))
         self.assertEqual(2, len(failures), failures)
 
+    def assert_trap_mutation_refused(self, workflow: str, job: str, mutated: str) -> None:
+        self.copy_repository()
+        self.mutate(workflow, "          trap log_out EXIT\n", mutated)
+        failures = self.failures()
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn(f"job '{job}' writes 'docker logout' in the step after the login but never runs it", failures[0])
+
+    def test_removing_or_commenting_the_exit_trap_of_the_real_workflows_is_refused(self):
+        for workflow, job, mutated in (("pr-ci.yml", "verify", ""),
+                                       ("pr-ci.yml", "verify", "          # trap log_out EXIT\n"),
+                                       ("pr-ci.yml", "verify", "          trap - EXIT\n"),
+                                       ("code-audit.yml", "mutation", ""),
+                                       ("code-audit.yml", "mutation", "          # trap log_out EXIT\n")):
+            with self.subTest(workflow=workflow, mutated=mutated):
+                self.assert_trap_mutation_refused(workflow, job, mutated)
+
     def test_the_logout_step_of_a_test_job_runs_no_repository_code(self):
         self.copy_repository()
         self.mutate("pr-ci.yml", '          for image in $IMAGES; do docker pull "$image"; done\n',
@@ -510,6 +526,76 @@ class JobHardeningTest(TreeTest):
         text = self.job(LOGIN_STEP + "      - run: |\n          # docker logout\n          ./build.sh\n")
         failures, _kept = self.hardening(text)
         self.assertEqual(1, len(failures))
+        self.assertIn("runs code while logged in to Docker Hub", failures[0])
+
+    # The logout the gate accepts is one that runs: a command of the script, or a function under an active EXIT trap.
+
+    LOG_OUT = ('log_out() { docker logout || { echo "logging out of Docker Hub failed" >&2; exit 1; }; }\n')
+
+    def logout_step(self, script: str) -> str:
+        body = "".join(f"          {line}\n" for line in script.splitlines())
+        return self.job(LOGIN_STEP + f"      - name: Pull, then log out\n        shell: bash\n        run: |\n{body}")
+
+    def test_the_logout_function_of_the_workflows_under_its_exit_trap_is_accepted(self):
+        for script in (f"set -euo pipefail\n{self.LOG_OUT}trap log_out EXIT\nfor image in $IMAGES; do docker pull \"$image\"; done",
+                       f"trap log_out EXIT\n{self.LOG_OUT}docker pull a",
+                       "set -e\nlog_out() {\n  docker logout\n}\ntrap log_out EXIT\ndocker pull a",
+                       "log_out()\n{\n  docker logout\n}\ntrap 'log_out' EXIT\ndocker pull a",
+                       "function log_out {\n  docker logout\n}\ntrap log_out ERR EXIT\ndocker pull a"):
+            with self.subTest(script=script):
+                self.assertEqual(([], set()), self.hardening(self.logout_step(script)))
+
+    def test_a_logout_command_of_the_script_is_accepted(self):
+        for script in ("docker pull a\ndocker logout", "docker pull a && docker logout",
+                       "docker pull a; docker logout", "if true; then docker logout; fi"):
+            with self.subTest(script=script):
+                self.assertEqual(([], set()), self.hardening(self.logout_step(script)))
+        self.assertEqual(([], set()), self.hardening(self.job(LOGIN_STEP + "      - run: docker logout\n")))
+
+    def test_a_logout_function_whose_trap_is_removed_is_refused(self):
+        failures, _kept = self.hardening(self.logout_step(f"{self.LOG_OUT}docker pull a"))
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("job 'build' writes 'docker logout' in the step after the login but never runs it", failures[0])
+
+    def test_a_commented_trap_is_refused(self):
+        failures, _kept = self.hardening(self.logout_step(f"{self.LOG_OUT}# trap log_out EXIT\ndocker pull a"))
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("never runs it", failures[0])
+
+    def test_a_trap_of_another_function_or_another_signal_is_refused(self):
+        for trap in ("trap other EXIT", "trap log_out ERR", "trap log_out", "trap - EXIT"):
+            with self.subTest(trap=trap):
+                failures, _kept = self.hardening(self.logout_step(f"{self.LOG_OUT}{trap}\ndocker pull a"))
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("never runs it", failures[0])
+
+    def test_a_trap_cleared_after_it_was_set_is_refused(self):
+        failures, _kept = self.hardening(self.logout_step(f"{self.LOG_OUT}trap log_out EXIT\ndocker pull a\ntrap - EXIT"))
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("never runs it", failures[0])
+
+    def test_a_logout_inside_a_function_is_not_a_logout_command(self):
+        for script in ("log_out() {\n  docker logout\n}\ndocker pull a", "function log_out { docker logout; }\ndocker pull a"):
+            with self.subTest(script=script):
+                failures, _kept = self.hardening(self.logout_step(script))
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("never runs it", failures[0])
+
+    def test_a_logout_that_exists_only_as_a_comment_or_a_name_is_refused(self):
+        text = self.job(LOGIN_STEP + "      - name: Pull, docker logout, build\n        run: |\n          # docker logout\n"
+                        "          docker pull a\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("runs code while logged in to Docker Hub", failures[0])
+        text = self.job(LOGIN_STEP + "      - name: docker logout\n        run: ./build.sh\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("runs code while logged in to Docker Hub", failures[0])
+
+    def test_the_run_of_a_step_ends_where_the_next_key_begins(self):
+        text = self.job(LOGIN_STEP + "      - run: |\n          docker pull a\n        env:\n          NOTE: docker logout\n")
+        failures, _kept = self.hardening(text)
+        self.assertEqual(1, len(failures), failures)
         self.assertIn("runs code while logged in to Docker Hub", failures[0])
 
     def test_a_job_of_the_closed_list_keeps_its_login_and_is_reported_as_kept(self):

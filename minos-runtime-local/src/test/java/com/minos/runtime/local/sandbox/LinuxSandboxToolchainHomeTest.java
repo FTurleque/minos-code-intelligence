@@ -15,9 +15,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,8 +50,8 @@ class LinuxSandboxToolchainHomeTest {
     @Test
     void distributionPackagedJdkReadsItsSecurityConfigurationInsideTheSandbox() throws Exception {
         Optional<Path> packaged = packagedJdk();
-        assumeTrue(packaged.isPresent(),
-                "hypothesis: a distribution-packaged JDK whose conf/security/java.security links under /etc "
+        SandboxTestSupport.decide(SandboxTestSupport.required(), packaged.isPresent(),
+                () -> "a distribution-packaged JDK whose conf/security/java.security links under /etc "
                         + "is installed under /usr/lib/jvm");
         List<String> output = runSandboxed(packaged.orElseThrow(),
                 List.of("-XshowSettings:security:properties", "-version"));
@@ -174,6 +176,54 @@ class LinuxSandboxToolchainHomeTest {
         List<String> command = plan(managedJdk).command();
         assertTrue(hasBind(command, "--ro-bind", managedJdk.toRealPath().toString(),
                 managedJdk.toRealPath().toString()), command::toString);
+    }
+
+    @Test
+    void aToolchainValueThatIsNotAPathMountsNothingAndIsNotRefused() throws Exception {
+        List<String> command = new ArrayList<>();
+        Set<Path> mounted = new HashSet<>();
+
+        LinuxBubblewrapWorkerSandboxBackend.addToolchainHomeBinds(
+                command, mounted, "JAVA_HOME", "/opt/jdk-with-nul-\0-name", temporary.resolve("minos-home"));
+
+        assertTrue(command.isEmpty(), command::toString);
+        assertTrue(mounted.isEmpty(), mounted::toString);
+    }
+
+    @Test
+    void aProviderArgumentThatIsNotAPathStaysOpaqueAndNothingIsMountedForIt() throws Exception {
+        Path jdk = fakeJdk(temporary.resolve("jdk"));
+        String opaque = "--option-with-nul-\0-value";
+        Path working = Files.createDirectories(temporary.resolve("workspace"));
+        Path run = Files.createDirectories(temporary.resolve("run"));
+        IndexerProcessPlan raw = new IndexerProcessPlan(
+                List.of(jdk.resolve("bin/java").toString(), opaque), working, Map.of(),
+                working.resolve("index.scip"), Duration.ofSeconds(60));
+        LinuxBubblewrapWorkerSandboxBackend backend = new LinuxBubblewrapWorkerSandboxBackend(
+                Files.createDirectories(temporary.resolve("minos-home")), Path.of("/bin/true"), Path.of("/bin/true"));
+
+        List<String> command = backend.sandboxPlan(raw, run, WorkerNetworkPolicy.DENY).command();
+
+        assertTrue(command.contains(opaque), "the argument is passed to the provider unchanged");
+        assertFalse(mountsSource(command, opaque), command::toString);
+    }
+
+    @Test
+    void aDanglingLinkInTheJdkIsNeitherMountedNorCountedAsRefused() throws Exception {
+        Path jdk = fakeJdk(temporary.resolve("jdk"));
+        Path conf = Files.createDirectories(jdk.resolve("conf"));
+        Path absent = temporary.resolve("absent-target");
+        Files.createSymbolicLink(conf.resolve("dangling.properties"), absent);
+        List<String> command = new ArrayList<>();
+        Set<Path> mounted = new HashSet<>();
+
+        LinuxBubblewrapWorkerSandboxBackend.addToolchainHomeBinds(
+                command, mounted, "JAVA_HOME", jdk.toString(), temporary.resolve("minos-home"));
+
+        String root = jdk.toRealPath().toString();
+        assertTrue(hasBind(command, "--ro-bind", root, root), command::toString);
+        assertFalse(command.stream().anyMatch(argument -> argument.contains("absent-target")), command::toString);
+        assertEquals(Set.of(jdk.toRealPath()), mounted);
     }
 
     @Test

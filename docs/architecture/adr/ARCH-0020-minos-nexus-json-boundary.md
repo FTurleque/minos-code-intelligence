@@ -63,6 +63,6 @@ Les deux moteurs restent indépendants et peuvent évoluer sur des runtimes Java
 
 Voir [`../../project/history/milestones/m13/DECISION_M13.md`](../../project/history/milestones/m13/DECISION_M13.md) et [`../../project/history/milestones/m13/NEXUS_INTEGRATION.md`](../../project/history/milestones/m13/NEXUS_INTEGRATION.md).
 
-## Mise en œuvre — baseline Java 25
+## Mise en œuvre — baseline Java 21
 
-La baseline de MINOS est **Java 25 LTS** ([ADR 0059](archive/0059-migrer-le-socle-vers-java-25-lts.md)) ; les mentions de Java 24 ci-dessus décrivent le contexte de la décision. La décision est inchangée : les deux moteurs restent séparés par un contrat JSON local versionné, sans couplage Maven.
+La baseline de MINOS est **Java 21 LTS** ([ADR GEN-0077](GEN-0077-socle-d-execution-java-21-et-maven.md)) ; les mentions de Java 24 ci-dessus décrivent le contexte de la décision. La décision est inchangée : les deux moteurs restent séparés par un contrat JSON local versionné, sans couplage Maven.

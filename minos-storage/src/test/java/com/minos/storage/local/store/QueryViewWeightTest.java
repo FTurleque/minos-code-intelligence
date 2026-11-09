@@ -1,6 +1,7 @@
 package com.minos.storage.local.store;
 
 import com.minos.storage.codec.QueryViewWeightFixtures;
+import com.minos.storage.codec.SnapshotLimits;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.IncomingRelationships;
 import com.minos.store.SnapshotReadView;
@@ -63,9 +64,14 @@ class QueryViewWeightTest {
 
         long estimate = reader.cacheStats().weightBytes();
         long persisted = persistedBytes(root);
+        // The estimate is the larger of a sum over the entity counts and the persisted size times the measured
+        // amplification: the second term alone may sit below the retained heap, the first carries those shapes.
+        long amplified = SnapshotLimits.production().amplifiedBytes(3, persisted);
         String line = String.format(Locale.ROOT,
-                "%s persisted=%d retained=%d estimate=%d retained/persisted=%.2f estimate/retained=%.2f",
-                label, persisted, retained, estimate, retained / (double) persisted, estimate / (double) retained);
+                "%s persisted=%d retained=%d estimate=%d retained/persisted=%.2f estimate/retained=%.2f"
+                        + " amplified/retained=%.2f",
+                label, persisted, retained, estimate, retained / (double) persisted, estimate / (double) retained,
+                amplified / (double) retained);
         if (Boolean.getBoolean(PRINT_PROPERTY)) {
             System.out.println("QUERY-VIEW-WEIGHT " + line);
             return;

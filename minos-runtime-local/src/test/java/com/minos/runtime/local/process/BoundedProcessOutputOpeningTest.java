@@ -70,7 +70,7 @@ class BoundedProcessOutputOpeningTest {
         assertThrows(IOException.class, () -> BoundedProcessOutput.openTarget(stdout, () -> {
             try {
                 Files.createSymbolicLink(stdout, sentinel);
-            } catch (IOException | UnsupportedOperationException _) {
+            } catch (IOException | UnsupportedOperationException ignored) {
                 assumeTrue(false, "this platform/account cannot create symbolic links");
             }
         }));

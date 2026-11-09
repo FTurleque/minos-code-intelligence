@@ -1,0 +1,253 @@
+package com.minos.bootstrap;
+
+import com.minos.application.WslIndexingRoute;
+import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.runtime.ProviderRuntimeManager;
+import com.minos.runtime.ProviderRuntimeStatus;
+import com.minos.runtime.local.wsl.WslCommandResult;
+import com.minos.runtime.local.wsl.WslCommandRunner;
+import com.minos.runtime.local.wsl.WslCommandJarProbe;
+import com.minos.runtime.local.wsl.WslIndexerExecutor;
+import com.minos.runtime.local.wsl.WslJarProbe;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.CodeSource;
+import java.security.cert.Certificate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/** The WSL2 route of the composition root: Windows only, scip-java routed by the probe (ADR SEC-0079). */
+class LocalWslIndexingRouteTest {
+
+    private static final String LISTING = "  NAME      STATE           VERSION\r\n* Ubuntu    Running         2\r\n";
+    private static final String HEALTHY = """
+            systemd=yes
+            userbus=yes
+            cgroup2=yes
+            controllers=cpuset cpu io memory pids
+            bwrap=yes
+            jvm=java.specification.version = 21
+            end=ok
+            """;
+
+    @TempDir Path temp;
+
+    @Test
+    void withoutWslScipJavaIsBlockedByItsDoctorIdentifierAndHasNoExecutor() throws Exception {
+        List<List<String>> commands = new ArrayList<>();
+        ProviderRuntimeManager runtimes = route(Optional.empty(), recording(commands), jar())
+                .runtimes(new NativeRuntimes(), Optional.empty());
+
+        ProviderRuntimeStatus status = runtimes.inspect("scip-java");
+
+        assertEquals(ProviderRuntimeStatus.State.BLOCKED, status.state());
+        assertTrue(status.diagnostics().getFirst().startsWith("WSL route prerequisite wsl-version is missing"),
+                status.diagnostics().toString());
+        assertThrows(IllegalStateException.class, () -> runtimes.executor("scip-java"));
+        assertTrue(commands.isEmpty(), "nothing is launched without wsl.exe");
+    }
+
+    @Test
+    void outsideAPackagedInstallationTheRouteRefusesBeforeProbing() {
+        List<List<String>> commands = new ArrayList<>();
+        ProviderRuntimeManager runtimes = route(Optional.of(temp.resolve("wsl.exe")), recording(commands),
+                Optional.empty()).runtimes(new NativeRuntimes(), Optional.of("Ubuntu"));
+
+        assertEquals(List.of(LocalWslIndexingRoute.NOT_PACKAGED), runtimes.inspect("scip-java").diagnostics());
+        assertTrue(commands.isEmpty());
+    }
+
+    @Test
+    void aDistributionWithoutBubblewrapBlocksScipJavaWithoutAnyPath() throws Exception {
+        WslCommandRunner runner = (command, timeout) -> command.contains("-l")
+                ? new WslCommandResult(0, LISTING.getBytes(StandardCharsets.UTF_16LE))
+                : new WslCommandResult(0, HEALTHY.replace("bwrap=yes", "bwrap=no").getBytes(StandardCharsets.UTF_8));
+        ProviderRuntimeManager runtimes = route(Optional.of(temp.resolve("wsl.exe")), runner, jar())
+                .runtimes(new NativeRuntimes(), Optional.empty());
+
+        String diagnostic = runtimes.inspect("scip-java").diagnostics().getFirst();
+
+        assertTrue(diagnostic.startsWith("WSL route prerequisite bubblewrap is missing"), diagnostic);
+        assertFalse(diagnostic.contains(temp.toString()), diagnostic);
+    }
+
+    @Test
+    void everyOtherProviderStaysNative() throws Exception {
+        NativeRuntimes natives = new NativeRuntimes();
+        ProviderRuntimeManager runtimes = route(Optional.empty(), recording(new ArrayList<>()), jar())
+                .runtimes(natives, Optional.empty());
+
+        assertSame(natives.typeScript, runtimes.inspect("scip-typescript"));
+        assertSame(natives.executor, runtimes.executor("scip-typescript"));
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void aReadyDistributionYieldsTheVerifiedWslExecutorOnWindows() throws Exception {
+        WslCommandRunner runner = (command, timeout) -> command.contains("-l")
+                ? new WslCommandResult(0, LISTING.getBytes(StandardCharsets.UTF_16LE))
+                : new WslCommandResult(0, HEALTHY.getBytes(StandardCharsets.UTF_8));
+        ProviderRuntimeManager runtimes = route(Optional.of(temp.resolve("wsl.exe")), runner, jar())
+                .runtimes(new NativeRuntimes(), Optional.empty());
+
+        assertEquals(ProviderRuntimeStatus.State.READY, runtimes.inspect("scip-java").state());
+        IndexerExecutor executor = runtimes.executor("scip-java");
+
+        assertInstanceOf(WslIndexerExecutor.class, executor);
+        assertEquals("scip-java", executor.indexerId());
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void aJarCheckMissingInTheDistributionBlocksScipJavaBeforeAnyRun() throws Exception {
+        List<List<String>> commands = new ArrayList<>();
+        WslCommandRunner runner = (command, timeout) -> {
+            commands.add(command);
+            if (command.contains("-l")) {
+                return new WslCommandResult(0, LISTING.getBytes(StandardCharsets.UTF_16LE));
+            }
+            if (command.contains("--probe")) {
+                return new WslCommandResult(0, """
+                        minos-wsl-probe-v1 maven MISSING install Maven 3.9.x
+                        minos-wsl-probe-v1 project-jdk OK
+                        minos-wsl-probe-v1 maven-repository OK
+                        """.getBytes(StandardCharsets.UTF_8));
+            }
+            return new WslCommandResult(0, HEALTHY.getBytes(StandardCharsets.UTF_8));
+        };
+        ProviderRuntimeManager runtimes = route(Optional.of(temp.resolve("wsl.exe")), runner, jar())
+                .runtimes(new NativeRuntimes(), Optional.empty());
+
+        ProviderRuntimeStatus status = runtimes.inspect("scip-java");
+
+        assertEquals(ProviderRuntimeStatus.State.BLOCKED, status.state());
+        assertTrue(status.diagnostics().getFirst().startsWith("WSL route prerequisite maven is missing"),
+                status.diagnostics().toString());
+        List<String> probe = commands.stream().filter(command -> command.contains("--probe")).findFirst()
+                .orElseThrow();
+        assertEquals(List.of("internal", "wsl-worker", "--probe"), probe.subList(probe.size() - 3, probe.size()));
+        assertFalse(probe.contains("systemd-run"), "the probe runs no scope: it reads files only");
+    }
+
+    @Test
+    void withoutWslOrInstallationJarTheJarChecksAreNotProbed() {
+        WslCommandRunner forbidden = (command, timeout) -> {
+            throw new AssertionError("no command");
+        };
+
+        assertSame(WslJarProbe.NOT_AVAILABLE,
+                LocalWslIndexingRoute.jarProbe(Optional.empty(), forbidden, Optional.of(temp.resolve("minos.jar"))));
+        assertSame(WslJarProbe.NOT_AVAILABLE,
+                LocalWslIndexingRoute.jarProbe(Optional.of(temp.resolve("wsl.exe")), forbidden, Optional.empty()));
+        assertInstanceOf(WslCommandJarProbe.class, LocalWslIndexingRoute.jarProbe(
+                Optional.of(temp.resolve("wsl.exe").toAbsolutePath()), forbidden,
+                Optional.of(temp.resolve("minos.jar"))));
+    }
+
+    @Test
+    void theRouteIsOfferedOnWindowsOnlyAndTheWorkerOnLinuxOnly() {
+        DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+
+        // Tests run from module jars or class directories, which hold no CLI entry point: no route is offered.
+        assertTrue(composer.wslIndexingRoute(temp).isEmpty());
+        assertEquals(os.startsWith("linux"), composer.wslIndexingWorker(temp).isPresent());
+    }
+
+    @Test
+    void onlyAJarHoldingTheCliEntryPointIsTheInstallationJar() throws Exception {
+        Path packaged = zip("minos.jar", "com/minos/cli/MinosLauncher.class");
+        Path module = zip("minos-bootstrap.jar", "com/minos/bootstrap/LocalWslIndexingRoute.class");
+        Path classes = Files.createDirectories(temp.resolve("classes"));
+
+        assertEquals(Optional.of(packaged), LocalWslIndexingRoute.installationJar(source(packaged)));
+        assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(source(module)));
+        assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(
+                source(Files.writeString(temp.resolve("empty.jar"), "not a zip"))),
+                "an unreadable jar is not an installation");
+        assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(source(classes)));
+        assertEquals(Optional.empty(), LocalWslIndexingRoute.installationJar(null));
+    }
+
+    private Path zip(String name, String entry) throws Exception {
+        Path file = temp.resolve(name);
+        try (java.util.zip.ZipOutputStream output = new java.util.zip.ZipOutputStream(Files.newOutputStream(file))) {
+            output.putNextEntry(new java.util.zip.ZipEntry(entry));
+            output.closeEntry();
+        }
+        return file;
+    }
+
+    private WslIndexingRoute route(Optional<Path> wsl, WslCommandRunner runner, Optional<Path> jar) {
+        return new LocalWslIndexingRoute(temp.resolve("home"), wsl, runner, jar);
+    }
+
+    private Optional<Path> jar() throws Exception {
+        Path jar = temp.resolve("minos.jar");
+        if (!Files.exists(jar)) {
+            Files.writeString(jar, "");
+        }
+        return Optional.of(jar);
+    }
+
+    private static CodeSource source(Path path) throws Exception {
+        URL url = path.toUri().toURL();
+        return new CodeSource(url, (Certificate[]) null);
+    }
+
+    private static WslCommandRunner recording(List<List<String>> commands) {
+        return (command, timeout) -> {
+            commands.add(command);
+            throw new java.io.IOException("unexpected command");
+        };
+    }
+
+    /** Native runtimes in which scip-java is blocked, as on Windows, and scip-typescript is ready. */
+    private static final class NativeRuntimes implements ProviderRuntimeManager {
+        private final ProviderRuntimeStatus typeScript = new ProviderRuntimeStatus("scip-typescript", "0.3.0",
+                ProviderRuntimeStatus.State.READY, Optional.empty(), List.of(), true);
+        private final IndexerExecutor executor = new IndexerExecutor() {
+            @Override public String indexerId() { return "scip-typescript"; }
+            @Override public com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact execute(
+                    com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest request) {
+                throw new UnsupportedOperationException();
+            }
+        };
+
+        @Override public List<ProviderRuntimeStatus> list() { return List.of(typeScript); }
+
+        @Override
+        public ProviderRuntimeStatus inspect(String providerId) {
+            if ("scip-java".equals(providerId)) {
+                throw new AssertionError("the native status of a routed provider is never consulted");
+            }
+            return typeScript;
+        }
+
+        @Override public ProviderRuntimeStatus install(String providerId) { return typeScript; }
+
+        @Override
+        public IndexerExecutor executor(String providerId) {
+            if ("scip-java".equals(providerId)) {
+                throw new AssertionError("the native executor of a routed provider is never resolved");
+            }
+            return executor;
+        }
+    }
+}

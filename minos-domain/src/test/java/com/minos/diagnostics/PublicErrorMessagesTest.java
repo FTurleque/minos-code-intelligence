@@ -9,6 +9,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PublicErrorMessagesTest {
 
     @Test
+    void joinedDetailsWithholdOnlyTheSensitiveOnes() {
+        String joined = PublicErrorMessages.joinedPublicDetails(java.util.List.of(
+                "Maven 3.9.x is required in PATH",
+                "the mvn of PATH is installed outside (/usr, /bin)",
+                "token=abc"));
+
+        assertEquals("Maven 3.9.x is required in PATH; " + PublicErrorMessages.REDACTED_DETAIL + "; "
+                + PublicErrorMessages.REDACTED_DETAIL, joined);
+        assertFalse(PublicErrorMessages.looksSensitive(joined));
+        assertEquals("", PublicErrorMessages.joinedPublicDetails(java.util.List.of()));
+    }
+
+    @Test
     void safeMessagesPassThroughUnchanged() {
         assertEquals("project not found: demo",
                 PublicErrorMessages.sanitize("project not found: demo", "fallback"));

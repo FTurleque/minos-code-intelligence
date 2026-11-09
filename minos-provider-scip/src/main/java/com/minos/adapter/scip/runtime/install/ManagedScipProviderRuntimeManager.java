@@ -1,11 +1,12 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
+import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProcessPlanFactory;
 import com.minos.adapter.scip.runtime.plan.ScipTypeScriptProcessPlanFactory;
 import com.minos.io.PrivateLocalStorage;
-import com.minos.io.ConfinedFileOpener;
 import com.minos.io.BoundedFileLease;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.local.process.CommandLocator;
@@ -22,13 +23,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import static com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractDistribution;
 import static com.minos.adapter.scip.runtime.install.BoundedZipExtraction.extractZipBounded;
 import static com.minos.adapter.scip.runtime.install.ManagedToolInstallation.deleteRecursively;
@@ -55,7 +53,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     // The URL, version and SHA-256 of every pinned artifact below live in embedded-tools.json (the one
     // description shared with the Docker release image and the Windows distribution build); nothing here
     // repeats them.
-    private static final String COURSIER_ID = "coursier";
+    private static final String COURSIER_ID = CoursierLauncherInstallation.COURSIER_ID;
 
     // A project's own Maven wrapper or a host-installed `mvn` cannot be reached by the Windows
     // AppContainer sandbox in general: wrapper discovery walks ancestor directories the sandbox
@@ -69,7 +67,6 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private static final String JAVA_CLASSPATH_ID = "scip-java-classpath";
     private static final String EMBEDDED_TREE_SOURCE = "embedded-tools-manifest-sha256";
     private static final String CLASSPATH_DIRECTORY = "classpath";
-    private static final long MAX_COURSIER_ARCHIVE_BYTES = 64L * 1024L * 1024L;
     private static final long MAX_MAVEN_ARCHIVE_BYTES = 16L * 1024L * 1024L;
     private static final long MAX_MAVEN_ARCHIVE_ENTRIES = 4_096L;
     private static final long MAX_MAVEN_EXTRACTED_BYTES = 64L * 1024L * 1024L;
@@ -94,11 +91,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     // interpreter and the script are ordinary, sandbox-grantable paths under MINOS_HOME/tools.
     /**
      * What a Windows installation reports until the scip-java chain is run end to end under the AppContainer sandbox.
-     * The chain has only been run outside it: capability honesty forbids calling it ready. No other runtime takes over:
-     * the Docker administration plane launches no provider, so the message names no alternative.
+     * The chain has only been run outside it: capability honesty forbids calling it ready. Java projects are indexed
+     * from Windows through the WSL2 route, which the message names; the Docker administration plane launches no
+     * provider and is not named. The prefix up to "is not qualified" is matched by the offline install qualification.
      */
     static final String SANDBOXED_EXECUTION_NOT_QUALIFIED = "scip-java execution under the Windows AppContainer sandbox "
-            + "is not qualified; MINOS has no supported way to index Java projects from a Windows host "
+            + "is not qualified; index Java projects from Windows through WSL2 with minos index <project> --via-wsl "
             + "(docs/user/troubleshooting.md)";
 
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
@@ -109,17 +107,23 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private final Path home;
     private final Path toolsRoot;
     private final ToolOriginLedger origins;
+    private final CoursierLauncherInstallation coursierLauncher;
     private final ScipJavaMavenOffline mavenOffline;
+    private final ScipJavaProjectJdk projectJdk;
     private volatile PinnedArtifactSource source;
 
     /**
      * @param mavenOffline the offline Maven build of scip-java outside Windows: the designated repository and the
      *     Maven of the PATH ({@link ScipJavaMavenOffline#configured}).
+     * @param projectJdk   the project JDK: {@link ScipJavaProjectJdk#SETTING}, otherwise {@code JAVA_HOME}
      */
-    public ManagedScipProviderRuntimeManager(Path minosHome, ScipJavaMavenOffline mavenOffline) {
+    public ManagedScipProviderRuntimeManager(Path minosHome, ScipJavaMavenOffline mavenOffline,
+                                             ScipJavaProjectJdk projectJdk) {
+        this.projectJdk = Objects.requireNonNull(projectJdk, "projectJdk");
         this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.toolsRoot = home.resolve("tools");
         this.origins = new ToolOriginLedger(toolsRoot);
+        this.coursierLauncher = new CoursierLauncherInstallation(CATALOG, toolsRoot, origins, MINOS_USER_AGENT);
         this.mavenOffline = Objects.requireNonNull(mavenOffline, "mavenOffline");
     }
 
@@ -133,20 +137,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return current;
     }
 
-    private static EmbeddedToolsCatalog.Artifact coursierArtifact() {
-        return CATALOG.artifact(COURSIER_ID, EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64);
-    }
-
     private static EmbeddedToolsCatalog.Artifact mavenArtifact() {
         return CATALOG.artifact(MAVEN_ID, EmbeddedToolsCatalog.PLATFORM_ANY);
     }
 
     private static EmbeddedToolsCatalog.Artifact nodeArtifact() {
         return CATALOG.artifact(NODE_ID, EmbeddedToolsCatalog.PLATFORM_WINDOWS_X64);
-    }
-
-    private static String coursierLauncherId() {
-        return "windows-x64-" + coursierArtifact().version().substring(0, 12);
     }
 
     private static String nodeDistributionId() {
@@ -179,7 +175,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         ProviderRuntimeStatus status = inspect(providerId);
         if (!status.ready() || status.executable().isEmpty()) {
             throw new IllegalStateException("provider runtime is not ready: " + providerId + " — "
-                    + String.join("; ", status.diagnostics()));
+                    + PublicErrorMessages.joinedPublicDetails(status.diagnostics()));
         }
         return switch (providerId) {
             case SCIP_TYPESCRIPT_ID -> StrongOwnedProcessExecutors.required(
@@ -190,7 +186,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
                             CommandLocator.isWindows() ? mavenExecutable() : null,
-                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars), mavenOffline));
+                            scipJavaClasspathFile(), jars -> ClasspathLock.packaged().verify(jars), mavenOffline)
+                            .withProjectJdk(projectJdk));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }
@@ -297,16 +294,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         diagnostics.add(SANDBOXED_EXECUTION_NOT_QUALIFIED);
     }
 
-    private static void addProjectJdkDiagnostics(List<String> diagnostics) {
-        String javaHome = System.getenv("JAVA_HOME");
-        if (javaHome == null || javaHome.isBlank()) {
-            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME is not set to the project JDK"));
-            return;
-        }
-        Path javac = Path.of(javaHome).resolve("bin").resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
-        if (!Files.isRegularFile(javac)) {
-            diagnostics.add(ExternalPrerequisite.of("JAVA_HOME does not contain javac: " + javaHome));
-        }
+    /** The project JDK: {@link ScipJavaProjectJdk#SETTING} when designated, otherwise {@code JAVA_HOME}. */
+    private void addProjectJdkDiagnostics(List<String> diagnostics) {
+        projectJdk.problem().ifPresent(problem -> diagnostics.add(ExternalPrerequisite.of(problem)));
     }
 
     private ProviderRuntimeStatus installTypeScript() throws Exception {
@@ -413,40 +403,14 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private Path ensureCoursier(boolean allowNetwork) throws Exception {
         Optional<Path> existing = coursierExecutable();
-        if (existing.isPresent()) return existing.orElseThrow();
-        if (!CommandLocator.isWindows()) {
-            throw new IllegalStateException("automatic Coursier installation is currently packaged for Windows x64; install `cs` in PATH");
-        }
-        Path directory = toolsRoot.resolve("coursier").resolve(coursierLauncherId());
-        PrivateLocalStorage.ensurePrivateDirectory(directory);
-        Path destination = directory.resolve("cs.exe");
-        Path archive = directory.resolve("cs-x86_64-pc-win32.zip");
-        Path archivePartial = directory.resolve("cs-x86_64-pc-win32.partial.zip");
-        Path executablePartial = directory.resolve("cs.partial.exe");
-        Files.deleteIfExists(archivePartial);
-        Files.deleteIfExists(executablePartial);
+        return existing.isPresent() ? existing.orElseThrow() : coursierLauncher.installForPlatform(source(), allowNetwork);
+    }
 
-        PinnedArtifactSource.Origin origin = source().acquire(
-                coursierArtifact(), archivePartial, MAX_COURSIER_ARCHIVE_BYTES, MINOS_USER_AGENT, allowNetwork);
-        moveFile(archivePartial, archive);
-
-        int executableEntries = 0;
-        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(archive); ZipInputStream zip = new ZipInputStream(input)) {
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                if (!entry.isDirectory() && entry.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) {
-                    executableEntries++;
-                    if (executableEntries == 1) writeNewFile(executablePartial, zip);
-                }
-            }
-        }
-        if (executableEntries != 1 || !Files.isRegularFile(executablePartial) || Files.size(executablePartial) == 0L) {
-            Files.deleteIfExists(executablePartial);
-            throw new IllegalStateException("Coursier launcher ZIP did not contain a Windows executable");
-        }
-        moveFile(executablePartial, destination);
-        origins.record(COURSIER_ID, origin);
-        return destination;
+    /** Installs the Coursier launcher {@code artifact} from {@code artifactSource} (see CoursierLauncherInstallation). */
+    Path installManagedCoursier(
+            PinnedArtifactSource artifactSource, EmbeddedToolsCatalog.Artifact artifact, boolean allowNetwork
+    ) throws IOException, InterruptedException {
+        return coursierLauncher.install(artifactSource, artifact, allowNetwork);
     }
 
     private Path mavenRoot() { return toolsRoot.resolve("maven").resolve(mavenArtifact().version()); }
@@ -710,9 +674,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     }
 
     private Optional<Path> coursierExecutable() {
-        Path managed = toolsRoot.resolve("coursier").resolve(coursierLauncherId())
-                .resolve(CommandLocator.isWindows() ? "cs.exe" : "cs");
-        return Files.isRegularFile(managed) ? Optional.of(managed) : CommandLocator.find("cs");
+        return coursierLauncher.managedExecutable().or(() -> CommandLocator.find("cs"));
     }
 
     private Path typeScriptRoot() { return toolsRoot.resolve("scip-typescript").resolve(SCIP_TYPESCRIPT_VERSION); }

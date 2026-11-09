@@ -6,9 +6,9 @@ Ce guide couvre l’installation native M14, les providers, l’indexation auton
 
 La ligne `error: index failed: …` (code de sortie 1) nomme le run, sa phase et, quand elle est sûre, la cause. Quand la cause cite un chemin local ou un secret, la ligne renvoie à `MINOS_HOME/index-state/runs` : la cause complète est la clé `message` du fichier `<projet>/<run>.properties`, et les journaux du provider sont sous `MINOS_HOME/runs/<run>` (`provider.stderr.log`). Aucun chemin absolu n'apparaît dans la ligne publique.
 
-## Windows : « scip-java execution under the Windows AppContainer sandbox is not qualified »
+## Windows : « scip-java execution under the Windows AppContainer sandbox is not qualified; index Java projects from Windows through WSL2 »
 
-scip-java est `BLOCKED` sous Windows (`minos doctor`, `minos tools verify`, `minos providers scip-java`), `minos tools install scip-java` échoue et l'indexation d'un projet Java est refusée avant tout lancement : la chaîne scip-java Windows n'a pas été exécutée de bout en bout sous le bac à sable AppContainer, et MINOS ne déclare pas prêt ce qui n'est pas qualifié ([ADR 0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)). Les autres providers (TypeScript) ne sont pas touchés. **Aucune voie n'indexe aujourd'hui un projet Java depuis un poste Windows** : le [runtime Docker](docker-runtime.md) ne lance aucun provider (`minos-admin index` y est refusé, `provider runtime is not ready`). Seul recours : indexer le projet par MINOS sur un hôte Linux, ou y produire un artefact SCIP et l'importer sous Windows par `minos import-scip <projet> --provider scip-java --file <index.scip>` (import de diagnostic : le projet n'est pas compilé par MINOS). Sous Windows, le runner scip-java n'utilise que le Windows PowerShell 5.1 du répertoire système (`System32\WindowsPowerShell\v1.0`), jamais un PowerShell du `PATH`.
+scip-java est `BLOCKED` sous Windows natif (`minos doctor`, `minos tools verify`, `minos providers scip-java`), `minos tools install scip-java` échoue et l'indexation native d'un projet Java est refusée avant tout lancement : la chaîne scip-java Windows n'a pas été exécutée de bout en bout sous le bac à sable AppContainer, et MINOS ne déclare pas prêt ce qui n'est pas qualifié ([ADR 0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)). Les autres providers (TypeScript) ne sont pas touchés. **Un projet Java s'indexe depuis Windows par WSL2** : `minos index <projet> --via-wsl`, qui exécute scip-java dans une distribution WSL2 sous le bac à sable Linux ; prérequis et mise en place : [installation, §2 ter](production-installation.md#2-ter-indexer-un-projet-java-depuis-windows-par-wsl2). Le [runtime Docker](docker-runtime.md) ne lance aucun provider (`minos-admin index` y est refusé, `provider runtime is not ready`). Sous Windows, le runner scip-java n'utilise que le Windows PowerShell 5.1 du répertoire système (`System32\WindowsPowerShell\v1.0`), jamais un PowerShell du `PATH`.
 
 ## Commencer par `doctor`
 
@@ -35,7 +35,7 @@ java -version
 .\mvnw.cmd -version
 ```
 
-Le développement de MINOS exige Java 25 et Maven 3.9.x via le wrapper.
+Le développement de MINOS exige Java 21 et Maven 3.9.x via le wrapper.
 
 Une distribution installée embarque son propre runtime et n’exige pas un JDK système pour exécuter la CLI/MCP.
 
@@ -108,12 +108,29 @@ minos.cmd doctor
 minos.cmd index <project> --dry-run
 ```
 
+## Linux : Coursier de `scip-java`
+
+Sous Linux, `minos tools install scip-java` installe lui-même le lanceur Coursier épinglé par le catalogue des outils : l'archive est téléchargée par MINOS, son empreinte SHA-256 est vérifiée avant toute décompression, puis `cs` est publié sous `MINOS_HOME/tools/coursier/`, exécutable par son seul propriétaire. Un `cs` présent dans le `PATH` n'est **pas requis** ; s'il existe et qu'aucun Coursier géré n'est installé, il est utilisé tel quel.
+
+Sans réseau (`MINOS_TOOLS_OFFLINE=1`, ou connexion refusée), l'installation échoue en nommant Coursier (« Coursier launcher could not be installed ») : autoriser le réseau le temps de l'installation, ou placer un `cs` dans le `PATH`. Une archive dont l'empreinte diffère de celle du catalogue est refusée et ne laisse aucun fichier sous `MINOS_HOME/tools/coursier/`.
+
 ## Linux : JDK et Maven de `scip-java` dans le bac à sable
 
 Sous Linux, `scip-java` s'exécute dans le bac à sable bubblewrap avec un egress `DENY`. Le bac à sable ne voit que `/usr`, `/bin`, `/lib`, `/lib64`, `/sbin`, les outils gérés de `MINOS_HOME/tools`, le projet et le run. Il ajoute, en lecture seule :
 
 - **le JDK désigné par `JAVA_HOME`** (ou `JDK_HOME`), entier, où qu'il soit : JDK de paquet (`apt install openjdk-21-jdk`, `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`) ou JDK autonome extrait dans le profil (Temurin, archive) ;
 - **la configuration Java de `/etc` que ce JDK lie**, fichier par fichier, et seulement sous `/etc/java`, `/etc/java-…`, `/etc/javaN…`, `/etc/ssl/certs`, `/etc/pki/java` ou `/etc/pki/ca-trust/extracted`. `/etc` n'est jamais monté en entier ; un lien du JDK vers un autre emplacement n'est pas suivi et le journal le signale (« did not mount … link target(s) of JAVA_HOME »).
+
+Le JDK du projet peut aussi être désigné par le réglage `minos.scip.java.project-jdk`, qui prime alors sur `JAVA_HOME` ; sans lui, `JAVA_HOME` reste la source. Le définir, au choix :
+
+```bash
+# MINOS_HOME/config/minos.properties
+minos.scip.java.project-jdk=/usr/lib/jvm/java-21-openjdk-amd64
+# ou dans l'environnement de MINOS
+export MINOS_SCIP_JAVA_PROJECT_JDK=/usr/lib/jvm/java-21-openjdk-amd64
+```
+
+Le JDK désigné devient le `JAVA_HOME` du provider et passe par les mêmes contrôles : il doit contenir `bin/javac`, et le bac à sable le monte comme ci-dessus. Un JDK désigné sans `javac` est refusé par le nom du réglage (« the project JDK designated by minos.scip.java.project-jdk does not contain javac »), jamais par son chemin. Sans le réglage ni `JAVA_HOME`, `minos doctor` rapporte « JAVA_HOME is not set to the project JDK and minos.scip.java.project-jdk is not set ».
 
 `JAVA_HOME` doit désigner **le répertoire du JDK lui-même**. Une valeur trop large (`/`, `/opt`, `/home`, le répertoire personnel, `MINOS_HOME`, un répertoire sous `/etc`, `/proc`, `/sys`, `/dev` ou `/run`) est refusée avant le lancement : « JAVA_HOME names a directory too broad to mount in the Linux sandbox ».
 

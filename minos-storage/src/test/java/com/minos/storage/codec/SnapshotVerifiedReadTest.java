@@ -42,7 +42,7 @@ class SnapshotVerifiedReadTest {
     void authenticContentIsDecodedInASinglePassOverItsBytes() throws Exception {
         CountingInputStream source = new CountingInputStream(payload);
 
-        CodeKnowledgeSnapshot decoded = SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV3(source, sha256);
+        CodeKnowledgeSnapshot decoded = SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV3(source, sha256, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES);
 
         assertEquals(written, decoded);
         assertEquals(payload.length, source.bytesRead, "every byte is read exactly once");
@@ -81,7 +81,7 @@ class SnapshotVerifiedReadTest {
     @Test
     void authenticContentWithAnotherExpectedChecksumIsRefused() {
         IOException refused = assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport
-                .readVerifiedKnowledgeSnapshotV3(new ByteArrayInputStream(payload), "0".repeat(64)));
+                .readVerifiedKnowledgeSnapshotV3(new ByteArrayInputStream(payload), "0".repeat(64), SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
 
         assertEquals(MISMATCH, refused.getMessage());
     }
@@ -94,19 +94,19 @@ class SnapshotVerifiedReadTest {
         byte[] legacy = Files.readAllBytes(file);
         CountingInputStream source = new CountingInputStream(legacy);
 
-        assertEquals(written, SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV2(source, legacySha));
+        assertEquals(written, SnapshotBinaryCodecSupport.readVerifiedKnowledgeSnapshotV2(source, legacySha, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
         assertEquals(legacy.length, source.bytesRead);
         assertEquals(written, codec.readVerified(file, legacySha));
         byte[] altered = legacy.clone();
         altered[altered.length - 1] ^= 0x01;
         IOException refused = assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport
-                .readVerifiedKnowledgeSnapshotV2(new ByteArrayInputStream(altered), legacySha));
+                .readVerifiedKnowledgeSnapshotV2(new ByteArrayInputStream(altered), legacySha, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
         assertEquals(MISMATCH, refused.getMessage());
     }
 
     private void assertMismatch(byte[] content) {
         IOException refused = assertThrows(IOException.class, () -> SnapshotBinaryCodecSupport
-                .readVerifiedKnowledgeSnapshotV3(new ByteArrayInputStream(content), sha256));
+                .readVerifiedKnowledgeSnapshotV3(new ByteArrayInputStream(content), sha256, SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES));
 
         assertEquals(MISMATCH, refused.getMessage());
     }

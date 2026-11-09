@@ -94,6 +94,6 @@ Ce dernier point est explicitement measurement-gated : M18 ne crée pas un daemo
 - Tests `IdeCommandTest` (`minos-cli`) — handshake JSON stable — et `MinosCliClientTest` (`minos-intellij`, `gradlew test` du même workflow).
 - Revue : un champ consommé supprimé ou renommé, ou une commande obligatoire modifiée, s’accompagne d’une nouvelle version du protocole `minos-ide`.
 
-## Mise en œuvre — note du 2026-10-13
+## Mise en œuvre — baseline Java
 
-La baseline du produit est passée de Java 24 à **Java 25 LTS** ([ADR 0059](archive/0059-migrer-le-socle-vers-java-25-lts.md)). La décision est inchangée : le plugin reste un client externe en Java 21, la frontière de processus sépare désormais Java 21 et Java 25.
+La baseline du produit est **Java 21 LTS** ([ADR GEN-0077](GEN-0077-socle-d-execution-java-21-et-maven.md)), comme celle du plugin. La décision est inchangée : le plugin reste un client externe du protocole CLI, sans dépendance `com.minos:*` ; la frontière de processus, et non de version Java, sépare le plugin et MINOS.

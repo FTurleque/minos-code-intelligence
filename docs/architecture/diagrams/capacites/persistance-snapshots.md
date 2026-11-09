@@ -103,6 +103,71 @@ Tables créées par `PostgresSchemaMigrator` (version de schéma courante 5 ; `r
 backend local porte les mêmes informations en fichiers sous `MINOS_HOME` : `symbol-snapshots/<projet>/`
 (`active.pointer`, snapshots versionnés), `index-state/projects/` et `index-state/runs/`.
 
+### Comment le poids estimé d'une vue décide-t-il de son admission au cache ?
+
+Type : flowchart · Portée : existant vérifié · Exigences : « Un snapshot de la taille de ce dépôt est admis au cache de vues »,
+« Le poids estimé d'une vue ne sous-évalue pas le tas qu'elle retient »
+
+```mermaid
+flowchart LR
+    F["Taille persistée du snapshot"] --> A{"Format ?"}
+    A -- "V3 (mesuré)" --> V3["× 125 %"]
+    A -- "V1 ou V2 (non mesuré)" --> V2["× 200 %"]
+    C["Comptes : 1 024 par symbole, 640 par occurrence, 1 024 par relation"] --> M{"max"}
+    V3 --> M
+    V2 --> M
+    M --> W["+ index des arêtes : poids estimé"]
+    W --> P{"≤ plafond du cache ?"}
+    P -- oui --> Y["Vue en cache : lectures suivantes en millisecondes"]
+    P -- non --> N["Vue servie, non mise en cache : rechargée à chaque requête"]
+```
+
+Les trois valeurs (plafond de persistance 400 Mio, amplifications, plafond du cache 512 Mio) viennent de `SnapshotLimits`
+(`minos-storage/src/main/java/com/minos/storage/codec/SnapshotLimits.java`), et `requireCacheCoversPersistable` impose que le plafond du
+cache couvre le plafond de persistance multiplié par l'amplification de V3. La décision est dans
+`docs/architecture/adr/DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md` (points 12 à 14).
+
+### Quand l'import applique-t-il la rétention, et que rend-il si elle ne tourne pas ?
+
+Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « Un import manuel applique la même
+rétention que l'indexation », « Un verrou de rétention occupé ne fait pas échouer un import publié »
+
+```mermaid
+sequenceDiagram
+    participant CLI as "import-scip"
+    participant Ops as LocalProjectOperations
+    participant Imp as ScipArtifactImporter
+    participant State as IndexStateStore
+    participant Ret as PublishedSnapshotRetention
+    participant Port as StorageRetentionService
+    CLI->>Ops: importScip(projet, artefact, ...)
+    Ops->>State: acquireProjectLease(projectId)
+    alt artefact refusé ou import en échec
+        Ops-->>CLI: exception d'origine (aucune rétention)
+    else snapshot publié
+        Ops->>Imp: importSnapshot(...)
+        Imp-->>Ops: ScipSymbolSnapshotReport
+        Ops->>State: saveProjectState (2 essais)
+        Ops->>Ret: compact(projectId)
+        Ret->>Port: compact(projectId)
+        alt rétention appliquée
+            Port-->>Ret: RetentionResult
+            Ret-->>Ops: aucun diagnostic
+        else IOException (verrou occupé, base indisponible)
+            Port-->>Ret: IOException
+            Ret-->>Ops: "storage retention did not run ..."
+        end
+        Ops-->>CLI: IndexImportResult (commitStatus inchangé, diagnostic combiné)
+    end
+```
+
+L'import compacte sous le bail du projet, après l'enregistrement de l'état : le store fichier protège alors le snapshot
+importé par le pointeur actif et par l'état, et un état resté en attente protège encore celui qu'il désigne.
+`PublishedSnapshotRetention` (`minos-application/src/main/java/com/minos/application/PublishedSnapshotRetention.java`)
+sert aussi aux deux chemins de succès de l'indexation : une `IOException` y devient la même ligne de diagnostic, sans
+cause ni chemin, et le statut de validation n'en dépend pas. Sur PostgreSQL, la rétention réutilise la session du bail
+de cycle de vie et ne regarde que les pointeurs actifs, jamais les runs : un snapshot importé sans run est compacté.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -115,8 +180,8 @@ backend local porte les mêmes informations en fichiers sous `MINOS_HOME` : `sym
 | Une connexion rendue dans un état incertain n'est pas réutilisée | message de l'erreur rejouée non vérifié | — | `minos-storage/src/test/java/com/minos/storage/postgresql/support/PostgresConnectionFactoryValidationTest.java#aConnectionReturnedAfterAnyFailureOfItsCallIsClosedAndNeverReused`, `minos-storage/src/test/java/com/minos/storage/postgresql/support/PostgresConnectionFactoryValidationTest.java#aWriteThatAlreadyRanIsNeverReplayed` | partielle |
 | Une recherche de symbole par identifiant utilise l'index de la vue | tous | — | `minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java#symbolReportReadsTheActiveQueryViewAndNeverTheRawSnapshot`, `minos-application/src/test/java/com/minos/impact/ReadViewSubstitutionTest.java#theRuntimeReportOfASymbolReadsTheSubstituteReader` | couverte |
 | Le poids d'une vue en cache compte ses index dérivés | cache du graphe de programme : poids sans mesure du tas | — | `minos-storage/src/test/java/com/minos/storage/local/store/QueryViewWeightTest.java#estimatedWeightIsNotBelowTheHeapRetainedByTheView`, `minos-engine/src/test/java/com/minos/store/SymbolEdgeIndexTest.java#weightIsChargedPerRelationshipAndSaturates` | partielle |
-| Un snapshot de la taille de ce dépôt est admis au cache de vues | snapshot de 64 Mio non reproduit ; backend PostgreSQL non testé | — | `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreCacheTest.java#aViewWithinTheMeasuredAmplificationOfItsFileIsCached`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreCacheTest.java#aViewHeavierThanTheCacheCeilingIsReloadedOnEveryRead` | partielle |
-| Le poids estimé d'une vue ne sous-évalue pas le tas qu'elle retient | format V3 seulement ; formats non mesurés traités comme V3 (E4) | — | `minos-storage/src/test/java/com/minos/storage/local/store/QueryViewWeightTest.java#estimatedWeightIsNotBelowTheHeapRetainedByTheView` | partielle |
+| Un snapshot de la taille de ce dépôt est admis au cache de vues | snapshot de plus de 64 Mio persistés non reproduit : les tests abaissent les plafonds (V3 admis en un chargement, V1 et V2 amplifiés à 200 %, vue plus lourde que le plafond rechargée) ; mesure réelle sur un snapshot de 339,5 Mio dans `docs/developer/indexing-and-storage.md` | V3 | `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewAdmissionTest.java`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest.java` (Docker requis), `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreCacheTest.java` | partielle |
+| Le poids estimé d'une vue ne sous-évalue pas le tas qu'elle retient | l'amplification de V3 (125 %) ne couvre pas seule le tas des corpus riches en relations (0,84 à 0,88 du tas retenu) : la somme des comptes porte la garantie ; V1 et V2 gardent 200 % ; corpus de plus de 300 Mio non rejoué dans le test | V3 | `minos-storage/src/test/java/com/minos/storage/local/store/QueryViewWeightTest.java#estimatedWeightIsNotBelowTheHeapRetainedByTheView`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotLimitsTest.java` | partielle |
 | Un snapshot altéré n'est ni publié ni mis en cache | tous | V1 | `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreIntegrityTest.java`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotVerifiedReadTest.java#truncatedContentIsAChecksumMismatchNotADecodingError` | couverte |
 | Un snapshot décodé partage une instance par chaîne distincte | tous | — | `minos-storage/src/test/java/com/minos/storage/codec/SnapshotDecodeStringSharingTest.java#utf8DecodingSharesEqualStrings`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotDecodeStringSharingTest.java#sharingIsLocalToOneDecodingPass` | couverte |
 | Une seconde publication identique ne change pas l'état persisté | « duplication détectée » : mutation manuelle ; Docker requis | V2 | `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreTest.java#isIdempotentForSameContent` | partielle |
@@ -139,6 +204,12 @@ backend local porte les mêmes informations en fichiers sous `MINOS_HOME` : `sym
 | La mise en place SCIP passe par des magasins de travail injectés | tous | V1 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycleTest.java#opensEveryWorkingStoreThroughThePortUnderTheStagingRunRoot`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycleTest.java#promotionWithoutAStagedSnapshotFailsAndLeavesTheActiveStoreUnchanged` | couverte |
 | Une lecture de statut ou une réconciliation ne charge pas le snapshot actif | tous | — | `minos-application/src/test/java/com/minos/application/ActiveSnapshotReadCostTest.java#aStatusViewDoesNotLoadTheActiveSnapshot`, `minos-application/src/test/java/com/minos/application/ActiveSnapshotReadCostTest.java#aStateThatReferencesAMissingSnapshotFailsClosedWithoutWriting` | couverte |
 | L'ancien contrat de réconciliation reste disponible et cohérent | tous | — | `minos-application/src/test/java/com/minos/application/ActiveSnapshotReadCostTest.java#theDeprecatedStatusReadLoadsTheSnapshotOnce`, `minos-application/src/test/java/com/minos/application/ActiveSnapshotReadCostTest.java#theDeprecatedRepairLoadsTheSnapshotOnce` | couverte |
+| Un snapshot de plus de 256 Mio est persisté jusqu'au plafond de persistance | tous, avec des plafonds abaissés en test (un snapshot réel de plus de 256 Mio n'est pas rejoué ; mesure réelle de 339,5 Mio dans `docs/developer/indexing-and-storage.md`) ; PostgreSQL avec Docker | V3 | `minos-storage/src/test/java/com/minos/storage/local/store/SnapshotPersistenceCeilingTest.java#aSnapshotAboveTheFormerCeilingIsPublishedUnderTheCurrentOneAndReadBack`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotReadCeilingTest.java#aSnapshotPublishedUnderARaisedCeilingIsReadUnderIt` | partielle |
+| Un snapshot au-delà du plafond de persistance est refusé sans rien écrire | tous | V3 | `minos-storage/src/test/java/com/minos/storage/local/store/PersistedSnapshotLimitTest.java#oversizedSnapshotLeavesNoFileAndKeepsTheActiveSnapshot`, `minos-storage/src/test/java/com/minos/storage/local/store/PersistedSnapshotLimitTest.java#theProductionCeilingIsFourHundredMebibytesAndTheRefusalNamesIt` | couverte |
+| Le plafond du cache de vues couvre tout snapshot persistable | tous (volet PostgreSQL avec Docker) | V3 | `minos-storage/src/test/java/com/minos/storage/codec/SnapshotLimitsTest.java#theProductionCacheCeilingCoversTheLargestPersistableSnapshot`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotLimitsTest.java#aCacheCeilingBelowThePersistableViewWeightIsRefusedNamingTheThreeValues`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreLimitsTest.java`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreLimitsTest.java` | couverte |
+| Un import manuel applique la même rétention que l'indexation | tous ; mesure réelle sur un projet de 340 Mio non refaite | V4 | `minos-cli/src/test/java/com/minos/cli/ImportScipRetentionTest.java#fourDistinctImportsKeepTheActiveSnapshotAndTwoHistoricalOnes`, `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aPublishedImportCompactsTheProjectOnceAfterItsStateIsSaved`, `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aRefusedArtifactAppliesNoRetention` | couverte |
+| Un verrou de rétention occupé ne fait pas échouer un import publié | tous | V4 | `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aBusyRetentionLeavesTheImportCommittedWithADiagnosticWithoutItsCause`, `minos-application/src/test/java/com/minos/application/LocalProjectOperationsRetentionTest.java#aBusyRetentionAfterAPendingStateKeepsBothDiagnosticsInOrder`, `minos-application/src/test/java/com/minos/application/PublishedSnapshotRetentionTest.java#anInputOutputFailureIsAFixedDiagnosticWithoutItsCause` | couverte |
+| La rétention après un import s'applique au store PostgreSQL | tous (Docker requis) ; l'import complet n'est pas rejoué sur PostgreSQL, seule la rétention | V2 | `minos-storage/src/test/java/com/minos/storage/postgresql/project/PostgresStorageRetentionServiceTest.java#compactsSnapshotsImportedWithoutAnyRun` | partielle |
 | Les contrôles d'identité du snapshot actif ne le chargent pas | tous | — | `minos-application/src/test/java/com/minos/application/ActiveSnapshotReadCostTest.java#aHostedBindingToTheActiveSnapshotIsAcceptedWithoutLoadingIt`, `minos-application/src/test/java/com/minos/application/indexing/PromotedSnapshotIdentityTest.java` | couverte |
 
 Les tests PostgreSQL se sautent sans Docker, sauf avec `-Dminos.postgresql.tests.required=true`
@@ -151,7 +222,6 @@ Les tests PostgreSQL se sautent sans Docker, sauf avec `-Dminos.postgresql.tests
 | E1 | La spec et certains scénarios parlent des modules `minos-storage-local` et `minos-storage-postgresql` ; ce ne sont pas des modules du reactor, les backends sont des packages de `minos-storage` | `pom.xml` (liste des modules) | [Proposition] Corriger les références par un changement |
 | E2 | La spec demande un message qui nomme le fichier du pointeur ; les messages sont génériques et le test les fige ainsi | `minos-storage/src/main/java/com/minos/storage/local/store/ActiveSnapshotRepository.java:95`, `minos-storage/src/test/java/com/minos/storage/local/store/ActivePointerCorruptionTest.java:28` | [Proposition] Nommer `active.pointer` (nom de fichier, pas chemin) |
 | E3 | La spec demande qu'un échec de migration nomme l'étape ; le message est générique, le test ne vérifie que la cause | `minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSchemaMigrator.java:67` | [Proposition] Nommer la version de l'étape en échec |
-| E4 | La spec garde une amplification prudente pour un format de snapshot non mesuré ; le code applique le facteur 2, mesuré sur V3, à tous les formats | `minos-storage/src/main/java/com/minos/storage/local/store/FileSymbolSnapshotStore.java:54` | [Question] Mesurer V1 et V2, ou appliquer l'amplification prudente aux formats non mesurés ? |
 | E5 | Le test de migration écrit en dur la liste des versions 1 à 5 ; le scénario « base plus récente » cite 6, le test 999 | `minos-storage/src/test/java/com/minos/storage/postgresql/support/PostgresSchemaUpgradeFromV1Test.java:33` | [Proposition] Dériver la liste de la version courante |
 | E6 | Un échec de suppression de l'arbre de staging après promotion est ignoré ; rien ne prouve sa récupération ultérieure | `minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java:152` | [Question] Récupération par la rétention, à vérifier |
 

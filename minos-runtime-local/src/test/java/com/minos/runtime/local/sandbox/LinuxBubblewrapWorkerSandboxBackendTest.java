@@ -73,6 +73,10 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         assertTrue(discovered.orElseThrow().enforcesNetworkDeny());
         assertFalse(discovered.orElseThrow().qualification().sandboxClaimPermitted(),
                 "sampled filesystem limits must not qualify execution of untrusted code");
+        assertFalse(command.contains("--setenv"),
+                "the sandbox sets no variable: a JVM banner would reach the output of the analysed build");
+        assertFalse(command.contains(LinuxBubblewrapWorkerSandboxBackend.JOB_CGROUP_VIEW),
+                "without a job there is no cgroup view");
     }
 
     @Test
@@ -266,13 +270,13 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
                         Path status = process.resolve("status");
                         if (!account.equals(statusField(status, "Uid:"))) continue;
                         tasks += Long.parseLong(statusField(status, "Threads:"));
-                    } catch (IOException | RuntimeException _) {
+                    } catch (IOException | RuntimeException ignored) {
                         // The process exited while it was being read.
                     }
                 }
             }
             return tasks;
-        } catch (IOException | RuntimeException _) {
+        } catch (IOException | RuntimeException ignored) {
             return -1L;
         }
     }
@@ -280,7 +284,7 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
     private static void awaitQuietly(CountDownLatch release) {
         try {
             release.await();
-        } catch (InterruptedException _) {
+        } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
     }

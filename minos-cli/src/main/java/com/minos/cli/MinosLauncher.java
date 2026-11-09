@@ -4,6 +4,7 @@ import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.LazyApplication;
 import com.minos.application.MinosApplication;
+import com.minos.application.WslIndexingWorker;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.runtime.MinosVersion;
 
@@ -72,19 +73,7 @@ public final class MinosLauncher {
             } else if (MinosCliRunner.isIdeHandshake(arguments)) {
                 exitCode = MinosCliRunner.runIdeHandshake(arguments, out, err);
             } else {
-                Path home = resolveHome(environment, properties);
-                if (arguments.length == 1 && "mcp".equals(arguments[0])) {
-                    // Route before opening MinosApplication so Docker MCP does not touch native
-                    // business stores. The registered entry point (minos-app's McpBackendRouter)
-                    // still validates/hardens MINOS_HOME before it reads backend.properties or
-                    // performs any Docker side effect. ADR 0044: minos-cli cannot depend on
-                    // minos-mcp, so the route is an SPI resolved in MINOS's own class loader.
-                    exitCode = McpLaunchRoutes.resolve().run(home);
-                } else {
-                    try (LazyApplication application = LazyApplication.opening(home, () -> opener.open(home))) {
-                        exitCode = runner.run(application, arguments, out, err);
-                    }
-                }
+                exitCode = runOnHome(resolveHome(environment, properties), arguments, out, err, opener, runner);
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -97,6 +86,27 @@ public final class MinosLauncher {
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
         }
         return exitCode;
+    }
+
+    /** A command that needs MINOS_HOME: the MCP route, the internal WSL worker, or a command on the application. */
+    private static int runOnHome(Path home, String[] arguments, PrintStream out, PrintStream err,
+                                 ApplicationOpener opener, CommandRunner runner) throws Exception {
+        if (arguments.length == 1 && "mcp".equals(arguments[0])) {
+            // Route before opening MinosApplication so Docker MCP does not touch native
+            // business stores. The registered entry point (minos-app's McpBackendRouter)
+            // still validates/hardens MINOS_HOME before it reads backend.properties or
+            // performs any Docker side effect. ADR 0044: minos-cli cannot depend on
+            // minos-mcp, so the route is an SPI resolved in MINOS's own class loader.
+            return McpLaunchRoutes.resolve().run(home);
+        }
+        if (WslWorkerLaunch.isWorkerCommand(arguments)) {
+            // The internal worker of the WSL2 route runs one provider: it opens no application, and the
+            // composition root offers it on Linux only.
+            return WslWorkerLaunch.run(arguments, WslIndexingWorker::forHome, home, out, err);
+        }
+        try (LazyApplication application = LazyApplication.opening(home, () -> opener.open(home))) {
+            return runner.run(application, arguments, out, err);
+        }
     }
 
     public static int run(

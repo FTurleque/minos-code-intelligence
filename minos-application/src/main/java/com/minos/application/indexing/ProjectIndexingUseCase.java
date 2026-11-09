@@ -2,6 +2,7 @@ package com.minos.application.indexing;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectIndexStateReconciler;
+import com.minos.application.PublishedSnapshotRetention;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.diagnostics.PublicErrorMessages;
@@ -75,6 +76,7 @@ public final class ProjectIndexingUseCase {
     private final IncrementalIndexingPlanner planner;
     private final Function<String, IndexerRegistry> indexerRegistries;
     private final StorageRetentionService retentionService;
+    private final PublishedSnapshotRetention publishedRetention;
     private final SemanticRefresh semanticRefresh;
     private final UnaryOperator<IndexerExecutor> executorDecorator;
 
@@ -196,6 +198,7 @@ public final class ProjectIndexingUseCase {
         this.planner = dependencies.planner();
         this.indexerRegistries = dependencies.indexerRegistries();
         this.retentionService = dependencies.retentionService();
+        this.publishedRetention = new PublishedSnapshotRetention(retentionService);
         this.semanticRefresh = dependencies.semanticRefresh();
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
     }
@@ -203,12 +206,18 @@ public final class ProjectIndexingUseCase {
     /** The production wiring: every port comes from the application (ADR 0042: markers from the composition root). */
     public static ProjectIndexingUseCase of(MinosApplication application, UnaryOperator<IndexerExecutor> executorDecorator) {
         Objects.requireNonNull(application, "application");
-        return new ProjectIndexingUseCase(new Dependencies(
+        return new ProjectIndexingUseCase(dependencies(application, application.providerRuntimeManager()),
+                executorDecorator);
+    }
+
+    /** The ports of the application, with the provider runtimes of the chosen route. */
+    private static Dependencies dependencies(MinosApplication application, ProviderRuntimeManager runtimes) {
+        return new Dependencies(
                 application.projectRegistry(),
                 application.snapshotStore(),
                 application.indexStateStore(),
                 application.fingerprintStore(),
-                application.providerRuntimeManager(),
+                runtimes,
                 application.snapshotStager(),
                 application.snapshotPromoter(),
                 application.compositionRoot().resumableRunMarkers(application.home()),
@@ -218,12 +227,27 @@ public final class ProjectIndexingUseCase {
                 application.incrementalIndexingPlanner(),
                 application::indexerRegistry,
                 application.retentionService(),
-                semanticRefresh(application.semanticIndexService())), executorDecorator);
+                semanticRefresh(application.semanticIndexService()));
     }
 
     /** The production wiring without executor decoration: the local indexing of every surface. */
     public static ProjectIndexingUseCase of(MinosApplication application) {
         return of(application, UnaryOperator.identity());
+    }
+
+    /**
+     * The production wiring of the WSL2 route: the same orchestration, with the provider runtimes of the route that
+     * the composition root offers (scip-java routed to the distribution, every other provider native). Empty when
+     * this installation does not offer the route; nothing is resolved then.
+     *
+     * @param distribution the WSL distribution name, or empty for the default distribution of WSL
+     */
+    public static Optional<ProjectIndexingUseCase> viaWsl(MinosApplication application, Optional<String> distribution) {
+        Objects.requireNonNull(application, "application");
+        Objects.requireNonNull(distribution, "distribution");
+        return application.compositionRoot().wslIndexingRoute(application.home())
+                .map(route -> new ProjectIndexingUseCase(dependencies(application,
+                        route.runtimes(application.providerRuntimeManager(), distribution)), UnaryOperator.identity()));
     }
 
     /** The semantic refresh of the product: skipped without an embedding provider, never fatal to the index. */
@@ -272,7 +296,7 @@ public final class ProjectIndexingUseCase {
                            IndexingResumePolicy resumePolicy) throws IOException {
         Objects.requireNonNull(resumePolicy, "resumePolicy");
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (var _ = stateStore.acquireProjectLease(project.id())) {
+        try (var ignored = stateStore.acquireProjectLease(project.id())) {
             // ADR 0039 sec. 6: --no-resume forces a complete run (it supersedes the interrupted run and indexes
             // everything), it is not only a resume policy: on an unchanged project it must not answer NO_CHANGES.
             boolean complete = forceFull || resumePolicy == IndexingResumePolicy.NO_RESUME;
@@ -314,7 +338,8 @@ public final class ProjectIndexingUseCase {
         for (ProviderRuntimeStatus runtime : prepared.providerRuntimes()) {
             if (runtime.state() != ProviderRuntimeStatus.State.READY) {
                 throw new IllegalStateException("provider runtime is not ready: " + runtime.providerId()
-                        + (runtime.diagnostics().isEmpty() ? "" : " — " + String.join("; ", runtime.diagnostics())));
+                        + (runtime.diagnostics().isEmpty() ? ""
+                                : " — " + PublicErrorMessages.joinedPublicDetails(runtime.diagnostics())));
             }
         }
     }
@@ -449,18 +474,9 @@ public final class ProjectIndexingUseCase {
         return recovered;
     }
 
-    /**
-     * Retention is maintenance after an index that already succeeded. Its lock is bounded, so it can time out
-     * behind a concurrent compaction: that must not turn a successful index into a failure. The diagnostic
-     * never carries the cause, which may name a path.
-     */
+    /** Retention after an index that already succeeded: a busy lock is a diagnostic, never a failure. */
     private String compactAfterSuccess(UUID projectId) {
-        try {
-            retentionService.compact(projectId);
-            return null;
-        } catch (IOException _) {
-            return "storage retention did not run (its lock was busy or unavailable); it runs after the next indexing";
-        }
+        return publishedRetention.compact(projectId).orElse(null);
     }
 
     private static String combineDiagnostics(String first, String second) {
@@ -484,7 +500,7 @@ public final class ProjectIndexingUseCase {
         try {
             baseline = fingerprintStore.loadActive(project.id());
             invalidation = invalidationService.assess(indexState, baseline, current, discovery);
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // D3 (a): the unreadable baseline is declared, never treated as absent in silence; the cause may name a
             // path and is not carried.
             baselineDiagnostic = Optional.of(BASELINE_UNREADABLE_DIAGNOSTIC);

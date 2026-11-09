@@ -76,7 +76,7 @@ public final class WindowsIcacls {
         Process process;
         try {
             process = launcher.start(command);
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             throw new IOException(refusal + ": icacls cannot be started");
         }
         try {
@@ -84,7 +84,7 @@ public final class WindowsIcacls {
                 process.destroyForcibly();
                 throw new IOException(refusal + ": timed out");
             }
-        } catch (InterruptedException _) {
+        } catch (InterruptedException ignored) {
             process.destroyForcibly();
             Thread.currentThread().interrupt();
             throw new IOException(refusal + ": interrupted");

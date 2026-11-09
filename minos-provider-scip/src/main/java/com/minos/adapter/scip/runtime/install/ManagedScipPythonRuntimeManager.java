@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.adapter.scip.runtime.plan.ScipPythonProcessPlanFactory;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.PrivateLocalStorage;
@@ -162,7 +163,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         ProviderRuntimeStatus status = inspect(providerId);
         if (!status.ready() || status.executable().isEmpty()) {
             throw new IllegalStateException("provider runtime is not ready: " + providerId + " — "
-                    + String.join("; ", status.diagnostics()));
+                    + PublicErrorMessages.joinedPublicDetails(status.diagnostics()));
         }
         Path python = pythonExecutable().orElseThrow();
         Path pip = pipExecutable(python).orElseThrow();

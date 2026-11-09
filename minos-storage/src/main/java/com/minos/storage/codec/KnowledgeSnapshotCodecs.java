@@ -15,9 +15,7 @@ import java.util.OptionalLong;
  */
 public final class KnowledgeSnapshotCodecs {
 
-    private static final SnapshotCodecV1 V1 = new SnapshotCodecV1();
-    private static final SnapshotCodecV2 V2 = new SnapshotCodecV2();
-    private static final SnapshotCodecV3 V3 = new SnapshotCodecV3();
+    private static final String LIMITS = "limits";
 
     private KnowledgeSnapshotCodecs() {
     }
@@ -27,32 +25,58 @@ public final class KnowledgeSnapshotCodecs {
      * {@link SnapshotCodec#MAX_PERSISTED_SNAPSHOT_BYTES}.
      */
     public static Selection select(CodeKnowledgeSnapshot snapshot) throws IOException {
+        return select(snapshot, SnapshotLimits.production());
+    }
+
+    /** As {@link #select(CodeKnowledgeSnapshot)}, refusing a snapshot above {@code limits.maxPersistedBytes()}. */
+    public static Selection select(CodeKnowledgeSnapshot snapshot, SnapshotLimits limits) throws IOException {
         Objects.requireNonNull(snapshot, "snapshot");
-        OptionalLong utf8 = V3.encodedSizeIfEncodable(snapshot);
+        Objects.requireNonNull(limits, LIMITS);
+        long ceiling = limits.maxPersistedBytes();
+        SnapshotCodecV3 currentCodec = new SnapshotCodecV3(limits);
+        OptionalLong utf8 = currentCodec.encodedSizeIfEncodable(snapshot);
         if (utf8.isPresent()) {
-            return new Selection(V3, SnapshotBinaryCodecSupport.requirePersistable(utf8.getAsLong()));
+            return new Selection(currentCodec, SnapshotBinaryCodecSupport.requirePersistable(utf8.getAsLong(), ceiling));
         }
-        return new Selection(V2, V2.requirePersistable(snapshot));
+        SnapshotCodec fallbackCodec = forVersion(SnapshotBinaryCodecSupport.FORMAT_VERSION_V2, limits);
+        return new Selection(fallbackCodec, fallbackCodec.requirePersistable(snapshot));
     }
 
     /** Codec of a known format version. */
     public static SnapshotCodec forVersion(int formatVersion) throws IOException {
+        return forVersion(formatVersion, SnapshotLimits.production());
+    }
+
+    /** Codec of a known format version, bound to the ceiling of {@code limits}. */
+    public static SnapshotCodec forVersion(int formatVersion, SnapshotLimits limits) throws IOException {
+        Objects.requireNonNull(limits, LIMITS);
         return switch (formatVersion) {
-            case SnapshotBinaryCodecSupport.FORMAT_VERSION_V1 -> V1;
-            case SnapshotBinaryCodecSupport.FORMAT_VERSION_V2 -> V2;
-            case SnapshotBinaryCodecSupport.FORMAT_VERSION_V3 -> V3;
+            case SnapshotBinaryCodecSupport.FORMAT_VERSION_V1 -> new SnapshotCodecV1(limits);
+            case SnapshotBinaryCodecSupport.FORMAT_VERSION_V2 -> new SnapshotCodecV2(limits);
+            case SnapshotBinaryCodecSupport.FORMAT_VERSION_V3 -> new SnapshotCodecV3(limits);
             default -> throw new IOException("unsupported knowledge snapshot format version: " + formatVersion);
         };
     }
 
     /** Format version declared by a stored payload's header. */
     public static int formatVersionOf(Path payload) throws IOException {
-        return SnapshotBinaryCodecSupport.readFormatVersion(Objects.requireNonNull(payload, "payload"));
+        return formatVersionOf(payload, SnapshotLimits.production());
+    }
+
+    /** Format version declared by a stored payload's header, refusing a payload above the ceiling of {@code limits}. */
+    public static int formatVersionOf(Path payload, SnapshotLimits limits) throws IOException {
+        return SnapshotBinaryCodecSupport.readFormatVersion(
+                Objects.requireNonNull(payload, "payload"), Objects.requireNonNull(limits, LIMITS).maxPersistedBytes());
     }
 
     /** Reads a stored payload in the format its header declares. */
     public static CodeKnowledgeSnapshot read(Path payload) throws IOException {
-        return forVersion(formatVersionOf(payload)).read(payload);
+        return read(payload, SnapshotLimits.production());
+    }
+
+    /** Reads a stored payload in the format its header declares, up to the ceiling of {@code limits}. */
+    public static CodeKnowledgeSnapshot read(Path payload, SnapshotLimits limits) throws IOException {
+        return forVersion(formatVersionOf(payload, limits), limits).read(payload);
     }
 
     public record Selection(SnapshotCodec codec, long encodedBytes) {

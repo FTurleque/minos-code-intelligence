@@ -11,6 +11,7 @@ import com.minos.runtime.local.process.IndexerProcessPlanFactory;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -58,6 +59,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     private final Path classpathFile;
     private final ScipJavaClasspath.Verifier classpathVerifier;
     private final ScipJavaMavenOffline mavenOffline;
+    private final ScipJavaProjectJdk projectJdk;
 
     /**
      * @param coursier Coursier, handed to the Windows runner; unused off Windows.
@@ -79,6 +81,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             ScipJavaClasspath.Verifier classpathVerifier,
             ScipJavaMavenOffline mavenOffline
     ) {
+        this.projectJdk = ScipJavaProjectJdk.fromEnvironment();
         this.coursier = Objects.requireNonNull(coursier, "coursier").toAbsolutePath().normalize();
         if (coordinate == null || coordinate.isBlank()) {
             throw new IllegalArgumentException("coordinate must not be blank");
@@ -92,6 +95,22 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         this.mavenOffline = Objects.requireNonNull(mavenOffline, "mavenOffline");
     }
 
+    /** The same plan factory with another project JDK (ADR 0045: a named entry, not a longer constructor). */
+    public ScipJavaProcessPlanFactory withProjectJdk(ScipJavaProjectJdk jdk) {
+        return new ScipJavaProcessPlanFactory(this, jdk);
+    }
+
+    private ScipJavaProcessPlanFactory(ScipJavaProcessPlanFactory base, ScipJavaProjectJdk jdk) {
+        this.coursier = base.coursier;
+        this.coordinate = base.coordinate;
+        this.windowsRunner = base.windowsRunner;
+        this.windowsManagedMaven = base.windowsManagedMaven;
+        this.classpathFile = base.classpathFile;
+        this.classpathVerifier = base.classpathVerifier;
+        this.mavenOffline = base.mavenOffline;
+        this.projectJdk = Objects.requireNonNull(jdk, "projectJdk");
+    }
+
     @Override
     public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws IOException {
         Path root = request.projectRoot().toAbsolutePath().normalize();
@@ -102,7 +121,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("scip-java incremental execution is not qualified");
         }
-        requireProjectJdk();
+        projectJdk.home();
 
         Path normalizedRunDirectory = runDirectory.toAbsolutePath().normalize();
         Path output = normalizedRunDirectory.resolve("index.scip");
@@ -147,7 +166,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         return new IndexerProcessPlan(
                 CommandLocator.invocation(powershell, runner.toArray(String[]::new)),
                 root,
-                Map.of(),
+                jdkEnvironment(),
                 providerOutput.resolve("index.scip"),
                 Duration.ofHours(1)
         );
@@ -173,13 +192,13 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         Path targetRoot = targetRoot(output);
         List<String> command = new ArrayList<>(launcher == null
                 ? standaloneCommand(standalone.orElseThrow(), output, targetRoot)
-                : classpathCommand(projectJava(), launcher, output, targetRoot));
+                : classpathCommand(projectJdk.java(), launcher, output, targetRoot));
         command.add("--");
         command.addAll(maven.mavenArguments());
         return new IndexerProcessPlan(
                 command,
                 executionRoot,
-                Map.of(),
+                portableJdkEnvironment(),
                 output,
                 Duration.ofHours(1),
                 maven.readOnlyRoots(),
@@ -357,21 +376,28 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         return target;
     }
 
-    /** The {@code java} of the project JDK that {@link #requireProjectJdk()} accepted. */
-    private static Path projectJava() {
-        return Path.of(System.getenv("JAVA_HOME")).resolve("bin").resolve(CommandLocator.isWindows() ? "java.exe" : "java");
+    /**
+     * The provider environment of the project JDK: a JDK designated by {@link ScipJavaProjectJdk#SETTING} becomes the
+     * {@code JAVA_HOME} of the provider (and so a mounted toolchain of the sandbox); without the setting the provider
+     * inherits {@code JAVA_HOME} as before.
+     */
+    private Map<String, String> jdkEnvironment() {
+        return projectJdk.designated() ? Map.of("JAVA_HOME", projectJdk.home().toString()) : Map.of();
     }
 
-    private static void requireProjectJdk() {
-        String javaHome = System.getenv("JAVA_HOME");
-        if (javaHome == null || javaHome.isBlank()) {
-            throw new IllegalStateException("scip-java requires a project JDK: JAVA_HOME is not set");
+    /**
+     * The provider environment of the project JDK outside Windows: a designated JDK is also the first entry of the
+     * {@code PATH}. The compiler wrapper scip-java generates runs {@code java} from the {@code PATH}, and the
+     * {@code java} of the host may live in a directory the Linux sandbox does not mount.
+     */
+    private Map<String, String> portableJdkEnvironment() {
+        if (!projectJdk.designated()) {
+            return Map.of();
         }
-        Path bin = Path.of(javaHome).resolve("bin");
-        Path javac = bin.resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
-        if (!Files.isRegularFile(javac)) {
-            throw new IllegalStateException("JAVA_HOME does not point to a JDK containing javac: " + javaHome);
-        }
+        String bin = projectJdk.home().resolve("bin").toString();
+        String inherited = System.getenv("PATH");
+        String path = inherited == null || inherited.isBlank() ? bin : bin + File.pathSeparator + inherited;
+        return Map.of("JAVA_HOME", projectJdk.home().toString(), "PATH", path);
     }
     /**
      * The Windows PowerShell of the system directory, the one the AppContainer sandbox trusts. PATH is not a source:

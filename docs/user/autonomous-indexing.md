@@ -95,6 +95,16 @@ build Maven exploitable
 
 L'indexeur est lancé depuis la racine du projet. Le `index.scip` éventuellement déjà présent est préservé et restauré après le run ; MINOS travaille sur une copie conservée dans son répertoire de run.
 
+## Taille d'un projet indexable
+
+MINOS garde pour chaque projet un snapshot de sa connaissance : fichiers, symboles, occurrences, relations. Il persiste un snapshot jusqu'à **400 Mio**. Mesuré sur un projet Java réel (`morpheus-engine`, 1 488 fichiers Java dont 769 de tests, environ 197 000 lignes), le snapshot fait 339,5 Mio, soit de l'ordre de 0,23 Mio par fichier Java, tests compris ; la taille varie avec le contenu, donc ce rapport est un ordre de grandeur, pas une garantie.
+
+Au-delà du plafond, l'indexation s'arrête sans rien écrire et l'index précédent reste actif. Le message commence par `knowledge snapshot is too large to persist:` et ne donne que deux tailles en octets, la taille encodée et le plafond. MINOS n'offre pas d'option pour exclure des fichiers de l'index : réduire la taille demande d'indexer un projet plus petit.
+
+Un snapshot s'interroge en mémoire : la vue d'un snapshot retient environ 1,05 à 1,5 fois la taille de son fichier (1,05 mesuré sur `morpheus-engine`). Le serveur MCP garde cette vue en cache tant qu'elle tient dans son plafond ; sinon il la recharge à chaque requête, ce qui prend de 3 à 4 s avec le stockage fichier et de 10 à 14 s avec PostgreSQL pour un snapshot de 340 Mio. Sous Docker, le tas de la JVM suit le plafond mémoire du conteneur : voir [docker-runtime.md](docker-runtime.md).
+
+Cette taille n'est pas qualifiée sous Linux : les mesures viennent de Windows.
+
 ## Provider TypeScript
 
 Le runtime géré installe `scip-typescript` localement dans `MINOS_HOME/tools`.
@@ -178,3 +188,9 @@ minos import-scip my-project --file .\index.scip --provider custom
 ```
 
 Ce chemin est destiné aux diagnostics, fixtures et providers qui ne disposent pas encore d'un executor MINOS.
+
+L'import décode l'artefact en mémoire. Il refuse, sans rien écrire, un artefact dont le décodage estimé dépasse le tiers du tas de la JVM ; le message commence par `SCIP index exceeds safe decode heap budget`. Mesuré, le SCIP de 52 Mo d'un projet Java de 1 488 fichiers est refusé sous un tas de 512 Mo et importé dès 576 Mo.
+
+Un import qui publie son snapshot applique ensuite la même rétention que `minos index` : le projet garde le snapshot actif et les deux snapshots historiques les plus récents, les plus anciens sont supprimés. Pour un projet de cette taille (340 Mio par snapshot), l'espace occupé reste ainsi de l'ordre de 1 Gio quel que soit le nombre d'imports. Ré-importer un artefact identique ne crée pas de snapshot supplémentaire. Un import refusé ou en échec ne supprime rien.
+
+Si la rétention ne peut pas s'exécuter (son verrou est pris par une autre opération sur le même projet), l'import reste réussi et le champ `diagnostic` de la sortie l'indique : `storage retention did not run (its lock was busy or unavailable); it runs after the next indexing`. Le prochain import ou la prochaine indexation l'applique.

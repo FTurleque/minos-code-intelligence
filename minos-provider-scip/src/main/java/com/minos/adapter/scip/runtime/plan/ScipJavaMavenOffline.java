@@ -149,9 +149,19 @@ public final class ScipJavaMavenOffline {
     /** Path-free diagnostics of everything the offline build lacks; empty when it can run. */
     public List<String> problems() {
         List<String> problems = new ArrayList<>();
-        maven().problem().ifPresent(problems::add);
-        repository().problem().ifPresent(problems::add);
+        mavenProblem().ifPresent(problems::add);
+        repositoryProblem().ifPresent(problems::add);
         return problems;
+    }
+
+    /** Path-free diagnostic of the Maven of the PATH; empty when it is a qualified 3.9.x visible to the sandbox. */
+    public Optional<String> mavenProblem() {
+        return maven().problem();
+    }
+
+    /** Path-free diagnostic of the designated Maven repository; empty when it may be mounted. */
+    public Optional<String> repositoryProblem() {
+        return repository().problem();
     }
 
     /** Decides whether the designation may be mounted (ADR SEC-0076, decision 3). */
@@ -160,7 +170,7 @@ public final class ScipJavaMavenOffline {
         Path named;
         try {
             named = Path.of(designation);
-        } catch (InvalidPathException _) {
+        } catch (InvalidPathException ignored) {
             return refused("it is not a path");
         }
         if (!named.isAbsolute()) return refused("it is not an absolute path");
@@ -169,7 +179,7 @@ public final class ScipJavaMavenOffline {
         Path real;
         try {
             real = normalized.toRealPath();
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             return refused("it cannot be resolved");
         }
         if (!real.equals(normalized)) return refused("a component of its path is a symbolic link");
@@ -191,7 +201,7 @@ public final class ScipJavaMavenOffline {
         try {
             Path real = launcher.orElseThrow().toRealPath();
             home = real.getParent() == null ? null : real.getParent().getParent();
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             home = null;
         }
         if (home == null) {
@@ -279,7 +289,7 @@ public final class ScipJavaMavenOffline {
                     return Optional.of(matcher.group(1) + "." + matcher.group(2) + "." + matcher.group(3));
                 }
             }
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // An unreadable installation has no version that MINOS can vouch for.
             return Optional.empty();
         }
@@ -318,7 +328,7 @@ public final class ScipJavaMavenOffline {
         if (location == null) return Stream.empty();
         try {
             return Files.exists(location) ? Stream.of(location, location.toRealPath()).distinct() : Stream.of(location);
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // Unresolvable now: only the normalized spelling can be compared, which is never broader.
             return Stream.of(location);
         }
@@ -347,7 +357,7 @@ public final class ScipJavaMavenOffline {
                     return Optional.of("its root holds a file that is not Maven repository metadata");
                 }
             }
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             return Optional.of("its content cannot be listed");
         }
         return Optional.empty();

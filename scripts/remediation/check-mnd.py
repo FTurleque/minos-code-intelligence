@@ -57,7 +57,8 @@ def main() -> int:
         discovery = read("minos-engine/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
         plugins = read("minos-engine/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
         registry = read("minos-storage/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java")
-        coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
+        managed = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManager.java")
+        coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/CoursierLauncherInstallation.java")
         pinned = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/install/PinnedArtifactSource.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 
@@ -97,7 +98,7 @@ def main() -> int:
         forbid("SemanticIndexBudget.java", semantic_budget, "Float.BYTES")
 
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres,
-                "activeMetadata(projectId)", "queryCache", "MAX_QUERY_CACHE_WEIGHT_BYTES", "buildLocks")
+                "activeMetadata(projectId)", "queryCache", "limits.maxQueryCacheWeightBytes()", "buildLocks")
         require("ProgramGraphService.java", graph_service,
                 "WeightedLruCache<CacheKey, GraphEntry> cache", "evidenceWeight", "stringWeight", "maximumWeight")
         require("FingerprintConstrainedJavaProgramGraphProvider.java", fingerprints,
@@ -116,12 +117,15 @@ def main() -> int:
         forbid("InterProcessLocalProjectRegistry.java", registry, "ConcurrentMap<Path, ReentrantLock>")
 
         # D1: the pinned downloads (Coursier, Maven, Node, nupkg) go through PinnedArtifactSource, which streams the body
-        # through a BoundedInputStream; the manager keeps the per-artifact byte ceiling it passes to it.
-        require("ManagedScipProviderRuntimeManager.java", coursier,
-                "MAX_COURSIER_ARCHIVE_BYTES", "source().acquire(", "coursierArtifact(), archivePartial, MAX_COURSIER_ARCHIVE_BYTES")
+        # through a BoundedInputStream; each installer keeps the per-artifact byte ceiling it passes to it.
+        require("ManagedScipProviderRuntimeManager.java", managed, "source().acquire(", "MAX_MAVEN_ARCHIVE_BYTES")
+        require("CoursierLauncherInstallation.java", coursier,
+                "MAX_COURSIER_ARCHIVE_BYTES", "artifactSource.acquire(",
+                "artifact, archivePartial, MAX_COURSIER_ARCHIVE_BYTES")
         require("PinnedArtifactSource.java", pinned,
                 "BodyHandlers.ofInputStream()", "BoundedInputStream", "maxBytes")
-        forbid("ManagedScipProviderRuntimeManager.java", coursier, "BodyHandlers.ofFile(archivePartial)")
+        forbid("ManagedScipProviderRuntimeManager.java", managed, "BodyHandlers.ofFile(archivePartial)")
+        forbid("CoursierLauncherInstallation.java", coursier, "BodyHandlers.ofFile(archivePartial)")
         forbid("PinnedArtifactSource.java", pinned, "BodyHandlers.ofFile(", "BodyHandlers.ofByteArray(")
 
         require("MinosMcpServer.java", mcp_server,

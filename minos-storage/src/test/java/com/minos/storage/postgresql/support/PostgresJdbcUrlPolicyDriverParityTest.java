@@ -122,7 +122,7 @@ class PostgresJdbcUrlPolicyDriverParityTest {
     private static SslMode driverModeOrNull(String url) {
         try {
             return SslMode.of(driverProperties(url));
-        } catch (PSQLException _) {
+        } catch (PSQLException ignored) {
             return null;
         }
     }

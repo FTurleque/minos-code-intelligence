@@ -65,7 +65,7 @@ class ParkedThreadsTest {
         Thread elsewhere = new Thread(() -> {
             try {
                 release.await(10, TimeUnit.SECONDS);
-            } catch (InterruptedException _) {
+            } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
         }, "parked-threads-elsewhere");

@@ -106,7 +106,7 @@ Les outils de la variante complète sont décrits par `tools\TOOLS-MANIFEST.json
 | Langage du projet | Prérequis du poste |
 |---|---|
 | TypeScript | rien d'autre : le critère « machine neuve, sans réseau » est rempli tel quel |
-| Java (Maven) | un **JDK complet** (`JAVA_HOME` pointant sur un JDK avec `javac` et `jar` ; le runtime embarqué de MINOS n'en tient pas lieu), **Git for Windows** (`Git\bin\bash.exe`), **Windows PowerShell 5.1** et `csc.exe` (tous deux fournis par Windows). Sous Windows natif, scip-java reste `BLOCKED` ([ADR SEC-0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)) |
+| Java (Maven) | un **JDK complet** (`JAVA_HOME` pointant sur un JDK avec `javac` et `jar` ; le runtime embarqué de MINOS n'en tient pas lieu), **Git for Windows** (`Git\bin\bash.exe`), **Windows PowerShell 5.1** et `csc.exe` (tous deux fournis par Windows). Sous Windows natif, scip-java reste `BLOCKED` ([ADR SEC-0074](../architecture/adr/SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md)) : un projet Java s'indexe par WSL2, voir [§2 ter](#2-ter-indexer-un-projet-java-depuis-windows-par-wsl2) |
 | Go, C#, Rust, C/C++, Python | Go, SDK .NET 10, cargo, toolchain C++ et Python 3.10+ ; ces indexeurs (scip-go, scip-dotnet, scip-clang, rust-analyzer, scip-python) ne sont pas embarqués (pas de binaire Windows amont, ou toolchain du poste requise) et restent installables comme avant |
 
 Ce tableau décrit un poste Windows. Sous Linux, le JDK et le Maven 3.9.x de `scip-java` sont exécutés dans le bac à sable bubblewrap, sans réseau : voir [JDK et Maven de `scip-java` dans le bac à sable](troubleshooting.md#linux--jdk-et-maven-de-scip-java-dans-le-bac-à-sable). Le build Maven y lit ses greffons et dépendances dans un dépôt Maven que vous désignez : voir [dépôt Maven désigné, build hors ligne](troubleshooting.md#linux--dépôt-maven-désigné-build-hors-ligne).
@@ -114,6 +114,57 @@ Ce tableau décrit un poste Windows. Sous Linux, le JDK et le Maven 3.9.x de `sc
 `minos.cmd doctor` et `minos.cmd tools verify` nomment ce qui manque : un diagnostic préfixé `machine prerequisite (not shipped by MINOS)` est une dépendance externe, `tools origin: …=embedded` ou `=downloaded` dit d'où vient chaque outil géré. Les licences et les mentions obligatoires sont dans `supply-chain\THIRD-PARTY-NOTICES.txt` (dont l'offre de sources pour les composants EPL, CDDL et GPL avec exception classpath embarqués avec le classpath de scip-java ; le dépôt `coursier/launchers`, d'où vient `cs.exe`, ne porte pas de fichier LICENSE propre : la licence est celle du projet coursier, Apache-2.0).
 
 **Mise à jour** : `integration\update-installation.ps1` traite `tools\` comme le reste du payload (copie en staging, bascule, rollback). Installer le ZIP lite sur une installation complète **supprime** l'ancien `tools\` géré (sauvegardé, restauré si l'activation échoue) ; les outils déjà amorcés sous `MINOS_HOME\tools` ne sont pas touchés.
+
+## 2 ter. Indexer un projet Java depuis Windows par WSL2
+
+`minos index <projet> --via-wsl` indexe un projet Java Maven depuis Windows : scip-java tourne dans une distribution WSL2, sous le bac à sable Linux (bubblewrap, cgroup v2 délégué par systemd, réseau coupé), avec le jar de l'installation Windows ; l'installation Windows vérifie l'index reçu puis l'importe. Les autres langages du projet restent indexés sous Windows. `--wsl-distro <nom>` choisit la distribution ; sans l'option, c'est la distribution WSL par défaut. Décision : [ADR SEC-0079](../architecture/adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md).
+
+**Ce que la distribution doit avoir** (jamais installé par MINOS) :
+
+| Prérequis | Contrôle `doctor` (`wslJava`) |
+|---|---|
+| WSL2 (pas WSL1) et une distribution Linux | `wsl-version` |
+| systemd actif (`[boot] systemd=true` dans `/etc/wsl.conf`) et son gestionnaire utilisateur | `systemd` |
+| cgroup v2 avec les contrôleurs `cpu`, `memory` et `pids` délégués au gestionnaire utilisateur | `cgroup-delegation` |
+| `bubblewrap` (`sudo apt install bubblewrap`) | `bubblewrap` |
+| un Java 21 ou plus récent sur le `PATH`, pour lancer le jar de MINOS | `minos-jvm` |
+| Maven 3.9.x installé sous `/usr` (par exemple `/usr/local/apache-maven-3.9.x`, avec `mvn` sur le `PATH`) | `maven` |
+| un JDK du projet installé sous `/usr` (paquet `openjdk-21-jdk-headless` : `/usr/lib/jvm/java-21-openjdk-amd64`) | `project-jdk` |
+| un dépôt Maven dédié dans le système de fichiers Linux, peuplé par vous, sans entrée cachée à sa racine | `maven-repository` |
+
+Le bac à sable ne monte que `/usr`, `/bin`, `/lib`, `/lib64` et `/sbin` : un JDK ou un Maven installé ailleurs (`/opt`, dossier personnel) ne lui est pas visible. Le JDK du projet est désigné explicitement, même s'il est déjà le `java` par défaut de la distribution.
+
+**Mise en place, dans la distribution** :
+
+1. Désigner le JDK et le dépôt dans la configuration MINOS de la distribution, `~/.minos/config/minos.properties` (droits `600`) :
+
+   ```properties
+   minos.scip.java.project-jdk=/usr/lib/jvm/java-21-openjdk-amd64
+   minos.scip.java.maven-repository=/home/<compte>/minos-maven-repo
+   ```
+
+2. Peupler le dépôt dédié sans lancer Maven dans le projet analysé : copier les dossiers visibles d'un dépôt existant (`~/.m2/repository/*`, sans `.locks` ni `.meta`), puis ajouter un artefact manquant par `mvn -Dmaven.repo.local=<dépôt> dependency:get -Dartifact=<groupe>:<artefact>:<version>` lancé hors du projet. Le build de l'indexation est hors ligne : un artefact absent du dépôt le fait échouer, et le diagnostic du run le nomme.
+3. Installer scip-java dans la distribution avec le jar de l'installation Windows :
+
+   ```bash
+   java -cp /mnt/c/Users/<compte>/AppData/Local/Programs/MINOS/lib/minos.jar com.minos.cli.MinosLauncher tools install scip-java
+   ```
+
+**Vérifier puis indexer, sous Windows** :
+
+```powershell
+minos.cmd doctor
+minos.cmd index <projet> --via-wsl
+```
+
+La section `wslJava` de `doctor` doit lister les huit contrôles à l'état `OK` ; un contrôle `MISSING` nomme l'action attendue et `minos index --via-wsl` refuse alors de lancer quoi que ce soit.
+
+**Limites** :
+
+- la voie n'existe que depuis une installation empaquetée (setup ou ZIP) et pour un projet sur un lecteur local (`X:\…`) ;
+- la ligne d'échec d'un run renvoie à `runs/<run>/scip-java/provider.stderr.log` de la distribution, que le worker supprime à la fin du run : pour lire la cause, rejouer l'indexation dans la distribution (`minos index` du jar, lancé dans un scope `systemd-run --user --scope -p Delegate=yes`) ;
+- chaque JVM du build se dimensionne sur les limites du bac à sable (8 Gio, 8 processeurs au plus) ;
+- mesure de référence (Ubuntu 24.04, WSL2, 16 cœurs, 24 Gio) : `fixtures/java/java-simple` en 14 s, un projet Maven multi-module d'environ 1 500 fichiers Java en 190 à 430 s, et le code Java de MINOS (15 modules, sans `fixtures/`, `scripts/` ni `docs/`, écartés par un `.minosignore`) en 12 min.
 
 ## 3. Programme et données
 

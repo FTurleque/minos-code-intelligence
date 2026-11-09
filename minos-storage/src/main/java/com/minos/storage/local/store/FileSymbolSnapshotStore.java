@@ -3,6 +3,7 @@ package com.minos.storage.local.store;
 import com.minos.storage.codec.KnowledgeSnapshotCodecs;
 import com.minos.storage.codec.SnapshotCodec;
 import com.minos.storage.codec.SnapshotCodecV1;
+import com.minos.storage.codec.SnapshotLimits;
 import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
@@ -41,17 +42,9 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
 public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore {
 
     public static final int DEFAULT_MAX_QUERY_CACHE_ENTRIES = 32;
-    public static final long DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
+    public static final long DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES = SnapshotLimits.DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES;
     public static final int DEFAULT_MAX_ACTIVE_QUERY_RETRIES = 2;
     private static final int BUILD_LOCK_STRIPES = 64;
-    /**
-     * Heap retained by a query view, as a multiple of its persisted size. With one instance per distinct
-     * string (ADR 0047, option A) a repository-shaped snapshot retains 1.41 to 1.46 times its V3 file
-     * (QueryViewWeightTest); 2 leaves a margin and also bounds a string of two-byte characters, which
-     * takes at most twice its UTF-8 size. It was 8 before the strings were shared, when a reread view
-     * retained 2.5 to 3.3 times its file.
-     */
-    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L;
 
     private final Path storageRoot;
     private final SnapshotRepository snapshotRepository;
@@ -59,6 +52,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final SnapshotIntegrityService integrityService;
     private final SnapshotRetentionService retentionService;
     private final SnapshotCodec codecV1;
+    private final SnapshotLimits limits;
     private final int maxQueryCacheEntries;
     private final long maxQueryCacheWeightBytes;
     private final int maxActiveQueryRetries;
@@ -84,7 +78,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this(
                 storageRoot,
                 maxQueryCacheEntries,
-                maxQueryCacheWeightBytes,
+                SnapshotLimits.production().withMaxQueryCacheWeightBytes(maxQueryCacheWeightBytes),
                 DEFAULT_MAX_ACTIVE_QUERY_RETRIES,
                 ActiveQueryBuildHook.NOOP);
     }
@@ -96,10 +90,33 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             int maxActiveQueryRetries,
             ActiveQueryBuildHook activeQueryBuildHook
     ) throws IOException {
+        this(
+                storageRoot,
+                maxQueryCacheEntries,
+                SnapshotLimits.production().withMaxQueryCacheWeightBytes(maxQueryCacheWeightBytes),
+                maxActiveQueryRetries,
+                activeQueryBuildHook);
+    }
+
+    /** A store bound to {@code limits}; tests lower the ceilings to exercise them without a snapshot of that size. */
+    FileSymbolSnapshotStore(Path storageRoot, SnapshotLimits limits) throws IOException {
+        this(storageRoot, DEFAULT_MAX_QUERY_CACHE_ENTRIES, limits, DEFAULT_MAX_ACTIVE_QUERY_RETRIES,
+                ActiveQueryBuildHook.NOOP);
+    }
+
+    FileSymbolSnapshotStore(
+            Path storageRoot,
+            int maxQueryCacheEntries,
+            SnapshotLimits limits,
+            int maxActiveQueryRetries,
+            ActiveQueryBuildHook activeQueryBuildHook
+    ) throws IOException {
+        Objects.requireNonNull(limits, "limits");
+        long cacheWeightCeiling = limits.maxQueryCacheWeightBytes();
         if (maxQueryCacheEntries < 1) {
             throw new IllegalArgumentException("maxQueryCacheEntries must be greater than zero");
         }
-        if (maxQueryCacheWeightBytes < 1L) {
+        if (cacheWeightCeiling < 1L) {
             throw new IllegalArgumentException("maxQueryCacheWeightBytes must be greater than zero");
         }
         if (maxActiveQueryRetries < 0) {
@@ -110,10 +127,11 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this.activeSnapshotRepository = new ActiveSnapshotRepository(snapshotRepository);
         this.integrityService = new SnapshotIntegrityService();
         this.retentionService = new SnapshotRetentionService(snapshotRepository);
-        this.codecV1 = new SnapshotCodecV1();
+        this.limits = limits;
+        this.codecV1 = new SnapshotCodecV1(limits);
         this.maxQueryCacheEntries = maxQueryCacheEntries;
-        this.maxQueryCacheWeightBytes = maxQueryCacheWeightBytes;
-        this.queryCache = new WeightedLruCache<>(maxQueryCacheEntries, maxQueryCacheWeightBytes);
+        this.maxQueryCacheWeightBytes = cacheWeightCeiling;
+        this.queryCache = new WeightedLruCache<>(maxQueryCacheEntries, cacheWeightCeiling);
         this.maxActiveQueryRetries = maxActiveQueryRetries;
         this.activeQueryBuildHook = Objects.requireNonNull(activeQueryBuildHook, "activeQueryBuildHook");
     }
@@ -152,7 +170,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         rejectDuplicateIds(orderedSymbols, Symbol::id, "symbol");
         rejectDuplicateIds(orderedOccurrences, SymbolOccurrence::id, "occurrence");
         rejectDuplicateIds(orderedRelationships, Relationship::id, "relationship");
-        publishSnapshot(snapshot, KnowledgeSnapshotCodecs.select(snapshot));
+        publishSnapshot(snapshot, KnowledgeSnapshotCodecs.select(snapshot, limits));
         return snapshot;
     }
 
@@ -273,6 +291,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     public Path storageRoot() { return storageRoot; }
 
+    /** Ceilings and weight factor this store applies. */
+    SnapshotLimits limits() { return limits; }
+
     public SnapshotRetentionService retentionService() { return retentionService; }
 
     public CacheStats cacheStats() {
@@ -354,7 +375,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         return switch (version) {
             case ActiveSnapshotRepository.FORMAT_VERSION_V1,
                  ActiveSnapshotRepository.FORMAT_VERSION_V2,
-                 ActiveSnapshotRepository.FORMAT_VERSION_V3 -> KnowledgeSnapshotCodecs.forVersion(version);
+                 ActiveSnapshotRepository.FORMAT_VERSION_V3 -> KnowledgeSnapshotCodecs.forVersion(version, limits);
             default -> throw new IOException("unsupported active snapshot pointer version: " + version);
         };
     }
@@ -365,7 +386,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         countWeight = saturatingAdd(countWeight, descriptor.occurrenceCount() * 640L);
         countWeight = saturatingAdd(countWeight, descriptor.relationshipCount() * 1024L);
         Path snapshot = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
-        long persistedWeight = saturatingMultiply(Files.size(snapshot), QUERY_VIEW_PERSISTED_AMPLIFICATION);
+        long persistedWeight = limits.amplifiedBytes(descriptor.formatVersion(), Files.size(snapshot));
         // AUD-PERF-11: the derived index of incoming edges, built later, lives as long as the cached view.
         return saturatingAdd(Math.max(countWeight, persistedWeight),
                 SnapshotReadView.incomingRelationshipsWeightBytes(descriptor.relationshipCount()));
@@ -373,14 +394,6 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
-    }
-
-    private static long saturatingMultiply(long left, long right) {
-        try {
-            return Math.multiplyExact(left, right);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
     }
 
     private static <T> List<T> orderedById(Collection<T> values, Function<T, String> id, String name) {

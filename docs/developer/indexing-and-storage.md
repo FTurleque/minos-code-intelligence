@@ -226,6 +226,48 @@ Selon les fonctionnalités utilisées :
 
 Le code de requête dépend uniquement du snapshot MINOS actif, jamais du fichier SCIP brut.
 
+## Mesurer un gros snapshot
+
+Deux `main` et un test des sources de `minos-storage`, hors `verify` (leur nom ne correspond à aucun motif Surefire), mesurent ce qu'un snapshot de plusieurs centaines de Mio coûte à lire et à mettre en cache. Un snapshot au-dessus du plafond de persistance (400 Mio, `SnapshotLimits`) ne se publie ni ne se lit : le mesurer demande un build dont le plafond (`SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES`) est relevé localement, jamais commité.
+
+| Outil | Rôle |
+|---|---|
+| `LargeSnapshotMeasurement` (`com.minos.storage.local.store`) | taille persistée, tas retenu par la vue avec l'index des arêtes, pic de tas au chargement, lectures successives et état du cache ; mode `synthetic <racine> <fichiers>` ou `existing <MINOS_HOME>/symbol-snapshots <projectId>` |
+| `LargePostgresSnapshotMeasurement` (`com.minos.storage.postgresql.snapshot`) | publication d'un snapshot du magasin fichier dans le store PostgreSQL géré (Docker, image pgvector épinglée déjà tirée), puis lectures successives ; lancé par `-Dtest=LargePostgresSnapshotMeasurement -Dminos.largeSnapshot.store=… -Dminos.largeSnapshot.project=…` |
+| `SnapshotReadCeilingTest` (`com.minos.storage.codec`) | exécuté par `verify` : le plafond borne aussi la lecture, sans chemin dans le message |
+
+Le classpath du `main` sur poste Windows ajoute `minos-storage/src/test/platform-access-control` (fournisseur de contrôle d'accès des tests du module).
+
+Mesures du 2026-11-07, `develop` `2e3da18b`, JDK 21.0.12.1, Windows, plafond relevé à 1 Gio dans un build jetable. Snapshot réel : `morpheus-engine` (1 488 fichiers Java, 60 472 symboles, 488 477 occurrences) ; snapshot synthétique : `QueryViewWeightFixtures`, 3 300 fichiers.
+
+| Mesure | `morpheus-engine` (réel) | Synthétique (3 300 fichiers) |
+|---|---|---|
+| Taille persistée | 356 038 984 octets (339,5 Mio) | 330 621 486 octets (315,3 Mio) |
+| Tas retenu par la vue, index des arêtes compris | 374 738 864 octets, soit 1,05 fois le fichier | 484 663 400 octets, soit 1,47 fois le fichier |
+| Somme des comptes du poids estimé (1 024 par symbole et par relation, 640 par occurrence) | 363,4 Mio, soit 1,02 fois le tas retenu | 669 Mio, soit 1,45 fois |
+| Lecture à froid, magasin fichier | 3,5 s | 4,2 s |
+| Lectures suivantes | 3,0 à 3,2 s : la vue est refusée par le cache (poids estimé au-dessus de 512 Mio), 5 chargements complets pour 5 lectures | 3,3 à 3,9 s, même refus |
+| Plus petit tas qui charge une vue | 512 Mo | non mesuré |
+| Deux vues chargées en même temps | `OutOfMemoryError` sous 512 et 640 Mo, passe sous 768 Mo | non mesuré |
+| Publication PostgreSQL (356 Mo), deux essais | 10,4 à 12,1 s | non mesuré |
+| Lecture PostgreSQL | 9,5 à 13,7 s à chaque lecture (aucune mise en cache) | non mesuré |
+
+Lecture : sur un corpus réel le tas retenu est proche de 1,05 à 1,14 fois le fichier (1,14 sur le code de production de MINOS, ADR 0047) ; le corpus synthétique, riche en relations, atteint 1,47. Le poids estimé est le plus grand de la somme des comptes et du produit d'une amplification par la taille du fichier : sur le corpus réel mesuré, la somme des comptes suffit déjà à ne pas sous-évaluer.
+
+Mesures du 2026-11-07 avec un build non modifié de `develop` `bc2995a8` (persistance 400 Mio, cache 512 Mio), même JDK, poste de 48 Go (tas par défaut de la JVM : 12 Gio), import du SCIP de `morpheus-engine` (51,9 Mo) dans un `MINOS_HOME` temporaire :
+
+| Mesure | Résultat |
+|---|---|
+| `import-scip` sous `-Xmx512m` | refusé avant décodage, rien d'écrit : `SCIP index exceeds safe decode heap budget`, estimation de 196 274 198 octets pour un budget de 178 956 970 (le tiers du tas) |
+| `import-scip` sous `-Xmx576m`, `640m`, `768m`, `1g` et le tas par défaut | publié en 10,1 à 11,3 s |
+| Occupation du tas avant une collection, tas par défaut | 1 432 à 1 451 Mio ; la JVM laisse croître un grand tas, ce chiffre n'est pas un minimum |
+| Sonde MCP à trois appels `minos_find_symbols`, tas par défaut puis `-Xmx768m` | premier appel en 4 156 et 4 206 ms (chargement de la vue), deux suivants en 54 à 62 ms (vue en cache) |
+| Ré-import du même SCIP, trois fois | un seul snapshot, adressé par son contenu : 339,5 Mio sur disque |
+| Import de quatre variantes distinctes par `import-scip` | cinq snapshots conservés, 1 697,7 Mio : le build `bc2995a8` ne compacte qu'à l'indexation |
+| `QueryViewWeightTest` avec `-Dminos.queryViewWeight.print=true` (150 fichiers, 14,8 à 15,0 Mo persistés) | tas retenu de 1,43 (ascii, latin1) à 1,48 (cjk) fois le fichier ; poids estimé de 1,53 à 1,57 fois le tas retenu ; amplification V3 seule de 0,84 à 0,88 |
+
+Un import publié applique la même rétention que l'indexation : `PublishedSnapshotRetention` (`minos-application`) sert à `LocalProjectOperations.importScipLocked` et aux deux chemins de succès de `ProjectIndexingUseCase`. Quatre imports distincts laissent l'actif et deux historiques (`minos-cli/src/test/java/com/minos/cli/ImportScipRetentionTest.java`) ; un verrou occupé laisse l'import réussi avec un diagnostic sans cause ni chemin.
+
 ## Cohérence concurrente
 
 `IndexingLifecycleService` sérialise les runs par projet dans une instance : un projet déjà `INDEXING` ou `REFRESHING` ne peut pas démarrer un second run concurrent.

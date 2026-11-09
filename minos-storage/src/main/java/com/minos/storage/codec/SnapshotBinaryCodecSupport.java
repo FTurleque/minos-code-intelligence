@@ -84,7 +84,11 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_STRING_CHARS = SnapshotBinaryPrimitives.MAX_STRING_CHARS;
     /** A string of at most {@link #MAX_STRING_CHARS} UTF-16 code units encodes to at most three bytes per unit. */
     private static final int MAX_STRING_UTF8_BYTES = 3 * MAX_STRING_CHARS;
-    static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
+    /**
+     * Production ceiling of one persisted snapshot: the write is refused above it and the read as well, so a
+     * snapshot published under this ceiling is unreadable once it is lowered.
+     */
+    static final long MAX_PERSISTED_SNAPSHOT_BYTES = 400L * 1024L * 1024L;
     private static final HexFormat HEX = HexFormat.of();
     private static final String SYMBOL_SNAPSHOT_LABEL = "symbol snapshot";
     private static final String KNOWLEDGE_SNAPSHOT_LABEL = "knowledge snapshot";
@@ -97,16 +101,16 @@ final class SnapshotBinaryCodecSupport {
         return Math.min(Math.max(0, declaredCount), 16_384);
     }
 
-    static String writeSymbolSnapshotV1(Path file, SymbolSnapshot snapshot) throws IOException {
+    static String writeSymbolSnapshotV1(Path file, SymbolSnapshot snapshot, long maxPersistedBytes) throws IOException {
         MessageDigest digest = Sha256.newDigest();
         try (OutputStream fileOutput = PrivateLocalStorage.openPrivateOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
-                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, SYMBOL_SNAPSHOT_LABEL);
+                     digestOutput, maxPersistedBytes, SYMBOL_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeSymbolSnapshotV1Body(new StreamSink(output, StringEncoding.UTF16_CHARS), snapshot);
         }
-        requireSnapshotFileSize(file);
+        requireSnapshotFileSize(file, maxPersistedBytes);
         return HEX.formatHex(digest.digest());
     }
 
@@ -150,24 +154,25 @@ final class SnapshotBinaryCodecSupport {
         return counter.bytes();
     }
 
-    static String writeKnowledgeSnapshotV3(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
+    static String writeKnowledgeSnapshotV3(Path file, CodeKnowledgeSnapshot snapshot, long maxPersistedBytes)
+            throws IOException {
         MessageDigest digest = Sha256.newDigest();
         try (OutputStream fileOutput = PrivateLocalStorage.openPrivateOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
-                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+                     digestOutput, maxPersistedBytes, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeKnowledgeSnapshotBody(new StreamSink(output, StringEncoding.UTF8), snapshot, FORMAT_VERSION_V3);
         }
-        requireSnapshotFileSize(file);
+        requireSnapshotFileSize(file, maxPersistedBytes);
         return HEX.formatHex(digest.digest());
     }
 
-    static CodeKnowledgeSnapshot readKnowledgeSnapshotV3(Path file) throws IOException {
-        requireSnapshotFileSize(file);
+    static CodeKnowledgeSnapshot readKnowledgeSnapshotV3(Path file, long maxPersistedBytes) throws IOException {
+        requireSnapshotFileSize(file, maxPersistedBytes);
         try (BoundedInputStream boundedInput = new BoundedInputStream(
                      ConfinedFileOpener.openRegularFileNoFollow(file),
-                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     maxPersistedBytes,
                      KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             return readKnowledgeSnapshotBody(new SnapshotInput(input, StringEncoding.UTF8), FORMAT_VERSION_V3);
@@ -177,29 +182,33 @@ final class SnapshotBinaryCodecSupport {
     }
 
     /** Decodes and authenticates a V3 knowledge snapshot file in a single pass over its bytes. */
-    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV3(Path file, String expectedSha256) throws IOException {
-        requireSnapshotFileSize(file);
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV3(Path file, String expectedSha256, long maxPersistedBytes)
+            throws IOException {
+        requireSnapshotFileSize(file, maxPersistedBytes);
         try (InputStream source = ConfinedFileOpener.openRegularFileNoFollow(file)) {
-            return readVerifiedKnowledgeSnapshotV3(source, expectedSha256);
+            return readVerifiedKnowledgeSnapshotV3(source, expectedSha256, maxPersistedBytes);
         }
     }
 
-    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV3(InputStream source, String expectedSha256)
-            throws IOException {
-        return readVerifiedKnowledgeSnapshot(source, expectedSha256, StringEncoding.UTF8, FORMAT_VERSION_V3);
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV3(
+            InputStream source, String expectedSha256, long maxPersistedBytes) throws IOException {
+        return readVerifiedKnowledgeSnapshot(
+                source, expectedSha256, StringEncoding.UTF8, FORMAT_VERSION_V3, maxPersistedBytes);
     }
 
     /** Decodes and authenticates a V2 knowledge snapshot file in a single pass over its bytes. */
-    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV2(Path file, String expectedSha256) throws IOException {
-        requireSnapshotFileSize(file);
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV2(Path file, String expectedSha256, long maxPersistedBytes)
+            throws IOException {
+        requireSnapshotFileSize(file, maxPersistedBytes);
         try (InputStream source = ConfinedFileOpener.openRegularFileNoFollow(file)) {
-            return readVerifiedKnowledgeSnapshotV2(source, expectedSha256);
+            return readVerifiedKnowledgeSnapshotV2(source, expectedSha256, maxPersistedBytes);
         }
     }
 
-    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV2(InputStream source, String expectedSha256)
-            throws IOException {
-        return readVerifiedKnowledgeSnapshot(source, expectedSha256, StringEncoding.UTF16_CHARS, FORMAT_VERSION_V2);
+    static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshotV2(
+            InputStream source, String expectedSha256, long maxPersistedBytes) throws IOException {
+        return readVerifiedKnowledgeSnapshot(
+                source, expectedSha256, StringEncoding.UTF16_CHARS, FORMAT_VERSION_V2, maxPersistedBytes);
     }
 
     /**
@@ -210,10 +219,11 @@ final class SnapshotBinaryCodecSupport {
      * rethrown unchanged.
      */
     private static CodeKnowledgeSnapshot readVerifiedKnowledgeSnapshot(
-            InputStream source, String expectedSha256, StringEncoding encoding, int version) throws IOException {
+            InputStream source, String expectedSha256, StringEncoding encoding, int version, long maxPersistedBytes)
+            throws IOException {
         MessageDigest digest = Sha256.newDigest();
         try (BoundedInputStream boundedInput = new BoundedInputStream(
-                     new DigestInputStream(source, digest), MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+                     new DigestInputStream(source, digest), maxPersistedBytes, KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             CodeKnowledgeSnapshot decoded = null;
             IOException invalid = null;
@@ -236,8 +246,8 @@ final class SnapshotBinaryCodecSupport {
     }
 
     /** Format version declared by a snapshot file's header, whatever the format, without decoding the body. */
-    static int readFormatVersion(Path file) throws IOException {
-        requireSnapshotFileSize(file);
+    static int readFormatVersion(Path file, long maxPersistedBytes) throws IOException {
+        requireSnapshotFileSize(file, maxPersistedBytes);
         // Unbuffered: exactly the eight header bytes are read, never the body.
         try (DataInputStream input = new DataInputStream(ConfinedFileOpener.openRegularFileNoFollow(file))) {
             return readHeaderVersion(input, SNAPSHOT_MAGIC, "snapshot");
@@ -250,20 +260,20 @@ final class SnapshotBinaryCodecSupport {
      * Refuses, before any byte is written, a snapshot whose encoding would exceed the persisted ceiling.
      * The message carries only sizes, never a path, so it is safe to surface publicly.
      */
-    static long requirePersistable(long encodedBytes) throws IOException {
-        if (encodedBytes > MAX_PERSISTED_SNAPSHOT_BYTES) {
+    static long requirePersistable(long encodedBytes, long maxPersistedBytes) throws IOException {
+        if (encodedBytes > maxPersistedBytes) {
             throw new IOException("knowledge snapshot is too large to persist: " + encodedBytes
-                    + " encoded bytes exceed the " + MAX_PERSISTED_SNAPSHOT_BYTES
-                    + "-byte limit (256 MiB); nothing was written");
+                    + " encoded bytes exceed the " + maxPersistedBytes
+                    + "-byte limit (" + SnapshotLimits.describeMebibytes(maxPersistedBytes) + "); nothing was written");
         }
         return encodedBytes;
     }
 
-    static SymbolSnapshot readSymbolSnapshotV1(Path file) throws IOException {
-        requireSnapshotFileSize(file);
+    static SymbolSnapshot readSymbolSnapshotV1(Path file, long maxPersistedBytes) throws IOException {
+        requireSnapshotFileSize(file, maxPersistedBytes);
         try (BoundedInputStream boundedInput = new BoundedInputStream(
                      ConfinedFileOpener.openRegularFileNoFollow(file),
-                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     maxPersistedBytes,
                      SYMBOL_SNAPSHOT_LABEL);
              DataInputStream stream = new DataInputStream(new BufferedInputStream(boundedInput))) {
             SnapshotInput input = new SnapshotInput(stream, StringEncoding.UTF16_CHARS);
@@ -298,28 +308,30 @@ final class SnapshotBinaryCodecSupport {
         );
     }
 
-    static String writeKnowledgeSnapshotV2(Path file, CodeKnowledgeSnapshot snapshot) throws IOException {
+    static String writeKnowledgeSnapshotV2(Path file, CodeKnowledgeSnapshot snapshot, long maxPersistedBytes)
+            throws IOException {
         MessageDigest digest = Sha256.newDigest();
         try (OutputStream fileOutput = PrivateLocalStorage.openPrivateOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
-                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+                     digestOutput, maxPersistedBytes, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeKnowledgeSnapshotBody(new StreamSink(output, StringEncoding.UTF16_CHARS), snapshot, FORMAT_VERSION_V2);
         }
-        requireSnapshotFileSize(file);
+        requireSnapshotFileSize(file, maxPersistedBytes);
         return HEX.formatHex(digest.digest());
     }
 
-    static byte[] writeKnowledgeSnapshotV2ToBytes(CodeKnowledgeSnapshot snapshot) throws IOException {
+    static byte[] writeKnowledgeSnapshotV2ToBytes(CodeKnowledgeSnapshot snapshot, long maxPersistedBytes)
+            throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (BoundedOutputStream boundedOutput = new BoundedOutputStream(
-                     baos, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+                     baos, maxPersistedBytes, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeKnowledgeSnapshotBody(new StreamSink(output, StringEncoding.UTF16_CHARS), snapshot, FORMAT_VERSION_V2);
         }
         byte[] payload = baos.toByteArray();
-        if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
+        if (payload.length > maxPersistedBytes) {
             throw new IOException("knowledge snapshot payload exceeds persisted byte limit: " + payload.length);
         }
         return payload;
@@ -346,11 +358,11 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    static CodeKnowledgeSnapshot readKnowledgeSnapshotV2(Path file) throws IOException {
-        requireSnapshotFileSize(file);
+    static CodeKnowledgeSnapshot readKnowledgeSnapshotV2(Path file, long maxPersistedBytes) throws IOException {
+        requireSnapshotFileSize(file, maxPersistedBytes);
         try (BoundedInputStream boundedInput = new BoundedInputStream(
                      ConfinedFileOpener.openRegularFileNoFollow(file),
-                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     maxPersistedBytes,
                      KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             return readKnowledgeSnapshotBody(new SnapshotInput(input, StringEncoding.UTF16_CHARS), FORMAT_VERSION_V2);
@@ -359,13 +371,14 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    static CodeKnowledgeSnapshot readKnowledgeSnapshotV2FromBytes(byte[] payload) throws IOException {
-        if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
+    static CodeKnowledgeSnapshot readKnowledgeSnapshotV2FromBytes(byte[] payload, long maxPersistedBytes)
+            throws IOException {
+        if (payload.length > maxPersistedBytes) {
             throw new IOException("knowledge snapshot payload exceeds persisted byte limit: " + payload.length);
         }
         try (BoundedInputStream boundedInput = new BoundedInputStream(
                      new ByteArrayInputStream(payload),
-                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     maxPersistedBytes,
                      KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             return readKnowledgeSnapshotBody(new SnapshotInput(input, StringEncoding.UTF16_CHARS), FORMAT_VERSION_V2);
@@ -409,11 +422,11 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static void requireSnapshotFileSize(Path file) throws IOException {
+    private static void requireSnapshotFileSize(Path file, long maxPersistedBytes) throws IOException {
         long size = Files.size(file);
-        if (size < 1L || size > MAX_PERSISTED_SNAPSHOT_BYTES) {
+        if (size < 1L || size > maxPersistedBytes) {
             throw new IOException("snapshot payload exceeds persisted byte limit: " + size
-                    + "/" + MAX_PERSISTED_SNAPSHOT_BYTES);
+                    + "/" + maxPersistedBytes);
         }
     }
 

@@ -21,6 +21,7 @@ dans le dossier, sans que ses exigences proposées y soient présentées comme l
 | [decouverte-et-negociation.md](decouverte-et-negociation.md) | `decouverte-et-negociation` | Séquence capture, découverte, négociation, promotion ; états de disponibilité d'un projet |
 | [distribution-docker.md](distribution-docker.md) | `distribution-docker` | Séquence de démarrage du plan de requête ; composants images et services |
 | [frontieres-de-modules.md](frontieres-de-modules.md) | `frontieres-de-modules` | Vue de composants des modules et de leurs dépendances autorisées |
+| [indexation-java-via-wsl.md](indexation-java-via-wsl.md) | `indexation-java-via-wsl` | Composants Windows et distribution ; séquence de `minos index --via-wsl` ; états d'un run |
 | [installation-des-providers.md](installation-des-providers.md) | `installation-des-providers` | Séquence d'installation vérifiée d'un outil ; états de scip-java |
 | [installeur-windows.md](installeur-windows.md) | `installeur-windows` | Organigramme de post-installation ; séquence de désinstallation Docker |
 | [journalisation.md](journalisation.md) | `journalisation` | Séquence d'une erreur de bibliothèque vers stderr ; organigramme d'un journal sans fuite |

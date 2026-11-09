@@ -135,7 +135,7 @@ public final class DockerRuntimeBootstrap {
         List<String> projects;
         try {
             projects = service.projectsUnder(name);
-        } catch (IOException _) {
+        } catch (IOException ignored) {
             // The registry is only named in the report: the mount is already removed.
             projects = List.of();
         }
