@@ -1,7 +1,7 @@
 # <image>:<tag>@sha256:<index digest>: see Dockerfile.mcp and scripts/quality/check-image-pins.py.
 FROM rust:1.99.1-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS rust-toolchain
-FROM golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS go-toolchain
-FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS dotnet-toolchain
+FROM golang:1.27.3-bookworm@sha256:dc0963f32053e4bc451d24d87e3892d42d01021b61f093e98eb95c0352bb84b0 AS go-toolchain
+FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS dotnet-toolchain
 
 # AUD-DEP-15: this file builds TWO images, one per `--target`.
 #   query  the persistent MCP query plane (minos-mcp) and the jobs that only need java or sh: a JRE
@@ -23,7 +23,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769
 # tests fail the build instead. Nothing else of this stage reaches an image. Tools installed
 # outside Maven (Node, Go, Rust, .NET, indexers) are not covered here, see
 # docs/developer/supply-chain.md.
-FROM eclipse-temurin:21.0.12.1_1-jdk-noble@sha256:57424b1d8eca9c4cf8a4fe226207027911f08d6758628891bf59fcfb53777029 AS licenses
+FROM eclipse-temurin:21.0.13_9-jdk-noble@sha256:114cabb73033ca4ce7ceec3deb62396bc1b716282bae051ed3c1d82e38fcab2d AS licenses
 COPY minos.jar /tmp/minos.jar
 RUN mkdir -p /licenses \
     && cd /licenses \
@@ -34,7 +34,7 @@ RUN mkdir -p /licenses \
     && chmod -R a+rX /licenses
 
 # The JRE reference is the one of docker/Dockerfile.mcp (M29DockerQueryImageContractTest compares them).
-FROM eclipse-temurin:21.0.12.1_1-jre-noble@sha256:cd35bb33859641c5374415826a5951845104093eaa401cbe9d3d9023444f1c13 AS query
+FROM eclipse-temurin:21.0.13_9-jre-noble@sha256:0eda5830ed7b669abc246a8dc520ea8a23cab06f9a8d4b6964109e2f2394e46f AS query
 
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
@@ -66,7 +66,7 @@ LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP query plane" \
 USER 10001:10001
 ENTRYPOINT ["java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"]
 
-FROM eclipse-temurin:21.0.12.1_1-jdk-noble@sha256:57424b1d8eca9c4cf8a4fe226207027911f08d6758628891bf59fcfb53777029 AS admin
+FROM eclipse-temurin:21.0.13_9-jdk-noble@sha256:114cabb73033ca4ce7ceec3deb62396bc1b716282bae051ed3c1d82e38fcab2d AS admin
 
 ARG TARGETARCH
 ARG MINOS_VERSION=dev
