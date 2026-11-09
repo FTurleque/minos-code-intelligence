@@ -1,5 +1,6 @@
 package com.minos.adapter.scip.runtime.install;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.adapter.scip.runtime.plan.ScipJavaClasspath;
 import com.minos.adapter.scip.runtime.plan.ScipJavaMavenOffline;
 import com.minos.adapter.scip.runtime.plan.ScipJavaProjectJdk;
@@ -174,7 +175,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         ProviderRuntimeStatus status = inspect(providerId);
         if (!status.ready() || status.executable().isEmpty()) {
             throw new IllegalStateException("provider runtime is not ready: " + providerId + " — "
-                    + String.join("; ", status.diagnostics()));
+                    + PublicErrorMessages.joinedPublicDetails(status.diagnostics()));
         }
         return switch (providerId) {
             case SCIP_TYPESCRIPT_ID -> StrongOwnedProcessExecutors.required(

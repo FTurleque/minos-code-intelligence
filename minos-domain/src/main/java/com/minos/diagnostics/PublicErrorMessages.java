@@ -1,8 +1,10 @@
 package com.minos.diagnostics;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Central place that decides whether a caught exception's message is safe to surface across a
@@ -16,6 +18,9 @@ import java.util.regex.Pattern;
  * cannot drift between the API, MCP and CLI.</p>
  */
 public final class PublicErrorMessages {
+
+    /** What replaces one detail that looks sensitive in {@link #joinedPublicDetails(List)}. */
+    public static final String REDACTED_DETAIL = "internal diagnostic redacted";
 
     private static final int MAX_LENGTH = 500;
 
@@ -56,6 +61,15 @@ public final class PublicErrorMessages {
         String flattened = stripControl(message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')).trim();
         if (flattened.length() > MAX_LENGTH) flattened = flattened.substring(0, MAX_LENGTH);
         return looksSensitive(flattened) ? fallback : flattened;
+    }
+
+    /**
+     * {@code details} joined by {@code "; "}, each one sanitized on its own: a detail that looks like it carries a path
+     * or a secret becomes {@value #REDACTED_DETAIL}, and the others stay readable. A message built from several
+     * diagnostics thus keeps its safe part instead of being replaced as a whole by a fallback.
+     */
+    public static String joinedPublicDetails(List<String> details) {
+        return details.stream().map(detail -> sanitize(detail, REDACTED_DETAIL)).collect(Collectors.joining("; "));
     }
 
     /**

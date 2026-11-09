@@ -65,6 +65,8 @@ final class IndexingFixture {
     final AtomicInteger semanticRefreshes = new AtomicInteger();
     final AtomicInteger snapshotIds = new AtomicInteger();
     ProviderRuntimeStatus.State runtimeState = ProviderRuntimeStatus.State.READY;
+    /** Diagnostics of a runtime that is not ready; null keeps the single "not installed" diagnostic. */
+    List<String> runtimeDiagnostics;
     IOException retentionFailure;
     RuntimeException promotionFailure;
     boolean qualifiedProvider = true;
@@ -146,7 +148,8 @@ final class IndexingFixture {
     final class Runtime implements ProviderRuntimeManager {
         private ProviderRuntimeStatus status() {
             return new ProviderRuntimeStatus(INDEXER, "1.0", runtimeState, Optional.empty(),
-                    runtimeState == ProviderRuntimeStatus.State.READY ? List.of() : List.of("not installed"), true);
+                    runtimeState == ProviderRuntimeStatus.State.READY ? List.of()
+                            : runtimeDiagnostics != null ? runtimeDiagnostics : List.of("not installed"), true);
         }
 
         @Override public List<ProviderRuntimeStatus> list() { return List.of(status()); }

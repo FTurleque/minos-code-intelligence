@@ -338,7 +338,8 @@ public final class ProjectIndexingUseCase {
         for (ProviderRuntimeStatus runtime : prepared.providerRuntimes()) {
             if (runtime.state() != ProviderRuntimeStatus.State.READY) {
                 throw new IllegalStateException("provider runtime is not ready: " + runtime.providerId()
-                        + (runtime.diagnostics().isEmpty() ? "" : " — " + String.join("; ", runtime.diagnostics())));
+                        + (runtime.diagnostics().isEmpty() ? ""
+                                : " — " + PublicErrorMessages.joinedPublicDetails(runtime.diagnostics())));
             }
         }
     }
