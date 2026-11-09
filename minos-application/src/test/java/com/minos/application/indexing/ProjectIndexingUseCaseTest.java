@@ -119,6 +119,26 @@ class ProjectIndexingUseCaseTest {
     }
 
     @Test
+    void aDiagnosticThatNamesAPathIsWithheldAloneAndTheRefusalStaysReadable() throws Exception {
+        IndexingFixture fixture = new IndexingFixture(temp);
+        fixture.runtimeState = ProviderRuntimeStatus.State.BLOCKED;
+        fixture.runtimeDiagnostics = List.of(
+                "the mvn of PATH is installed outside the system directories (/usr, /bin, /lib)",
+                "managed local provider sandbox tier is not provided by this backend");
+
+        ProjectIndexingUseCase useCase = fixture.useCase();
+        String projectId = fixture.id();
+        IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                () -> useCase.execute(projectId, null, false, IndexingResumePolicy.RESUME));
+
+        assertEquals("provider runtime is not ready: java-indexer — internal diagnostic redacted; "
+                + "managed local provider sandbox tier is not provided by this backend", refusal.getMessage());
+        assertFalse(com.minos.diagnostics.PublicErrorMessages.looksSensitive(refusal.getMessage()),
+                "the public output keeps the refusal instead of replacing it by the exception class");
+        assertEquals(0, fixture.executor.calls.get());
+    }
+
+    @Test
     void aResumeOnlyIndexingOfAnUnchangedProjectIsRefused() throws Exception {
         IndexingFixture fixture = new IndexingFixture(temp);
         ProjectIndexingUseCase useCase = fixture.useCase();
