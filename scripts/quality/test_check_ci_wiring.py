@@ -462,5 +462,50 @@ class ReleasePluginTest(WiringTestCase):
         self.assertEqual([], gate.check_releases_publish_the_plugin(REPOSITORY))
 
 
+ATTESTING_PLUGIN_RELEASE = PLUGIN_RELEASE + """  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - run: echo attach
+"""
+
+
+class CalledWorkflowPermissionsTest(WiringTestCase):
+
+    def permission_failures(self, workflows: dict[str, str | None]) -> list[str]:
+        return gate.check_called_workflows_get_their_permissions(self.tree(workflows))
+
+    def test_a_calling_job_that_grants_what_the_called_jobs_ask_is_accepted(self):
+        release = RELEASE.replace("      contents: write\n",
+                                  "      contents: write\n      id-token: write\n      attestations: write\n")
+        self.assertEqual([], self.permission_failures(
+            {"release.yml": release, "intellij-plugin-release.yml": ATTESTING_PLUGIN_RELEASE}))
+
+    def test_a_called_job_that_asks_more_than_the_calling_job_grants_is_refused(self):
+        failures = self.permission_failures(
+            {"release.yml": RELEASE, "intellij-plugin-release.yml": ATTESTING_PLUGIN_RELEASE})
+        self.assertEqual(
+            [".github/workflows/release.yml: job 'plugin' calls ./.github/workflows/intellij-plugin-release.yml, whose "
+             "job 'publish' asks attestations: write, id-token: write beyond what the calling job grants: GitHub "
+             "refuses to start the run"], failures)
+
+    def test_a_calling_job_without_permissions_grants_the_workflow_permissions(self):
+        release = RELEASE.replace("    permissions:\n      contents: write\n", "").replace(
+            "jobs:\n", "permissions:\n  contents: write\njobs:\n", 1)
+        self.assertEqual([], self.permission_failures(
+            {"release.yml": release, "intellij-plugin-release.yml": PLUGIN_RELEASE}))
+        attesting = self.permission_failures(
+            {"release.yml": release, "intellij-plugin-release.yml": ATTESTING_PLUGIN_RELEASE})
+        self.assertEqual(1, len(attesting))
+        self.assertIn("asks attestations: write, id-token: write", attesting[0])
+
+    def test_the_repository_grants_every_called_workflow_its_permissions(self):
+        self.assertEqual([], gate.check_called_workflows_get_their_permissions(REPOSITORY))
+
+
 if __name__ == "__main__":
     unittest.main()
