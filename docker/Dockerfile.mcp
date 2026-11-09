@@ -9,7 +9,7 @@
 # META-INF/licenses/<artifact>-<version>/ from the very JAR that is shipped, keeping the relative
 # paths of the JAR. `jar xf` silently extracts nothing for an absent entry: the tests fail the build
 # instead. Nothing else of this stage reaches the final image.
-FROM eclipse-temurin:21.0.12.1_1-jdk-noble@sha256:57424b1d8eca9c4cf8a4fe226207027911f08d6758628891bf59fcfb53777029 AS licenses
+FROM eclipse-temurin:21.0.13_9-jdk-noble@sha256:114cabb73033ca4ce7ceec3deb62396bc1b716282bae051ed3c1d82e38fcab2d AS licenses
 COPY minos-code-intelligence-*-all.jar /tmp/minos.jar
 RUN mkdir -p /licenses \
     && cd /licenses \
@@ -19,7 +19,7 @@ RUN mkdir -p /licenses \
     && test -n "$(find META-INF/licenses -type f -size +0c -print -quit)" \
     && chmod -R a+rX /licenses
 
-FROM eclipse-temurin:21.0.12.1_1-jre-noble@sha256:cd35bb33859641c5374415826a5951845104093eaa401cbe9d3d9023444f1c13
+FROM eclipse-temurin:21.0.13_9-jre-noble@sha256:0eda5830ed7b669abc246a8dc520ea8a23cab06f9a8d4b6964109e2f2394e46f
 
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
