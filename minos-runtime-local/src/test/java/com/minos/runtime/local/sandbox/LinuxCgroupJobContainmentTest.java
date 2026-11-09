@@ -155,6 +155,45 @@ class LinuxCgroupJobContainmentTest {
     }
 
     @Test
+    void theProviderReadsItsOwnJobLimitsReadOnlyAndCannotRelaxThem(@TempDir Path temporary) throws Exception {
+        Path root = requireDelegatedRoot();
+        var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
+        SandboxTestSupport.requireBackend(discovered, "a Linux sandbox backend is required");
+        LinuxCgroupJob job = LinuxCgroupJob.create(
+                root, "minos-view-" + UUID.randomUUID(), new LinuxCgroupJob.Limits(256 * MEBIBYTE, 64L, 200_000L));
+        try {
+            Path working = Files.createDirectories(temporary.resolve("workspace"));
+            Path run = Files.createDirectories(temporary.resolve("run"));
+            Path artifact = run.resolve("index.scip");
+            IndexerProcessPlan plan = new IndexerProcessPlan(
+                    List.of("/bin/sh", "-c",
+                            "cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max > \"$1\";"
+                                    + " for f in memory.max pids.max cpu.max cgroup.procs cgroup.subtree_control; do"
+                                    + " if (echo max > /sys/fs/cgroup/$f) 2>/dev/null; then echo \"writable $f\" >> \"$1\"; fi;"
+                                    + " done;"
+                                    + " if mkdir /sys/fs/cgroup/escape 2>/dev/null; then echo child >> \"$1\"; fi",
+                            "sh", artifact.toString()),
+                    working, Map.of(), artifact, Duration.ofSeconds(20));
+
+            Process process = new ProcessBuilder(discovered.orElseThrow()
+                    .sandboxPlan(plan, run, WorkerNetworkPolicy.DENY, job).command())
+                    .redirectErrorStream(true).start();
+            String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8);
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS), output);
+            assertEquals(0, process.exitValue(), output);
+
+            List<String> seen = Files.readAllLines(artifact, StandardCharsets.UTF_8);
+            assertEquals(List.of(Long.toString(256 * MEBIBYTE), "200000 " + LinuxCgroupJob.CPU_PERIOD_MICROS), seen,
+                    "the provider sees the limits of its own job, nothing else, and cannot write them");
+            assertEquals(Long.toString(256 * MEBIBYTE), read(job, "memory.max"));
+            assertEquals("64", read(job, "pids.max"));
+            assertFalse(Files.exists(job.directory().resolve("escape")), "no child cgroup can be created from inside");
+        } finally {
+            job.close();
+        }
+    }
+
+    @Test
     void theQualifiedBackendDeclaresTheAggregateContainmentItReallyEnforces() {
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
         SandboxTestSupport.requireBackend(discovered, "a Linux sandbox backend is required");

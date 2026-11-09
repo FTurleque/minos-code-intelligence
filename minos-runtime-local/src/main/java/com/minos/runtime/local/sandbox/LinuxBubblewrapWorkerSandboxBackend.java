@@ -67,8 +67,8 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
      * an account that already runs that many threads (MINOS-AUD-H17).
      */
     static final int MAX_PROCESSES = 128;
-    /** Read by every JVM at start; carries the job bounds of {@link #boundedJavaToolOptions(String, int)}. */
-    static final String JAVA_TOOL_OPTIONS = "JAVA_TOOL_OPTIONS";
+    /** Where a JVM looks for its container limits; the job cgroup is bound there read-only by {@link #jobCgroupView}. */
+    static final String JOB_CGROUP_VIEW = "/sys/fs/cgroup";
     static final int MAX_OPEN_FILES = 2048;
     /** Aggregate CPU bandwidth per {@link LinuxCgroupJob#CPU_PERIOD_MICROS}, enforced by {@code cpu.max}. */
     static final long MAX_CPU_MICROS_PER_PERIOD = 8L * LinuxCgroupJob.CPU_PERIOD_MICROS;
@@ -325,10 +325,9 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
         // Declared read-only roots come after every writable bind, so that no writable mount can cover them,
         // and masked files come last, so that no later mount can expose them again.
         LinuxSandboxReadOnlyRoots.addDeclaredMounts(sandbox, plan, List.of(working, artifactParent, run), minosHome, run);
-        sandbox.add("--setenv");
-        sandbox.add(JAVA_TOOL_OPTIONS);
-        sandbox.add(boundedJavaToolOptions(providerEnvironment.get(JAVA_TOOL_OPTIONS),
-                Runtime.getRuntime().availableProcessors()));
+        if (job != null) {
+            sandbox.addAll(jobCgroupView(job.directory()));
+        }
         sandbox.add("--chdir");
         sandbox.add(working.toString());
         sandbox.add("--");
@@ -339,17 +338,14 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements OsEnforcedWork
     }
 
     /**
-     * The {@code JAVA_TOOL_OPTIONS} of every process of the provider tree: the options the plan declares, then the
-     * job memory as {@code -XX:MaxRAM} and the job processors (at most the host's) as
-     * {@code -XX:ActiveProcessorCount}. A JVM otherwise sizes its heap and its thread pools on the host, and its
-     * reservations alone reach {@link #MAX_ADDRESS_SPACE_BYTES} on a large host. The bounds come last, so that they
-     * win over a declared value of the same option.
+     * The read-only view of the job cgroup given to the provider at {@link #JOB_CGROUP_VIEW}. In its cgroup namespace
+     * the provider's cgroup is the root of that view, so a JVM reads {@code memory.max} and {@code cpu.max} of its job
+     * and sizes its heap and its thread pools on them; otherwise it sizes them on the host, and its reservations alone
+     * reach {@link #MAX_ADDRESS_SPACE_BYTES} on a large host. The view is read-only: the provider cannot relax a limit.
+     * No option or variable is set, so no JVM prints a banner into the output of the analysed build.
      */
-    static String boundedJavaToolOptions(String declared, int availableProcessors) {
-        long jobProcessors = MAX_CPU_MICROS_PER_PERIOD / LinuxCgroupJob.CPU_PERIOD_MICROS;
-        String bounds = "-XX:MaxRAM=" + MAX_JOB_MEMORY_BYTES
-                + " -XX:ActiveProcessorCount=" + Math.clamp(availableProcessors, 1L, jobProcessors);
-        return declared == null || declared.isBlank() ? bounds : declared.strip() + " " + bounds;
+    static List<String> jobCgroupView(Path jobDirectory) {
+        return List.of(RO_BIND, jobDirectory.toString(), JOB_CGROUP_VIEW);
     }
 
     private boolean probeOsIsolation() {
