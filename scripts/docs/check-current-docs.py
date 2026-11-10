@@ -144,10 +144,11 @@ def validate_security_and_storage() -> None:
     forbid(POM, pom, "<jackson3.version>3.0.3</jackson3.version>")
 
     postgres_pom = read(POSTGRES_POM)
-    require_all(POSTGRES_POM, postgres_pom, (
-        "windows-docker-desktop-testcontainers", "<family>Windows</family>",
-        "dockerDesktopLinuxEngine", "jackson-databind",
-    ))
+    require_all(POSTGRES_POM, postgres_pom, ("jackson-databind",))
+    # AUD-DEP-14 (R-27): the PostgreSQL tests connect to a server started outside the JVM; Testcontainers and the
+    # docker-java client it embeds stay out of the dependency tree.
+    for pom_path, pom_text in ((POM, pom), (POSTGRES_POM, postgres_pom)):
+        forbid(pom_path, pom_text, "org.testcontainers")
 
     postgres_support = read(POSTGRES_SUPPORT)
     require_all(POSTGRES_SUPPORT, postgres_support, (
