@@ -10,7 +10,7 @@ Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135
 
 La matrice obligatoire couvre :
 
-- Ubuntu : Java 21, PostgreSQL/pgvector Testcontainers réel et fail-closed, Maven `clean verify`, JaCoCo complet et Product Facts ;
+- Ubuntu : Java 21, PostgreSQL/pgvector réel (conteneur démarré par `scripts/dev/start-test-postgres.sh`) et fail-closed, Maven `clean verify`, JaCoCo complet et Product Facts ;
 - Windows : Java 21, Maven `clean verify`, JaCoCo hors scope PostgreSQL déjà qualifié sur Linux et Product Facts ;
 - OSV Scanner bloquant ;
 - vérification de l'immutabilité des références GitHub Actions ;
@@ -156,7 +156,7 @@ Le même gate refuse aussi :
 - des filtres `paths` de `windows-installer.yml` qui ne couvriraient plus `release-windows.yml` et le gate lui-même, ou qui divergeraient entre `pull_request` et `push` ;
 - une image de runner flottante : toute étiquette de `runs-on` terminée par `-latest` (valeur en ligne, liste, `labels:`), et `ubuntu-latest`, `windows-latest` ou `macos-latest` sur toute autre ligne non commentée (une matrice lue par `${{ matrix.os }}`). Chaque job nomme une image versionnée (`ubuntu-24.04`, `windows-2022`) : `-latest` change sous le workflow sans commit (AUD-DEP-05) ;
 - un `actions/checkout` sans `persist-credentials: false` (le jeton du dépôt resterait dans `.git/config` ; hypothèse « dépôt public » écrite dans `docs/developer/supply-chain.md`) et un job à `runs-on` sans `timeout-minutes` (un appel de workflow réutilisable en est exempté) (AUD-DEP-12) ;
-- un job connecté à Docker Hub (`docker/login-action`) dont la première étape `run:` après la connexion n'exécute pas `docker logout`, sauf s'il figure, avec sa raison, dans la liste fermée `DOCKER_LOGIN_KEPT` ; une entrée de cette liste qui ne désigne plus un job connecté est refusée ; l'étape de déconnexion qui lance du code du dépôt (script de `scripts/`, `mvnw`) ; un job qui tire les images de Testcontainers (`check-image-pins.py --testcontainers-images`) sans déclarer `TESTCONTAINERS_PULL_POLICY` et `TESTCONTAINERS_RYUK_DISABLED` dans son `env:`, et ces variables sans la classe de politique qu'elles désignent (AUD-DEP-13).
+- un job connecté à Docker Hub (`docker/login-action`) dont la première étape `run:` après la connexion n'exécute pas `docker logout`, sauf s'il figure, avec sa raison, dans la liste fermée `DOCKER_LOGIN_KEPT` ; une entrée de cette liste qui ne désigne plus un job connecté est refusée ; l'étape de déconnexion qui lance du code du dépôt (script de `scripts/`, `mvnw`) (AUD-DEP-13).
 
 Le gate accepte `--root <arbre>` (défaut : le dépôt). Son auto-test, `python scripts/quality/test_check_workflow_pins.py` (job `invariants`), prouve pour chaque règle un cas refusé et un cas accepté sur des arbres temporaires, puis des mutations d'une copie des vrais workflows.
 

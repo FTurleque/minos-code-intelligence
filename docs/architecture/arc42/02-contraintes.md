@@ -1,7 +1,7 @@
 # Section 2 — Contraintes
 
 > Preuves : `pom.xml` (versions enforcer), ADR-0004, ADR-0005, ADR-0017, ADR-0021, ADR-0035, ADR-0037,
-> `minos-storage/pom.xml` (Docker Testcontainers), ADR-0022.
+> `minos-storage/pom.xml`, `scripts/dev/start-test-postgres.sh`, ADR-0022.
 
 ---
 
@@ -17,7 +17,7 @@
 | CT-6 | **MCP STDIO read-only** — aucune mutation de projet via MCP | Imposée — ADR-0017 | `MinosMcpServer.java` |
 | CT-7 | **Shaded JAR** produit par `minos-app` ; point d'entrée `com.minos.cli.MinosLauncher` | Imposée — ADR-0022 | `minos-app/pom.xml` shade plugin |
 | CT-8 | **JGit** confiné à `minos-integration-git` | Imposée — ADR-0022 | `minos-integration-git/pom.xml` |
-| CT-9 | **PostgreSQL / pgvector** : backend optionnel, qualifié par Testcontainers | Préférence qualifiée | `minos-storage/pom.xml` |
+| CT-9 | **PostgreSQL / pgvector** : backend optionnel, qualifié sous Linux contre un serveur de test démarré hors de la JVM (`scripts/dev/start-test-postgres.sh`) | Préférence qualifiée | `PostgresTestSupport`, `.github/workflows/pr-ci.yml` |
 | CT-10 | Aucun framework serveur (Spring, Quarkus…) dans le cœur | Imposée — ADR-0004 | Absence de dépendance framework dans `pom.xml` |
 
 ---

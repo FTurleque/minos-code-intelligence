@@ -123,7 +123,7 @@
 
 - **Surefire** : tests unitaires par module.
 - **Failsafe** : tests d'intégration dans `minos-app` (cross-boundary, replay M14).
-- **Testcontainers** : PostgreSQL dans `minos-storage`.
+- **PostgreSQL de test** : les tests de `minos-storage` se connectent à un serveur démarré hors de la JVM (`scripts/dev/start-test-postgres.sh` ou `.ps1`), une base par classe ; sautés et comptés sans serveur, en échec en mode requis (`-Dminos.postgresql.tests.required=true`).
 - JaCoCo produit un rapport de couverture agrégé dans `target/site/jacoco-aggregate`.
 - Qualification de chaque jalon : tests + replay providers + handshake MCP + distribution.
 

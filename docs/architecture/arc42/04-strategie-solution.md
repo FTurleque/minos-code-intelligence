@@ -58,7 +58,7 @@ La direction des dépendances est strictement ascendante : les couches basses ig
 | PostgreSQL / pgvector | Stockage avancé optionnel | `minos-storage` |
 | Jackson | Sérialisation JSON (NEXUS, MCP, output) | `minos-storage`, `minos-application` |
 | JUnit 5 / JaCoCo | Tests et couverture | Tous |
-| Testcontainers | Tests d'intégration PostgreSQL | `minos-storage` |
+| Conteneur pgvector de test (`scripts/dev/start-test-postgres.sh`) | Serveur des tests d'intégration PostgreSQL, démarré hors de la JVM | `minos-storage` (tests) |
 | Advanced Installer / JPackage | Distribution Windows | `minos-app` build |
 
 ---
