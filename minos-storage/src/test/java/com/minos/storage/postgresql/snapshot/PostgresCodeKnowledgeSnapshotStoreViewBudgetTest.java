@@ -91,6 +91,10 @@ class PostgresCodeKnowledgeSnapshotStoreViewBudgetTest extends PostgresTestSuppo
     void aSecondProjectWaitsForTheFirstFetchThenLoads() throws Exception {
         UUID projectA = UUID.randomUUID();
         UUID projectB = UUID.randomUUID();
+        // 64 build-lock stripes: on a shared stripe, B would wait for A's project lock instead of the budget.
+        while (Math.floorMod(projectB.hashCode(), 64) == Math.floorMod(projectA.hashCode(), 64)) {
+            projectB = UUID.randomUUID();
+        }
         long payload = new SnapshotCodecV3().encodedSize(publish(projectA));
         publish(projectB);
         // 4.5 payloads: one fetch transient (3) fits, two do not; a cached view (1.25) beside one fetch does.

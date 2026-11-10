@@ -40,7 +40,7 @@ class FileSymbolSnapshotStoreViewBudgetTest {
     private static final Duration SHORT = Duration.ofMillis(300);
 
     private final UUID projectA = UUID.randomUUID();
-    private final UUID projectB = UUID.randomUUID();
+    private final UUID projectB = onAnotherBuildLockStripe(projectA);
 
     @Test
     void aSecondLoadWaitsForTheFirstThenSucceedsWithinTheBudget(@TempDir Path root) throws Exception {
@@ -174,6 +174,18 @@ class FileSymbolSnapshotStoreViewBudgetTest {
         assertTrue(refused.getMessage().startsWith("active symbol snapshot file is missing: "), refused.getMessage());
         assertFalse(PublicErrorMessages.looksSensitive(refused.getMessage()), refused.getMessage());
         assertEquals(0L, budget.stats().reservedBytes());
+    }
+
+    /**
+     * A project whose build lock is not the stripe of {@code other} (64 stripes, {@code FileSymbolSnapshotStore}):
+     * on a shared stripe, B would wait for A's project lock instead of the budget.
+     */
+    static UUID onAnotherBuildLockStripe(UUID other) {
+        UUID candidate = UUID.randomUUID();
+        while (Math.floorMod(candidate.hashCode(), 64) == Math.floorMod(other.hashCode(), 64)) {
+            candidate = UUID.randomUUID();
+        }
+        return candidate;
     }
 
     /** Publishes A and B with the same shape and returns the estimated weight of one view. */
