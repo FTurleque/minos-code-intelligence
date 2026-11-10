@@ -90,6 +90,39 @@ stateDiagram-v2
 États de `ProviderRuntimeStatus.State` (`minos-engine/src/main/java/com/minos/runtime/ProviderRuntimeStatus.java:46-63`),
 calculés à chaque inspection. Un état autre que `READY` empêche de remettre un exécuteur pour l'indexation.
 
+### Qui applique les versions forcées, et quand le verrou refuse-t-il ?
+
+Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « L'installation de scip-java
+applique les versions forcées du verrou », « Le verrou de scip-java se régénère par le script de construction avec
+ses versions forcées », « Une version forcée du classpath de scip-java est nominative et justifiée »
+
+```mermaid
+sequenceDiagram
+    participant I as "ScipJavaClasspathInstallation"
+    participant L as "ClasspathLock"
+    participant C as "coursier (épinglé)"
+    I->>L: packaged()
+    alt "entrée forcée malformée"
+        L-->>I: IOException (aucun lancement)
+    else "verrou valide"
+        L-->>I: jars + forcedVersions
+        I->>C: "fetch --classpath --force-version com.google.guava:guava:33.7.2-jre org.scip-code:scip-java:0.13.2"
+        C-->>I: classpath (jars du cache)
+        I->>L: verify(jars)
+        alt "jar absent, en trop ou somme différente"
+            L-->>I: IllegalStateException (rien n'est gardé)
+        else "conforme"
+            L-->>I: ok, copie puis classpath.txt
+        end
+    end
+```
+
+Le forçage est lu dans le verrou qui sert ensuite à la vérification : forçage et contrôle ne divergent pas. Le script
+de construction (`scripts/release/build-embedded-tools.py`) suit le même déroulé ; avec `--update-classpath-lock`, il
+écrit le verrou au lieu de le comparer, après avoir contrôlé que chaque module forcé est résolu à sa version. Le repli
+du lanceur Windows et le lanceur de l'image Docker résolvent sans forçage. La règle est décrite par
+`docs/architecture/adr/SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md`.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -101,7 +134,7 @@ calculés à chaque inspection. Un état autre que `READY` empêche de remettre 
 | L'installation n'exécute pas scip-java pour en lire la version | tous | V1 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ClasspathLockTest.java#theInstallationFetchesTheClasspathAndNeverLaunchesScipJava`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManagerTest.java#fetchesPinnedScipJavaWithoutLaunchingIt` | couverte |
 | Le verrou est tenu par le catalogue et contrôlé en CI | tous | — | `scripts/quality/test_check_tools_manifest.py#test_a_lock_that_does_not_match_the_catalogue_version_is_refused`, `scripts/quality/test_check_tools_manifest.py#test_a_coursier_fetch_component_without_a_lock_file_is_refused` | couverte |
 | Les tests du provider SCIP ne dépendent pas du JAVA_HOME de l'hôte | un test lit le `JAVA_HOME` de l'hôte et se saute sans lui (E1) | — | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java` | partielle |
-| Sans JDK de projet, le plan scip-java est refusé avant toute préparation | tous | V2 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#anUnsetJavaHomeIsRefusedBeforeAnythingIsStaged`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#aJavaHomeWithoutJavacIsRefusedBeforeAnythingIsStaged` | couverte |
+| Sans JDK de projet, le plan scip-java est refusé avant toute préparation | tous | V2 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#anUnsetJavaHomeIsRefusedBeforeAnythingIsStaged`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#aJavaHomeWithoutJavacIsRefusedBeforeAnythingIsStaged`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/ScipJavaProjectJdkTest.java#theRefusalOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath` | couverte |
 | Un test du provider propre à Windows est compté comme sauté ailleurs | rapport Linux non lu automatiquement ; classe citée par la spec différente (E2) | — | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#onWindowsAKotlinProjectGivesItsLanguageToTheRunner` | partielle |
 | Le helper d'identité de chemin Windows n'hérite pas de l'environnement de MINOS | tous (capture réelle sous Windows) | — | `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsExecutionPathIdentityHelperEnvironmentTest.java#noSecretOfTheJvmEnvironmentReachesTheHelper`, `minos-runtime-local/src/test/java/com/minos/runtime/local/sandbox/WindowsExecutionPathIdentityHelperEnvironmentTest.java#theHelperDoesNotInheritTheModulePathNorTheToolchainVariablesOfTheJvm` | couverte |
 | scip-java sous Windows n'utilise que le PowerShell du répertoire système | tous (Windows) | — | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/ScipJavaPowerShellTest.java#lePlanUtiliseLePowerShellDuRepertoireSystemeQuelQueSoitLePath`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#onWindowsAPowerShellOnPathIsNeverTheOneThePlanRuns` | couverte |
@@ -117,6 +150,10 @@ calculés à chaque inspection. Un état autre que `READY` empêche de remettre 
 | Sous Linux, scip-java n'est prêt que s'il peut construire hors ligne | tous sous Linux | V2 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManagerOfflineMavenTest.java#aMavenOutsideTheQualifiedRangeIsAMachinePrerequisiteAndIsNeverRun`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ManagedScipProviderRuntimeManagerOfflineMavenTest.java#withoutADesignatedRepositoryScipJavaIsNotReadyAndTheDiagnosticNamesTheSetting` | couverte |
 | L'installation range une copie vérifiée du classpath de scip-java | tous | V1 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallationTest.java#theVerifiedJarsAreCopiedBesideARelativeListingAndTheirLauncher`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallationTest.java#aJarThatDoesNotMatchTheLockIsNeverKeptAndThePreviousTreeSurvives` | couverte |
 | Le plan d'indexation de scip-java n'exécute que le classpath revérifié | tous (Linux et Windows répartis) | V2 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#onLinuxAJarThatNoLongerMatchesTheLockIsRefusedBeforeAnythingIsStaged`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ScipJavaProcessPlanFactoryToolchainTest.java#onWindowsAMissingClasspathIsRefusedRatherThanResolvedByTheRunner` | couverte |
+| Le diagnostic d'un JAVA_HOME sans javac ne contient pas son chemin | tous | V2 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/ScipJavaProjectJdkTest.java#theDiagnosticOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/plan/ScipJavaProjectJdkTest.java#theRefusalOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath` | couverte |
+| Une version forcée du classpath de scip-java est nominative et justifiée | tous | V3 | `scripts/quality/test_check_tools_manifest.py#test_a_forced_version_without_a_reason_or_an_advisory_is_refused`, `scripts/quality/test_check_tools_manifest.py#test_a_module_forced_twice_is_refused`, `scripts/quality/test_check_tools_manifest.py#test_a_forced_jar_absent_from_the_lock_is_refused`, `scripts/quality/test_check_tools_manifest.py#test_scip_java_itself_cannot_be_forced`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ClasspathLockTest.java#thePackagedLockForcesGuavaForItsAdvisory` | couverte |
+| L'installation de scip-java applique les versions forcées du verrou | tous (Coursier simulé en test ; installation et indexation réelles sous bubblewrap dans WSL2 et dans `Verify (ubuntu-24.04)`, run 42868644914) | V3 | `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ClasspathLockTest.java#theInstallationForcesTheVersionsOfTheLock`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ClasspathLockTest.java#aLockWithoutForcedVersionsResolvesWithoutForcing`, `minos-provider-scip/src/test/java/com/minos/adapter/scip/runtime/install/ClasspathLockTest.java#aMalformedForcedVersionIsRefusedBeforeAnyResolution` | couverte |
+| Le verrou de scip-java se régénère par le script de construction avec ses versions forcées | tous (Coursier simulé en test ; régénération réelle faite sous Windows) | V3 | `scripts/release/test_build_embedded_tools.py#test_the_fetch_command_forces_the_versions_of_the_lock_in_their_order`, `scripts/release/test_build_embedded_tools.py#test_the_regeneration_recomputes_every_jar_and_keeps_the_forced_versions`, `scripts/release/test_build_embedded_tools.py#test_a_forced_module_resolved_at_another_version_leaves_the_lock_untouched` | couverte |
 
 Beaucoup de tests de cette capacité ne tournent que sous un système (`@EnabledOnOs`) : chaque garantie n'est prouvée
 que par le job `Verify` du système concerné.
