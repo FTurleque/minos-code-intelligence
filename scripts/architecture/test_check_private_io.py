@@ -60,6 +60,7 @@ WITNESSES = {
 PLUGIN = "minos-intellij/src/main/java/com/minos/intellij/protocol/Launcher.java"
 REAL_FIXED_SITE = "minos-storage/src/main/java/com/minos/storage/local/registry/InterProcessLocalProjectRegistry.java"
 REAL_REGISTRY = "minos-storage/src/main/java/com/minos/storage/local/registry/LocalProjectRegistry.java"
+REAL_PROJECT_JDK = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/plan/ScipJavaProjectJdk.java"
 
 
 def java(body: str, header: str = "") -> str:
@@ -638,6 +639,21 @@ class PrivateIoGateTest(unittest.TestCase):
                          'configured runtime mapping: "\n                        + project.rootPath(), exception);'),
             "string": ('configured mapping", exception);',
                        'configured mapping: " + legacyRoot, exception);'),
+        }
+        for name, (fixed, reverted_text) in reverts.items():
+            with self.subTest(site=name):
+                reverted = real.replace(fixed, reverted_text)
+                self.assertNotEqual(real, reverted, "the fixed site moved: update this witness")
+                self.assertEqual(1, _MODULE.count_occurrences(reverted)["message(Path)"])
+
+    def test_the_two_real_project_jdk_messages_reverted_to_the_java_home_value_are_caught(self):
+        real = (Path(__file__).resolve().parents[2] / REAL_PROJECT_JDK).read_text(encoding="utf-8")
+        self.assertEqual({}, {k: v for k, v in _MODULE.count_occurrences(real).items() if k == "message(Path)"})
+        reverts = {
+            "problem": ('Optional.of("JAVA_HOME does not contain javac");',
+                        'Optional.of("JAVA_HOME does not contain javac: " + javaHome);'),
+            "home": ('new IllegalStateException("JAVA_HOME does not point to a JDK containing javac");',
+                     'new IllegalStateException("JAVA_HOME does not point to a JDK containing javac: " + javaHome);'),
         }
         for name, (fixed, reverted_text) in reverts.items():
             with self.subTest(site=name):
