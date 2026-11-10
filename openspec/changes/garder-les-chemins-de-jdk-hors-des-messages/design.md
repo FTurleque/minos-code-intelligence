@@ -288,19 +288,19 @@ lui-même. Ajouter un journal pour elle ajouterait une sortie sans diagnostic no
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| stockage-prive-et-secrets › Le gate des messages reconnaît un chemin nommé par le suffixe Home | Valeur de JAVA_HOME concaténée dans une exception | D1, diagramme 1 | 1.1, 1.2 | à écrire (`test_check_private_io.py`) |
-| idem | Rôle nommé ou nom de feuille | D1 | 1.1, 1.2 | à écrire |
-| idem | Mutation du site réel corrigé | D1 | 2.3 | à écrire (témoin du site réel) |
-| idem | Entrée de liste périmée | D1 | 1.1, 1.2 | à écrire |
-| stockage-prive-et-secrets › Le gate des messages reconnaît un chemin dérivé par un appel chaîné | Parent ou résolution d'un chemin connu | D1 | 1.1, 1.2 | à écrire |
-| idem | Chemin construit dans le message | D1 | 1.1, 1.2 | à écrire |
-| idem | Appel final qui ne rend pas le chemin | D1 | 1.1, 1.2 | à écrire |
-| stockage-prive-et-secrets › Le gate des messages lit un diagnostic préparé dans un Optional | Diagnostic qui concatène un chemin | D2 | 1.1, 1.2 | à écrire |
-| idem | Chemin transporté sans être rendu | D2 | 1.1, 1.2 | à écrire |
+| stockage-prive-et-secrets › Le gate des messages reconnaît un chemin nommé par le suffixe Home | Valeur de JAVA_HOME concaténée dans une exception | D1, diagramme 1 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_a_derived_path_or_a_diagnostic_in_an_optional_fails` ; gate sur le dépôt réel (rouge `:90`, vert après 2.2) |
+| idem | Rôle nommé ou nom de feuille | D1 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_named_by_its_role_or_a_path_not_rendered_passes` |
+| idem | Mutation du site réel corrigé | D1 | 2.3 | `test_check_private_io.py#test_the_two_real_project_jdk_messages_reverted_to_the_java_home_value_are_caught` |
+| idem | Entrée de liste périmée | D1 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_site_takes_a_justified_entry_and_a_stale_entry_is_refused` |
+| stockage-prive-et-secrets › Le gate des messages reconnaît un chemin dérivé par un appel chaîné | Parent ou résolution d'un chemin connu | D1 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_a_derived_path_or_a_diagnostic_in_an_optional_fails` |
+| idem | Chemin construit dans le message | D1 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_a_derived_path_or_a_diagnostic_in_an_optional_fails` |
+| idem | Appel final qui ne rend pas le chemin | D1 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_named_by_its_role_or_a_path_not_rendered_passes` |
+| stockage-prive-et-secrets › Le gate des messages lit un diagnostic préparé dans un Optional | Diagnostic qui concatène un chemin | D2 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_a_derived_path_or_a_diagnostic_in_an_optional_fails`, `test_check_private_io.py#test_the_inventory_lists_a_diagnostic_in_an_optional_as_public` ; gate sur le dépôt réel (rouge `:68`) |
+| idem | Chemin transporté sans être rendu | D2 | 1.1, 1.2 | `test_check_private_io.py#test_a_home_named_by_its_role_or_a_path_not_rendered_passes` |
 | installation-des-providers › Sans JDK de projet, le plan scip-java est refusé avant toute préparation | Variable non posée | inchangé | — | `ScipJavaProjectJdkTest#neitherTheSettingNorJavaHomeIsRefusedByNamingTheSettingWithoutAnyPath` (existant) |
-| idem | Dossier sans compilateur | D3, diagramme 2 | 2.1, 2.2 | à écrire (`ScipJavaProjectJdkTest`) ; `ScipJavaProcessPlanFactoryToolchainTest#aJavaHomeWithoutJavacIsRefusedBeforeAnythingIsStaged` (existant, préfixe) |
-| installation-des-providers › Le diagnostic d'un JAVA_HOME sans javac ne contient pas son chemin | Diagnostic du JDK de projet | D3, diagramme 2 | 2.1, 2.2 | à écrire (`ScipJavaProjectJdkTest`) |
-| idem | Diagnostic du runtime scip-java | D3, diagramme 2 | 2.2 | `ManagedScipProviderRuntimeManagerToolchainTest.java:204` (existant, inchangé) |
+| idem | Dossier sans compilateur | D3, diagramme 2 | 2.1, 2.2 | `ScipJavaProjectJdkTest#theRefusalOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath` ; `ScipJavaProcessPlanFactoryToolchainTest#aJavaHomeWithoutJavacIsRefusedBeforeAnythingIsStaged` (existant, préfixe) |
+| installation-des-providers › Le diagnostic d'un JAVA_HOME sans javac ne contient pas son chemin | Diagnostic du JDK de projet | D3, diagramme 2 | 2.1, 2.2 | `ScipJavaProjectJdkTest#theDiagnosticOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath` |
+| idem | Diagnostic du runtime scip-java | D3, diagramme 2 | 2.2 | `ManagedScipProviderRuntimeManagerToolchainTest#aJavaHomeWithoutJavacIsReportedAsAMachinePrerequisite` (existant, inchangé ; `contains` du texte préfixé, l'absence de tout ajout n'est pas assertée) |
 
 ## Décisions du propriétaire
 
