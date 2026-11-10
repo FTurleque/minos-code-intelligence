@@ -80,5 +80,5 @@ Changement `forcer-guava-dans-le-classpath-de-scip-java` : `com.google.guava:gua
 
 - [BE-0065](BE-0065-providers-scip-polyglottes-livres-dans-le-paquet.md) § 12 (intégrité du classpath de scip-java, comparé au verrou).
 - [SEC-0074](SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) (scip-java bloqué sous Windows natif).
-- Changement OpenSpec `openspec/changes/forcer-guava-dans-le-classpath-de-scip-java/` ; capacité `installation-des-providers`.
+- Changement OpenSpec `openspec/changes/archive/2026-11-10-forcer-guava-dans-le-classpath-de-scip-java/` ; capacité `installation-des-providers`.
 - Chaîne d'approvisionnement : [`docs/developer/supply-chain.md`](../../developer/supply-chain.md) ; registre des risques : [`docs/architecture/risks/register.md`](../risks/register.md) (R-29).

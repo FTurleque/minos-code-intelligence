@@ -22,9 +22,9 @@ dans la colonne ; dossiers de capacité à l'archivage.
 ## 4. Clôture
 
 - [x] 4.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) avec les noms réels des tests écrits ; nommer comme manquante toute preuve absente ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 4.2 **(à l'archivage)** Préparer les lignes de traçabilité des dossiers `docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md` (trois exigences ajoutées) et `installation-des-providers.md` (une exigence ajoutée, preuve `ScipJavaProjectJdkTest` sur l'exigence modifiée), à écrire à l'archivage ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 4.2 **(à l'archivage)** Préparer les lignes de traçabilité des dossiers `docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md` (trois exigences ajoutées) et `installation-des-providers.md` (une exigence ajoutée, preuve `ScipJavaProjectJdkTest` sur l'exigence modifiée), à écrire à l'archivage ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Fait à l'archivage : lignes écrites dans les deux dossiers ; `check-capability-dossiers.py` vert.
 - [x] 4.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`.
-- [ ] 4.4 **(manuelle)** Transmettre au propriétaire le texte de `design.md` § « Texte proposé pour les fichiers partagés » pour `docs/project/audits/2026-10-10/SUIVI.md` (ligne AUD-SEC-04), rempli avec le numéro de PR, la date et les comptes réels mesurés en 1.2 ; aucun texte pour `register.md` ni `supply-chain.md`.
+- [x] 4.4 **(manuelle)** Transmettre au propriétaire le texte de `design.md` § « Texte proposé pour les fichiers partagés » pour `docs/project/audits/2026-10-10/SUIVI.md` (ligne AUD-SEC-04), rempli avec le numéro de PR, la date et les comptes réels mesurés en 1.2 ; aucun texte pour `register.md` ni `supply-chain.md`. Fait : ligne AUD-SEC-04 de `SUIVI.md` écrite par la PR #710 et complétée par la PR #714 (numéro et commit de fusion).
 - [x] 4.5 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, docs/user, docs/developer, arc42, ADR) ; vérifier que chacun est fait ou nommé comme reste (attendu : aucun ADR, `docs/user/troubleshooting.md:133` inchangée car elle ne cite pas les messages à chemin).
 
 ## Workflow follow-up
