@@ -188,6 +188,15 @@ Contenu de l'ADR : les trois conditions du propriétaire (listé avec sa raison 
 
 [Décision du propriétaire] Seul `com.google.guava:guava` est forcé. Si la résolution fait aussi bouger `jspecify` (1.0.0 → 1.0.1) ou `error_prone_annotations`, le verrou régénéré l'enregistre. Le diff du verrou est relu jar par jar dans la PR et décrit dans la tâche 3.2. Aucun forçage de plus n'est ajouté pour garder les anciennes versions : ce serait forcer des modules sans avis, contraire au caractère nominatif. Le nombre de jars peut donc rester 70 ou changer. `supply-chain.md:179,193` cite 70 : à mettre à jour avec la valeur mesurée (texte proposé ci-dessous, à compléter).
 
+**Mesure du 2026-11-10 (tâches 2.1 et 3.2).** Lanceur Coursier `windows-x64` épinglé téléchargé dans un dossier vide du scratchpad, SHA-256 égal au catalogue (`d6b375ea…be3a`, 30 508 363 octets). `cs fetch --help` liste `-V, --force-version organization:name:forcedVersion`. `fetch --classpath --force-version com.google.guava:guava:33.7.2-jre org.scip-code:scip-java:0.13.2` (cache Coursier vide) sort en code 0 avec **70 jars**, comme le verrou du HEAD. Diff jar par jar :
+
+| Jar | HEAD | Après forçage | Justification |
+|---|---|---|---|
+| guava | `guava-33.6.0-jre.jar` | `guava-33.7.2-jre.jar` (3 057 659 octets, `b5309422…606c`, égal à Maven Central) | le forçage lui-même (`GHSA-xxph-c9ww-hj94`) |
+| jspecify | `jspecify-1.0.0.jar` | `jspecify-1.0.1.jar` | dépendance directe de guava 33.7.2-jre (POM `guava-parent` 33.7.2) : la médiation de Coursier retient la plus haute version demandée ; jar d'annotations seules, sans avis connu, déjà couvert par `CLASSPATH_GROUPS` (`org.jspecify`) |
+
+Inchangés : les 68 autres jars, dont `error_prone_annotations-2.41.0.jar` et `failureaccess-1.0.3.jar` (une autre branche de l'arbre impose 2.41.0 à error_prone, et failureaccess reste en 1.0.3 dans guava 33.7.2). Aucun jar ajouté ni retiré : `CLASSPATH_GROUPS` de `check-embedded-tools-advisories.py` ne change pas.
+
 ### D5 — Point d'arrêt
 
 [Décision du propriétaire] Si scip-java 0.13.2 échoue avec guava 33.7.2 (tests du module ou indexation réelle), on s'arrête. Le verrou, la dérogation et R-29 restent tels qu'au HEAD, et l'ADR passe `Rejected` avec la preuve de l'échec (tâche 4.3).
@@ -277,16 +286,23 @@ Plage retenue par le propriétaire : `>= 7.0.0, < 11.0.1` (décision 6), la plus
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| installation-des-providers › Une version forcée du classpath de scip-java est nominative et justifiée | Verrou livré avec guava forcé | D2, Modèle de domaine | 3.1, 3.3 | `check-tools-manifest.py` (à écrire : assertion guava) |
-| idem | Entrée forcée sans raison | Modèle de domaine, invariant 1 | 1.1, 1.2 | `test_check_tools_manifest.py` (à écrire) |
-| idem | Jar forcé absent du verrou | Modèle de domaine, invariant 3 | 1.1, 1.2 | `test_check_tools_manifest.py` (à écrire) |
-| installation-des-providers › L'installation de scip-java applique les versions forcées du verrou | Commande de résolution avec guava forcé | D3, diagramme | 2.3, 2.4 | `ClasspathLockTest` (à écrire) |
-| idem | Verrou sans version forcée | D3 | 2.3, 2.4 | `ManagedScipProviderRuntimeManagerTest` (à adapter) |
-| idem | Entrée forcée malformée | Sécurité et isolation, diagramme | 2.3, 2.4 | `ClasspathLockTest` (à écrire) |
-| installation-des-providers › Le verrou de scip-java se régénère par le script de construction avec ses versions forcées | Régénération avec un faux Coursier | D3, D4 | 2.1, 2.2 | `test_build_embedded_tools.py` (à écrire) |
-| idem | Module forcé non résolu à sa version | Transactions | 2.1, 2.2 | `test_build_embedded_tools.py` (à écrire) |
-| idem | Construction sans régénération sur une résolution divergente | Traitements | 2.1 | `test_build_embedded_tools.py:117-132` (existant, à compléter du message) |
-| Critère de sortie : indexation réelle | — | D5 | 4.1, 4.2 | CI Linux `pr-ci.yml:401-409` (manquante tant que la PR n'a pas tourné) |
+| installation-des-providers › Une version forcée du classpath de scip-java est nominative et justifiée | Verrou livré avec guava forcé | D2, Modèle de domaine | 3.1, 3.2, 3.3 | `check-tools-manifest.py` (vert sur le verrou livré) ; `ClasspathLockTest#thePackagedLockForcesGuavaForItsAdvisory` (rouge au HEAD, vert après 3.2) |
+| idem | Entrée forcée sans raison | Modèle de domaine, invariant 1 | 1.1, 1.2 | `test_check_tools_manifest.py` : `test_a_forced_version_without_a_reason_or_an_advisory_is_refused`, `test_a_forced_module_that_is_not_organisation_colon_name_is_refused`, `test_a_module_forced_twice_is_refused`, `test_scip_java_itself_cannot_be_forced` |
+| idem | Jar forcé absent du verrou | Modèle de domaine, invariant 3 | 1.1, 1.2 | `test_check_tools_manifest.py` : `test_a_forced_jar_absent_from_the_lock_is_refused` |
+| installation-des-providers › L'installation de scip-java applique les versions forcées du verrou | Commande de résolution avec guava forcé | D3, diagramme | 2.3, 2.4 | `ClasspathLockTest#theInstallationForcesTheVersionsOfTheLock` |
+| idem | Verrou sans version forcée | D3 | 2.3, 2.4 | `ClasspathLockTest#aLockWithoutForcedVersionsResolvesWithoutForcing`, `ManagedScipProviderRuntimeManagerTest#fetchesPinnedScipJavaWithoutLaunchingIt`, `ManagedScipProviderRuntimeManagerRuntimeTest#theFetchCommandOnlyResolvesTheClasspath` |
+| idem | Entrée forcée malformée | Sécurité et isolation, diagramme | 2.3, 2.4 | `ClasspathLockTest#aMalformedForcedVersionIsRefusedBeforeAnyResolution` (le verrou est refusé par `parse`, donc avant tout lancement) |
+| installation-des-providers › Le verrou de scip-java se régénère par le script de construction avec ses versions forcées | Régénération avec un faux Coursier | D3, D4 | 2.1, 2.2 | `test_build_embedded_tools.py` : `test_the_fetch_command_forces_the_versions_of_the_lock_in_their_order`, `test_the_build_resolves_with_the_forced_versions`, `test_the_regeneration_recomputes_every_jar_and_keeps_the_forced_versions` |
+| idem | Module forcé non résolu à sa version | Transactions | 2.1, 2.2 | `test_build_embedded_tools.py` : `test_a_forced_module_resolved_at_another_version_leaves_the_lock_untouched` |
+| idem | Construction sans régénération sur une résolution divergente | Traitements | 2.1 | `test_build_embedded_tools.py` : `test_a_replaced_extra_or_missing_jar_is_refused`, `test_a_divergent_resolution_names_the_jar_and_the_regeneration_option` |
+| Critère de sortie : indexation réelle | — | D5 | 4.1, 4.2 | Preuve locale WSL2 du 2026-11-10 (4.1, ci-dessous) ; CI Linux `pr-ci.yml:401-409` **manquante** tant que la PR n'a pas tourné (4.2) |
+
+## Preuves de réalisation (2026-11-10)
+
+- Coursier épinglé et résolution forcée : voir D4 (mesure).
+- Régénération : `python scripts/release/build-embedded-tools.py --update-classpath-lock --output target/tools-regen --cache <dossier vide du scratchpad>` sous Windows, code 0, puis la même commande sans l'option, code 0 (`EMBEDDED TOOLS BUILD SUCCESS (platform=windows-x64, components=5)`). Le diff du verrou ne touche que `forcedVersions`, guava et jspecify ; le format du fichier est conservé.
+- Veille réelle : `python scripts/quality/check-embedded-tools-advisories.py`, code 0, `packages queried=76`, `waived=0`, aucun composant affecté. La sortie ne liste pas les paquets un à un ; les 70 jars du verrou en font partie, guava en 33.7.2-jre.
+- Indexation réelle (4.1) : distribution WSL2 Ubuntu du poste, copie du worktree avec le verrou régénéré et le code d'installation, `./mvnw -DskipTests package` (JDK 21), puis `scripts/ci/qualify-linux-offline-maven-index.sh` sous `systemd-run --user --scope -p Delegate=yes` (cgroup feuille, `MINOS_SANDBOX_CGROUP_ROOT`). `minos tools install scip-java` réussit (Coursier Linux épinglé, classpath vérifié contre le verrou en guava 33.7.2-jre), sandbox `linux-bubblewrap-cgroup2-v5 AVAILABLE`, `minos index java-simple` rend `"status":"SUCCEEDED"`, et le script conclut « offline Maven index under the Linux sandbox: artifact produced, designated repository unchanged ».
 
 ## Décisions du propriétaire (2026-11-10)
 

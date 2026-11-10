@@ -109,6 +109,18 @@ class ClasspathLockTest {
         assertTrue(packaged.names().size() > 10, "le verrou doit épingler tout le graphe de dépendances");
     }
 
+    @Test
+    void thePackagedLockForcesGuavaForItsAdvisory() throws Exception {
+        ClasspathLock packaged = ClasspathLock.packaged();
+
+        assertTrue(packaged.names().contains("guava-33.7.2-jre.jar"), "guava 33.7.2-jre doit être épinglé");
+        assertFalse(packaged.names().contains("guava-33.6.0-jre.jar"), "guava 33.6.0-jre ne doit plus être épinglé");
+        assertEquals(List.of(new ClasspathLock.ForcedVersion("com.google.guava:guava", "33.7.2-jre")), packaged.forcedVersions());
+        try (java.io.InputStream input = ClasspathLock.class.getResourceAsStream(ClasspathLock.RESOURCE)) {
+            assertTrue(new String(input.readAllBytes(), StandardCharsets.UTF_8).contains("\"advisory\": \"GHSA-xxph-c9ww-hj94\""));
+        }
+    }
+
     // ------------------------------------------------------------------ l'installation, avec un faux coursier
 
     private Path fakeCoursier(String classpathLine) throws IOException {

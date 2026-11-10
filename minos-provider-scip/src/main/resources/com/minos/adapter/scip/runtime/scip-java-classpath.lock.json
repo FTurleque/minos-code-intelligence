@@ -1,6 +1,9 @@
 {
   "coordinate": "org.scip-code:scip-java:0.13.2",
   "version": "0.13.2",
+  "forcedVersions": [
+    {"module": "com.google.guava:guava", "version": "33.7.2-jre", "advisory": "GHSA-xxph-c9ww-hj94", "reason": "R-29: guava 33.6.0-jre (maven-core 3.9.16, guice 5.1.0) is affected; fixed in 33.7.2-jre, shipped by no scip-java release."}
+  ],
   "jars": [
     {"name": "annotations-13.0.jar", "size": 17536, "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"},
     {"name": "aopalliance-1.0.jar", "size": 4467, "sha256": "0addec670fedcd3f113c5c8091d783280d23f75e3acb841b61a9cdb079376a08"},
@@ -13,14 +16,14 @@
     {"name": "error_prone_annotations-2.41.0.jar", "size": 20389, "sha256": "a56e782b5b50811ac204073a355a21d915a2107fce13ec711331ad036f660fcc"},
     {"name": "failureaccess-1.0.3.jar", "size": 10763, "sha256": "cbfc3906b19b8f55dd7cfd6dfe0aa4532e834250d7f080bd8d211a3e246b59cb"},
     {"name": "gson-2.13.2.jar", "size": 289901, "sha256": "dd0ce1b55a3ed2080cb70f9c655850cda86c206862310009dcb5e5c95265a5e0"},
-    {"name": "guava-33.6.0-jre.jar", "size": 3064793, "sha256": "dc573e1fca4fd5454f4a5fd3d7da2df03002876a4175bafc14a95980dd7713b3"},
+    {"name": "guava-33.7.2-jre.jar", "size": 3057659, "sha256": "b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c"},
     {"name": "guice-5.1.0-classes.jar", "size": 656919, "sha256": "142ad4475e19524d2fe3ac995b3f7cbc962fc726f2edb9dbdccc61feab9b2bf9"},
     {"name": "httpclient-4.5.14.jar", "size": 785639, "sha256": "c8bc7e1c51a6d4ce72f40d2ebbabf1c4b68bfe76e732104b04381b493478e9d6"},
     {"name": "httpcore-4.4.16.jar", "size": 327891, "sha256": "6c9b3dd142a09dc468e23ad39aad6f75a0f2b85125104469f026e52a474e464f"},
     {"name": "javax.inject-1.jar", "size": 2497, "sha256": "91c77044a50c481636c32d916fd89c9118a72195390452c81065080f957de7ff"},
     {"name": "jcl-over-slf4j-1.7.36.jar", "size": 16555, "sha256": "ab57ca8fd223772c17365d121f59e94ecbf0ae59d08c03a3cb5b81071c019195"},
     {"name": "jna-5.14.0.jar", "size": 1878533, "sha256": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6"},
-    {"name": "jspecify-1.0.0.jar", "size": 3819, "sha256": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"},
+    {"name": "jspecify-1.0.1.jar", "size": 3064, "sha256": "070d75f261fe4c5b8202508366715f7f2d4660f88c8ef7e6d3575e48c9683b66"},
     {"name": "kotlin-build-tools-api-2.4.21.jar", "size": 468126, "sha256": "c5cd6a49bd072b529ae10809111c16a7aa0f92147e95d288354017fd65799461"},
     {"name": "kotlin-compiler-embeddable-2.4.21.jar", "size": 58593291, "sha256": "ef19419c765e7ac8404465fa026ca8fc4dbb8a822de0fc79aa53c8dce29f1d02"},
     {"name": "kotlin-daemon-embeddable-2.4.21.jar", "size": 393410, "sha256": "7b3ef24674e5bcffcadfc4e43202ea314194939ecbcdd90a4770b2f1b04e0d07"},
