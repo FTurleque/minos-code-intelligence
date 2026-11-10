@@ -38,8 +38,9 @@ laissé ce bornage « à proposer » : c'est le seul constat encore ouvert de l'
   `docker/Dockerfile.mcp.release` et le service `minos-mcp` des deux compose.
 - **Surfaces** (additif) : la CLI rend le message de refus avec le code de sortie existant `1` ; l'outil MCP rend le
   même message au lieu de l'erreur générique. Aucun nouveau code de sortie, aucun champ retiré, goldens inchangés.
-- **ADR DATA-0078 amendé** : mesures, fraction retenue, invariant du point 14 précisé (plafond configuré contre
-  plafond effectif), risque des chargements simultanés retiré.
+- **ADR DATA-0081** consolidé, qui remplace DATA-0078 (passé `Superseded`) : il reprend toute la décision en vigueur
+  avec le bornage (budget, plafond effectif, invariant du point 14 sur le plafond configuré), les mesures et la
+  fraction retenue ; le risque des chargements simultanés en est retiré.
 
 ## Capabilities
 
@@ -63,13 +64,17 @@ plafonds), le dimensionnement des services de `distribution-docker`.
 
 - Le bornage **entre plusieurs JVM** d'un même conteneur : chaque client MCP lance sa propre JVM dans `minos-mcp`
   (`docs/user/docker-runtime.md`, « Limites de ressources ») ; le budget est par processus. Le risque résiduel
-  (plusieurs JVM chargeant chacune un gros snapshot sous `mem_limit`) reste inscrit au registre.
+  (plusieurs JVM chargeant chacune un gros snapshot sous `mem_limit`) est décrit par DATA-0081 (Risques) ; aucun risque
+  n'est ajouté au registre (décision du propriétaire : le bornage supprime le risque d'une JVM).
 - Un rapatriement PostgreSQL **par tranches** (`substring` sur la colonne) : avec le stockage `EXTENDED` (compressé)
   de `payload`, chaque tranche décompresserait la valeur ; changer le stockage est une migration de schéma, hors lot.
 - Les tas des services `minos-admin` et des tâches ponctuelles (ils lancent des providers JVM fils sous 2 Gio et
   512 Mio) ; le format de snapshot (pas de V4, pas de snapshot mappé, DATA-0078 point 10).
 - Les fichiers partagés `docs/architecture/risks/register.md`, `docs/project/audits/2026-10-10/SUIVI.md`,
-  `docs/developer/supply-chain.md`, `ETAT-2026-10-13.md` et `findings.json` : texte proposé dans `design.md`.
+  `docs/developer/supply-chain.md`, `ETAT-2026-10-13.md`, `findings.json`, `docs/architecture/adr/README.md` et
+  `docs/architecture/arc42/09-decisions.md` : texte proposé dans `design.md`, reporté par le propriétaire.
+- Les dossiers de capacité `docs/architecture/diagrams/capacites/*.md` : mis à jour à l'archivage (le changement
+  parallèle sur PostgreSQL amende aussi `persistance-snapshots`).
 - Tout autre constat d'audit et le risque R-28.
 
 ## Statut des informations
@@ -82,30 +87,31 @@ plafonds), le dimensionnement des services de `distribution-docker`.
 | La ligne `bytea` est rapatriée avant la borne | [Existant vérifié] | `PostgresCodeKnowledgeSnapshotStore.java:389`, `:407-409` |
 | Les images MCP ne fixent pas de tas | [Existant vérifié] | `docker/Dockerfile.mcp:45`, `docker/Dockerfile.mcp.release:67` ; `docker/compose-mcp.prod.yaml:28-45` |
 | Une vue de 363,4 Mio estimés se charge sous 512 Mo de tas ; deux échouent sous 640 Mo | [Existant vérifié] | DATA-0078, Context (mesures du 2026-11-07) |
-| Fraction 50 %, attente 30 s, `MaxRAMPercentage=35` | [Proposition] | `design.md`, D2, D4, D6 |
+| Attente bornée de 30 s (constante), `MaxRAMPercentage=35` surchargeable par `MINOS_MCP_HEAP_PERCENT` | [Décision] | Propriétaire, 2026-11-10 ; `design.md`, D4, D6 |
+| Fraction 50 % du tas | [Proposition] | `design.md`, D2 ; mesure en tâche 2.1 |
 | Amplification du rapatriement PostgreSQL : 300 % jusqu'à mesure | [Proposition] | `design.md`, D5 ; mesure en tâche 4.1 |
 | Le pic de décodage au-delà de 512 Mo et Linux ne sont pas mesurés | [Question] non bloquante | DATA-0078 l. 106 ; mesurée en tâche 2.1 |
 
 ## Impact
 
-- **Modules du reactor** : `minos-storage` (budget, stores fichier et PostgreSQL, `SnapshotLimits`) ; fichiers hors
-  colonne requis : `minos-domain` (type d'exception publique), `minos-mcp` (rendu du message), `minos-app` (test de
-  contrat des images) — voir `design.md`.
+- **Modules du reactor** : `minos-storage` (budget, stores fichier et PostgreSQL, `SnapshotLimits`) ; colonne étendue
+  par le propriétaire : `minos-domain` (type d'exception publique), `minos-mcp` (rendu du message), `minos-cli` (test
+  seul), `minos-app` (test de contrat des images) — voir `design.md`.
 - **Surfaces publiques** : CLI et MCP, **additif** (nouveau message d'erreur, code de sortie existant) ; API Java :
   l'exception reste une `IOException` ; IntelliJ et NEXUS : aucun.
-- **ADR** : amender DATA-0078 (points 13-14, Risques, Compliance) ; pas de nouvel ADR.
+- **ADR** : DATA-0081 consolidé remplace DATA-0078 (passé `Superseded`, en-tête et statut seulement).
 - **Gates à rejouer** : `scripts/remediation/check-mne.py`, `scripts/remediation/check-mnd.py` (chaînes de
   `SnapshotLimits` et des deux stores), `scripts/quality/check-compose-limits.py`,
   `scripts/architecture/check-module-boundaries.py` (A2, A8, A11), `scripts/quality/check-comment-language.py`,
   `scripts/quality/check-private-io.py` ; JaCoCo et SonarCloud : nouveau code de `minos-storage` ≥ 80 %.
 - **Plateformes** : Windows et Linux, même code ; le test de simultanéité lance une JVM fille en `-Xmx` réduit sur
   les deux ; les images Docker sont Linux.
-- **Documentation durable et diagrammes** : `docs/architecture/diagrams/capacites/persistance-snapshots.md`,
-  `docs/architecture/diagrams/capacites/distribution-docker.md`, `docs/developer/indexing-and-storage.md`,
-  `docs/user/docker-runtime.md` (« Limites de ressources »).
+- **Documentation durable et diagrammes** : `docs/developer/indexing-and-storage.md`, `docs/user/docker-runtime.md`
+  (« Limites de ressources ») ; dossiers de capacité `persistance-snapshots.md` et `distribution-docker.md` à
+  l'archivage.
 
 ## Questions ouvertes
 
-Aucune bloquante pour les specs. Décisions du propriétaire attendues (recommandations dans `design.md`, « Questions
-ouvertes ») : type d'exception publique dans `minos-domain` et rendu MCP ; valeur de `MaxRAMPercentage` face aux JVM
-multiples du conteneur ; réglage de l'attente.
+Aucune. Les décisions du propriétaire du 2026-11-10 sont consignées dans `design.md` (« Décisions du
+propriétaire ») ; la fraction de 50 % et l'amplification PostgreSQL de 300 % restent des propositions jusqu'aux
+mesures des tâches 2.1 et 4.1.

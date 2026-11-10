@@ -281,15 +281,15 @@ transitoire de décodage.
 
 ### D3 — Attente bornée de 30 s, éviction totale des vues en cache sous pression
 
-[Proposition] Sous pression, le budget vide les vues en cache des stores inscrits (`removeIf` existant) plutôt que de
+[Décision] Sous pression, le budget vide les vues en cache des stores inscrits (`removeIf` existant) plutôt que de
 les évincer une à une : `WeightedLruCache` (`minos-engine`) n'offre pas d'éviction jusqu'à un poids, et l'ajouter
 sortirait de la colonne. Une vue vidée encore utilisée par une requête en cours reste en mémoire jusqu'à la fin de
 cette requête (risque ci-dessous).
 
 ### D4 — Valeur d'attente fixe
 
-[Proposition] Constante de `SnapshotLimits` (30 s), substituable en test par le constructeur du budget ; pas de
-réglage public tant qu'aucune mesure ne le demande (question ouverte 3).
+[Décision] Constante de `SnapshotLimits` (30 s), substituable en test par le constructeur du budget ; pas de
+réglage public tant qu'aucune mesure ne le demande (décision du propriétaire 3).
 
 ### D5 — PostgreSQL : `octet_length` et en-tête avant la charge utile ; transitoire compté
 
@@ -300,7 +300,7 @@ rapatriement par tranches `substring` (le stockage `EXTENDED` décompresserait l
 
 ### D6 — `-XX:MaxRAMPercentage=35` pour le plan de requête
 
-[Proposition] Par `ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=35"` dans `docker/Dockerfile.mcp` et l'étape `query` de
+[Décision] Par `ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=35"` dans `docker/Dockerfile.mcp` et l'étape `query` de
 `docker/Dockerfile.mcp.release`, et `JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=${MINOS_MCP_HEAP_PERCENT:-35}"` dans le
 service `minos-mcp` des deux compose (l'environnement du service s'applique aux `docker exec`, aucun script de
 lancement à modifier). Avec 3 Gio : tas ≈ 1 075 Mio, budget ≈ 537 Mio, plafond effectif 512 Mio : la vue V3 maximale
@@ -311,16 +311,17 @@ stderr, jamais sur stdout réservé au protocole.
 
 ### D7 — Erreur publique typée dans le domaine
 
-[Proposition] `SnapshotMemoryExhaustedException` (`minos-domain`, `com.minos.diagnostics`) étend `IOException` ; le
+[Décision] `SnapshotMemoryExhaustedException` (`minos-domain`, `com.minos.diagnostics`) étend `IOException` ; le
 MCP la rend comme `UnreadableRegistryException`. Écarté : une simple `IOException` (le MCP la rendrait opaque) ; un
 type dans `minos-engine` (cliquet A11).
 
 ### ADR
 
-Amender DATA-0078 (points 13 et 14, Risques l. 102-103 et 106, Compliance) en tâche 5.1 : pas de nouvelle décision
-structurante (la décision prolonge les plafonds existants). Forme : `.claude/rules/adr.md` interdit qu'un amendement
-partiel cohabite avec l'original et demande un ADR consolidé qui remplace DATA-0078 (DATA-0078 passe `Superseded`,
-archivé) ; la spécification du propriétaire parle d'« amender DATA-0078 ». Question ouverte 5.
+[Décision] Nouvel ADR consolidé **DATA-0081** (tâche 5.1) : il reprend DATA-0078 en entier avec le bornage (points 13
+et 14), les mesures et la fraction retenue ; le risque des chargements simultanés en est retiré, celui des JVM
+multiples d'un conteneur y reste. DATA-0078 passe `Superseded` (en-tête et statut seulement, `.claude/rules/adr.md`).
+Les index `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` sont des fichiers partagés :
+le propriétaire y reporte les lignes données par la tâche 5.1.
 
 ## Qualification des capacités
 
@@ -330,14 +331,14 @@ archivé) ; la spécification du propriétaire parle d'« amender DATA-0078 ». 
   l'amplification de rapatriement est **partielle** (valeur prudente) tant que la tâche 4.1 n'a pas mesuré.
 - Tas Docker : **qualifiée** par le test de contrat ; le tas effectif dans le conteneur est vérifié par une tâche
   **manuelle** (Docker local).
-- Bornage entre JVM d'un conteneur : **non supporté** (hors périmètre, risque résiduel inscrit).
+- Bornage entre JVM d'un conteneur : **non supporté** (hors périmètre, risque résiduel décrit par DATA-0081).
 
 ## Risques et compromis
 
 - [Risque] Une vue vidée du cache mais tenue par une requête en cours n'est pas libérée → le budget compte la place
   comme libre ; atténuation : marge de 50 % du tas, requêtes courtes ; documenté dans DATA-0078.
 - [Risque] Plusieurs JVM MCP d'un conteneur → OOM-kill du conteneur, pas `OutOfMemoryError` ; atténuation : 35 %,
-  registre.
+  décrit par DATA-0081 (aucun risque ajouté au registre, décision du propriétaire 6).
 - [Risque] 300 % de rapatriement refuse sous Docker connecté les snapshots PostgreSQL au-delà d'environ 179 Mio
   (537 Mio / 3) jusqu'à mesure → aujourd'hui ces lectures risquent l'OOM ; la mesure 4.1 fixe la valeur.
 - [Risque] La JVM fille du test dépend du ramasse-miettes → le probe fixe `-XX:+UseSerialGC -Xmx256m
@@ -360,22 +361,21 @@ archivé) ; la spécification du propriétaire parle d'« amender DATA-0078 ». 
 
 ## Documentation durable à mettre à jour
 
-`docs/architecture/diagrams/capacites/persistance-snapshots.md` (séquence d'admission, traçabilité des six exigences
-ajoutées) ; `docs/architecture/diagrams/capacites/distribution-docker.md` (exigence du tas) ;
 `docs/developer/indexing-and-storage.md` (« Mesurer un gros snapshot » : budget, réglage) ; `docs/user/docker-runtime.md`
-(« Limites de ressources » : `MINOS_MCP_HEAP_PERCENT`, tas par JVM) ; DATA-0078.
+(« Limites de ressources » : `MINOS_MCP_HEAP_PERCENT`, tas par JVM) ; DATA-0081. À l'archivage (décision du
+propriétaire 7) : `docs/architecture/diagrams/capacites/persistance-snapshots.md` (séquence d'admission, traçabilité
+des six exigences ajoutées) et `docs/architecture/diagrams/capacites/distribution-docker.md` (exigence du tas).
 
 ## Texte proposé pour les fichiers partagés
 
 **`docs/project/audits/2026-10-10/SUIVI.md`** (ligne de tableau, même forme que AUD-PERF-13, l. 299) :
 
 ```text
-| AUD-PERF-15 | Gros snapshots : cache fixe de 512 Mio et chargements simultanés non bornés | **En cours** (change OpenSpec `borner-les-gros-snapshots-au-tas`) | Admission au poids avant décodage sur un budget de 50 % du tas, plafond effectif du cache `min(512 Mio, budget)`, taille PostgreSQL lue par `octet_length` avant rapatriement, `MaxRAMPercentage=35` pour le plan de requête Docker ; DATA-0078 amendé. Reste hors lot : bornage entre JVM d'un même conteneur. |
+| AUD-PERF-15 | Gros snapshots : cache fixe de 512 Mio et chargements simultanés non bornés | **En cours** (change OpenSpec `borner-les-gros-snapshots-au-tas`) | Admission au poids avant décodage sur un budget de 50 % du tas, plafond effectif du cache `min(512 Mio, budget)`, taille PostgreSQL lue par `octet_length` avant rapatriement, `MaxRAMPercentage=35` pour le plan de requête Docker ; DATA-0081 remplace DATA-0078. Reste hors lot : bornage entre JVM d'un même conteneur. |
 ```
 
-**`docs/architecture/risks/register.md`** (section « Risques actifs / résiduels », à inscrire tant que le change n'est
-pas fusionné, puis à passer en résiduel) — le numéro `R-<n>` est à attribuer par le propriétaire (R-28 n'est pas
-touché) :
+**`docs/architecture/risks/register.md`** : aucun texte (décision du propriétaire 6 : le bornage supprime le risque
+d'une JVM ; le résiduel des JVM multiples est décrit par DATA-0081). Texte initialement proposé, abandonné :
 
 ```text
 | R-<n> | Épuisement du tas MCP par de gros snapshots : cache fixe de 512 Mio, chargements de vues simultanés non bornés, ligne PostgreSQL rapatriée avant la borne (AUD-PERF-15) | 3 | 3 | 9 | Ouvert → change `borner-les-gros-snapshots-au-tas` | Admission au poids sur un budget dérivé du tas, attente bornée puis erreur explicite ; `octet_length` avant rapatriement ; tas explicite du plan de requête. Résiduel : plusieurs JVM MCP d'un conteneur ne partagent pas le budget. |
@@ -385,15 +385,18 @@ touché) :
 
 ## Fichiers hors colonne requis
 
+Colonne étendue par le propriétaire (décision 1) :
+
 - `minos-domain/src/main/java/com/minos/diagnostics/SnapshotMemoryExhaustedException.java` (nouveau) et son test.
 - `minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java` (clause `catch`) et un test de `minos-mcp`.
+- Un test de `minos-cli` (refus rendu sur stderr, code 1).
 - `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java` (valeur `MaxRAMPercentage`
   identique et budget suffisant) ; `M29DockerAdministrationContractTest.java` relu, inchangé (admin non touché).
 - `scripts/remediation/check-mne.py`, `scripts/remediation/check-mnd.py` : seulement si une chaîne affirmée change
   (l'implémentation garde `estimateWeight(metadata, payloadBytes, decoded.formatVersion())`,
   `limits.amplifiedBytes(...)` et `limits.maxQueryCacheWeightBytes()` ou met le gate à jour dans la même tâche).
 - `scripts/quality/check-compose-limits.py` : rejoué ; modifié seulement s'il refuse l'ajout d'environnement.
-- `docs/user/docker-runtime.md`, `docs/developer/indexing-and-storage.md`, dossiers de capacité (documentation).
+- `docs/user/docker-runtime.md`, `docs/developer/indexing-and-storage.md` ; dossiers de capacité à l'archivage.
 
 ## Traçabilité
 
@@ -415,7 +418,25 @@ touché) :
 | distribution-docker › Le plan de requête Docker fixe le tas de sa JVM en proportion de sa limite mémoire | Valeur identique ; Budget suffisant | D6 | 5.2 | à écrire : `M29DockerQueryImageContractTest` (hors colonne) |
 | idem | Tas effectif du conteneur | D6 | 5.3 (manuelle) | manquante jusqu'à la tâche manuelle |
 
-## Questions ouvertes
+## Décisions du propriétaire
+
+Tranchées le 2026-11-10 :
+
+1. Exception publique typée `com.minos.diagnostics.SnapshotMemoryExhaustedException` dans `minos-domain` et clause de
+   rendu dans `MinosMcpTools` avec son test ; colonne étendue au test de contrat `M29DockerQueryImageContractTest`, à
+   un test CLI, à `docs/user/docker-runtime.md` et `docs/developer/indexing-and-storage.md`.
+2. `-XX:MaxRAMPercentage=35` par `JAVA_TOOL_OPTIONS`, surchargeable par `MINOS_MCP_HEAP_PERCENT`, dans le service
+   `minos-mcp` des deux compose, `docker/Dockerfile.mcp` et l'étape `query` de `docker/Dockerfile.mcp.release`.
+3. Attente bornée : constante de 30 s.
+4. Message en anglais : `insufficient memory to load this snapshot`, avec le réglage à changer pour un refus
+   d'admission.
+5. ADR consolidé DATA-0081 qui remplace DATA-0078 (passé `Superseded`).
+6. Aucun nouveau risque au registre.
+7. Dossiers de capacité mis à jour à l'archivage.
+8. La fraction de 50 % et l'amplification PostgreSQL de 300 % restent des propositions jusqu'aux mesures des tâches
+   2.1 et 4.1.
+
+Questions telles qu'elles étaient posées :
 
 1. **Type d'exception publique et rendu MCP** (hors colonne `minos-domain`, `minos-mcp`). Options : (a) type dans
    `minos-domain` + clause MCP (message lisible partout) ; (b) simple `IOException` (CLI lisible, MCP opaque).
