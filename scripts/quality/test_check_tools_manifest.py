@@ -193,6 +193,56 @@ class CheckToolsManifestTest(unittest.TestCase):
         failures = self.run_gate(lock=lock(jars=[]))
         self.assertTrue(any("lists no jar" in f for f in failures), failures)
 
+    # A forced version corrects one transitive dependency for one advisory: named, justified and pinned.
+
+    @staticmethod
+    def forced(**fields) -> dict:
+        entry = {"module": "org.example:dependency", "version": "2", "advisory": "GHSA-aaaa-bbbb-cccc",
+                 "reason": "R-00: dependency 1 is affected; fixed in 2."}
+        entry.update(fields)
+        return entry
+
+    def forced_lock(self, *entries) -> dict:
+        value = lock()
+        value["forcedVersions"] = list(entries)
+        return value
+
+    def test_a_named_justified_and_pinned_forced_version_passes(self):
+        self.assertEqual([], self.run_gate(lock=self.forced_lock(self.forced())))
+
+    def test_a_forced_version_without_a_reason_or_an_advisory_is_refused(self):
+        for field in ("reason", "advisory", "version"):
+            with self.subTest(field=field):
+                failures = self.run_gate(lock=self.forced_lock(self.forced(**{field: "  "})))
+                self.assertTrue(any("forced version" in f and "org.example:dependency" in f
+                                    and "classpath.lock.json" in f for f in failures), failures)
+
+    def test_a_forced_module_that_is_not_organisation_colon_name_is_refused(self):
+        for module in ("dependency", "org.example:dependency:2", "org example:dependency", ":dependency"):
+            with self.subTest(module=module):
+                failures = self.run_gate(lock=self.forced_lock(self.forced(module=module)))
+                self.assertTrue(any("forced version" in f for f in failures), failures)
+
+    def test_a_module_forced_twice_is_refused(self):
+        failures = self.run_gate(lock=self.forced_lock(self.forced(), self.forced()))
+        self.assertTrue(any("forced twice" in f and "org.example:dependency" in f for f in failures), failures)
+
+    def test_a_forced_jar_absent_from_the_lock_is_refused(self):
+        failures = self.run_gate(lock=self.forced_lock(self.forced(version="3")))
+        self.assertTrue(any("dependency-3.jar" in f and "does not pin" in f for f in failures), failures)
+
+    def test_scip_java_itself_cannot_be_forced(self):
+        failures = self.run_gate(lock=self.forced_lock(self.forced(module="org.example:classpath", version="1.0.0")))
+        self.assertTrue(any("cannot force" in f for f in failures), failures)
+
+    def test_forced_versions_that_are_not_a_list_of_objects_are_refused(self):
+        for value in ("guava", {"module": "a:b"}, ["a:b:1"]):
+            with self.subTest(value=value):
+                broken = lock()
+                broken["forcedVersions"] = value
+                failures = self.run_gate(lock=broken)
+                self.assertTrue(any("forcedVersions" in f or "forced version" in f for f in failures), failures)
+
     def test_an_embedded_artifact_without_a_payload_is_refused(self):
         broken = self.minimal_catalog()
         del broken["artifacts"][0]["payload"]

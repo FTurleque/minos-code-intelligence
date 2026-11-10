@@ -4,8 +4,8 @@ Constat d'audit : AUD-DEP-03. Risques fermés ou préparés : **R-29** (fermé p
 
 ## 1. Gate du catalogue : forçage nominatif et justifié (R-29)
 
-- [ ] 1.1 Rouge (R-29) : dans `scripts/quality/test_check_tools_manifest.py`, ajouter trois cas sur une copie du verrou : entrée forcée sans `reason`, module forcé en double, jar forcé absent de `jars`. Exécuter `python scripts/quality/test_check_tools_manifest.py` et vérifier que les trois cas échouent parce que le gate ne contrôle pas encore `forcedVersions`. Couvre : installation-des-providers › Une version forcée du classpath de scip-java est nominative et justifiée.
-- [ ] 1.2 Correction (R-29) : étendre `check_classpath_locks` de `scripts/quality/check-tools-manifest.py` aux invariants 1 à 4 du design (forme du module, champs non vides, unicité, jar épinglé, jamais scip-java lui-même). Vérifier que 1.1 passe, puis rejouer `python scripts/quality/check-tools-manifest.py` (vert au HEAD, sans `forcedVersions`), `check-ci-wiring.py` et `check-single-execution.py`.
+- [x] 1.1 Rouge (R-29) : dans `scripts/quality/test_check_tools_manifest.py`, ajouter trois cas sur une copie du verrou : entrée forcée sans `reason`, module forcé en double, jar forcé absent de `jars`. Exécuter `python scripts/quality/test_check_tools_manifest.py` et vérifier que les trois cas échouent parce que le gate ne contrôle pas encore `forcedVersions`. Couvre : installation-des-providers › Une version forcée du classpath de scip-java est nominative et justifiée.
+- [x] 1.2 Correction (R-29) : étendre `check_classpath_locks` de `scripts/quality/check-tools-manifest.py` aux invariants 1 à 4 du design (forme du module, champs non vides, unicité, jar épinglé, jamais scip-java lui-même). Vérifier que 1.1 passe, puis rejouer `python scripts/quality/check-tools-manifest.py` (vert au HEAD, sans `forcedVersions`), `check-ci-wiring.py` et `check-single-execution.py`.
 
 ## 2. Résolution avec versions forcées : script et installation (R-29)
 

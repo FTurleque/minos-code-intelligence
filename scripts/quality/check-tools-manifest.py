@@ -188,6 +188,43 @@ def check_classpath_locks(root: Path, catalog: dict, failures: list[str]) -> Non
         artifact = coordinate.split(":")[1] if coordinate.count(":") == 2 else ""
         if f"{artifact}-{component.get('version')}.jar" not in names:
             failures.append(f"{CATALOG.parent / lock_name}: the lock does not pin the {coordinate} jar itself")
+        check_forced_versions(CATALOG.parent / lock_name, lock, coordinate, names, failures)
+
+
+FORCED_MODULE = re.compile(r"[^\s:]+:[^\s:]+")
+
+
+def check_forced_versions(lock_path: Path, lock: dict, coordinate: str, names: set[str], failures: list[str]) -> None:
+    """A forced version (ADR SEC-0080) corrects one transitive dependency for one advisory: the module is
+    ``organisation:name``, forced once, with a version, an advisory and a reason, its jar is pinned by the lock, and
+    it is never the provider itself. Absent or empty: nothing is forced."""
+    forced = lock.get("forcedVersions", [])
+    if not isinstance(forced, list):
+        failures.append(f"{lock_path}: forcedVersions must be a list")
+        return
+    provider = ":".join(coordinate.split(":")[:2])
+    seen: set[str] = set()
+    for entry in forced:
+        if not isinstance(entry, dict):
+            failures.append(f"{lock_path}: forced version {entry!r} must be an object")
+            continue
+        module = entry.get("module")
+        fields = [entry.get(field) for field in ("version", "advisory", "reason")]
+        if (not isinstance(module, str) or FORCED_MODULE.fullmatch(module) is None
+                or not all(isinstance(value, str) and value.strip() for value in fields)):
+            failures.append(f"{lock_path}: forced version {module!r} needs an organisation:name module, a version, "
+                            "an advisory and a reason")
+            continue
+        if module in seen:
+            failures.append(f"{lock_path}: the module {module} is forced twice")
+            continue
+        seen.add(module)
+        if module == provider:
+            failures.append(f"{lock_path}: the lock cannot force {module} itself, only a dependency of it")
+            continue
+        jar = f"{module.split(':')[1]}-{entry['version'].strip()}.jar"
+        if jar not in names:
+            failures.append(f"{lock_path}: the lock does not pin {jar}, the jar of the forced module {module}")
 
 
 def java_constant(source: str, name: str) -> str | None:
