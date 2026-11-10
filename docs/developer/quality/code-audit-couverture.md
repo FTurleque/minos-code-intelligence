@@ -73,7 +73,7 @@ Le projet ouvert dans IntelliJ (MCP JetBrains) déclare 15 modules dont un doubl
 | Livrées, agrégées sur le réacteur | 40 (13 modules MINOS + 27 artefacts tiers) | Dependency-Check, profil `audit-dependency-check` |
 | Avec la portée test | 68 (dont 28 propres aux tests) | profil `audit-dependency-check-tests` |
 | Plugin IntelliJ (`build.gradle.kts`) | 10 (gson 2.14.0 livré ; JUnit 6.1.3 et sa plateforme en test) | POM de reconstitution hors dépôt |
-| Non couvertes par ces vues | plugins Maven et leurs dépendances, plugin Gradle `org.jetbrains.intellij.platform` 2.19.0, plateforme IntelliJ (fournie par l'IDE), images Docker, outils SCIP embarqués, dépendances Python (aucun fichier `requirements`) | |
+| Non couvertes par ces vues | plugins Maven et leurs dépendances, plugin Gradle `org.jetbrains.intellij.platform` 2.20.0, plateforme IntelliJ (fournie par l'IDE), images Docker, outils SCIP embarqués, dépendances Python (aucun fichier `requirements`) | |
 
 Le jar ombré embarque `slf4j-api` 2.0.20 ; les arbres des modules intermédiaires résolvent 2.0.16 (`minos-mcp`) et 2.0.18 (`minos-integration-git`, `minos-cli`, `minos-api`), et l'agrégat Dependency-Check voit aussi 1.7.36 (constat H05).
 
