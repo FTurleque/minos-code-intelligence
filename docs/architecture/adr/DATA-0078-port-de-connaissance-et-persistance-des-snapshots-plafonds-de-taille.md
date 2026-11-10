@@ -7,11 +7,13 @@ rules: false
 
 # Port de connaissance et persistance des snapshots : format V3, plafonds de taille, compatibilité, dédoublonnage
 
-- **Statut** : Accepted
+> Superseded by [DATA-0081](DATA-0081-port-de-connaissance-et-persistance-des-snapshots-budget-memoire-des-vues.md) (décision consolidée : plafonds de taille et budget de mémoire des vues).
+
+- **Statut** : Superseded
 - **Date** : 2026-11-07
 - **Origine** : changement OpenSpec `supporter-les-gros-snapshots` ; valeurs retenues par le propriétaire en lançant l'implémentation, d'après les mesures du 2026-11-07
 - **Remplace** : [DATA-0066](archive/DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md) (décision consolidée, points 7 et 12 à 14 nouveaux), [ADR-0003](archive/0003-glean-behind-code-knowledge-store.md), [ADR-0023](archive/0023-decomposed-local-snapshot-persistence.md), [ADR-0046](archive/0046-format-de-snapshot-v3-chaines-utf8.md) ; reprend les règles durables de l'[ADR-0047](archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) (archivé sans successeur direct)
-- **Remplacé par** : —
+- **Remplacé par** : [DATA-0081](DATA-0081-port-de-connaissance-et-persistance-des-snapshots-budget-memoire-des-vues.md)
 
 ## Context
 

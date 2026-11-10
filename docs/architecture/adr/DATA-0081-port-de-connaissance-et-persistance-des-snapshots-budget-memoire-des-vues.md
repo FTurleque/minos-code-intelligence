@@ -1,0 +1,155 @@
+---
+id: DATA-0081
+title: "Port de connaissance et persistance des snapshots : format V3, plafonds de taille, budget de mémoire des vues, compatibilité, dédoublonnage"
+domain: data
+rules: false
+---
+
+# Port de connaissance et persistance des snapshots : format V3, plafonds de taille, budget de mémoire des vues, compatibilité, dédoublonnage
+
+- **Statut** : Accepted
+- **Date** : 2026-11-10
+- **Origine** : changements OpenSpec `supporter-les-gros-snapshots` (plafonds, 2026-11-07) et `borner-les-gros-snapshots-au-tas` (budget de mémoire des vues, constat AUD-PERF-15) ; valeurs retenues par le propriétaire le 2026-11-10
+- **Remplace** : [DATA-0078](DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md) (décision consolidée : points 14 et 15 à 17), [DATA-0066](archive/DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md), [ADR-0003](archive/0003-glean-behind-code-knowledge-store.md), [ADR-0023](archive/0023-decomposed-local-snapshot-persistence.md), [ADR-0046](archive/0046-format-de-snapshot-v3-chaines-utf8.md) ; reprend les règles durables de l'[ADR-0047](archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) (archivé sans successeur direct)
+- **Remplacé par** : —
+
+## Context
+
+MINOS est local-first et vise Windows, Linux et macOS ; aucun backend spécialisé ne peut être imposé sans validation opérationnelle (ADR 0003). La connaissance normalisée se stocke et s'interroge derrière une abstraction définie par les cas d'usage MINOS (ADR 0003 § 1).
+
+La persistance locale publie des snapshots binaires versionnés et un pointeur actif ; le snapshot persisté est la source de vérité, la vue de requête et ses index sont reconstruits en mémoire ([ADR 0024](DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md)). Les formats publiés doivent rester lisibles, et leur publication ne doit jamais promouvoir un fichier partiellement écrit (ADR 0023).
+
+Les chaînes font 97 % d'un snapshot. Le format V2 les écrit en UTF-16 : sur ce dépôt, un SCIP de 23,8 Mo donnait un snapshot V2 de 355 Mo ; V3 (UTF-8) divise le fichier par environ 1,8 sans changer le tas d'un snapshot chargé (ADR 0046). À la lecture, le décodage recréait une instance par champ chaîne, d'où un tas 2,5 fois supérieur à celui de l'ingestion pour le même contenu (ADR 0047). Mesures et journal : [`ARCHI-SUIVI.md`](../../project/audits/archive/2026-09/ARCHI-SUIVI.md) (lot 3, A6).
+
+Un projet Java de 1 500 fichiers donne un snapshot de plus de 300 Mio. Mesuré le 2026-11-07 ([`indexing-and-storage.md`](../../developer/indexing-and-storage.md), « Mesurer un gros snapshot ») : `morpheus-engine` (1 488 fichiers Java, 339,5 Mio persistés) retient en tas 1,05 fois son fichier, un corpus synthétique de 315,3 Mio 1,47 fois ; la somme des comptes du poids estimé (363,4 Mio) vaut 1,02 fois le tas réel de `morpheus-engine`. Une vue se charge dans 512 Mo de tas ; deux vues chargées en même temps échouent sous 640 Mo. PostgreSQL publie 356 Mo en 10,4 à 12,1 s et les relit en 9,5 à 13,7 s.
+
+Le constat AUD-PERF-15 relève qu'un processus peut épuiser son tas en chargeant de gros snapshots : un plafond de cache constant qui ignore le tas réel, des chargements de vues de projets différents que rien ne borne ensemble, des images MCP sans tas explicite (25 % de la limite mémoire par défaut), et une ligne PostgreSQL rapatriée entière par le pilote avant que la borne de copie ne s'applique. L'issue d'un dépassement est une `OutOfMemoryError`, qui laisse le processus dans un état incertain. Mesures du bornage : voir « Mise en œuvre ».
+
+## Decision
+
+### Port de connaissance (ADR 0003 § 1)
+
+1. `CodeKnowledgeStore` est une frontière architecturale de MINOS, définie à partir des cas d'usage MINOS et non à partir de l'API d'un backend. Aucun type de backend ne la traverse : ni type Glean, ni prédicat Angle, ni identifiant de fait, ni type Thrift (ADR 0003 § 1).
+2. Le chemin par défaut est un backend MINOS léger ; un `InMemoryCodeKnowledgeStore` sert aux tests. Le convertisseur SQLite expérimental de la CLI SCIP peut servir à l'inspection ou à la comparaison, pas de dépendance de production sans étude supplémentaire (ADR 0003).
+
+### Persistance locale des snapshots (ADR 0023, format mis à jour par ADR 0046)
+
+3. `FileSymbolSnapshotStore` reste la façade de compatibilité locale ; ses responsabilités vivent dans des composants explicites de `minos-storage` : `SnapshotRepository`, `ActiveSnapshotRepository`, `SnapshotIntegrityService`, `SnapshotRetentionService` et `SnapshotCodec` (codecs V1, V2, V3) ; `SnapshotDescriptor` porte les métadonnées persistées par le pointeur actif. `minos-storage` reste propriétaire du format binaire local, qui ne fuit pas vers le domaine, le moteur, l'API ou les transports (ADR 0023).
+4. **Compatibilité disque.** Sont invariants : le magic du snapshot `0x4D4E5359` ; le fichier `active.pointer` et son magic `0x4D4E4150` ; les extensions `.symbols` et `.knowledge` ; `logicalIdHash` et le schéma des noms `snapshot-<logicalIdHash>-<sha256 du contenu><extension>` ; le checksum SHA-256 des octets publiés, porté par le pointeur ou par la ligne PostgreSQL ; l'ordre déterministe des symboles, occurrences, relations, références de provider et preuves ; les limites défensives de lecture ; les erreurs explicites de checksum, version, projet, `snapshotId` et cardinalité incohérents. Un snapshot V1 chargé comme connaissance complète est adapté avec des occurrences et relations vides (ADR 0023 ; ADR 0046 § 3).
+5. **Atomicité.** Le fichier snapshot est publié **avant** la promotion du pointeur actif, par déplacement atomique quand le système de fichiers le permet, avec repli historique `REPLACE_EXISTING` sinon ; le pointeur est écrit dans un fichier temporaire distinct puis remplacé ; un fichier snapshot partiellement écrit n'est jamais promu (ADR 0023, « Atomicité »).
+6. **Format V3.** La mise en page de V2 est conservée ; seules changent la version (3) et la forme des chaînes : longueur en octets sur 32 bits (`-1` pour `null`) puis octets UTF-8. L'écrivain refuse une chaîne à surrogate isolé au lieu de l'altérer. Le décodeur est strict (`CodingErrorAction.REPORT`, toute séquence mal formée est une erreur) ; chaque longueur est bornée en octets avant lecture (3 × 8 Mi par chaîne), les octets sont lus par `readNBytes` sans pré-allocation de la longueur déclarée ; les plafonds par nombre d'entités sont ceux de V2 (ADR 0046 § 1).
+7. **Politique d'écriture : V3, sinon V2, jamais de refus ni de substitution.** `KnowledgeSnapshotCodecs.select` est la règle commune au magasin fichier et à PostgreSQL : un nouveau snapshot de connaissance s'écrit en V3, ou entièrement en V2 si une de ses chaînes contient un surrogate isolé ; la publication historique « symboles seuls », sans appelant de production, écrit en V1. Le format et la taille encodée exacte sont établis avant toute écriture ; un snapshot au-dessus du plafond de persistance (point 12) est refusé sans rien écrire (ADR 0046 § 2). `CodeKnowledgeSnapshotBinaryCodec`, pont public vers le format V2 canonique, reste en V2 (ADR 0046, « Hors périmètre »).
+8. **Lecture : tout format jamais écrit reste lisible.** Magasin fichier : le pointeur actif désigne le format du snapshot (1, 2 ou 3) ; un pointeur V1 ou V2 garde exactement ses octets, un pointeur 3 désigne un snapshot V3. PostgreSQL : le payload se décrit par son en-tête, sans nouvelle colonne, et le descripteur de la vue porte la version réelle. Ré-import sous le même identifiant : même contenu en d'autres octets n'est pas un conflit ; PostgreSQL décode les deux payloads, conserve un payload existant identique, et un contenu différent reste un conflit d'identité. Un snapshot V2 existant n'est jamais déclaré corrompu (ADR 0046 § 3). Toute évolution de codec garde une erreur explicite pour les versions non supportées (ADR 0023).
+9. **Décodage.** Les chaînes sont dédoublonnées au décodage par une table locale à chaque passe, jetée avec elle (une instance par chaîne distincte, formats V2 et V3), sans changer aucun format persisté : le modèle décodé reste égal (ADR 0047, option A). La lecture est authentifiée en un parcours : rien de décodé n'est publié si l'empreinte diffère (ADR 0047, « Mise en œuvre »).
+10. **Évolution du format.** Une table de chaînes sur disque (option B, format V4) n'est envisagée que si la taille sur disque ou le temps de lecture restent un problème après le dédoublonnage, pour des tailles de projet cibles à fixer ; un snapshot paginé ou mappé en mémoire (option C) seulement si le tas d'un projet cible dépasse encore le budget mémoire accepté, précédé d'un inventaire des consommateurs de `CodeKnowledgeSnapshot`. Le passage d'une étape à la suivante se fonde sur une mesure du corpus réel par le banc `benchmarks/scalability/`, jamais sur une estimation ; B et C créent un format persisté et suivent les points 4 à 8 (lecture des formats antérieurs, pointeur, PostgreSQL, ré-import, fixtures de la base, preuve sur les golden qui listent des noms de fichiers) (ADR 0047, décision et « Ordre confirmé »).
+11. **Rétention : mécanisme séparé de la politique.** `SnapshotRetentionService` liste les snapshots et ne supprime que des fichiers explicitement désignés comme historiques ; il refuse de supprimer le fichier actif fourni par l'appelant. Aucune politique automatique de nombre maximal, d'âge, de compaction ou de quota n'est adoptée par cette décision ; ces seuils restent gouvernés par les mesures de M16 (ADR 0023, « Rétention » ; voir « Écarts constatés »).
+
+### Plafonds de taille (changement `supporter-les-gros-snapshots`)
+
+12. **Plafond de persistance : 400 Mio** (419 430 400 octets) pour un snapshot encodé, dans le magasin fichier comme dans PostgreSQL. Le plafond borne l'écriture (refus avant toute écriture, message de tailles seules : `knowledge snapshot is too large to persist: <octets> encoded bytes exceed the <plafond>-byte limit (400 MiB); nothing was written`) **et la lecture** (`snapshot payload exceeds persisted byte limit`, sans chemin) : un snapshot publié au-delà d'un plafond antérieur n'est plus lisible si le plafond est rabaissé, et le rabaisser suppose de réindexer.
+13. **Poids estimé d'une vue.** Le poids qu'un cache de vues compte pour une vue est le plus grand de la somme des comptes (1 024 octets par symbole, 640 par occurrence, 1 024 par relation) et du produit d'une amplification par la taille persistée, plus l'index des arêtes entrantes. L'amplification est de **125 % pour V3** (mesurée) et de **200 % pour V1 et V2** (non mesurés, valeur prudente qui couvre aussi une chaîne UTF-16 de caractères à deux octets) ; l'amplification suit le format du snapshot lu. Le poids estimé reste supérieur ou égal au tas retenu, prouvé par `QueryViewWeightTest` pour les vocabulaires ASCII, Latin-1, CJK et mixte. L'amplification de V3 seule ne suffit pas : sur ces corpus riches en relations, 125 % du fichier vaut 0,84 à 0,88 du tas retenu et c'est la somme des comptes qui porte la garantie ; ce terme ne se retire pas.
+14. **Plafond du cache et invariant.** Le plafond **configuré** du cache de vues est de 512 Mio, pour les deux stores. Les valeurs (plafond de persistance, amplifications, plafond configuré, attente d'admission, amplification du rapatriement PostgreSQL) vivent dans `SnapshotLimits`, source unique des deux stores et des codecs, et `requireCacheCoversPersistable` impose que le plafond configuré soit au moins égal au plafond de persistance multiplié par l'amplification de V3 (400 Mio × 1,25 = 500 Mio ≤ 512 Mio) : un snapshot V3 persistable n'est jamais refusé par le cache configuré pour son seul poids estimé. Le plafond **effectif** vaut le plus petit du plafond configuré et du budget de mémoire des vues (point 15) ; l'invariant ne porte pas sur lui. Une vue dont le poids estimé dépasse le plafond effectif n'est pas mise en cache et se recharge à chaque requête ; un snapshot V1 ou V2 de plus de 256 Mio n'est jamais admis au cache (400 Mio × 2 > 512 Mio).
+15. **Budget de mémoire des vues et admission au poids.** Un processus a un seul budget de mémoire des vues (`QueryViewMemoryBudget`, `minos-storage`), commun aux deux stores et à toutes leurs instances : **50 %** du tas maximal (`Runtime.maxMemory()`), réglable par la propriété `minos.storage.viewHeapPercent` puis la variable `MINOS_VIEW_HEAP_PERCENT`, entier de 10 à 80 ; une autre valeur fait échouer chaque chargement, sans repli. Les vues en cache et les chargements en cours tiennent ensemble sous ce budget. Un chargement de vue non mise en cache réserve son poids estimé **avant** de lire ou de décoder la charge utile ; une réservation plus lourde que le budget est refusée aussitôt ; une réservation qui ne tient pas vide les vues en cache des stores inscrits, puis attend une libération au plus **30 s** (constante), et est alors refusée. La mise en cache convertit la réservation en poids résident sous le verrou du budget ; toute autre issue la libère. Ordre des verrous : projet, budget, cache. Un refus est une `SnapshotMemoryExhaustedException` (`minos-domain`, `com.minos.diagnostics`, sous-type d'`IOException`) dont le message, public et sans chemin, commence par `insufficient memory to load this snapshot` et nomme le réglage à relever ; la CLI le rend avec le code de sortie 1, le serveur MCP tel quel. Un dépassement du budget ne se manifeste jamais par une `OutOfMemoryError`.
+16. **PostgreSQL : taille lue avant le rapatriement.** Le store PostgreSQL lit `octet_length(payload)` et les 8 octets d'en-tête avec les métadonnées du snapshot actif. Une taille hors de `[1, plafond de persistance]` est refusée (`snapshot payload exceeds persisted byte limit: <taille>/<plafond>`) sans demander la charge utile ni créer de fichier temporaire. La réservation vaut le plus grand du poids estimé de la vue et du transitoire du pilote pendant le rapatriement, **300 %** de la charge utile (hexadécimal puis octets), valeur prudente tant qu'elle n'est pas mesurée. Le stockage de la colonne `payload` et le format persisté ne changent pas.
+17. **Tas du plan de requête Docker.** L'image de requête (`docker/Dockerfile.mcp`, étape `query` de `docker/Dockerfile.mcp.release`) pose `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=35` et le service `minos-mcp` des deux compose le repose avec `${MINOS_MCP_HEAP_PERCENT:-35}` : sous la limite par défaut de 3 Gio, le tas d'une JVM MCP vaut environ 1 075 Mio et son budget environ 537 Mio, qui contient la vue V3 la plus lourde persistable (500 Mio estimés). 35 % plutôt que 50 % parce que chaque client MCP est une JVM du même conteneur : deux JVM au tas plein tiennent encore sous 3 Gio. L'image et les services d'administration gardent le défaut de la JVM.
+
+### Hors de la décision
+
+Glean comme backend avancé optionnel (ADR 0003 § 2 et 3, critères d'adoption, scénarios de décision, validation M0 du 22 juillet 2026 qui retient « ADOPTER_AVEC_CONTRAINTES ») est sans suite : aucune documentation courante, roadmap, spécification ni changement actif ne le porte. Cette option ne fait pas partie de la décision ; sa trace reste dans l'[ADR 0003](archive/0003-glean-behind-code-knowledge-store.md), [`RAPPORT_GLEAN_C1.md`](../../project/history/milestones/m0/RAPPORT_GLEAN_C1.md) et [`COMPARATIF_BACKENDS.md`](../../project/history/milestones/m0/COMPARATIF_BACKENDS.md). Seule la frontière du point 1 en est retenue.
+
+## Do's and Don'ts
+
+### Do
+
+- Définir `CodeKnowledgeStore` par les cas d'usage MINOS et normaliser derrière lui tout backend.
+- Publier le fichier snapshot avant de promouvoir le pointeur actif, et écrire le pointeur dans un fichier temporaire distinct.
+- Écrire un nouveau snapshot de connaissance en V3, ou entièrement en V2 si une de ses chaînes contient un surrogate isolé, après avoir établi format et taille exacte.
+- Décoder strictement et borner chaque longueur avant toute lecture.
+- Garder lisible tout format jamais écrit, dans le magasin fichier comme dans PostgreSQL, et une erreur explicite pour toute version non supportée.
+- Dédoublonner les chaînes au décodage sans changer le modèle décodé.
+- Fonder tout passage à un format V4 ou à un snapshot mappé sur une mesure du banc `benchmarks/scalability/`.
+- Lire les plafonds de taille dans `SnapshotLimits` et vérifier l'invariant du point 14 avant de relever l'un d'eux.
+- Réserver le poids estimé d'une vue sur le budget de mémoire des vues avant de lire ou de décoder sa charge utile, et convertir ou libérer la réservation sur toute issue.
+- Lire la taille d'une charge utile PostgreSQL avant de la demander, et compter le transitoire du pilote dans la réservation.
+- Signaler un manque de mémoire par `SnapshotMemoryExhaustedException`, avec un message qui nomme le réglage à relever.
+- Garder la même valeur de `-XX:MaxRAMPercentage` dans les deux images de requête et le service `minos-mcp` des deux compose.
+- Mesurer l'amplification d'un format avant de lui appliquer autre chose que la valeur prudente.
+
+### Don't
+
+- Ne laisser traverser `CodeKnowledgeStore` aucun type d'un backend particulier.
+- Ne pas laisser fuir le format binaire vers le domaine, le moteur, l'API ou les transports.
+- Ne jamais promouvoir un fichier snapshot partiellement écrit.
+- Ne pas altérer silencieusement une chaîne à surrogate isolé, ni pré-allouer une longueur déclarée.
+- Ne jamais refuser ni substituer à l'écriture une chaîne : V3, sinon V2.
+- Ne pas déclarer corrompu un snapshot V2 existant.
+- Ne publier aucune donnée décodée dont l'empreinte diffère.
+- Ne pas supprimer le fichier snapshot actif par le service de rétention.
+- Ne pas décider un format V4 ou un snapshot mappé sur une estimation.
+- Ne pas retirer la somme des comptes du poids estimé d'une vue.
+- Ne pas relever le plafond de persistance sans relever ou vérifier le plafond du cache.
+- Ne pas soumettre le plafond effectif à l'invariant du point 14, ni dériver le budget d'une valeur implicite de la JVM.
+- Ne jamais laisser un chargement de vue allouer sa charge utile sans réservation, ni dégrader un refus en lecture « au mieux ».
+- Ne pas appeler le budget en tenant le verrou du cache d'un store.
+- Ne pas rendre un refus de mémoire par l'erreur générique d'un outil MCP.
+
+## Consequences
+
+### Positives
+
+- Un backend nouveau se branche derrière le port sans toucher au domaine (ADR 0003).
+- Codecs, intégrité et pointeur actif se testent séparément ; une nouvelle version de codec s'ajoute sans mélanger format et publication (ADR 0023).
+- Un fichier V3 fait 0,548 à 0,550 fois le V2 de même contenu ; la lecture à froid est environ 2,5 fois plus rapide (ADR 0046, mesures archivées).
+- Le dédoublonnage ramène le tas retenu par une vue relue à 1,14 fois le fichier V3 sur le code de production de ce dépôt, ce qui le rend admissible au cache de vues (ADR 0047, mesure du 2026-10-15).
+- Un snapshot V3 jusqu'à 400 Mio est persisté et mis en cache : `morpheus-engine` (339,5 Mio) devient indexable, le reactor complet de ce dépôt (300 Mo) aussi.
+- Une JVM n'épuise plus son tas en chargeant des vues : un chargement de trop attend ou échoue par une erreur explicite, et le processus reste sain. Une JVM au grand tas garde le plafond de 512 Mio et les chargements qui tiennent.
+
+### Négatives
+
+- Un snapshot publié en V3 a d'autres octets, donc un autre sha256 en fin de nom ; les snapshots existants gardent leur nom (ADR 0046).
+- Un binaire antérieur à V3 refuse proprement la lecture et la compaction d'un projet dont le pointeur désigne un V3, sans modifier aucun fichier (ADR 0046, retour arrière mesuré V-A6-06).
+- Relever un plafond de persistance est à sens unique : un snapshot publié au-dessus d'un plafond antérieur devient illisible si le plafond est rabaissé.
+- Sous un petit tas, deux gros chargements deviennent séquentiels ; une vue plus lourde que le budget est refusée au lieu d'être tentée. Sous pression, le budget vide toutes les vues en cache, pas seulement la plus ancienne.
+- Dans le magasin fichier, ré-importer un même `snapshotId` après le passage à V3 laisse le V2 de même préfixe comme historique jusqu'à la prochaine compaction ; PostgreSQL conserve le payload V2 existant (ADR 0046, V-A6-07).
+
+### Risques
+
+- Le budget vaut par JVM : plusieurs clients MCP d'un même conteneur, chacun une JVM, additionnent leurs tas sous la limite mémoire du conteneur, et un dépassement est alors un arrêt du conteneur par le noyau, pas une erreur explicite. Atténuation : 35 % du plafond par JVM.
+- Une vue vidée du cache mais encore tenue par une requête en cours n'est plus comptée par le budget ; la moitié du tas laissée hors budget la couvre.
+- L'amplification du rapatriement PostgreSQL (300 %) n'est pas mesurée : sous la limite par défaut du plan de requête, un snapshot PostgreSQL au-delà d'environ 179 Mio est refusé à l'admission.
+- Dans un conteneur qui ne voit qu'un CPU, la JVM choisit le ramasse-miettes série, dont le tas utilisable est un peu inférieur à `MaxRAMPercentage` : le budget peut alors passer sous la vue V3 la plus lourde (500 Mio).
+- Un snapshot de cette taille se lit en 3 à 4 s dans le magasin fichier et en 9,5 à 13,7 s sous PostgreSQL, à chaque lecture tant que la vue n'est pas en cache.
+- La rétention par défaut (2 snapshots historiques plus l'actif) porte l'espace disque à environ 1 Gio pour un projet de 340 Mio (calculé, non mesuré par imports répétés).
+- Le pic de tas au décodage d'une vue admise au-delà de 512 Mo de tas, sous Windows et sous Linux, n'est pas mesuré : la fraction de 50 % repose sur le rapport mesuré poids / tas d'un chargement réussi (0,74) avec une marge.
+
+## Compliance and Enforcement
+
+- Test `ProviderBoundaryTest` (`minos-application`) — aucun import `glean.`, `com.facebook.glean`, `org.scip_code.scip` ou `com.google.protobuf` dans les packages du cœur présents dans `minos-application`.
+- Règle A2 de `scripts/architecture/check-module-boundaries.py` (job `invariants`) — `minos-storage` est un adaptateur : l'application ne connaît que les ports, aucun adaptateur ne remonte vers elle ; test `ModuleArchitectureTest` (`applicationOnlyKnowsPorts`, `adaptersDoNotReachBackIntoUpperLayers`, `minos-app`).
+- Tests de `minos-storage`, lancés par `mvnw verify` : `SnapshotCodecTest` (codecs sans repository), `SnapshotFormatCompatibilityTest` (lecture des formats publiés), `SnapshotPublicationCrashTest` (publication interrompue à tout point : le snapshot actif reste valide), `SnapshotCodecV3Test` (aller-retour exact, longueurs bornées, refus croisé des versions), `PersistedSnapshotLimitTest` (refus au-dessus du plafond sans rien écrire, y compris sur la taille V2, et plafond de production de 400 Mio), `SnapshotReadCeilingTest` et `SnapshotPersistenceCeilingTest` (le plafond borne la lecture ; publication et relecture sous un plafond relevé, refus sous l'ancien), `SnapshotLimitsTest`, `FileSymbolSnapshotStoreLimitsTest` et `PostgresCodeKnowledgeSnapshotStoreLimitsTest` (invariant du point 14, avec le cas d'échec qui nomme les trois valeurs), `FileSymbolSnapshotStoreViewAdmissionTest` et `PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest` (admission au cache en V3, amplification prudente pour V1 et V2, vue plus lourde que le plafond), `QueryViewMemoryBudgetTest` (budget, réglage et valeurs invalides, refus, attente bornée, éviction, conversion), `FileSymbolSnapshotStoreViewBudgetTest` et `PostgresCodeKnowledgeSnapshotStoreViewBudgetTest` (point 15 dans chaque store ; point 16 : ligne au-delà du plafond refusée sans rapatriement ni fichier temporaire, transitoire compté), `QueryViewAdmissionChildJvmTest` (JVM fille `-Xmx256m` : sans admission, deux chargements simultanés finissent en `OutOfMemoryError` ; avec le budget, code de sortie 0), `SnapshotPersistenceComponentsTest` (`retentionDeletesOnlyExplicitHistoricalFiles`, `boundedRetentionKeepsActiveAndNewestHistoricalFiles`), `SnapshotDecodeStringSharingTest` (chaînes partagées, table locale à une passe), `SnapshotVerifiedReadTest` et `FileSymbolSnapshotStoreIntegrityTest` (lecture authentifiée, contenu altéré refusé), `QueryViewWeightTest` (poids estimé d'une vue au moins égal au tas retenu).
+- Tests hors `minos-storage` : `SnapshotMemoryExhaustedExceptionTest` (`minos-domain`), `MinosMcpSnapshotMemoryRefusalTest` (`minos-mcp` : message rendu au lieu de l'erreur générique), `SnapshotMemoryRefusalCliTest` (`minos-cli` : message sur la sortie d'erreur, code 1), `M29DockerQueryImageContractTest` (`minos-app` : même `MaxRAMPercentage` partout, budget par défaut suffisant, administration inchangée).
+- Tests `PostgresSnapshotFormatCompatibilityTest` (`minos-storage` : payload V2 lisible, ré-import conservé, surrogate isolé republié en V2) et `RetentionFormatEquivalenceTest` (`minos-app` : même modèle décodé en V2 et en V3).
+- Gates littéraux `scripts/remediation/check-mne.py` (chaînes de `SnapshotLimits` et de l'estimation du poids dans les deux stores) et `check-mnd.py` (`limits.maxQueryCacheWeightBytes()`, `activeMetadata(projectId)`), qui suivent le code ; aucun autre gate `scripts/**/check-*.py` dédié. Aucune règle Archgate compagnon (`rules: false`) : la compatibilité d'un format et l'ordre de publication sont des comportements tenus par des tests ; seule la non-fuite du format hors des modules de stockage se lirait dans les sources, règle non écrite.
+- Revue : une évolution de codec garde la lecture des formats publiés, l'ordre « snapshot puis pointeur » et une erreur explicite pour les versions non supportées ; tout passage à l'option B ou C cite une mesure du banc `benchmarks/scalability/`.
+
+## Mise en œuvre
+
+- Budget et admission : `minos-storage/src/main/java/com/minos/storage/codec/QueryViewMemoryBudget.java` ; réservation dans `FileSymbolSnapshotStore` et `PostgresCodeKnowledgeSnapshotStore` ; valeurs dans `SnapshotLimits` ; refus public `minos-domain/src/main/java/com/minos/diagnostics/SnapshotMemoryExhaustedException.java`, rendu par `minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java` ; tas du plan de requête dans `docker/Dockerfile.mcp`, `docker/Dockerfile.mcp.release` et les deux compose.
+- Mesures du 2026-11-10 (Windows, JDK 21.0.13, `LargeSnapshotMeasurement`, corpus synthétique `QueryViewWeightFixtures` de 1 500 fichiers : 149 752 282 octets persistés, tas retenu de 222 Mo soit 1,48 fois le fichier, poids estimé de 333 186 560 octets) : sous `-Xmx1100m`, budget de 550 Mio, plafond effectif de 512 Mio, pic de tas de 571 580 240 octets (0,50 du tas) ; sous `-Xmx768m`, budget et plafond effectif de 384 Mio, pic de 561 094 240 octets (0,70 du tas). Le pic vaut 1,68 fois le poids estimé : une vue qui remplit tout le budget (la moitié du tas) donne un pic d'environ 0,84 du tas, sous le seuil de 0,9 retenu pour la fraction de 50 %. Le pic sous Linux et le transitoire du rapatriement PostgreSQL ne sont pas mesurés.
+- `QueryViewAdmissionChildJvmTest` : deux snapshots de 148 Mio chargés au même instant dans une JVM fille `-Xmx256m -XX:+UseSerialGC` finissent en `OutOfMemoryError` (code 3) sans admission, et se terminent avec le code 0 sous un budget de 80 % du tas.
+
+## Écarts constatés
+
+Relevés le 2026-10-23 (audit des ADR), preuves relues au HEAD `2f773e57` ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.
+
+- Point 11 : une rétention automatique est appliquée par défaut — au plus 2 snapshots historiques plus l'actif par projet, compaction à chaque chemin terminal d'indexation et après chaque import SCIP publié — alors que l'ADR 0023 et l'[ADR 0024](DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md) (« Limites ») disent qu'aucune politique automatique de rétention n'est adoptée. La roadmap M16 donne cette rétention comme livrée par M16-S9 dans le profil par défaut. Le propriétaire n'a pas tranché — preuves : `minos-storage/src/main/java/com/minos/storage/local/store/SnapshotRetentionPolicy.java:10`, `minos-storage/src/main/java/com/minos/storage/local/store/SnapshotRetentionService.java:174`, `minos-engine/src/main/java/com/minos/storage/PersistentRetentionPolicy.java:9`, `minos-application/src/main/java/com/minos/application/indexing/ProjectIndexingUseCase.java:369` et `:456`, `minos-application/src/main/java/com/minos/application/LocalProjectOperations.java:145` ; [`M16_EXECUTION.md`](../../project/roadmap/M16_EXECUTION.md) lignes 114 et 140.
+
+Écart d'un ADR source levé par la consolidation : le codec V3, relevé hors de la décision de l'ADR 0023, relève des points 6 à 8 (ADR 0046) — `minos-storage/src/main/java/com/minos/storage/codec/SnapshotCodecV3.java`.
+
+## References
+
+- ADR actifs : [ADR 0024](DATA-0024-active-snapshot-query-view-and-rebuildable-indexes.md) (vue de requête en cache, index reconstruits), [ADR 0056](ARCH-0056-ports-de-lecture-des-snapshots.md) (port de lecture des snapshots), [ADR 0039](BE-0039-reprise-indexation-apres-interruption.md) (reprise de l'indexation, rétention des snapshots préparés orphelins), [ADR 0061](SEC-0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) (E/S privées), [ADR 0064](ARCH-0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) (cœur agnostique de l'indexeur).
+- ADR archivés : [ADR 0003](archive/0003-glean-behind-code-knowledge-store.md) (option Glean, validation M0), [ADR 0023](archive/0023-decomposed-local-snapshot-persistence.md) (validation M15-S6), [ADR 0046](archive/0046-format-de-snapshot-v3-chaines-utf8.md) (mesures, historique des commits `a68c560e`/`ebdc6969`), [ADR 0047](archive/0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) (options et mesures détaillées), [ADR 0025](archive/0025-measurement-gated-storage-backend-evolution.md) (promotion de backend sur mesure).
+- Décisions remplacées : [DATA-0078](DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md), [DATA-0066](archive/DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md).
+- Changements OpenSpec : `openspec/changes/archive/2026-11-07-supporter-les-gros-snapshots/` (specs, design, mesures) ; `openspec/changes/borner-les-gros-snapshots-au-tas/` (budget de mémoire des vues, AUD-PERF-15) ; utilisateur : [`docker-runtime.md`](../../user/docker-runtime.md) (« Limites de ressources »).
+- Spécification : [`openspec/specs/persistance-snapshots/spec.md`](../../../openspec/specs/persistance-snapshots/spec.md) ; développeur : [`indexing-and-storage.md`](../../developer/indexing-and-storage.md) ; banc : [`benchmarks/scalability/README.md`](../../../benchmarks/scalability/README.md) ; audit : [`AUDIT-2026-09.md`](../../project/audits/archive/2026-09/AUDIT-2026-09.md) (constat A6).
