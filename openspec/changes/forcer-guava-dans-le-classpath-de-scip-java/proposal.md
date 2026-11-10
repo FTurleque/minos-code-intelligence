@@ -36,7 +36,7 @@ Cette capacité est retenue plutôt que `chaine-de-livraison` : celle-ci couvre 
 - Soumettre la demande de correction de R-30 : seul le propriétaire le fait.
 - Modifier les fichiers partagés `docs/architecture/risks/register.md`, `docs/project/audits/2026-10-10/SUIVI.md` et `docs/developer/supply-chain.md`. Leur texte est proposé dans le design.
 - Rendre scip-java exécutable sous Windows natif : il reste `BLOCKED` (SEC-0074).
-- Le lanceur autonome de l'image Docker (`cs bootstrap`, `docker/Dockerfile.mcp.release:268`) : c'est une décision du propriétaire (design D6).
+- Le repli du lanceur Windows (`scip-java-windows-runner.ps1`) et le lanceur autonome de l'image Docker (`cs bootstrap`, `docker/Dockerfile.mcp.release:268`) restent sans forçage : décision du propriétaire (design D6), dite dans l'ADR.
 
 ## Statut des informations
 
@@ -48,7 +48,7 @@ Cette capacité est retenue plutôt que `chaine-de-livraison` : celle-ci couvre 
 | Coursier accepte `--force-version organisation:nom:version` (alias `-V`) | [Existant vérifié] | source Coursier, `ResolutionOptions.scala` (branche `main`) ; à prouver avec le lanceur épinglé (tâche 2.1) |
 | guava 33.7.2-jre existe sur Maven Central (SHA-256 `b530942257fb…606c`, 3 057 659 octets) | [Existant vérifié] | téléchargement et calcul local, 2026-11-10 |
 | Le code décrit par GHSA-g3hv-75wg-m249 est absent de minimatch 3.1.5 | [Existant vérifié] | archive du registre, sha512 égal au verrou (design, R-30) |
-| Le forçage se déclare dans le verrou, pas dans `embedded-tools.json` | [Proposition] | design D2 |
+| Le forçage se déclare dans le verrou, pas dans `embedded-tools.json` | [Décision] | design D2 (propriétaire, 2026-11-10) |
 | Nouvel ADR plutôt qu'amendement de BE-0065 | [Décision] | design D1 |
 | scip-java 0.13.2 fonctionne avec guava 33.7.2 | [Question] | bloquante pour la clôture ; point d'arrêt en tâche 4 |
 
@@ -56,7 +56,7 @@ Cette capacité est retenue plutôt que `chaine-de-livraison` : celle-ci couvre 
 
 - **Modules du reactor** : `minos-provider-scip` (verrou, installation de scip-java, tests). Aucun autre module.
 - **Surfaces publiques** (CLI, API Java, MCP, IntelliJ, NEXUS) : aucune. Le format du verrou, ressource interne du jar, gagne un champ facultatif (additif).
-- **ADR** : à écrire, un nouvel ADR `SEC-<n>` (numéro lu dans l'index à la réalisation, 0080 au 3cadc4ca). Il complète BE-0065 § 12, qui reçoit un renvoi.
+- **ADR** : à écrire, un nouvel ADR `SEC-0080` (numéro réservé par l'orchestrateur). Il complète BE-0065 § 12, qui reçoit un renvoi.
 - **Gates à rejouer** : `check-tools-manifest.py` et son test, `scripts/release/test_build_embedded_tools.py`, `check-embedded-tools-advisories.py --self-test`, `check-ci-wiring.py`, `check-comment-language.py`, `python .claude/scripts/run_gates.py --fast`. Pas de renommage, donc aucun gate littéral cassé (vérifié : aucun `check-*.py` ne cite la commande de fetch).
 - **Plateformes** : Linux (installation réelle et indexation sous bubblewrap) et Windows (construction du paquet, avec le lanceur Coursier `windows-x64` embarqué). Sous Windows natif, scip-java reste `BLOCKED`.
 - **Documentation durable et diagrammes** : `docs/architecture/diagrams/capacites/installation-des-providers.md`, l'ADR, `docs/developer/supply-chain.md` (texte proposé), le registre des risques (texte proposé).

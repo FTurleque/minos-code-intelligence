@@ -37,7 +37,7 @@ Non mesuré : la résolution réelle avec `--force-version` (aucun Coursier lanc
 |---|---|---|---|
 | L'option de régénération est conseillée mais n'existe pas | `build-embedded-tools.py:195` | `build-embedded-tools.py:343-347` | L'ajouter (tâche 2.2) |
 | La règle « un jar du verrou ne se remplace pas seul » est écrite comme une impossibilité | `register.md:25`, `supply-chain.md:215` | Coursier `--force-version` | Nouvel ADR (D1) et texte proposé pour les fichiers partagés |
-| Le repli Windows et le lanceur Docker résolvent scip-java sans verrou, donc sans forçage | `scip-java-windows-runner.ps1:237` ; `Dockerfile.mcp.release:268` | ADR BE-0065 § 12 | Décision du propriétaire (D6), hors colonne |
+| Le repli Windows et le lanceur Docker résolvent scip-java sans verrou, donc sans forçage | `scip-java-windows-runner.ps1:237` ; `Dockerfile.mcp.release:268` | ADR BE-0065 § 12 | Décision du propriétaire (D6, option b) : restent sans forçage, dit dans l'ADR |
 | La spec de référence décrit « Le plan d'indexation Linux, qui relance encore Coursier » comme hors capacité, alors que la fabrique ne résout plus par coordonnée | `openspec/specs/installation-des-providers/spec.md:4` | `ScipJavaProcessPlanFactory.java:37-41` | Signalé, non traité ici (le `## Purpose` ne fait pas partie du delta) |
 
 ## Exigences couvertes
@@ -55,10 +55,10 @@ Objectif : un forçage déclaré à un seul endroit (le verrou), lu par les deux
 | Composant | Responsabilité | Change |
 |---|---|---|
 | `scip-java-classpath.lock.json` | Source unique : jars épinglés et `forcedVersions` | Données |
-| `ClasspathLock` (`minos-provider-scip`, package `…runtime.install`) | Lit et valide `forcedVersions`, expose la liste | Code (hors colonne) |
-| `ScipJavaClasspathInstallation.scipJavaFetchCommand` | Construit `fetch --classpath [--force-version m:v]… <coordonnée>` à partir du verrou | Code (hors colonne) |
+| `ClasspathLock` (`minos-provider-scip`, package `…runtime.install`) | Lit et valide `forcedVersions`, expose la liste | Code |
+| `ScipJavaClasspathInstallation.scipJavaFetchCommand` | Construit `fetch --classpath [--force-version m:v]… <coordonnée>` à partir du verrou | Code |
 | `build-embedded-tools.py` | Même commande ; `--update-classpath-lock` réécrit le verrou | Script (colonne) |
-| `check-tools-manifest.py` | Refuse un forçage incomplet, en double ou non épinglé | Gate (hors colonne) |
+| `check-tools-manifest.py` | Refuse un forçage incomplet, en double ou non épinglé | Gate |
 
 La direction des dépendances (ARCH-0068) est inchangée : tout reste dans `minos-provider-scip` (adaptateur) et dans `scripts/`. Aucun nouveau package, aucune dépendance Maven.
 
@@ -164,7 +164,7 @@ L'installation lit le forçage dans le verrou qui sert ensuite à la vérificati
 
 ### D1 — Nouvel ADR plutôt qu'amendement de BE-0065
 
-[Décision] Écrire un nouvel ADR, domaine `SEC` : `SEC-<n>-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md`. Le numéro se lit dans l'index `docs/architecture/adr/README.md` au moment de la réalisation (le plus haut au `3cadc4ca` est 0079, soit 0080). BE-0065 § 12 reçoit une ligne de renvoi dans « References ». Raisons :
+[Décision du propriétaire] Écrire un nouvel ADR, domaine `SEC` : `SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md`. Le numéro est réservé par l'orchestrateur, qui ajoute aussi la ligne de l'index `docs/architecture/adr/README.md` et de `docs/architecture/arc42/09-decisions.md`. BE-0065 § 12 reçoit une ligne de renvoi dans « References ». Raisons :
 - BE-0065 est `Accepted` et consolide les ADR 0032 et 0040. La règle documentaire interdit de réécrire une décision acceptée (`.claude/rules/documentation.md`, ADR). Le forçage change le modèle de confiance : le verrou n'est plus le reflet exact de la résolution amont.
 - C'est un choix entre options réelles (attendre scip-java, forcer, remplacer un jar à la main, retirer scip-java) et il engage durablement le catalogue et la veille.
 - Domaine `SEC` : il relève de l'intégrité de la chaîne d'approvisionnement (règles 4 et 10 de `.claude/rules/securite.md`), comme SEC-0074.
@@ -178,7 +178,7 @@ Contenu de l'ADR : les trois conditions du propriétaire (listé avec sa raison 
 
 ### D2 — Le forçage se déclare dans le verrou
 
-[Proposition] `forcedVersions` vit dans `scip-java-classpath.lock.json`, que le catalogue déclare (`embedded-tools.json:237`). Les deux résolveurs le lisent déjà : l'installation Java par sa ressource, le script par `load_classpath_lock`. Il n'y a qu'une source, sans nouvelle lecture du catalogue côté Java. Alternative : un champ dans `embedded-tools.json`, sur l'entrée assemblée `scip-java-classpath`. Mais cette entrée est propre à `windows-x64`, et l'installation Linux ne la lit pas. Il faudrait étendre `EmbeddedToolsCatalog.Assembled` et dupliquer la donnée, ou la faire contrôler pour l'égalité. Conséquence : `embedded-tools.json` ne change pas, sauf sa phrase `description` si le propriétaire veut y voir le forçage nommé (voir Questions ouvertes, 1).
+[Décision du propriétaire, option a] `forcedVersions` vit dans `scip-java-classpath.lock.json`, que le catalogue déclare (`embedded-tools.json:237`). Les deux résolveurs le lisent déjà : l'installation Java par sa ressource, le script par `load_classpath_lock`. Il n'y a qu'une source, sans nouvelle lecture du catalogue côté Java. Alternative : un champ dans `embedded-tools.json`, sur l'entrée assemblée `scip-java-classpath`. Mais cette entrée est propre à `windows-x64`, et l'installation Linux ne la lit pas. Il faudrait étendre `EmbeddedToolsCatalog.Assembled` et dupliquer la donnée, ou la faire contrôler pour l'égalité. Conséquence : `embedded-tools.json` ne change pas.
 
 ### D3 — Une seule forme de commande, construite depuis le verrou
 
@@ -186,7 +186,7 @@ Contenu de l'ADR : les trois conditions du propriétaire (listé avec sa raison 
 
 ### D4 — Forcer guava seul ; les jars voisins suivent la résolution
 
-[Proposition] Seul `com.google.guava:guava` est forcé. Si la résolution fait aussi bouger `jspecify` (1.0.0 → 1.0.1) ou `error_prone_annotations`, le verrou régénéré l'enregistre. Le diff du verrou est relu jar par jar dans la PR et décrit dans la tâche 3.2. Aucun forçage de plus n'est ajouté pour garder les anciennes versions : ce serait forcer des modules sans avis, contraire au caractère nominatif. Le nombre de jars peut donc rester 70 ou changer. `supply-chain.md:179,193` cite 70 : à mettre à jour avec la valeur mesurée (texte proposé ci-dessous, à compléter).
+[Décision du propriétaire] Seul `com.google.guava:guava` est forcé. Si la résolution fait aussi bouger `jspecify` (1.0.0 → 1.0.1) ou `error_prone_annotations`, le verrou régénéré l'enregistre. Le diff du verrou est relu jar par jar dans la PR et décrit dans la tâche 3.2. Aucun forçage de plus n'est ajouté pour garder les anciennes versions : ce serait forcer des modules sans avis, contraire au caractère nominatif. Le nombre de jars peut donc rester 70 ou changer. `supply-chain.md:179,193` cite 70 : à mettre à jour avec la valeur mesurée (texte proposé ci-dessous, à compléter).
 
 ### D5 — Point d'arrêt
 
@@ -194,7 +194,7 @@ Contenu de l'ADR : les trois conditions du propriétaire (listé avec sa raison 
 
 ### D6 — Le repli Windows et le lanceur Docker
 
-[Question] Deux résolutions hors verrou existent (voir « Écarts »). Options : (a) leur appliquer aussi le forçage, avec le lanceur Windows lisant le verrou et le Dockerfile recevant `--force-version` synchronisé par `sync-tools-manifest.py` ; (b) les laisser, en écrivant dans l'ADR qu'elles sont hors du verrou. Recommandation : (b) pour ce changement. Le repli Windows n'est atteint que sans classpath installé, alors que Windows est `BLOCKED`. L'image Docker n'exécute aucun provider. Le Dockerfile serait un autre changement. À trancher par le propriétaire.
+[Décision du propriétaire, option b] Deux résolutions hors verrou existent (voir « Écarts »). Elles restent sans forçage et l'ADR le dit : le repli de `scip-java-windows-runner.ps1` n'est atteint que sans classpath installé, alors que Windows est `BLOCKED` (SEC-0074) ; `docker/Dockerfile.mcp.release` n'exécute aucun provider. Option écartée : (a) leur appliquer le forçage (lanceur Windows lisant le verrou, Dockerfile synchronisé par `sync-tools-manifest.py`).
 
 ## Qualification des capacités
 
@@ -220,8 +220,8 @@ Contenu de l'ADR : les trois conditions du propriétaire (listé avec sa raison 
 
 ## Documentation durable à mettre à jour
 
-- `docs/architecture/diagrams/capacites/installation-des-providers.md` : traçabilité des trois exigences ajoutées (hors colonne, requis par `check-capability-dossiers.py` à l'archivage).
-- Nouvel ADR, index `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` (hors colonne pour l'index et arc42).
+- `docs/architecture/diagrams/capacites/installation-des-providers.md` : traçabilité des trois exigences ajoutées, **reportée à l'archivage** (décision 7 ; requise par `check-capability-dossiers.py`).
+- Nouvel ADR SEC-0080 et renvoi dans BE-0065 (colonne). Index `docs/architecture/adr/README.md` et `docs/architecture/arc42/09-decisions.md` : tenus par l'orchestrateur.
 - `docs/developer/supply-chain.md`, `docs/architecture/risks/register.md`, `docs/project/audits/2026-10-10/SUIVI.md` : fichiers partagés, texte proposé ci-dessous.
 
 ## Texte proposé pour les fichiers partagés
@@ -230,7 +230,7 @@ Ce texte n'est pas appliqué par ce changement. Le propriétaire, ou la session 
 
 **`docs/architecture/risks/register.md`, ligne R-29** (remplace la ligne actuelle) :
 
-> | R-29 | Un avis OSV sur le classpath verrouillé de scip-java 0.13.2 (`scip-java-classpath.lock.json`, AUD-DEP-03) : `GHSA-xxph-c9ww-hj94` (guava 33.6.0-jre) | — | — | — | **Résolu le <date de fusion>** (changement OpenSpec `forcer-guava-dans-le-classpath-de-scip-java`, PR #<n>) | guava est forcé en 33.7.2-jre dans le verrou par un forçage nominatif ([ADR SEC-<n>](../adr/SEC-<n>-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md)) : entrée `forcedVersions` avec l'avis et sa raison, somme SHA-256 vérifiée à l'installation et avant chaque indexation, indexation Java réelle sous bubblewrap prouvée par la CI Linux (run <id>). La dérogation de `embedded-tools-advisory-waivers.json` est retirée. Le forçage se retire dès qu'une version de scip-java embarque guava ≥ 33.7.2. |
+> | R-29 | Un avis OSV sur le classpath verrouillé de scip-java 0.13.2 (`scip-java-classpath.lock.json`, AUD-DEP-03) : `GHSA-xxph-c9ww-hj94` (guava 33.6.0-jre) | — | — | — | **Résolu le <date de fusion>** (changement OpenSpec `forcer-guava-dans-le-classpath-de-scip-java`, PR #<n>) | guava est forcé en 33.7.2-jre dans le verrou par un forçage nominatif ([ADR SEC-0080](../adr/SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md)) : entrée `forcedVersions` avec l'avis et sa raison, somme SHA-256 vérifiée à l'installation et avant chaque indexation, indexation Java réelle sous bubblewrap prouvée par la CI Linux (run <id>). La dérogation de `embedded-tools-advisory-waivers.json` est retirée. Le forçage se retire dès qu'une version de scip-java embarque guava ≥ 33.7.2. |
 
 **`docs/architecture/risks/register.md`, ligne R-30** : remplacer la colonne de statut par :
 
@@ -240,13 +240,13 @@ et ajouter à la fin de la colonne de justification : « Revérifié le 2026-11-
 
 **`docs/developer/supply-chain.md`, « Traiter une alerte », point 3** : remplacer la dernière phrase par :
 
-> Un avis sur un jar du classpath de scip-java se corrige d'abord en montant scip-java. Si aucune version ne l'embarque corrigé, un **forçage nominatif** est permis ([ADR SEC-<n>](../architecture/adr/SEC-<n>-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md)). Il porte sur une seule dépendance transitive, jamais scip-java lui-même. Il est déclaré dans `forcedVersions` du verrou avec l'avis et sa raison, et contrôlé par `check-tools-manifest.py`. Le verrou est régénéré par `python scripts/release/build-embedded-tools.py --update-classpath-lock`, qui recalcule toutes les sommes, et une indexation Java réelle sous le bac à sable Linux le prouve. Le forçage se retire à la première version de scip-java qui embarque la correction. Un jar n'est jamais remplacé à la main.
+> Un avis sur un jar du classpath de scip-java se corrige d'abord en montant scip-java. Si aucune version ne l'embarque corrigé, un **forçage nominatif** est permis ([ADR SEC-0080](../architecture/adr/SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md)). Il porte sur une seule dépendance transitive, jamais scip-java lui-même. Il est déclaré dans `forcedVersions` du verrou avec l'avis et sa raison, et contrôlé par `check-tools-manifest.py`. Le verrou est régénéré par `python scripts/release/build-embedded-tools.py --update-classpath-lock`, qui recalcule toutes les sommes, et une indexation Java réelle sous le bac à sable Linux le prouve. Le forçage se retire à la première version de scip-java qui embarque la correction. Un jar n'est jamais remplacé à la main.
 
 **`docs/developer/supply-chain.md:179,193`** : remplacer « 70 jars » par le nombre mesuré après régénération (tâche 3.2).
 
 **`docs/project/audits/2026-10-10/SUIVI.md`** : ajouter à la fin de la section de suivi courante :
 
-> - **R-29, guava forcé dans le classpath de scip-java** (changement OpenSpec `forcer-guava-dans-le-classpath-de-scip-java`, PR #<n>, `<sha>`) : nouvel ADR SEC-<n> (forçage nominatif), verrou régénéré avec `com.google.guava:guava:33.7.2-jre` forcé (<N> jars, sommes recalculées), dérogation `GHSA-xxph-c9ww-hj94` retirée de `embedded-tools-advisory-waivers.json`, indexation réelle prouvée par la CI Linux (run <id>). **R-29 résolu.**
+> - **R-29, guava forcé dans le classpath de scip-java** (changement OpenSpec `forcer-guava-dans-le-classpath-de-scip-java`, PR #<n>, `<sha>`) : nouvel ADR SEC-0080 (forçage nominatif), verrou régénéré avec `com.google.guava:guava:33.7.2-jre` forcé (<N> jars, sommes recalculées), dérogation `GHSA-xxph-c9ww-hj94` retirée de `embedded-tools-advisory-waivers.json`, indexation réelle prouvée par la CI Linux (run <id>). **R-29 résolu.**
 > - **R-30, demande de correction de l'avis GHSA-g3hv-75wg-m249 préparée** (même changement, design) : plage affectée proposée `>= 7.0.0, < 11.0.1`, preuve sur l'archive de minimatch 3.1.5 au sha512 du verrou. **En attente de soumission par le propriétaire** ; la dérogation `osv-scanner.toml` reste jusqu'au 2027-01-31.
 
 ## R-30 : demande de correction de l'avis GHSA-g3hv-75wg-m249
@@ -267,11 +267,11 @@ Texte proposé (en anglais, destiné au formulaire « Suggest improvements for t
 > 2. The same search over registry tarballs finds none of these identifiers in 4.2.3, 5.1.6, 6.0.0 or 6.2.0. Both functions first appear in 7.0.0, and the `optimizationLevel` option first appears in 7.1.0. Both are present in 7.1.0 through 9.0.0.
 > 3. Reproduction: `npm pack minimatch@3.1.5 && tar -xzf minimatch-3.1.5.tgz && grep -rnE "firstPhasePreProcess|secondPhasePreProcess|optimizationLevel" package/` prints nothing; the same command on `minimatch@7.1.0` prints matches.
 >
-> **Requested change.** Replace the affected range `< 11.0.1` with `>= 7.0.0, < 11.0.1` (or, if the maintainers consider that the vulnerable behaviour requires the `optimizationLevel` option, `>= 7.1.0, < 11.0.1`). At minimum, exclude the 3.x line, which is still pulled by `glob` 7.x in many dependency trees and cannot reach 11.0.1 without a major upgrade of `glob`.
+> **Requested change.** Replace the affected range `< 11.0.1` with `>= 7.0.0, < 11.0.1`. At minimum, exclude the 3.x line, which is still pulled by `glob` 7.x in many dependency trees and cannot reach 11.0.1 without a major upgrade of `glob`.
 >
 > **Impact of the change.** Consumers locked on minimatch 3.x through `glob` 7 currently have to carry a waiver for code they do not ship.
 
-La plage `>= 7.0.0` ou `>= 7.1.0` est une proposition (Questions ouvertes, 3). La demande minimale du propriétaire, exclure la ligne 3.x, est satisfaite dans les deux cas.
+Plage retenue par le propriétaire : `>= 7.0.0, < 11.0.1` (décision 6), la plus prudente puisque les deux fonctions existent dès 7.0.0. Elle exclut la ligne 3.x.
 
 ## Traçabilité
 
@@ -288,12 +288,14 @@ La plage `>= 7.0.0` ou `>= 7.1.0` est une proposition (Questions ouvertes, 3). L
 | idem | Construction sans régénération sur une résolution divergente | Traitements | 2.1 | `test_build_embedded_tools.py:117-132` (existant, à compléter du message) |
 | Critère de sortie : indexation réelle | — | D5 | 4.1, 4.2 | CI Linux `pr-ci.yml:401-409` (manquante tant que la PR n'a pas tourné) |
 
-## Questions ouvertes
+## Décisions du propriétaire (2026-11-10)
 
-Décisions du propriétaire, avec une recommandation. Aucune ne change les specs ni le découpage.
+Elles remplacent les questions ouvertes de la proposition. Aucune ne change les specs ni le découpage.
 
-1. **Où le forçage est « listé dans le catalogue »** : (a) dans le verrou seul, que le catalogue déclare (recommandé, D2) ; (b) aussi dans `embedded-tools.json`, avec un contrôle d'égalité par le gate. Recommandation : (a). `embedded-tools.json` ne change alors que si l'on veut nommer le forçage dans sa `description`.
-2. **Repli Windows et lanceur Docker** (D6) : recommandation (b), les laisser hors de ce changement et le dire dans l'ADR.
-3. **Plage proposée à GitHub pour R-30** : `>= 7.0.0, < 11.0.1` (fonctions présentes, recommandé, le plus prudent) ou `>= 7.1.0, < 11.0.1` (option `optimizationLevel` présente). Le texte propose les deux, la première par défaut.
-4. **Numéro d'ADR** : 0080 au `3cadc4ca`. Si un autre changement en cours (chg-A/B/C) prend aussi 0080, le premier fusionné le garde et l'autre relit l'index. Recommandation : réserver le numéro à la réalisation, pas maintenant.
-5. **Jars voisins** (D4) : accepter que `jspecify` ou `error_prone_annotations` suivent la résolution (recommandé), ou les forcer à leur version actuelle. Le second choix est refusé par le caractère nominatif.
+1. **Où le forçage est listé** : (a) dans le verrou seul, que le catalogue déclare (D2). `embedded-tools.json` est inchangé.
+2. **Repli Windows et lanceur Docker** (D6) : (b), ils restent sans forçage ; l'ADR SEC-0080 le dit.
+3. **Plage proposée à GitHub pour R-30** : `>= 7.0.0, < 11.0.1`. La soumission est une tâche manuelle du propriétaire (6.1).
+4. **Numéro d'ADR** : SEC-0080, réservé par l'orchestrateur, qui tient l'index et `09-decisions.md`.
+5. **Jars voisins** (D4) : ils suivent la résolution. Le diff du verrou est relu jar par jar et chaque changement est justifié ici (tâche 3.2).
+6. **Colonne** : étendue au code d'installation (`ClasspathLock.java`, `ScipJavaClasspathInstallation.java` et leurs tests `ClasspathLockTest`, `ManagedScipProviderRuntimeManagerTest`, `ManagedScipProviderRuntimeManagerRuntimeTest`), à `check-tools-manifest.py` et `build-embedded-tools.py` avec leurs auto-tests, à `CLASSPATH_GROUPS` de `check-embedded-tools-advisories.py` si un jar nouveau apparaît, et au renvoi de BE-0065.
+7. **Dossier de capacité** `docs/architecture/diagrams/capacites/installation-des-providers.md` : reporté à l'archivage.
