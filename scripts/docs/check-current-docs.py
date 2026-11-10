@@ -152,8 +152,9 @@ def validate_security_and_storage() -> None:
     postgres_support = read(POSTGRES_SUPPORT)
     require_all(POSTGRES_SUPPORT, postgres_support, (
         "minos.postgresql.tests.required", "Boolean.getBoolean(REQUIRED_PROPERTY)",
-        "PostgreSQL integration tests are required", "assumeTrue(dockerAvailable",
+        "PostgreSQL integration tests are required", "assumeTrue(serverAvailable",
     ))
+    forbid(POSTGRES_SUPPORT, postgres_support, "org.testcontainers")
 
 
 # Same detection as scripts/quality/check-single-execution.py: a Maven wrapper invocation that runs verify.
