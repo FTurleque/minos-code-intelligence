@@ -268,6 +268,23 @@ Mesures du 2026-11-07 avec un build non modifié de `develop` `bc2995a8` (persis
 
 Un import publié applique la même rétention que l'indexation : `PublishedSnapshotRetention` (`minos-application`) sert à `LocalProjectOperations.importScipLocked` et aux deux chemins de succès de `ProjectIndexingUseCase`. Quatre imports distincts laissent l'actif et deux historiques (`minos-cli/src/test/java/com/minos/cli/ImportScipRetentionTest.java`) ; un verrou occupé laisse l'import réussi avec un diagnostic sans cause ni chemin.
 
+## Budget de mémoire des vues
+
+Un processus a un seul budget de mémoire des vues de snapshot (`QueryViewMemoryBudget.shared()`, `com.minos.storage.codec`), commun aux deux stores (`FileSymbolSnapshotStore`, `PostgresCodeKnowledgeSnapshotStore`) et à toutes leurs instances, magasins de travail SCIP compris. Il vaut une fraction du tas maximal (`Runtime.maxMemory()`) : propriété système `minos.storage.viewHeapPercent`, puis variable `MINOS_VIEW_HEAP_PERCENT`, 50 par défaut ; une valeur qui n'est pas un entier de 10 à 80 fait échouer chaque chargement de vue (`MINOS_VIEW_HEAP_PERCENT (or -Dminos.storage.viewHeapPercent) must be an integer from 10 to 80`), sans repli. Le fichier de configuration de `MINOS_HOME` n'est pas lu : le tas est un fait du processus.
+
+| Étape | Magasin fichier | PostgreSQL |
+|---|---|---|
+| Avant toute lecture de la charge utile | pointeur actif, présence du fichier, `Files.size` | métadonnées avec `octet_length(payload)` et les 8 octets d'en-tête ; une taille hors `[1, plafond de persistance]` est refusée (`snapshot payload exceeds persisted byte limit: <taille>/<plafond>`) sans demander la charge utile ni créer de fichier temporaire |
+| Réservation | poids estimé de la vue | le plus grand du poids estimé et du transitoire du pilote pendant le rapatriement (`SnapshotLimits.fetchTransientBytes`, 300 % de la charge utile, valeur prudente non mesurée) |
+| Vue mise en cache | la réservation devient du poids résident sous le verrou du budget | idem |
+| Vue non mise en cache, erreur, pointeur déplacé | la réservation est libérée | idem |
+
+Une réservation plus lourde que tout le budget est refusée aussitôt (`SnapshotMemoryExhaustedException`, `minos-domain`, message `insufficient memory to load this snapshot: …` qui donne poids, budget, pourcentage et tas, et nomme `-Xmx`, `-XX:MaxRAMPercentage` et `MINOS_VIEW_HEAP_PERCENT`). Une réservation qui ne tient pas à côté des autres vide d'abord les vues en cache de tous les stores inscrits, puis attend une libération au plus `SnapshotLimits.VIEW_ADMISSION_WAIT` (30 s), et échoue alors par `insufficient memory to load this snapshot now: …`. Le plafond effectif du cache d'un store vaut le plus petit de `SnapshotLimits.maxQueryCacheWeightBytes()` (512 Mio) et du budget ; c'est lui que rapportent `cacheStats()` et `queryCacheStats()`. L'invariant `requireCacheCoversPersistable` porte sur le plafond configuré, jamais sur le plafond effectif. La CLI rend le message avec le code de sortie 1, le serveur MCP le rend tel quel (`error: insufficient memory…`) au lieu de l'erreur générique.
+
+Ordre des verrous : le verrou de projet d'un store, puis le verrou du budget, puis le verrou du cache du store ; un store n'appelle jamais le budget en tenant son verrou de cache. Une vue vidée du cache mais encore tenue par une requête en cours n'est plus comptée : la marge du budget (la moitié du tas) la couvre.
+
+Preuves : `QueryViewMemoryBudgetTest` (réglage, refus, attente, éviction, conversion), `FileSymbolSnapshotStoreViewBudgetTest`, `PostgresCodeKnowledgeSnapshotStoreViewBudgetTest`, et `QueryViewAdmissionChildJvmTest`, qui lance une JVM fille `-Xmx256m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError` sur deux snapshots de 148 Mio chargés au même instant : sans admission elle meurt d'une `OutOfMemoryError` (code 3), avec un budget de 80 % du tas elle se termine avec le code 0. `LargeSnapshotMeasurement` rapporte le plafond effectif (`cache.maximum.bytes`) et le pic de tas d'une vue admise.
+
 ## Cohérence concurrente
 
 `IndexingLifecycleService` sérialise les runs par projet dans une instance : un projet déjà `INDEXING` ou `REFRESHING` ne peut pas démarrer un second run concurrent.
