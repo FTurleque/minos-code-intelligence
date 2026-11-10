@@ -25,7 +25,10 @@ class ConfinedFileOpenerStructureTest {
 
     @Test
     void hasNoStaticFieldThatCanBeReassigned() {
+        // A coverage or mutation tool (JaCoCo, PIT) adds its own synthetic static field to the instrumented class:
+        // it is not state that the class declares.
         List<String> mutable = Arrays.stream(ConfinedFileOpener.class.getDeclaredFields())
+                .filter(field -> !field.isSynthetic())
                 .filter(field -> Modifier.isStatic(field.getModifiers()))
                 .filter(field -> !Modifier.isFinal(field.getModifiers()))
                 .map(Field::getName)
