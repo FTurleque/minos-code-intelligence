@@ -365,23 +365,23 @@ deux variables ci-dessus » ; remplacer le bloc « Vérifier la liste sans la CI
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| persistance-snapshots › Les tests PostgreSQL utilisent un serveur fourni de l'extérieur | Serveur démarré par le script local | D1, D5, séquence « classe » | 2.2, 6.1 | à écrire |
-| idem | Aucune bibliothèque de pilotage de Docker dans les tests | D6 | 2.3 | à écrire (`grep`) |
-| persistance-snapshots › Un serveur absent ou injoignable fait échouer les tests en mode requis | URL absente en mode requis | États | 2.1, 2.2 | `PostgresTestSupportContractTest` (à écrire) |
-| idem | Serveur injoignable en mode requis | États | 2.1, 2.2 | idem |
-| persistance-snapshots › Sans mode requis, l'absence de serveur saute les tests et les compte | Poste sans serveur | États | 2.1, 2.2 | idem |
-| idem | Job Windows de la CI | Qualification | 4.4 | manquante (run CI, manuelle) |
-| persistance-snapshots › Chaque classe de test PostgreSQL travaille dans sa propre base | Ordre des classes inversé | D4 | 2.2, 6.1 | à écrire |
-| idem | Aucune base laissée derrière | D4 | 2.2, 6.1 | à écrire |
-| persistance-snapshots › Le mot de passe du serveur de test de la CI est généré par le job | Aucun mot de passe figé dans le dépôt | D3, Sécurité | 2.2 | à écrire (`grep`) |
-| idem | Deux démarrages, deux mots de passe | D2, D5 | 1.1, 1.2 | `test_start_test_postgres.py` (à écrire) |
-| persistance-snapshots › Le script local démarre le conteneur de test épinglé | Démarrage nominal | D5 | 1.2, 1.4 | manuelle (poste avec Docker) |
-| idem | Image non épinglée | D5 | 1.1, 1.2 | `test_start_test_postgres.py` (à écrire) |
-| persistance-snapshots › L'arbre de dépendances ne contient ni Testcontainers ni docker-java | Arbre de dépendances | D6 | 2.3, 2.4 | à écrire |
-| idem | Rapport Dependency-Check des tests | D6 | 5.1 | manquante (manuelle, base NVD) |
+| persistance-snapshots › Les tests PostgreSQL utilisent un serveur fourni de l'extérieur | Serveur démarré par le script local | D1, D5, séquence « classe » | 2.2, 6.1 | `mvnw -o -pl minos-storage -am verify` en mode requis contre le conteneur du script (poste Windows, Docker Desktop, 2026-11-10) : 388 tests PostgreSQL, 0 saut |
+| idem | Aucune bibliothèque de pilotage de Docker dans les tests | D6 | 2.3 | `grep -rlF "import org.testcontainers" --include=*.java .` : vide (le motif sans `import` trouve la garde d'absence `"org/testcontainers/"` de `ShadedJarCompositionRootIT`, conservée par D6) ; `check-current-docs.py` refuse `org.testcontainers` dans `PostgresTestSupport` |
+| persistance-snapshots › Un serveur absent ou injoignable fait échouer les tests en mode requis | URL absente en mode requis | États | 2.1, 2.2 | `PostgresTestSupportContractTest.missingUrlFailsInRequiredModeNamingTheProperty` |
+| idem | Serveur injoignable en mode requis | États | 2.1, 2.2 | `PostgresTestSupportContractTest.unreachableServerFailsInRequiredModeWithoutThePassword` |
+| persistance-snapshots › Sans mode requis, l'absence de serveur saute les tests et les compte | Poste sans serveur | États | 2.1, 2.2 | `PostgresTestSupportContractTest.missingUrlIsSkippedWithAReasonThatNamesTheProperty` ; `mvnw -o -pl minos-storage -am test` sans serveur : 183 tests PostgreSQL sautés, raison qui nomme `minos.postgresql.test.url` |
+| idem | Job Windows de la CI | Qualification | 4.4 | manquante (run CI, manuelle) ; saut compté prouvé sur poste Windows |
+| persistance-snapshots › Chaque classe de test PostgreSQL travaille dans sa propre base | Ordre des classes inversé | D4 | 2.2, 6.1 | `-Dsurefire.runOrder=alphabetical` puis `reversealphabetical` : 388 tests réussis les deux fois |
+| idem | Aucune base laissée derrière | D4 | 2.2, 6.1 | `psql` après les trois exécutions : seule la base `postgres` |
+| persistance-snapshots › Le mot de passe du serveur de test de la CI est généré par le job | Aucun mot de passe figé dans le dépôt | D3, Sécurité | 2.2 | `grep -rn test-secret minos-storage/src .github/workflows scripts` : vide |
+| idem | Deux démarrages, deux mots de passe | D2, D5 | 1.1, 1.2 | `test_start_test_postgres.py` (`test_two_starts_two_passwords_never_in_the_arguments`, bash et PowerShell) |
+| persistance-snapshots › Le script local démarre le conteneur de test épinglé | Démarrage nominal | D5 | 1.2, 1.4 | manuelle, faite le 2026-11-10 : `.sh` (Git Bash) et `.ps1` (Windows PowerShell 5.1), `docker port` → `127.0.0.1:55432` seul |
+| idem | Image non épinglée | D5 | 1.1, 1.2 | `test_start_test_postgres.py` (`test_unpinned_default_is_refused_before_docker`) |
+| persistance-snapshots › L'arbre de dépendances ne contient ni Testcontainers ni docker-java | Arbre de dépendances | D6 | 2.3, 2.4 | `./mvnw -o -B -ntp dependency:tree` (13 modules) : 0 ligne `org.testcontainers` ou `com.github.docker-java` |
+| idem | Rapport Dependency-Check des tests | D6 | 5.1 | manquante (manuelle, CI : le greffon refuse le mode hors ligne) |
 | persistance-snapshots › Les résultats des requêtes sont inchangés | Goldens de caractérisation | — | 6.1 | inchangé |
-| idem | Store PostgreSQL, sous Linux seulement | D1 | 6.1 | à écrire |
-| frontieres-de-modules › Les règles de mise en page de build valent aussi dans un profil | Profils existants | D6 | 2.3 | `check-module-boundaries.py` (à rejouer) |
+| idem | Store PostgreSQL, sous Linux seulement | D1 | 6.1 | même exécution que « Serveur démarré par le script local » (poste Windows) ; run Linux de la CI : tâche 4.4 (manuelle) |
+| frontieres-de-modules › Les règles de mise en page de build valent aussi dans un profil | Profils existants | D6 | 2.3 | `check-module-boundaries.py` vert |
 
 ## Questions ouvertes
 

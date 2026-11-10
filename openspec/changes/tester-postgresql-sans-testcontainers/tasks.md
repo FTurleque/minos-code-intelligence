@@ -40,10 +40,10 @@ d'environnement) et colonne tranchées par le propriétaire le 2026-11-10 (quest
 
 ## 6. Clôture
 
-- [ ] 6.1 Rejouer `python .claude/scripts/run_gates.py` et `./mvnw -B -ntp -pl minos-storage -am verify` contre le conteneur du script ; mettre à jour la matrice de traçabilité du design (exigence → scénario → conception → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
+- [x] 6.1 Rejouer `python .claude/scripts/run_gates.py` et `./mvnw -B -ntp -pl minos-storage -am verify` contre le conteneur du script ; mettre à jour la matrice de traçabilité du design (exigence → scénario → conception → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
 - [ ] 6.2 **(manuelle, à l'archivage)** Mettre à jour les dossiers durables `persistance-snapshots.md` (dont `:215-216` et la séquence « classe » du design), `recherche-semantique.md:103` et `frontieres-de-modules.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
-- [ ] 6.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`.
-- [ ] 6.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP:156, docs/developer, arc42, fichiers partagés de 5.2) ; vérifier que chacun est fait ou nommé comme reste ; rejouer `check-current-docs.py` et `product-facts.py --check`.
+- [x] 6.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`.
+- [x] 6.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP:156, docs/developer, arc42, fichiers partagés de 5.2) ; vérifier que chacun est fait ou nommé comme reste ; rejouer `check-current-docs.py` et `product-facts.py --check`. Fait : ROADMAP:156, `docs/developer/` (testing, quality-gates, code-audit-couverture), arc42 02/04/07/08/12. Restes nommés : `docs/project/governance/STATUS.md:47` (R-27 « accepté » à passer « résolu », orchestrateur via `minos-doc-sync`) ; fichiers partagés de 5.2 ; dossiers de capacité (6.2) ; `.claude/skills/minos-dependency-update/SKILL.md:3,12` et `.claude/skills/minos-verify-local/SKILL.md:31`, qui citent encore Testcontainers (hors colonne).
 
 ## Workflow follow-up
 

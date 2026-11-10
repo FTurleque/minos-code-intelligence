@@ -11,7 +11,7 @@ Les tests d'intégration PostgreSQL SHALL se connecter au serveur désigné par 
 
 #### Scenario: Aucune bibliothèque de pilotage de Docker dans les tests
 - **GIVEN** les sources de test du réacteur
-- **WHEN** `grep -rl "org.testcontainers" --include=*.java .` est exécuté à la racine
+- **WHEN** `grep -rlF "import org.testcontainers" --include=*.java .` est exécuté à la racine
 - **THEN** la commande ne trouve aucun fichier
 
 ### Requirement: Un serveur absent ou injoignable fait échouer les tests en mode requis
