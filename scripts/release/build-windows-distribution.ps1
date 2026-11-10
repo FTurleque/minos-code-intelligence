@@ -198,9 +198,20 @@ if (-not $ReuseBuild) {
         }
         $MavenArgs += 'clean'
         $MavenArgs += if ($SkipVerify) { 'package' } else { 'verify' }
-        & '.\mvnw.cmd' @MavenArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "MINOS Maven build failed with exit code $LASTEXITCODE"
+        # Tests and mvnw.cmd start Windows PowerShell 5.1 (powershell.exe). Under pwsh 7, PSModulePath lists the
+        # PowerShell 7 module folders, and 5.1 then fails to autoload Microsoft.PowerShell.Security (Set-Acl).
+        # Without the variable, each powershell.exe builds its own default module path.
+        $InheritedModulePath = $env:PSModulePath
+        try {
+            Remove-Item -LiteralPath Env:PSModulePath -ErrorAction SilentlyContinue
+            & '.\mvnw.cmd' @MavenArgs
+            $MavenExitCode = $LASTEXITCODE
+        }
+        finally {
+            $env:PSModulePath = $InheritedModulePath
+        }
+        if ($MavenExitCode -ne 0) {
+            throw "MINOS Maven build failed with exit code $MavenExitCode"
         }
 
         $RootPomContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
