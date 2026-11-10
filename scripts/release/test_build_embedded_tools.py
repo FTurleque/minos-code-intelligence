@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -130,6 +132,112 @@ class BuildEmbeddedToolsTest(unittest.TestCase):
             (tree / "a-1.jar").unlink()
             with self.assertRaisesRegex(builder.BuildError, "lacks the pinned jar a-1.jar"):
                 builder.verify_classpath_lock(tree, lock)
+
+    def test_a_divergent_resolution_names_the_jar_and_the_regeneration_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree, lock = self._classpath(Path(directory), {"a-1.jar": b"a"})
+            (tree / "c-3.jar").write_bytes(b"c")
+            with self.assertRaisesRegex(builder.BuildError, "c-3.jar.*--update-classpath-lock"):
+                builder.verify_classpath_lock(tree, lock)
+
+    # ------------------------------------------------------------------ forced versions (ADR SEC-0080)
+
+    FORCED = {"module": "com.example:guava", "version": "33.7.2-jre", "advisory": "GHSA-xxph-c9ww-hj94",
+              "reason": "R-29: guava 33.6.0-jre is affected; fixed in 33.7.2."}
+    COMPONENT = {"id": "scip-java-classpath", "coordinate": "org.example:tool:1", "version": "1",
+                 "lock": "tool.lock.json"}
+
+    @staticmethod
+    def fake_coursier(*jars: tuple[str, str, bytes]):
+        """A stand-in for the pinned launcher: records its arguments and lays the jars out like the Coursier cache,
+        each with a POM that names its license."""
+        calls: list[list[str]] = []
+
+        def run(command, cwd=None, env=None, capture_output=None, text=None):
+            calls.append(list(command))
+            cache = Path(env["COURSIER_CACHE"])
+            entries = []
+            for artifact, version, content in jars:
+                folder = cache / "https" / "repo.example" / "maven2" / "com" / "example" / artifact / version
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / f"{artifact}-{version}.jar").write_bytes(content)
+                (folder / f"{artifact}-{version}.pom").write_text(
+                    "<project><licenses><license><name>MIT</name></license></licenses></project>", encoding="utf-8")
+                entries.append(str(folder / f"{artifact}-{version}.jar"))
+            return types.SimpleNamespace(returncode=0, stdout="Downloading x\n" + os.pathsep.join(entries) + "\n",
+                                         stderr="")
+        run.calls = calls
+        return run
+
+    def write_lock(self, directory: Path, jars: dict[str, bytes], forced: list[dict] | None) -> Path:
+        value = {"coordinate": self.COMPONENT["coordinate"], "version": "1",
+                 "jars": [{"name": n, "size": len(c), "sha256": hashlib.sha256(c).hexdigest()} for n, c in jars.items()]}
+        if forced is not None:
+            value["forcedVersions"] = forced
+        path = directory / "tool.lock.json"
+        path.write_text(json.dumps(value), encoding="utf-8")
+        return path
+
+    def test_the_fetch_command_forces_the_versions_of_the_lock_in_their_order(self):
+        second = dict(self.FORCED, module="com.example:jspecify", version="1.0.1")
+        command = builder.classpath_fetch_command("cs", "org.example:tool:1", {"forcedVersions": [self.FORCED, second]})
+        self.assertEqual(["cs", "fetch", "--classpath", "--force-version", "com.example:guava:33.7.2-jre",
+                          "--force-version", "com.example:jspecify:1.0.1", "org.example:tool:1"], command)
+        self.assertEqual(["cs", "fetch", "--classpath", "org.example:tool:1"],
+                         builder.classpath_fetch_command("cs", "org.example:tool:1", {"jars": []}))
+
+    def test_a_malformed_forced_entry_is_refused_before_coursier_runs(self):
+        for entry in ({"module": "guava", "version": "1"}, {"module": "a:b", "version": " "}, "a:b:1"):
+            with self.subTest(entry=entry):
+                with self.assertRaisesRegex(builder.BuildError, "forced"):
+                    builder.classpath_fetch_command("cs", "org.example:tool:1", {"forcedVersions": [entry]})
+
+    def test_the_build_resolves_with_the_forced_versions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jars = {"tool-1.jar": b"tool", "guava-33.7.2-jre.jar": b"new guava"}
+            self.write_lock(root, jars, [self.FORCED])
+            run = self.fake_coursier(("tool", "1", b"tool"), ("guava", "33.7.2-jre", b"new guava"))
+            (root / "work").mkdir()
+            builder.resolve_classpath_tree(Path("cs"), self.COMPONENT, root / "work", lock_dir=root, run=run)
+            self.assertEqual(["cs", "fetch", "--classpath", "--force-version", "com.example:guava:33.7.2-jre",
+                              "org.example:tool:1"], run.calls[0])
+
+    def test_the_regeneration_recomputes_every_jar_and_keeps_the_forced_versions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = self.write_lock(root, {"tool-1.jar": b"old", "guava-33.6.0-jre.jar": b"old guava"}, [self.FORCED])
+            run = self.fake_coursier(("tool", "1", b"tool"), ("guava", "33.7.2-jre", b"new guava"))
+            (root / "work").mkdir()
+            builder.resolve_classpath_tree(Path("cs"), self.COMPONENT, root / "work", update_lock=True,
+                                           lock_dir=root, run=run)
+            written = json.loads(lock_path.read_text(encoding="utf-8"))
+            self.assertEqual([self.FORCED], written["forcedVersions"])
+            self.assertEqual(("org.example:tool:1", "1"), (written["coordinate"], written["version"]))
+            self.assertEqual([{"name": "guava-33.7.2-jre.jar", "size": 9, "sha256": hashlib.sha256(b"new guava").hexdigest()},
+                              {"name": "tool-1.jar", "size": 4, "sha256": hashlib.sha256(b"tool").hexdigest()}],
+                             written["jars"])
+            first = lock_path.read_bytes()
+            (root / "work2").mkdir()
+            builder.resolve_classpath_tree(Path("cs"), self.COMPONENT, root / "work2", update_lock=True,
+                                           lock_dir=root, run=run)
+            self.assertEqual(first, lock_path.read_bytes(), "the regeneration must be idempotent")
+            self.assertEqual([], list(root.glob("*.tmp")), "no temporary file is left beside the lock")
+
+    def test_a_forced_module_resolved_at_another_version_leaves_the_lock_untouched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock_path = self.write_lock(root, {"tool-1.jar": b"tool", "guava-33.7.2-jre.jar": b"x"}, [self.FORCED])
+            before = lock_path.read_bytes()
+            run = self.fake_coursier(("tool", "1", b"tool"), ("guava", "33.6.0-jre", b"old guava"))
+            (root / "work").mkdir()
+            with self.assertRaisesRegex(builder.BuildError, "forced module com.example:guava was not resolved at 33.7.2-jre"):
+                builder.resolve_classpath_tree(Path("cs"), self.COMPONENT, root / "work", update_lock=True,
+                                               lock_dir=root, run=run)
+            self.assertEqual(before, lock_path.read_bytes())
+
+    def test_the_command_line_offers_the_regeneration_option(self):
+        self.assertIn("--update-classpath-lock", builder.argument_parser().format_help())
 
     def test_a_coursier_fetch_component_without_a_lock_name_is_refused(self):
         with self.assertRaisesRegex(builder.BuildError, "must name its lock file"):

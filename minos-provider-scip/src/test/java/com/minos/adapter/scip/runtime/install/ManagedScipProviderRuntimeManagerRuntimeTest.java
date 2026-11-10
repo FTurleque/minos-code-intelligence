@@ -132,11 +132,14 @@ class ManagedScipProviderRuntimeManagerRuntimeTest {
     }
 
     @Test
-    void theFetchCommandOnlyResolvesTheClasspath() {
+    void theFetchCommandOnlyResolvesTheClasspath() throws IOException {
         Path coursier = directory.resolve("cs");
+        ClasspathLock unforced = ClasspathLock.parse(new java.io.StringReader(
+                "{\"coordinate\":\"org.scip-code:scip-java:0.13.2\",\"forcedVersions\":[],\"jars\":[{\"name\":\"scip-java-0.13.2.jar\",\"size\":1,"
+                        + "\"sha256\":\"" + "0".repeat(64) + "\"}]}"));
 
         assertEquals(List.of(coursier.toString(), "fetch", "--classpath", ManagedScipProviderRuntimeManager.SCIP_JAVA_COORDINATE),
-                ScipJavaClasspathInstallation.scipJavaFetchCommand(coursier));
+                ScipJavaClasspathInstallation.scipJavaFetchCommand(coursier, unforced));
     }
 
     // ------------------------------------------------------------------ packaged resources

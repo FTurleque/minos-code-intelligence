@@ -21,10 +21,13 @@ class ManagedScipProviderRuntimeManagerTest {
     Path temporaryDirectory;
 
     @Test
-    void fetchesPinnedScipJavaWithoutLaunchingIt() {
+    void fetchesPinnedScipJavaWithoutLaunchingIt() throws IOException {
         Path coursier = temporaryDirectory.resolve("cs.exe");
+        ClasspathLock unforced = ClasspathLock.parse(new java.io.StringReader(
+                "{\"coordinate\":\"org.scip-code:scip-java:0.13.2\",\"jars\":[{\"name\":\"scip-java-0.13.2.jar\",\"size\":1,\"sha256\":\""
+                        + "0".repeat(64) + "\"}]}"));
 
-        List<String> command = ScipJavaClasspathInstallation.scipJavaFetchCommand(coursier);
+        List<String> command = ScipJavaClasspathInstallation.scipJavaFetchCommand(coursier, unforced);
 
         // Resolution only: scip-java is never launched, and nothing runs before the jars are verified.
         assertEquals(List.of(coursier.toString(), "fetch", "--classpath", "org.scip-code:scip-java:0.13.2"), command);

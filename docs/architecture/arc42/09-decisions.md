@@ -51,6 +51,7 @@
 | [SEC-0075](../adr/SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md) | Le runtime Docker n'expose que les projets inscrits | Accepted | 2026-11-01 | — |
 | [SEC-0076](../adr/SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md) | scip-java sous Linux : dépôt Maven désigné en lecture seule, Maven hors ligne, réseau fermé | Accepted | 2026-10-31 | Complète SEC-0074 |
 | [SEC-0079](../adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md) | Indexation Java depuis Windows par WSL2 : indexation locale, providers routés de l'orchestration unique, artefact v3 vérifié | Accepted | 2026-11-07 | Complète SEC-0074 |
+| [SEC-0080](../adr/SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md) | Forçage nominatif d'une dépendance du verrou de scip-java | Proposed | 2026-11-10 | Complète BE-0065 |
 
 ## ADR archivés
 
