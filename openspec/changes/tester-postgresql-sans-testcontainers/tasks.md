@@ -1,7 +1,8 @@
 # Tasks
 
-Toutes les tâches portent AUD-DEP-14 / R-27. Prérequis : décisions D2, D3 et colonne (questions ouvertes du design)
-tranchées par le propriétaire ; si D2 retient `services:`, réécrire le groupe 4 avant de l'entamer.
+Toutes les tâches portent AUD-DEP-14 / R-27. Décisions D2 (étape `docker run`), D3 (repli sur des variables
+d'environnement) et colonne tranchées par le propriétaire le 2026-11-10 (questions ouvertes du design). Le contrat de
+`PostgresTestSupport` pour ses sous-classes reste inchangé ; les dossiers de capacité sont mis à jour à l'archivage.
 
 ## 1. Script local de démarrage
 
@@ -16,7 +17,7 @@ tranchées par le propriétaire ; si D2 retient `services:`, réécrire le group
 - [ ] 2.2 AUD-DEP-14/R-27 — Correction : réécrire `PostgresTestSupport` (paramètres de D1/D3, base `minos_t_<aléa>` créée au `@BeforeAll` et supprimée `WITH (FORCE)` au `@AfterAll`, `createFreshDatabase`/`createFactoryForDatabase` conservés) ; retirer `pinnedPostgresImage` ; remplacer le littéral `test-secret` de `PostgresTestPools` par le mot de passe du harnais ; vérifier 2.1 vert, puis les 33 classes contre le serveur du script (`./mvnw -B -ntp -pl minos-storage -am test "-Dminos.postgresql.tests.required=true"` + propriétés), deux fois avec `-Dsurefire.runOrder=alphabetical` puis `reversealphabetical`, et `psql -l` sans base `minos_t_` restante ; `grep -rn "test-secret" minos-storage/src .github/workflows scripts` vide. Mettre à jour les littéraux de `scripts/docs/check-current-docs.py:146-155` et le rejouer ; rejouer `check-jacoco.py` (scope `m30-postgresql-pgvector`). Couvre persistance-snapshots › Les tests PostgreSQL utilisent un serveur fourni de l'extérieur ; › Chaque classe de test PostgreSQL travaille dans sa propre base ; › Le mot de passe du serveur de test de la CI est généré par le job.
 - [ ] 2.3 AUD-DEP-14/R-27 — Correction : supprimer `PrePulledImagesOnlyPullPolicy` et `PrePulledImagesOnlyPullPolicyTest` ; retirer `testcontainers.version` et le BOM du `pom.xml` racine (et la mention du commentaire `pom.xml:462`), les trois dépendances et le profil `windows-docker-desktop-testcontainers` de `minos-storage/pom.xml` et `minos-bootstrap/pom.xml` (commentaire `minos-bootstrap/pom.xml:64-67` corrigé) ; retirer le groupe `testcontainers` de `.github/dependabot.yml` ; vérifier `grep -rl "org.testcontainers" --include=*.java .` vide (hors la garde de `ShadedJarCompositionRootIT`, qui reste) ; rejouer `python scripts/architecture/check-module-boundaries.py` (couvre frontieres-de-modules › Les règles de mise en page de build valent aussi dans un profil) et `check-current-docs.py`.
 - [ ] 2.4 AUD-DEP-14/R-27 — Preuve : `./mvnw -B -ntp dependency:tree` filtré sur `org.testcontainers` et `com.github.docker-java` → aucune ligne (sortie jointe au commit) ; `./mvnw -B -ntp -pl minos-storage -am verify` contre le conteneur du script, vert. Couvre persistance-snapshots › L'arbre de dépendances ne contient ni Testcontainers ni docker-java ; › Les résultats des requêtes sont inchangés.
-- [ ] 2.5 AUD-DEP-14/R-27 — Documentation : section « Tests PostgreSQL » de `docs/developer/testing.md` (script, propriétés, mode requis, saut compté) ; `docs/architecture/diagrams/capacites/persistance-snapshots.md:215-216` (nouvelles exigences dans la traçabilité, séquence « classe » du design reportée) et `recherche-semantique.md:103` ; vérifier `python scripts/docs/check-capability-dossiers.py`.
+- [ ] 2.5 AUD-DEP-14/R-27 — Documentation : section « Tests PostgreSQL » de `docs/developer/testing.md` (script, propriétés, mode requis, saut compté) ; les dossiers de capacité `persistance-snapshots.md:215-216` et `recherche-semantique.md:103` sont reportés à l'archivage (décision du propriétaire, tâche 6.2) ; vérifier `python scripts/docs/check-capability-dossiers.py`.
 
 ## 3. Gates
 
@@ -26,7 +27,7 @@ tranchées par le propriétaire ; si D2 retient `services:`, réécrire le group
 ## 4. Workflows
 
 - [ ] 4.1 AUD-DEP-14/R-27 — Correction `pr-ci.yml` `verify` : retirer `TESTCONTAINERS_*` de `env:` ; remplacer « List the Testcontainers images » par une étape Linux `bash scripts/dev/start-test-postgres.sh --print-image` ; renommer l'étape de tirage « Pull the PostgreSQL test image, then log out of Docker Hub » (contenu inchangé : aucun code du dépôt) ; ajouter après la déconnexion « Start the PostgreSQL test server » (`--github-env`) ; passer URL et utilisateur en `-D` au `verify` Linux, `-Dminos.postgresql.tests.required=true` gardé ; Windows inchangé. Vérifier `yaml.safe_load`, `check-workflow-pins.py`, `check-single-execution.py`, `check-ci-wiring.py`, `check-current-docs.py` verts.
-- [ ] 4.2 AUD-DEP-14/R-27 — Correction `code-audit.yml` `mutation` : mêmes retraits et mêmes étapes ; le conteneur démarre quel que soit `mutation_module` ; le mot de passe atteint les JVM de PIT par l'environnement (D3). Vérifier les mêmes gates.
+- [ ] 4.2 AUD-DEP-14/R-27 — Correction `code-audit.yml` `mutation` : mêmes retraits et mêmes étapes ; le conteneur démarre quel que soit `mutation_module` ; URL, utilisateur et mot de passe atteignent les JVM de PIT par l'environnement (D3 : `pitest-maven` ne transmet pas les propriétés utilisateur de Maven à ses minions). Vérifier les mêmes gates.
 - [ ] 4.3 AUD-DEP-14/R-27 — Commentaires : retirer la mention de Testcontainers de `docker-upgrade-qualification.yml:46` et `release-promotion-gate.yml:54` ; rejouer `check-workflow-pins.py`.
 - [ ] 4.4 AUD-DEP-14/R-27 — Preuve **(manuelle, runner)** : run `Verify (ubuntu-24.04)` vert avec les tests PostgreSQL exécutés (décompte Surefire non sauté), mot de passe masqué dans le journal ; run `Verify (windows-2022)` vert, tests PostgreSQL comptés sautés, `check-jacoco.py --skip-scope m30-postgresql-pgvector` vert. Couvre persistance-snapshots › Sans mode requis, l'absence de serveur saute les tests et les compte (Job Windows).
 - [ ] 4.5 AUD-DEP-14/R-27 — Preuve **(manuelle, runner)** : run `code-audit.yml` avec `run_mutation` sur `minos-storage`, PIT mute du code couvert par les tests PostgreSQL (`audit-report-summary.py pit`).
@@ -40,7 +41,7 @@ tranchées par le propriétaire ; si D2 retient `services:`, réécrire le group
 ## 6. Clôture
 
 - [ ] 6.1 Rejouer `python .claude/scripts/run_gates.py` et `./mvnw -B -ntp -pl minos-storage -am verify` contre le conteneur du script ; mettre à jour la matrice de traçabilité du design (exigence → scénario → conception → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 6.2 Mettre à jour les dossiers durables `persistance-snapshots.md` et `frontieres-de-modules.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [ ] 6.2 **(manuelle, à l'archivage)** Mettre à jour les dossiers durables `persistance-snapshots.md` (dont `:215-216` et la séquence « classe » du design), `recherche-semantique.md:103` et `frontieres-de-modules.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 - [ ] 6.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`.
 - [ ] 6.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP:156, docs/developer, arc42, fichiers partagés de 5.2) ; vérifier que chacun est fait ou nommé comme reste ; rejouer `check-current-docs.py` et `product-facts.py --check`.
 

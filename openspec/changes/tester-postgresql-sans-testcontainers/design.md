@@ -4,8 +4,11 @@
 
 Motivation : voir `proposal.md` (Why). Le changement est d'outillage de test et de CI : aucune classe de production,
 aucune surface publique. Il touche les tests de `minos-storage` (`com.minos.storage.postgresql`), trois POM (racine,
-`minos-storage`, `minos-bootstrap`), deux workflows (`pr-ci.yml`, `code-audit.yml`), deux gates
-(`check-image-pins.py`, `check-workflow-pins.py`) et ajoute un script local en deux variantes (`scripts/dev/`).
+`minos-storage`, `minos-bootstrap`), deux workflows (`pr-ci.yml`, `code-audit.yml`) et les commentaires de deux autres
+(`docker-upgrade-qualification.yml`, `release-promotion-gate.yml`), trois gates (`check-image-pins.py`,
+`check-workflow-pins.py`, `scripts/docs/check-current-docs.py`) et leurs auto-tests, `.github/dependabot.yml`, et
+ajoute un script local en deux variantes (`scripts/dev/`) avec son auto-test câblé dans le job `invariants`.
+Colonne arrêtée par le propriétaire le 2026-11-10 (questions ouvertes tranchées, voir « Décisions »).
 Plateformes : Linux exécute les tests PostgreSQL ; Windows les saute, en CI comme sur un poste sans serveur.
 
 ## État vérifié au HEAD
@@ -103,8 +106,8 @@ Contrat de test (non public, non versionné) :
 
 | Paramètre | Source, par ordre | Requis | Exemple |
 |---|---|---|---|
-| URL JDBC d'administration | `-Dminos.postgresql.test.url` | oui | `jdbc:postgresql://127.0.0.1:55432/postgres` |
-| Utilisateur (droit `CREATEDB`) | `-Dminos.postgresql.test.user` | oui | `minos` |
+| URL JDBC d'administration | `-Dminos.postgresql.test.url`, sinon variable `MINOS_TEST_POSTGRES_URL` (D3) | oui | `jdbc:postgresql://127.0.0.1:55432/postgres` |
+| Utilisateur (droit `CREATEDB`) | `-Dminos.postgresql.test.user`, sinon variable `MINOS_TEST_POSTGRES_USER` (D3) | oui | `minos` |
 | Mot de passe | `-Dminos.postgresql.test.password`, sinon variable `MINOS_TEST_POSTGRES_PASSWORD` (D3) | oui | généré |
 | Mode requis | `-Dminos.postgresql.tests.required=true` | non | inchangé |
 
@@ -118,7 +121,7 @@ Script local, deux variantes de même contrat :
 | (aucune) | démarre `minos-test-postgres` sur `127.0.0.1:55432`, attend le healthcheck (60 s au plus), affiche les trois `-D` et la commande `mvnw` |
 | `--port <n>` / `-Port <n>` | autre port local |
 | `--print-image` / `-PrintImage` | affiche l'image épinglée lue dans la compose et sort (utilisé par la CI avant la connexion) |
-| `--github-env` (sh seulement) | n'affiche pas le mot de passe : écrit `::add-mask::`, puis URL, utilisateur et mot de passe dans `$GITHUB_ENV` |
+| `--github-env` (sh seulement) | n'affiche pas le mot de passe : écrit `::add-mask::`, puis `MINOS_TEST_POSTGRES_URL`, `MINOS_TEST_POSTGRES_USER` et `MINOS_TEST_POSTGRES_PASSWORD` dans `$GITHUB_ENV` |
 | `--stop` / `-Stop` | supprime le conteneur |
 
 Codes : 0 succès ; 1 image absente ou non épinglée, Docker absent, healthcheck non sain dans le délai (le conteneur
@@ -256,7 +259,10 @@ par la JVM de test (c'est ce qui tire docker-java).
 
 ### D2 — Le conteneur de CI démarre par une étape `docker run`, pas par `services:`
 
-[Proposition], écart à la décision du propriétaire. Raisons, vérifiées :
+[Décision] (propriétaire, 2026-11-10, sur cette proposition). L'étape appelle `scripts/dev/start-test-postgres.sh` :
+image épinglée lue dans la compose et tirée avant `docker logout`, mot de passe généré et masqué (`::add-mask::`) puis
+transmis par `$GITHUB_ENV`, conteneur lié à `127.0.0.1` avec healthcheck, mot de passe jamais dans les arguments de
+`docker` ni de `mvnw`. Raisons, vérifiées :
 1. `services:` est évalué avant toute étape : son `env.POSTGRES_PASSWORD` ne peut venir que d'un secret ou d'une
    expression ; GitHub n'offre aucune fonction aléatoire, et `github.run_id` est public. Un secret n'est pas « généré
    par le job » et il est vide sur une PR de fork et sur une PR Dependabot (secrets Dependabot distincts) : le
@@ -266,17 +272,18 @@ par la JVM de test (c'est ce qui tire docker-java).
 3. `verify` est une matrice avec Windows, où les conteneurs de service ne sont pas pris en charge.
 4. Le tirage d'un service a lieu avant les étapes, donc hors du couple connexion/déconnexion Docker Hub qu'impose
    AUD-DEP-13 (il faudrait `credentials:`, sans déconnexion possible).
-Variante si le propriétaire maintient `services:` : `POSTGRES_PASSWORD: ${{ secrets.MINOS_TEST_POSTGRES_PASSWORD }}`
-(secret créé à la main, aussi pour Dependabot), image écrite dans le workflow avec une exception dans
-`check-image-pins.py`, job Linux séparé de la matrice. Elle ne tient pas « mot de passe généré ».
+Variante écartée : `services:` avec `POSTGRES_PASSWORD: ${{ secrets.MINOS_TEST_POSTGRES_PASSWORD }}` (secret créé à
+la main), image écrite dans le workflow, job Linux séparé de la matrice ; elle ne tient pas « mot de passe généré ».
 
-### D3 — Mot de passe : propriété système, avec repli sur `MINOS_TEST_POSTGRES_PASSWORD`
+### D3 — Paramètres : propriété système, avec repli sur une variable d'environnement
 
-[Proposition]. Un `-Dminos.postgresql.test.password=…` sur la ligne de `mvnw` est visible dans la liste des processus
-du runner, et rien ne garantit qu'il atteigne les JVM filles de PIT ([Question] non vérifiée au HEAD : la
-propagation des propriétés utilisateur de Maven aux processus « minion » de `pitest-maven` ; ces processus héritent en
-revanche de l'environnement, ce que la tâche 4.5 prouve). La CI fournit donc URL et utilisateur en
-propriétés et le mot de passe en variable d'environnement ; la propriété reste prioritaire pour un usage local.
+[Décision] (propriétaire, 2026-11-10) pour le mot de passe : propriété `minos.postgresql.test.password`, sinon variable
+`MINOS_TEST_POSTGRES_PASSWORD` ; la CI passe par la variable. Un `-D…password=…` sur la ligne de `mvnw` serait visible
+dans la liste des processus du runner. Adaptation vérifiée au HEAD pour PIT : `pitest-maven` ne transmet à ses JVM
+« minion » que ses `jvmArgs` (`pom.xml:355-362`), pas les propriétés utilisateur de Maven ; ces JVM héritent en revanche
+de l'environnement du processus Maven. URL et utilisateur ont donc le même repli (`MINOS_TEST_POSTGRES_URL`,
+`MINOS_TEST_POSTGRES_USER`) : le job `mutation` ne passe que par l'environnement, le job `verify` passe en plus URL et
+utilisateur en `-D`. La propriété reste prioritaire pour un usage local. Preuve sur runner : tâche 4.5.
 
 ### D4 — Une base par classe
 
@@ -286,7 +293,7 @@ propriétés et le mot de passe en variable d'environnement ; la propriété res
 
 ### D5 — Script local en `scripts/dev/`, réutilisé par la CI
 
-[Décision] (propriétaire pour le chemin) ; [Proposition] pour la réutilisation par la CI (une seule façon de démarrer
+[Décision] (propriétaire pour le chemin et pour la réutilisation par la CI, 2026-11-10 : une seule façon de démarrer
 le conteneur). L'image est lue dans la compose par le script (source unique) ; `--print-image` remplace
 `check-image-pins.py --testcontainers-images`.
 
@@ -378,12 +385,17 @@ deux variables ci-dessus » ; remplacer le bloc « Vérifier la liste sans la CI
 
 ## Questions ouvertes
 
-Décisions du propriétaire attendues avant l'implémentation (elles ne changent pas les specs, seulement les tâches 4.x
-et 2.2) :
-1. D2 — `docker run` dans une étape (recommandé) ou `services:` avec un secret créé à la main.
-2. D3 — repli du mot de passe sur `MINOS_TEST_POSTGRES_PASSWORD` (recommandé) ou propriété système seule (et alors
-   `jvmArgs` explicites pour PIT, mot de passe dans l'argv).
-3. Colonne du changement : ajouter `minos-storage/pom.xml`, `minos-bootstrap/pom.xml`, `scripts/docs/check-current-docs.py`,
-   `.github/dependabot.yml`, `docs/developer/testing.md` (recommandé : oui, ils sont indissociables du retrait).
+Tranchées par le propriétaire le 2026-11-10 :
+1. D2 — étape `docker run` par `scripts/dev/start-test-postgres.sh` (pas `services:`).
+2. D3 — propriété système avec repli sur une variable d'environnement ; la CI passe par la variable (étendu à URL et
+   utilisateur pour PIT, voir D3).
+3. Colonne : `minos-storage/pom.xml`, `minos-bootstrap/pom.xml`, `scripts/docs/check-current-docs.py` et son auto-test,
+   `.github/dependabot.yml`, `docs/developer/testing.md`, job `invariants` de `pr-ci.yml` et
+   `scripts/dev/test_start_test_postgres.py`, commentaires de `docker-upgrade-qualification.yml` et
+   `release-promotion-gate.yml`, documentation de « Documentation durable à mettre à jour » (hors dossiers de capacité).
+4. Contrat de `PostgresTestSupport` pour ses sous-classes inchangé (méthodes et champ protégés conservés) : un
+   changement parallèle ajoute des sous-classes qui n'utilisent que cette API.
+5. Dossiers de capacité `docs/architecture/diagrams/capacites/*.md` : mis à jour à l'archivage, pas pendant
+   l'implémentation (tâches 2.5 et 6.2).
 
 Non bloquante : rendre l'état de `PostgresTestSupport` indépendant du statique si un parallélisme Surefire arrive.

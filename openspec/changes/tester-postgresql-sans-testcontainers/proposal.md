@@ -81,8 +81,8 @@ ou se sautent) ; `chaine-de-livraison` porte ce que les livrables redistribuent 
 | 33 classes, toutes dans `minos-storage`, étendent `PostgresTestSupport` | [Existant vérifié] | `grep -rl "extends PostgresTestSupport"` |
 | `minos-bootstrap` déclare Testcontainers sans aucun test qui l'utilise | [Existant vérifié] | `minos-bootstrap/pom.xml:75-89` ; aucun `PostgresTestSupport` ni `org.testcontainers` sous `minos-bootstrap/src` |
 | Un `services:` GitHub ne peut pas porter l'image (seconde source refusée) ni un mot de passe généré par le job | [Existant vérifié] / [Décision proposée] | `scripts/quality/check-image-pins.py:11-13,169` ; voir design D2 |
-| Démarrage du conteneur CI par une étape `docker run` au lieu de `services:` | [Proposition] | design D2 ; écart à la décision du propriétaire |
-| Mot de passe lu en propriété système, avec repli sur une variable d'environnement | [Proposition] | design D3 |
+| Démarrage du conteneur CI par une étape `docker run` au lieu de `services:` | [Décision] (propriétaire, 2026-11-10) | design D2 |
+| Paramètres lus en propriété système, avec repli sur une variable d'environnement (la CI passe le mot de passe par la variable) | [Décision] (propriétaire, 2026-11-10) | design D3 |
 | Une base par classe de test | [Décision] (propriétaire), forme retenue en design D4 | demande du propriétaire |
 
 ## Impact
@@ -101,6 +101,5 @@ ou se sautent) ; `chaine-de-livraison` porte ce que les livrables redistribuent 
 
 ## Questions ouvertes
 
-Bloquantes pour l'implémentation (pas pour la spécification) : D2 (`docker run` au lieu de `services:`) et D3 (repli
-du mot de passe sur une variable d'environnement) s'écartent de la lettre des décisions du propriétaire ; voir
-`design.md`, « Questions ouvertes ».
+Aucune : D2, D3 et la colonne du changement ont été tranchés par le propriétaire le 2026-11-10 (voir `design.md`,
+« Questions ouvertes »).
