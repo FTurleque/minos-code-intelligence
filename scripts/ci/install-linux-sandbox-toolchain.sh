@@ -32,7 +32,7 @@
 set -euo pipefail
 
 PACKAGES=(bubblewrap util-linux apparmor apparmor-profiles)
-PACKAGED_JDK_PACKAGE='openjdk-21-jre-headless=21.0.12.1+1-1~24.04.4'
+PACKAGED_JDK_PACKAGE='openjdk-21-jre-headless=21.0.13.0.3+1-1~24.04.1'
 PACKAGED_JDK_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 with_packaged_jdk=false
 if [ "${1:-}" = '--with-packaged-jdk' ]; then

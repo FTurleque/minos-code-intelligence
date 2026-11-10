@@ -108,10 +108,18 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: IntelliJ unit/build/structure gates
+      # The Windows process-tree tests run alone, as in the Windows job of intellij-plugin.yml: in the same Gradle
+      # invocation as buildPlugin, the configuration cache runs them beside buildSearchableOptions, which starts a
+      # whole IDE instance, and the platform process-tree termination they exercise fails under that load.
+      - name: IntelliJ unit tests
         working-directory: minos-intellij
         shell: pwsh
-        run: ./gradlew.bat --no-daemon test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
+        run: ./gradlew.bat --no-daemon test
+
+      - name: IntelliJ build/structure gates
+        working-directory: minos-intellij
+        shell: pwsh
+        run: ./gradlew.bat --no-daemon buildPlugin verifyPluginProjectConfiguration verifyPluginStructure
 
       - name: IntelliJ Plugin Verifier
         working-directory: minos-intellij
