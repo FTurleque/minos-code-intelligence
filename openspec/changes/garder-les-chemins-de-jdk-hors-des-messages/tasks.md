@@ -17,7 +17,7 @@ dans la colonne ; dossiers de capacité à l'archivage.
 
 ## 3. Documentation du gate
 
-- [ ] 3.1 AUD-SEC-04 — Documentation : mettre à jour la règle `message(Path)` de `docs/developer/quality-gates.md:135` (suffixe `Home`, formes chaînées, `Optional.of`, limites restantes). Vérifier : `python -I scripts/docs/check-current-docs.py` et liens relatifs du fichier sans erreur.
+- [x] 3.1 AUD-SEC-04 — Documentation : mettre à jour la règle `message(Path)` de `docs/developer/quality-gates.md:135` (suffixe `Home`, formes chaînées, `Optional.of`, limites restantes). Vérifier : `python -I scripts/docs/check-current-docs.py` et liens relatifs du fichier sans erreur.
 
 ## 4. Clôture
 
