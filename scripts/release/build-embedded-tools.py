@@ -180,40 +180,104 @@ def npm_components(lock: Path) -> list[dict]:
 
 # ---------------------------------------------------------------- coursier-fetch (scip-java)
 
+REGENERATE = "regenerate the lock with --update-classpath-lock after reviewing the change"
+FORCED_MODULE = re.compile(r"[^\s:]+:[^\s:]+")
+
+
 def verify_classpath_lock(tree: Path, lock: dict) -> None:
     """The resolved jars must be exactly the pinned ones: same names, sizes and SHA-256 (the lock is the single
     description the installation on a user's machine checks against, so the shipped payload cannot differ)."""
     expected = {jar["name"]: (jar["size"], jar["sha256"]) for jar in lock["jars"]}
     found = {jar.name: (jar.stat().st_size, sha256_of(jar)) for jar in tree.glob("*.jar")}
     for name in sorted(set(found) - set(expected)):
-        raise BuildError(f"the resolved classpath has a jar the lock does not pin: {name}")
+        raise BuildError(f"the resolved classpath has a jar the lock does not pin: {name}; {REGENERATE}")
     for name in sorted(set(expected) - set(found)):
-        raise BuildError(f"the resolved classpath lacks the pinned jar {name}")
+        raise BuildError(f"the resolved classpath lacks the pinned jar {name}; {REGENERATE}")
     for name in sorted(expected):
         if expected[name] != found[name]:
-            raise BuildError(f"the resolved jar {name} does not match its pinned size and SHA-256; "
-                             f"regenerate the lock with --update-classpath-lock after reviewing the change")
+            raise BuildError(f"the resolved jar {name} does not match its pinned size and SHA-256; {REGENERATE}")
 
 
-def load_classpath_lock(component: dict, lock_dir: Path | None = None) -> dict:
+def lock_path(component: dict, lock_dir: Path | None = None) -> Path:
     base = lock_dir if lock_dir is not None else CATALOG.parent
     name = component.get("lock")
     if not name:
         raise BuildError(f"{component['id']}: a coursier-fetch component must name its lock file")
-    return json.loads((base / name).read_text(encoding="utf-8"))
+    return base / name
 
 
-def build_classpath_tree(component: dict, coursier_zip: Path, work: Path) -> tuple[Path, list[dict]]:
+def load_classpath_lock(component: dict, lock_dir: Path | None = None) -> dict:
+    return json.loads(lock_path(component, lock_dir).read_text(encoding="utf-8"))
+
+
+def forced_versions(lock: dict) -> list[tuple[str, str]]:
+    """The (module, version) pairs the lock forces (ADR SEC-0080), in the lock's order; a malformed entry fails."""
+    forced = lock.get("forcedVersions", [])
+    if not isinstance(forced, list):
+        raise BuildError("the forcedVersions of the classpath lock must be a list")
+    pairs = []
+    for entry in forced:
+        module = entry.get("module") if isinstance(entry, dict) else None
+        version = entry.get("version") if isinstance(entry, dict) else None
+        if (not isinstance(module, str) or FORCED_MODULE.fullmatch(module) is None
+                or not isinstance(version, str) or not version.strip() or any(c.isspace() for c in version)):
+            raise BuildError(f"the classpath lock has a malformed forced version: {entry!r}")
+        pairs.append((module, version))
+    return pairs
+
+
+def classpath_fetch_command(launcher: str, coordinate: str, lock: dict) -> list[str]:
+    """``fetch --classpath``, one ``--force-version module:version`` per forced entry of the lock, then the
+    coordinate: the same arguments as the installation on a user's machine (ScipJavaClasspathInstallation)."""
+    command = [launcher, "fetch", "--classpath"]
+    for module, version in forced_versions(lock):
+        command += ["--force-version", f"{module}:{version}"]
+    return command + [coordinate]
+
+
+def write_classpath_lock(path: Path, lock: dict, tree: Path) -> None:
+    """Rewrites the lock from the resolved jars (sorted by name, size and SHA-256 recomputed), keeping its
+    coordinate, version and forced versions. A forced module that was not resolved at its version fails and the
+    lock is left as it was; the new lock replaces the old one atomically."""
+    jars = sorted(tree.glob("*.jar"), key=lambda jar: jar.name)
+    names = {jar.name for jar in jars}
+    for module, version in forced_versions(lock):
+        if f"{module.split(':')[1]}-{version}.jar" not in names:
+            raise BuildError(f"the forced module {module} was not resolved at {version}")
+    lines = ["{", f'  "coordinate": {json.dumps(lock["coordinate"])},', f'  "version": {json.dumps(lock["version"])},']
+    if lock.get("forcedVersions"):
+        lines.append('  "forcedVersions": [')
+        lines.append(",\n".join(f"    {json.dumps(entry)}" for entry in lock["forcedVersions"]))
+        lines.append("  ],")
+    lines.append('  "jars": [')
+    lines.append(",\n".join(
+        f"    {json.dumps({'name': jar.name, 'size': jar.stat().st_size, 'sha256': sha256_of(jar)})}" for jar in jars))
+    lines += ["  ]", "}"]
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    os.replace(temporary, path)
+
+
+def build_classpath_tree(component: dict, coursier_zip: Path, work: Path,
+                         update_lock: bool = False) -> tuple[Path, list[dict]]:
     cs_home = work / "cs"
     extract(coursier_zip, cs_home)
     launchers = [path for path in cs_home.rglob("*") if path.suffix.lower() == ".exe" or path.name == "cs"]
     if len(launchers) != 1:
         raise BuildError("the pinned Coursier archive must contain exactly one launcher")
+    return resolve_classpath_tree(launchers[0], component, work, update_lock=update_lock)
+
+
+def resolve_classpath_tree(launcher: Path, component: dict, work: Path, update_lock: bool = False,
+                           lock_dir: Path | None = None, run=subprocess.run) -> tuple[Path, list[dict]]:
+    """Resolves the classpath with the forced versions of the lock, then checks it against the lock, or rewrites
+    the lock first with ``update_lock``."""
+    lock = load_classpath_lock(component, lock_dir)
+    command = classpath_fetch_command(str(launcher), component["coordinate"], lock)
     cache = work / "cache"
     cache.mkdir()
     env = dict(os.environ, COURSIER_CACHE=str(cache))
-    result = subprocess.run([str(launchers[0]), "fetch", "--classpath", component["coordinate"]],
-                            cwd=work, env=env, capture_output=True, text=True)
+    result = run(command, cwd=work, env=env, capture_output=True, text=True)
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     if result.returncode != 0 or not lines:
         raise BuildError(f"coursier fetch failed: {result.stderr.strip()[-400:]}")
@@ -230,7 +294,9 @@ def build_classpath_tree(component: dict, coursier_zip: Path, work: Path) -> tup
         shutil.copyfile(jar, tree / jar.name)
         names.append(jar.name)
         components.append(maven_component(jar, cache))
-    verify_classpath_lock(tree, load_classpath_lock(component))
+    if update_lock:
+        write_classpath_lock(lock_path(component, lock_dir), lock, tree)
+    verify_classpath_lock(tree, load_classpath_lock(component, lock_dir))
     (tree / "classpath.txt").write_text("\n".join(names) + "\n", encoding="utf-8", newline="\n")
     return tree, components
 
@@ -277,7 +343,7 @@ RECIPES = {"npm-ci": "nodejs", "coursier-fetch": "coursier"}
 
 
 def build(catalog: dict, platform: str, output: Path, cache: Path, fetch: Fetch = download,
-          sbom: Path | None = None) -> dict:
+          sbom: Path | None = None, update_classpath_lock: bool = False) -> dict:
     entries = [dict(kind="artifact", **a) for a in catalog["artifacts"]
                if a.get("embedded") and a["platform"] in (platform, "any")]
     entries += [dict(kind="assembled", **a) for a in catalog["assembled"]
@@ -309,7 +375,7 @@ def build(catalog: dict, platform: str, output: Path, cache: Path, fetch: Fetch 
             if entry["recipe"] == "npm-ci":
                 tree, tree_components = build_npm_tree(entry, pinned[needed], work)
             else:
-                tree, tree_components = build_classpath_tree(entry, pinned[needed], work)
+                tree, tree_components = build_classpath_tree(entry, pinned[needed], work, update_classpath_lock)
             target = output / entry["payload"]
             zip_tree(tree, target)
         components.append(artifact_component({**entry, "url": f"recipe:{entry['recipe']}"}))
@@ -339,16 +405,24 @@ def extend_sbom(sbom: Path, components: list[dict]) -> None:
     sbom.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
 
 
-def main(argv: list[str] | None = None) -> int:
+def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--platform", default="windows-x64")
     parser.add_argument("--output", required=True, type=Path, help="the tools directory of the distribution")
     parser.add_argument("--cache", type=Path, default=ROOT / "target" / "tools-cache")
     parser.add_argument("--sbom", type=Path, default=None, help="CycloneDX SBOM to extend with the embedded components")
-    args = parser.parse_args(argv)
+    parser.add_argument("--update-classpath-lock", action="store_true",
+                        help="rewrite the scip-java classpath lock from the resolution (forced versions kept) "
+                             "instead of comparing with it; review the diff jar by jar before committing it")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = argument_parser().parse_args(argv)
     try:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
-        manifest = build(catalog, args.platform, args.output.resolve(), args.cache.resolve(), sbom=args.sbom)
+        manifest = build(catalog, args.platform, args.output.resolve(), args.cache.resolve(), sbom=args.sbom,
+                         update_classpath_lock=args.update_classpath_lock)
     except (BuildError, OSError, subprocess.SubprocessError, json.JSONDecodeError) as failure:
         print(f"EMBEDDED TOOLS BUILD FAILED: {failure}", file=sys.stderr)
         return 1
