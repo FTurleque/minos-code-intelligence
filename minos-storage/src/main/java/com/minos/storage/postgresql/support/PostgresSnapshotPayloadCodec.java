@@ -39,6 +39,11 @@ public final class PostgresSnapshotPayloadCodec {
         return KnowledgeSnapshotCodecs.formatVersionOf(payload, limits);
     }
 
+    /** Format version declared by the first eight bytes of a payload, or {@code -1} when they are no snapshot header. */
+    public int formatVersionOfHeader(byte[] header) {
+        return KnowledgeSnapshotCodecs.formatVersionOfHeader(header);
+    }
+
     public CodeKnowledgeSnapshot decode(Path payload) throws IOException {
         return KnowledgeSnapshotCodecs.read(payload, limits);
     }
