@@ -7,7 +7,7 @@ rules: false
 
 # Forçage nominatif d'une dépendance du verrou de scip-java
 
-- **Statut** : Proposed
+- **Statut** : Accepted (décision du propriétaire du 2026-11-11 ; indexation Java réelle sous le bac à sable Linux avec guava forcé : `Verify (ubuntu-24.04)`, run 42868644914)
 - **Date** : 2026-11-10
 - **Origine** : changement OpenSpec `forcer-guava-dans-le-classpath-de-scip-java` (risque R-29, constat d'audit AUD-DEP-03) ; décisions du propriétaire du 2026-11-10
 - **Remplace** : —

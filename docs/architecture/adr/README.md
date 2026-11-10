@@ -83,7 +83,7 @@ Chaque ADR suit le format et la convention Archgate ([GEN-0073](GEN-0073-tenir-l
 | [SEC-0075](SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md) | Le runtime Docker n'expose que les projets inscrits | Accepted | Décision du propriétaire, 2026-11-01 |
 | [SEC-0076](SEC-0076-depot-maven-designe-en-lecture-seule-et-maven-hors-ligne.md) | scip-java sous Linux : dépôt Maven désigné en lecture seule, Maven hors ligne, réseau fermé | Accepted | Décision du propriétaire, 2026-10-31 (complète SEC-0074) |
 | [SEC-0079](SEC-0079-indexation-java-depuis-windows-par-wsl2.md) | Indexation Java depuis Windows par WSL2 : indexation locale, providers routés de l'orchestration unique, artefact v3 vérifié | Accepted | Changement OpenSpec `indexer-java-depuis-windows-par-wsl2`, 2026-11-07 (complète SEC-0074) |
-| [SEC-0080](SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md) | Forçage nominatif d'une dépendance du verrou de scip-java | Proposed | Changement OpenSpec `forcer-guava-dans-le-classpath-de-scip-java`, 2026-11-10 (complète BE-0065 § 12) |
+| [SEC-0080](SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md) | Forçage nominatif d'une dépendance du verrou de scip-java | Accepted | Changement OpenSpec `forcer-guava-dans-le-classpath-de-scip-java`, 2026-11-10 (complète BE-0065 § 12) |
 
 ## Archives
 
