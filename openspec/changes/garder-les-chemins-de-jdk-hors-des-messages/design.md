@@ -59,7 +59,7 @@ Non mesuré : le build Maven et les tests Java (hors phase) ; la sortie réelle 
 | Écart | Source A | Source B | Suite proposée |
 |---|---|---|---|
 | Le test fige le chemin que la règle des sorties interdit | `ScipJavaProjectJdkTest.java:80` | `.claude/rules/securite.md` § 7, AUD-SEC-04 | Le test est réécrit dans la tâche 2.1 (rouge) |
-| Le suffixe `Home` seul ne ferme que `:90` ; `:68` reste invisible (message dans un `Optional`) | spécification du propriétaire (point 1) | critère de sortie « une mutation qui réintroduit `+ javaHome` rend le gate rouge » | D2 : lire `Optional.of(…)` ; à défaut, la mutation de `:68` n'est prouvée que par le test Java |
+| Le suffixe `Home` seul ne ferme que `:90` ; `:68` reste invisible (message dans un `Optional`) | spécification du propriétaire (point 1) | critère de sortie « une mutation qui réintroduit `+ javaHome` rend le gate rouge » | D2 retenue : le gate lit `Optional.of(…)` ; la mutation de `:68` est prouvée par le gate et par le test Java |
 | La règle `message(Path)` n'est écrite dans aucune spec de référence | `check-private-io.py:29-34`, `docs/developer/quality-gates.md:135` | `openspec/specs/` | Exigences ajoutées à `stockage-prive-et-secrets` (ce changement) ; la règle d'origine reste à spécifier ailleurs si le propriétaire le veut |
 | La spécification propose un message en français | spécification du propriétaire (point 3) | `AGENTS.md` : les messages du code suivent la langue du module (anglais dans `minos-provider-scip`) | D3 : message anglais qui nomme le rôle |
 
@@ -211,22 +211,23 @@ chaînes comme invisibles, alors qu'aucun coût mesuré ne le justifie.
 
 ### D2 — Lire `Optional.of(…)` comme un message
 
-[Proposition], hors lettre de la spécification. Sans elle, `:68` reste invisible au gate et le critère de sortie
+[Décision] (option A, retenue par le propriétaire le 10/11). Sans elle, `:68` reste invisible au gate et le critère de sortie
 « une mutation qui réintroduit `+ javaHome` rend le gate rouge » ne tient que pour `:90`. Mesure : 1 site (le
 vrai), 0 faux positif. Alternatives : (a) ne rien ajouter et prouver `:68` par le test Java seul, en écrivant
 cette limite dans la docstring ; (b) lire aussi tout `return … + x;` d'une méthode qui retourne `String`
-(non mesuré, faux positifs probables). Recommandation : D2 telle quelle.
+(non mesuré, faux positifs probables).
 
 ### D3 — Message anglais qui nomme le rôle, préfixe conservé
 
-[Décision] (règle `AGENTS.md` : messages du code dans la langue du module). Textes cibles « JAVA_HOME does not
+[Décision] (règle `AGENTS.md` : messages du code dans la langue du module ; confirmée par le propriétaire le
+10/11). Textes cibles « JAVA_HOME does not
 contain javac » et « JAVA_HOME does not point to a JDK containing javac ». Le français proposé par la spécification
 mélangerait deux langues dans un fichier anglais. `leafName` écarté : le nom de feuille d'un JDK (`jdk-21`) n'aide
 pas, et `leafName(Path)` exigerait un `Path.of` qui peut lever `InvalidPathException` sur une valeur invalide.
 
 ### D4 — Pas de journal DEBUG de la valeur
 
-[Décision]. La classe n'a pas de journal ; la valeur est dans l'environnement de l'utilisateur, qui la lit
+[Décision] (confirmée par le propriétaire le 10/11). La classe n'a pas de journal ; la valeur est dans l'environnement de l'utilisateur, qui la lit
 lui-même. Ajouter un journal pour elle ajouterait une sortie sans diagnostic nouveau.
 
 ## Qualification des capacités
@@ -248,7 +249,7 @@ lui-même. Ajouter un journal pour elle ajouterait une sortie sans diagnostic no
 
 ## Vérification
 
-- `python -I scripts/architecture/check-private-io.py` (rouge après 1.1 : 1 violation `:90`, puis 2 avec D2 ;
+- `python -I scripts/architecture/check-private-io.py` (rouge après 1.2 : 1 violation, `message(Path)` aux lignes 68 et 90 ;
   vert après 2.2) et `--inventory` (`TOTAL 0 site(s)` à la fin).
 - `python -I scripts/architecture/test_check_private_io.py` (fixtures et témoin du site réel).
 - `./mvnw -B -ntp -pl minos-provider-scip -am test` (`ScipJavaProjectJdkTest`,
@@ -259,12 +260,11 @@ lui-même. Ajouter un journal pour elle ajouterait une sortie sans diagnostic no
 
 ## Documentation durable à mettre à jour
 
-- `docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md` : trois lignes de traçabilité (exigences
-  ajoutées), exigées par `check-capability-dossiers.py` après archivage.
-- `docs/architecture/diagrams/capacites/installation-des-providers.md` : une ligne (exigence ajoutée) et la preuve
-  `ScipJavaProjectJdkTest` sur la ligne existante.
-- `docs/developer/quality-gates.md:135` : suffixes reconnus, formes chaînées, `Optional.of`.
-- Ces trois fichiers sont hors de la colonne déclarée : voir Questions ouvertes.
+- `docs/developer/quality-gates.md:135` : suffixes reconnus, formes chaînées, `Optional.of` (tâche 3.1, même PR).
+- À l'archivage : `docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md` (trois lignes de
+  traçabilité, exigences ajoutées) et `docs/architecture/diagrams/capacites/installation-des-providers.md` (une
+  ligne, exigence ajoutée, et la preuve `ScipJavaProjectJdkTest` sur la ligne existante), exigées par
+  `check-capability-dossiers.py` après archivage (tâche 4.2).
 
 ### Texte proposé pour les fichiers partagés
 
@@ -280,8 +280,6 @@ lui-même. Ajouter un journal pour elle ajouterait une sortie sans diagnostic no
 > `python -I scripts/architecture/check-private-io.py && python -I scripts/architecture/test_check_private_io.py`,
 > `ScipJavaProjectJdkTest` ; une mutation qui remet `+ javaHome` rend le gate rouge ;
 > `git grep -n "+ javaHome" -- "*.java"` vide.
-
-(Sans D2, remplacer « 2 sites » par « 1 site » et `:68` par « invisible au gate, prouvé par le test Java ».)
 
 `docs/architecture/risks/register.md` : aucun texte (le changement ne touche à aucun risque, R-28 compris).
 `docs/developer/supply-chain.md` : aucun texte.
@@ -304,17 +302,12 @@ lui-même. Ajouter un journal pour elle ajouterait une sortie sans diagnostic no
 | installation-des-providers › Le diagnostic d'un JAVA_HOME sans javac ne contient pas son chemin | Diagnostic du JDK de projet | D3, diagramme 2 | 2.1, 2.2 | à écrire (`ScipJavaProjectJdkTest`) |
 | idem | Diagnostic du runtime scip-java | D3, diagramme 2 | 2.2 | `ManagedScipProviderRuntimeManagerToolchainTest.java:204` (existant, inchangé) |
 
-## Questions ouvertes
+## Décisions du propriétaire
 
-Décisions attendues du propriétaire avant l'implémentation (elles ne changent ni les specs rédigées ni le
-découpage, sauf D2) :
+Tranchées le 10/11 :
 
-1. **D2, lecture de `Optional.of(…)`** : options (A) la retenir (1 site, 0 faux positif) ; (B) l'écarter, retirer
-   l'exigence « Le gate des messages lit un diagnostic préparé dans un Optional » et prouver `:68` par le test
-   Java seul. Recommandation : A, seule option qui tient le critère de sortie pour les deux sites.
-2. **Documents hors colonne** (`docs/developer/quality-gates.md`, les deux dossiers de capacité) : options (A)
-   les ajouter à la colonne de ce changement (tâches 3.1 et 4.2) ; (B) les laisser à la session qui archive.
-   Recommandation : A pour `quality-gates.md` (même PR que la règle) ; les dossiers après archivage, comme
-   l'exige `check-capability-dossiers.py`.
-3. **Langue du message** : la spécification propose une phrase française ; D3 retient l'anglais du module avec le
-   même sens. Recommandation : D3.
+1. **D2, lecture de `Optional.of(…)`** : option A retenue ; l'exigence « Le gate des messages lit un diagnostic
+   préparé dans un Optional » reste.
+2. **Documents hors colonne** : `docs/developer/quality-gates.md` entre dans la colonne (tâche 3.1, même PR que la
+   règle) ; les dossiers de capacité sont mis à jour à l'archivage (tâche 4.2).
+3. **Langue du message** : anglais (D3), sans journal DEBUG (D4).

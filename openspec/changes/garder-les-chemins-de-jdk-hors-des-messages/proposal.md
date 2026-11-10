@@ -76,7 +76,7 @@ Aucune : le gate et le refus du JDK de projet ont déjà leur capacité.
 | Chaînes : 0 site réel, 0 faux positif ; `Optional.of` : 1 site (`:68`), 0 faux positif | [Existant vérifié] | mesure sur copie, voir `design.md` |
 | Gate d'abord, correction par rôle ou `leafName` | [Exigence] | spécification du propriétaire, 10/11 |
 | Messages en anglais, préfixes conservés, pas de journal DEBUG | [Décision] | `design.md` D3, D4 |
-| Lecture de `Optional.of(...)` par le gate | [Proposition] | `design.md` D2 (hors lettre de la spécification) |
+| Lecture de `Optional.of(...)` par le gate | [Décision] | `design.md` D2, option A retenue par le propriétaire le 10/11 |
 
 ## Impact
 
@@ -89,11 +89,12 @@ Aucune : le gate et le refus du JDK de projet ont déjà leur capacité.
   `-pl minos-provider-scip -am`. Aucun renommage : aucun gate littéral ne cite `ScipJavaProjectJdk` (vérifié par
   `git grep -n ScipJavaProjectJdk -- scripts`).
 - **Plateformes** : Windows et Linux — aucun comportement propre ; les tests posent leur propre `JAVA_HOME`.
-- **Documentation durable et diagrammes** : dossiers `docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md`
-  et `installation-des-providers.md` (traçabilité), `docs/developer/quality-gates.md` (règle `message(Path)`).
-  Ces trois fichiers sont hors de la colonne déclarée du changement : voir `design.md`, Questions ouvertes.
+- **Documentation durable et diagrammes** : `docs/developer/quality-gates.md` (règle `message(Path)`), dans la
+  colonne du changement et la même PR. Les dossiers `docs/architecture/diagrams/capacites/stockage-prive-et-secrets.md`
+  et `installation-des-providers.md` (traçabilité) sont mis à jour à l'archivage.
 
-## Questions ouvertes
+## Décisions du propriétaire
 
-Non bloquantes pour les specs, à trancher par le propriétaire avant l'implémentation (détail et recommandation
-dans `design.md`) : la lecture de `Optional.of(...)` (D2) et la mise à jour des trois documents hors colonne.
+Tranchées le 10/11 (détail dans `design.md`) : la lecture de `Optional.of(...)` est retenue (D2, option A) ; les
+messages restent en anglais sans journal DEBUG (D3, D4) ; `docs/developer/quality-gates.md` entre dans la colonne,
+les dossiers de capacité sont mis à jour à l'archivage.
