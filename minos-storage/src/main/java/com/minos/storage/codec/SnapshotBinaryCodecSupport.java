@@ -245,6 +245,18 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
+    /**
+     * Format version declared by the first eight bytes of a snapshot payload, or {@code -1} when they are not a
+     * snapshot header (too short or another magic): the caller then estimates with the cautious amplification and
+     * the decoder refuses the payload.
+     */
+    static int headerFormatVersion(byte[] header) {
+        if (header == null || header.length < 8) return -1;
+        int magic = ((header[0] & 0xFF) << 24) | ((header[1] & 0xFF) << 16) | ((header[2] & 0xFF) << 8) | (header[3] & 0xFF);
+        if (magic != SNAPSHOT_MAGIC) return -1;
+        return ((header[4] & 0xFF) << 24) | ((header[5] & 0xFF) << 16) | ((header[6] & 0xFF) << 8) | (header[7] & 0xFF);
+    }
+
     /** Format version declared by a snapshot file's header, whatever the format, without decoding the body. */
     static int readFormatVersion(Path file, long maxPersistedBytes) throws IOException {
         requireSnapshotFileSize(file, maxPersistedBytes);

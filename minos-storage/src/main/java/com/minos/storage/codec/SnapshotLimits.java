@@ -1,5 +1,7 @@
 package com.minos.storage.codec;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.util.Locale;
 
 /**
@@ -12,6 +14,9 @@ import java.util.Locale;
  * (QueryViewWeightTest, {@code LargeSnapshotMeasurement}); the estimate is the larger of that multiple and a sum
  * over the entity counts, which carries the shapes whose heap exceeds it. Only the current format (V3) has a
  * measured factor; V1 and V2 keep the conservative one, which also bounds a string of two-byte characters.</p>
+ *
+ * <p>The ceiling of the cache is the configured one; a store applies the smaller of it and the process-wide
+ * {@link QueryViewMemoryBudget}, which also bounds the loads in progress (AUD-PERF-15).</p>
  *
  * <p>{@link #production()} holds the values every store uses; a test lowers one of them with {@code with...} to
  * exercise a ceiling without building a snapshot of the production size.</p>
@@ -34,6 +39,13 @@ public record SnapshotLimits(
     public static final long CURRENT_FORMAT_AMPLIFICATION_PERCENT = 125L;
     /** Conservative estimate kept for a format whose amplification was not measured. */
     public static final long UNMEASURED_FORMAT_AMPLIFICATION_PERCENT = 200L;
+    /**
+     * Heap the PostgreSQL driver holds while it fetches a payload, as a percentage of the payload: the text form of a
+     * {@code bytea} arrives in hexadecimal (two bytes per byte), then is decoded. A cautious value until measured.
+     */
+    public static final long POSTGRES_FETCH_AMPLIFICATION_PERCENT = 300L;
+    /** Longest wait of a view load for room in the view memory budget before it is refused. */
+    public static final Duration VIEW_ADMISSION_WAIT = Duration.ofSeconds(30);
 
     private static final long PERCENT = 100L;
     private static final long MEBIBYTE = 1024L * 1024L;
@@ -88,6 +100,26 @@ public record SnapshotLimits(
             return Long.MAX_VALUE;
         }
         return Math.ceilDiv(bytes * percent, PERCENT);
+    }
+
+    /** Heap the PostgreSQL driver holds while it fetches {@code payloadBytes}, rounded up and saturated. */
+    public long fetchTransientBytes(long payloadBytes) {
+        long bytes = Math.max(0L, payloadBytes);
+        if (bytes > Long.MAX_VALUE / POSTGRES_FETCH_AMPLIFICATION_PERCENT) {
+            return Long.MAX_VALUE;
+        }
+        return Math.ceilDiv(bytes * POSTGRES_FETCH_AMPLIFICATION_PERCENT, PERCENT);
+    }
+
+    /**
+     * Refuses a stored payload size outside {@code [1, maxPersistedBytes]} with the message of the persisted ceiling
+     * on read: sizes only, never a path.
+     */
+    public void requirePersistedSize(long payloadBytes) throws IOException {
+        if (payloadBytes < 1L || payloadBytes > maxPersistedBytes) {
+            throw new IOException("snapshot payload exceeds persisted byte limit: " + payloadBytes
+                    + "/" + maxPersistedBytes);
+        }
     }
 
     /** Estimated weight of the view of the largest persistable snapshot of the current format. */

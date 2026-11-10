@@ -3,6 +3,7 @@ package com.minos.mcp;
 import com.minos.application.MinosApplication;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.diagnostics.SnapshotMemoryExhaustedException;
 import com.minos.output.json.DeterministicJson;
 import com.minos.domain.registry.UnreadableRegistryException;
 import io.modelcontextprotocol.json.McpJsonDefaults;
@@ -197,6 +198,12 @@ public final class MinosMcpTools implements AutoCloseable {
             if (exception instanceof McpClientFailure failure) {
                 return toolError("error: " + failure.clientMessage());
             }
+            SnapshotMemoryExhaustedException memoryRefusal = memoryRefusal(exception);
+            if (memoryRefusal != null) {
+                // AUD-PERF-15: a public message (byte counts and the setting to raise, no path), as the CLI renders it.
+                return toolError("error: " + PublicErrorMessages.sanitize(
+                        memoryRefusal.getMessage(), SnapshotMemoryExhaustedException.MESSAGE_PREFIX));
+            }
             logInternalFailure(toolName, exception);
             return toolError(GENERIC_TOOL_ERROR);
         }
@@ -253,6 +260,17 @@ public final class MinosMcpTools implements AutoCloseable {
         LOGGER.log(System.Logger.Level.WARNING,
                 "MCP tool execution failed (tool=" + toolName + ", type=" + exception.getClass().getName()
                         + ", rootCause=" + rootCauseType(exception) + ")");
+    }
+
+    /** The memory refusal of a snapshot view carried by {@code failure} or one of its causes, or {@code null}. */
+    private static SnapshotMemoryExhaustedException memoryRefusal(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; depth <= MAX_CAUSE_DEPTH && current != null; depth++) {
+            if (current instanceof SnapshotMemoryExhaustedException refusal) return refusal;
+            if (current.getCause() == current) return null;
+            current = current.getCause();
+        }
+        return null;
     }
 
     private static String rootCauseType(Throwable failure) {

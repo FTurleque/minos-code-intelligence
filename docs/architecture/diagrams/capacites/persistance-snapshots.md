@@ -125,7 +125,7 @@ flowchart LR
 Les trois valeurs (plafond de persistance 400 Mio, amplifications, plafond du cache 512 Mio) viennent de `SnapshotLimits`
 (`minos-storage/src/main/java/com/minos/storage/codec/SnapshotLimits.java`), et `requireCacheCoversPersistable` impose que le plafond du
 cache couvre le plafond de persistance multiplié par l'amplification de V3. La décision est dans
-`docs/architecture/adr/DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md` (points 12 à 14).
+`docs/architecture/adr/DATA-0081-port-de-connaissance-et-persistance-des-snapshots-budget-memoire-des-vues.md` (points 12 à 14).
 
 ### Quand l'import applique-t-il la rétention, et que rend-il si elle ne tourne pas ?
 

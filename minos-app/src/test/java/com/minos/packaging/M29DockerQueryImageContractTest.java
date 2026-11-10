@@ -212,6 +212,63 @@ class M29DockerQueryImageContractTest {
                 "the qualification must first prove the data root refuses a write, or the query proves nothing");
     }
 
+    /**
+     * AUD-PERF-15 — the query plane sets the heap of its JVM as a share of its memory limit, with one value in both
+     * query images and in the {@code minos-mcp} service of both compose files; administration and jobs keep theirs.
+     */
+    @Test
+    void theQueryPlaneSetsOneMaxRamPercentageEverywhereAndOnlyThere() throws Exception {
+        Stage query = stage(stages(text("docker/Dockerfile.mcp.release")), "query");
+        Stage admin = stage(stages(text("docker/Dockerfile.mcp.release")), "admin");
+        Stage standalone = stages(text("docker/Dockerfile.mcp")).get(stages(text("docker/Dockerfile.mcp")).size() - 1);
+
+        int expected = maxRamPercentage("docker/Dockerfile.mcp", standalone.text());
+        assertEquals(expected, maxRamPercentage("docker/Dockerfile.mcp.release (query)", query.text()));
+        assertFalse(admin.text().contains("MaxRAMPercentage"), "the administration image keeps its Java options");
+        for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
+            Map<String, String> services = serviceBlocks(text(name));
+            String mcp = services.get("minos-mcp");
+            assertEquals(expected, maxRamPercentage(name + " minos-mcp", mcp));
+            assertTrue(mcp.contains("JAVA_TOOL_OPTIONS: \"-XX:MaxRAMPercentage=${MINOS_MCP_HEAP_PERCENT:-" + expected + "}\""),
+                    name + ": minos-mcp must let MINOS_MCP_HEAP_PERCENT override the share of the heap");
+            for (Map.Entry<String, String> service : services.entrySet()) {
+                if (!service.getKey().equals("minos-mcp")) {
+                    assertFalse(service.getValue().contains("MaxRAMPercentage"),
+                            name + ": " + service.getKey() + " keeps its Java options");
+                }
+            }
+        }
+    }
+
+    /** AUD-PERF-15 — under the default memory limit, the view budget holds the heaviest persistable V3 view. */
+    @Test
+    void theDefaultQueryHeapGivesAViewBudgetThatHoldsTheHeaviestPersistableView() throws Exception {
+        for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
+            String compose = text(name);
+            Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
+                    .matcher(compose);
+            assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
+            long memoryBytes = Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L;
+            int percent = maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp"));
+            long heap = memoryBytes * percent / 100L;
+            com.minos.storage.codec.QueryViewMemoryBudget budget = com.minos.storage.codec.QueryViewMemoryBudget.of(
+                    heap, com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
+                    com.minos.storage.codec.SnapshotLimits.VIEW_ADMISSION_WAIT);
+            long heaviest = com.minos.storage.codec.SnapshotLimits.production().largestPersistableViewWeightBytes();
+
+            assertTrue(budget.budgetBytes() >= heaviest,
+                    name + ": view budget " + budget.budgetBytes() + " < heaviest persistable view " + heaviest);
+        }
+    }
+
+    private static int maxRamPercentage(String where, String text) {
+        Matcher matcher = Pattern.compile("-XX:MaxRAMPercentage=(?:\\$\\{MINOS_MCP_HEAP_PERCENT:-)?(\\d+)").matcher(text);
+        assertTrue(matcher.find(), where + " must declare -XX:MaxRAMPercentage=");
+        int value = Integer.parseInt(matcher.group(1));
+        assertFalse(matcher.find(), where + " must declare -XX:MaxRAMPercentage= once");
+        return value;
+    }
+
     // --- rules -------------------------------------------------------------------------------------
 
     record Stage(String name, String base, int firstLine, List<String> lines) {

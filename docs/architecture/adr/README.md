@@ -71,7 +71,7 @@ Chaque ADR suit le format et la convention Archgate ([GEN-0073](GEN-0073-tenir-l
 | [SEC-0061](SEC-0061-deux-niveaux-de-confidentialite-pour-l-ecriture-de-fichiers-prives.md) | Écrire un fichier privé à deux niveaux de confidentialité : durci, ou hérité de la racine | Accepted |
 | [ARCH-0064](ARCH-0064-coeur-agnostique-du-langage-et-de-l-indexeur.md) | Cœur agnostique du langage et de l'indexeur, SCIP protocole privilégié | Accepted | Consolidation du registre, 2026-10-23 |
 | [BE-0065](BE-0065-providers-scip-polyglottes-livres-dans-le-paquet.md) | Providers SCIP polyglottes sous preuve, livrés dans le paquet | Accepted | Consolidation du registre, 2026-10-23 |
-| [DATA-0078](DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md) | Port de connaissance et persistance des snapshots : format V3, plafonds de taille, compatibilité, dédoublonnage | Accepted | Décision du propriétaire, 2026-11-07 |
+| [DATA-0081](DATA-0081-port-de-connaissance-et-persistance-des-snapshots-budget-memoire-des-vues.md) | Port de connaissance et persistance des snapshots : format V3, plafonds de taille, budget de mémoire des vues, compatibilité, dédoublonnage | Accepted | Décision du propriétaire, 2026-11-10 (remplace DATA-0078) |
 | [GEN-0077](GEN-0077-socle-d-execution-java-21-et-maven.md) | Socle d'exécution : Java 21, Maven par le wrapper, sans framework serveur | Accepted | Décision du propriétaire, 2026-11-06 |
 | [ARCH-0068](ARCH-0068-modules-dependances-et-propriete-des-packages.md) | Modules, dépendances et propriété des packages | Accepted | Consolidation du registre, 2026-10-23 |
 | [ARCH-0069](ARCH-0069-backends-mcp-natif-et-docker.md) | Backends MCP natif et Docker | Accepted | Consolidation du registre, 2026-10-23 |
@@ -127,6 +127,7 @@ ADR remplacés, rejetés ou reclassés (non lus par Archgate) :
 | [0063](archive/0063-ecrire-les-adr-au-format-archgate-dans-le-registre-arc42.md) | Écrire les ADR au format Archgate dans le registre arc42 | Superseded by GEN-0073 |
 | [GEN-0067](archive/GEN-0067-socle-d-execution-java-25-et-maven.md) | Socle d'exécution : Java 25, Maven par le wrapper, sans framework serveur | Superseded by GEN-0077 |
 | [DATA-0066](archive/DATA-0066-port-de-connaissance-et-persistance-des-snapshots.md) | Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage | Superseded by DATA-0078 |
+| [DATA-0078](archive/DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md) | Port de connaissance et persistance des snapshots : format V3, plafonds de taille, compatibilité, dédoublonnage | Superseded by DATA-0081 |
 | [0060](archive/0060-scip-java-windows-natif-bloque-indexation-java-par-docker.md) | scip-java sous Windows : non prêt en natif, indexation Java par le runtime Docker | Superseded by SEC-0074 (le runtime Docker ne lance aucun provider) |
 
 [Backlog, tâches et démarrage Claude](../../project/roadmap/storage-hexagonal-2026-10/README.md).

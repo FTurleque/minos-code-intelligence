@@ -69,6 +69,14 @@ public final class KnowledgeSnapshotCodecs {
                 Objects.requireNonNull(payload, "payload"), Objects.requireNonNull(limits, LIMITS).maxPersistedBytes());
     }
 
+    /**
+     * Format version declared by the first eight bytes of a stored payload, read before the payload itself, or
+     * {@code -1} when they are not a snapshot header.
+     */
+    public static int formatVersionOfHeader(byte[] header) {
+        return SnapshotBinaryCodecSupport.headerFormatVersion(header);
+    }
+
     /** Reads a stored payload in the format its header declares. */
     public static CodeKnowledgeSnapshot read(Path payload) throws IOException {
         return read(payload, SnapshotLimits.production());

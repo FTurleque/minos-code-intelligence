@@ -252,7 +252,9 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
                 .publish(projectId, "between", symbols, List.of(), List.of());
         IOException refusedRead = assertThrows(IOException.class, () -> formerStore.loadActiveKnowledge(projectId));
 
-        assertEquals("PostgreSQL knowledge snapshot payload exceeds streaming limit", refusedRead.getMessage());
+        // AUD-PERF-15: the stored size is read with the metadata and refused before the payload is fetched.
+        assertTrue(refusedRead.getMessage().startsWith("snapshot payload exceeds persisted byte limit: ")
+                && refusedRead.getMessage().endsWith("/" + FORMER_CEILING), refusedRead.getMessage());
         try (Stream<Path> scratch = Files.list(tempDir.resolve("postgresql-snapshot-scratch"))) {
             assertEquals(0L, scratch.count(), "a refused read leaves no scratch payload");
         }

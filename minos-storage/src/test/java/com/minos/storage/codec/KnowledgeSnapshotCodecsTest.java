@@ -34,6 +34,19 @@ class KnowledgeSnapshotCodecsTest {
     }
 
     @Test
+    void theHeaderOfAStoredPayloadGivesItsVersionBeforeThePayloadIsRead() throws IOException {
+        Path payload = directory.resolve("v3.knowledge");
+        new SnapshotCodecV3().write(payload, PersistedSizeFixtures.withTail(java.util.UUID.randomUUID(), "header", 0, 10));
+        byte[] header = java.util.Arrays.copyOf(Files.readAllBytes(payload), 8);
+
+        assertEquals(3, KnowledgeSnapshotCodecs.formatVersionOfHeader(header));
+        assertEquals(-1, KnowledgeSnapshotCodecs.formatVersionOfHeader(java.util.Arrays.copyOf(header, 7)), "too short");
+        assertEquals(-1, KnowledgeSnapshotCodecs.formatVersionOfHeader(null));
+        header[0] = 0;
+        assertEquals(-1, KnowledgeSnapshotCodecs.formatVersionOfHeader(header), "another magic");
+    }
+
+    @Test
     void anUnknownVersionHasNoCodec() {
         IOException refusal = assertThrows(IOException.class, () -> KnowledgeSnapshotCodecs.forVersion(0));
 
