@@ -51,8 +51,8 @@ jobs:
 
       # Docker Hub limits anonymous pulls per runner address (429 toomanyrequests on 2026-10-09 stopped base images,
       # pgvector for the PostgreSQL tests, and the Docker qualifications). With the repository secrets
-      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), pulls are authenticated, Testcontainers
-      # included; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
+      # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a read-only access token), every pull of the job is
+      # authenticated; without them (forks, secrets not created) this step is skipped and pulls stay anonymous.
       - name: Log in to Docker Hub (when the secrets exist)
         if: ${{ env.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
