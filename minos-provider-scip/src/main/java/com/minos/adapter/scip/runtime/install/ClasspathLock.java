@@ -14,12 +14,15 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * The jars of the scip-java classpath, one name, size and SHA-256 each, as resolved when the catalogue was built.
@@ -27,20 +30,39 @@ import java.util.TreeSet;
  * <p>An installation that resolves the classpath on the user's machine ({@code coursier fetch}) compares what it
  * got with this lock before it keeps anything: a jar substituted upstream or by a mirror, a jar added to the
  * dependency graph, a jar missing, all fail. Messages name the jar file only, never a directory.</p>
+ *
+ * <p>The lock may also force the version of a transitive dependency to correct an advisory (ADR SEC-0080): each
+ * entry of {@code forcedVersions} names one {@code organisation:name} module, its version, the advisory and a
+ * reason, and the jar of that version is pinned like any other. The resolution passes these versions to Coursier,
+ * so the forcing and the verification read the same file. A malformed entry fails before anything is launched.</p>
  */
 final class ClasspathLock implements ScipJavaClasspath.Verifier {
 
     static final String RESOURCE = EmbeddedToolsCatalog.RESOURCE_ROOT + "scip-java-classpath.lock.json";
 
+    private static final Pattern MODULE = Pattern.compile("[^\\s:]+:[^\\s:]+");
+    private static final Pattern VERSION = Pattern.compile("\\S+");
+
     private final String coordinate;
     private final Map<String, Entry> jars;
+    private final List<ForcedVersion> forcedVersions;
 
     private record Entry(long size, String sha256) {
     }
 
-    private ClasspathLock(String coordinate, Map<String, Entry> jars) {
+    /** A module version forced in the Coursier resolution to correct an advisory (ADR SEC-0080). */
+    record ForcedVersion(String module, String version) {
+
+        /** The value of Coursier's {@code --force-version} option. */
+        String argument() {
+            return module + ":" + version;
+        }
+    }
+
+    private ClasspathLock(String coordinate, Map<String, Entry> jars, List<ForcedVersion> forcedVersions) {
         this.coordinate = coordinate;
         this.jars = jars;
+        this.forcedVersions = forcedVersions;
     }
 
     /** The lock packaged with MINOS. */
@@ -67,14 +89,54 @@ final class ClasspathLock implements ScipJavaClasspath.Verifier {
             if (jars.isEmpty()) {
                 throw new IOException("the scip-java classpath lock lists no jar");
             }
-            return new ClasspathLock(root.required("coordinate").asText(), Map.copyOf(jars));
+            String coordinate = root.required("coordinate").asText();
+            return new ClasspathLock(coordinate, Map.copyOf(jars), forcedVersions(root.path("forcedVersions"), coordinate, jars.keySet()));
         } catch (RuntimeException malformed) {
             throw new IOException("the scip-java classpath lock is unreadable", malformed);
         }
     }
 
+    /**
+     * Every forced version is an object with an {@code organisation:name} module, a version, an advisory and a
+     * reason; a module is forced once, never the provider itself, and the jar of its forced version is pinned.
+     */
+    private static List<ForcedVersion> forcedVersions(JsonNode node, String coordinate, Set<String> pinned) throws IOException {
+        if (node.isMissingNode() || node.isNull()) {
+            return List.of();
+        }
+        if (!node.isArray()) {
+            throw new IOException("the scip-java classpath lock is malformed");
+        }
+        String[] segments = coordinate.split(":", -1);
+        String provider = segments.length > 1 ? segments[0] + ":" + segments[1] : coordinate;
+        Set<String> seen = new HashSet<>();
+        List<ForcedVersion> forced = new ArrayList<>();
+        for (JsonNode entry : node) {
+            String module = text(entry, "module");
+            String version = text(entry, "version");
+            if (!MODULE.matcher(module).matches() || !VERSION.matcher(version).matches()
+                    || text(entry, "advisory").isBlank() || text(entry, "reason").isBlank()
+                    || module.equals(provider) || !seen.add(module)
+                    || !pinned.contains(module.substring(module.indexOf(':') + 1) + "-" + version + ".jar")) {
+                throw new IOException("the scip-java classpath lock is malformed");
+            }
+            forced.add(new ForcedVersion(module, version));
+        }
+        return List.copyOf(forced);
+    }
+
+    private static String text(JsonNode entry, String field) {
+        JsonNode value = entry.isObject() ? entry.get(field) : null;
+        return value != null && value.isTextual() ? value.asText() : "";
+    }
+
     String coordinate() {
         return coordinate;
+    }
+
+    /** The forced versions, in the order of the lock; empty when nothing is forced. */
+    List<ForcedVersion> forcedVersions() {
+        return forcedVersions;
     }
 
     Set<String> names() {

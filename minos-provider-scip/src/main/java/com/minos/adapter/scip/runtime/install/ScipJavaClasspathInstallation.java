@@ -37,9 +37,19 @@ final class ScipJavaClasspathInstallation {
     private ScipJavaClasspathInstallation() {
     }
 
-    /** Resolution only: scip-java is never launched, so nothing from the network runs before it is verified. */
-    static List<String> scipJavaFetchCommand(Path coursier) {
-        return List.of(coursier.toString(), "fetch", "--classpath", ManagedScipProviderRuntimeManager.SCIP_JAVA_COORDINATE);
+    /**
+     * Resolution only: scip-java is never launched, so nothing from the network runs before it is verified. Every
+     * version the lock forces (ADR SEC-0080) is passed as {@code --force-version module:version}, in the lock's order,
+     * so the jars resolved are the ones the same lock verifies.
+     */
+    static List<String> scipJavaFetchCommand(Path coursier, ClasspathLock lock) {
+        List<String> command = new ArrayList<>(List.of(coursier.toString(), "fetch", "--classpath"));
+        for (ClasspathLock.ForcedVersion forced : lock.forcedVersions()) {
+            command.add("--force-version");
+            command.add(forced.argument());
+        }
+        command.add(ManagedScipProviderRuntimeManager.SCIP_JAVA_COORDINATE);
+        return List.copyOf(command);
     }
 
     /**
@@ -48,7 +58,7 @@ final class ScipJavaClasspathInstallation {
      */
     static List<Path> fetchVerifiedClasspath(Path coursier, Path workingDirectory, Path log, ClasspathLock lock)
             throws IOException, InterruptedException {
-        ManagedToolInstallation.run(scipJavaFetchCommand(coursier), workingDirectory, log, Duration.ofMinutes(10));
+        ManagedToolInstallation.run(scipJavaFetchCommand(coursier, lock), workingDirectory, log, Duration.ofMinutes(10));
         List<Path> jars = resolvedJars(log);
         lock.verify(jars);
         return jars;
