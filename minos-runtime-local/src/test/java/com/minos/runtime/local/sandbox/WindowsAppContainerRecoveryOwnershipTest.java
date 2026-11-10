@@ -85,9 +85,12 @@ class WindowsAppContainerRecoveryOwnershipTest {
         Journal journal;
         try {
             journal = fixture.awaitJournalWithGrants(first, Duration.ofSeconds(60));
-            first.process().descendants().forEach(ProcessHandle::destroyForcibly);
+            // The launcher dies first: a sandboxed child killed before it would let RunSandbox return, and the
+            // launcher's own finally block would then remove the journal this test expects to find.
+            List<ProcessHandle> descendants = first.process().descendants().toList();
             first.process().destroyForcibly();
             assertTrue(first.process().waitFor(30, TimeUnit.SECONDS), "the killed launcher did not exit");
+            descendants.forEach(ProcessHandle::destroyForcibly);
         } finally {
             first.destroy();
         }
