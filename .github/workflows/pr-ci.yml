@@ -126,6 +126,9 @@ jobs:
       - name: Delegated cgroup root validation tests (provisioning scripts run with a recording sudo)
         run: python scripts/deploy/test_cgroup_root_validation.py -v
 
+      - name: PostgreSQL test server script tests (recording docker; bash and pwsh)
+        run: python scripts/dev/test_start_test_postgres.py -v
+
       - name: Shipped tools gate (one description shared by Java, the Docker image and the Windows distribution)
         run: python scripts/quality/check-tools-manifest.py
 
