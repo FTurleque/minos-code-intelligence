@@ -153,7 +153,7 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 
 | Sprint | Titre |
 |---|---|
-| 3 | Socle d'exécution supporté (JDK LTS, Node) — **fait**, sauf les CVE de Testcontainers (AUD-DEP-14, bloqué) et deux preuves à relever |
+| 3 | Socle d'exécution supporté (JDK LTS, Node) — **fait** ; les CVE de Testcontainers (AUD-DEP-14) partent avec Testcontainers (`tester-postgresql-sans-testcontainers`) ; restent deux preuves à relever |
 | 4 | Chemin de requête : ne plus relire le snapshot |
 | 5 | Chaîne de release et d'approvisionnement |
 | 6 | Couverture réelle et plugin IntelliJ |

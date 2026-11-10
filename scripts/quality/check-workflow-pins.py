@@ -15,10 +15,8 @@ after the login, unless DOCKER_LOGIN_KEPT names it with a reason, and a stale en
 logout step runs no repository code (a script under scripts/, the Maven wrapper), which goes in a step before the
 login. The logout must run: `docker logout` is a command of the step's script, or sits in a shell function that an
 active `trap <function> EXIT` calls; a commented-out line, a function nobody traps and a trap that is cleared leave
-the token on disk and are refused. A job that
-pulls the Testcontainers images before logging out (`check-image-pins.py --testcontainers-images`) declares, in its
-`env:`, the pull policy that refuses any other image and disables Ryuk (TESTCONTAINERS_GUARD_ENV): without them a test
-needing a new image would pull it anonymously, under Docker Hub's quota.
+the token on disk and are refused. The test jobs read the PostgreSQL test image before the login
+(`scripts/dev/start-test-postgres.sh --print-image`) and start its container after the logout (AUD-DEP-14).
 
 Release provenance (AUD-DEP-06): a job that publishes release assets (`publish-windows-release.ps1` outside
 `-ValidateOnly`, `gh release create`, `gh release upload`) runs `actions/attest-build-provenance` before it and holds
@@ -133,18 +131,9 @@ DOCKER_LOGIN_KEPT = {
 }
 
 
-# A job that pulls the Testcontainers images, then logs out (AUD-DEP-13, option B of decision D4), lets the tests start
-# those images only: the pull policy refuses any other by name, and Ryuk (an image outside the list) is not started.
-TESTCONTAINERS_PREPULL = "--testcontainers-images"
 # Code of the repository in the step that logs out: a script under scripts/ or the Maven wrapper. That step runs while
 # the token is on disk, so it only pulls what an earlier step computed.
 REPOSITORY_CODE = re.compile(r"(?:^|[\s\"'./\\])scripts[/\\]|\bmvnw\b")
-TESTCONTAINERS_GUARD_ENV = {
-    "TESTCONTAINERS_PULL_POLICY": "com.minos.storage.postgresql.PrePulledImagesOnlyPullPolicy",
-    "TESTCONTAINERS_RYUK_DISABLED": "true",
-}
-TESTCONTAINERS_GUARD_CLASS = ("minos-storage/src/test/java/com/minos/storage/postgresql/"
-                              "PrePulledImagesOnlyPullPolicy.java")
 
 
 def _content_indent(line: str) -> int:
@@ -305,8 +294,7 @@ def find_job_hardening_violations(label: str, text: str) -> tuple[list[str], set
     * a job that runs on a runner (`runs-on`) without `timeout-minutes` can hold it for GitHub's 360-minute default;
       a reusable-workflow call (`uses:` at job level) has no runner and cannot carry the key;
     * a job that logs in to Docker Hub runs `docker logout` in its first `run:` step after the login, unless it is
-      named in DOCKER_LOGIN_KEPT with its reason;
-    * a job that pulls the Testcontainers images declares TESTCONTAINERS_GUARD_ENV in its own `env:`.
+      named in DOCKER_LOGIN_KEPT with its reason.
     """
     workflow = label.rsplit("/", 1)[-1]
     failures: list[str] = []
@@ -349,35 +337,7 @@ def find_job_hardening_violations(label: str, text: str) -> tuple[list[str], set
                         f"{label}:{step_line}: job '{job}' runs repository code in the step that logs out of Docker "
                         f"Hub -- compute what it needs in a step before the login; after the login, only pull."
                     )
-        if any(_step_runs(step) and any(TESTCONTAINERS_PREPULL in line for line in step) for _line, step in _steps(body)):
-            env = _job_mapping(body, "env")
-            for name, value in TESTCONTAINERS_GUARD_ENV.items():
-                if env.get(name) != value:
-                    failures.append(
-                        f"{label}:{job_line}: job '{job}' pulls the Testcontainers images, then logs out, without "
-                        f"'{name}: {value}' in its env -- a test needing another image would pull it anonymously."
-                    )
     return failures, kept
-
-
-def _job_mapping(body: list[tuple[int, str]], name: str) -> dict[str, str]:
-    """{key: value} of the mapping `name:` written directly under a job (`env:`, ...), quotes removed."""
-    if not body:
-        return {}
-    indent = _content_indent(body[0][1])
-    values: dict[str, str] = {}
-    inside = False
-    for _number, line in body:
-        current = _content_indent(line)
-        key = MAPPING_KEY.match(line)
-        if inside:
-            if current <= indent:
-                break
-            if key:
-                values[key.group("key")] = line.split(":", 1)[1].strip().strip("'\"")
-            continue
-        inside = bool(key) and current == indent and key.group("key") == name and not STEP_ITEM.match(line)
-    return values
 
 
 ATTESTATION = "actions/attest-build-provenance"
@@ -792,12 +752,10 @@ def check(root: Path) -> tuple[list[str], int, int]:
     checked = 0
     runners = 0
     kept_logins: set[tuple[str, str]] = set()
-    guarded = False
     workflows = root / WORKFLOWS
     for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
         label = relative(root, workflow)
         text = workflow.read_text(encoding="utf-8")
-        guarded = guarded or TESTCONTAINERS_GUARD_ENV["TESTCONTAINERS_PULL_POLICY"] in text
         pin_failures, pin_checked = find_pin_violations(label, text)
         failures.extend(pin_failures)
         checked += pin_checked
@@ -812,9 +770,6 @@ def check(root: Path) -> tuple[list[str], int, int]:
         kept_logins.update((workflow.name, job) for job in kept)
         failures.extend(find_release_attestation_violations(label, text))
     failures.extend(find_stale_docker_login_entries(kept_logins))
-    if guarded and not (root / TESTCONTAINERS_GUARD_CLASS).is_file():
-        failures.append(f"{TESTCONTAINERS_GUARD_CLASS} is missing: the workflows select it as the Testcontainers pull "
-                        f"policy, so the tests would fail to start any container.")
     failures.extend(find_missing_documented_scripts(root))
     failures.extend(find_windows_qualification_coverage_violations(root))
     failures.extend(check_build_windows_installer_script(root))
