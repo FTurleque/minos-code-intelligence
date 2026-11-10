@@ -26,12 +26,15 @@ Forbidden in src/main/java of every module except minos-intellij, outside those 
                             getChannel(), and lock/tryLock on a receiver named *channel*: a channel can only
                             come from the primitives, so holding one outside them is the finding, whatever
                             its variable is called. A bare import is not a use.
-  message(Path)             an exception constructed (new ...Exception( / new ...Error() or a logger called by
-                            level (warn, error, info, debug, ...) whose message renders a Path or a File: operand
-                            of +, toString(), String.valueOf, an argument of String.format / formatted, or the
-                            result of toAbsolutePath / toRealPath / getAbsolutePath / getCanonicalPath. A
-                            message names the entry by its role or by its file name (getFileName(),
-                            PublicErrorMessages.leafName), never by its absolute path.
+  message(Path)             an exception constructed (new ...Exception( / new ...Error(), a logger called by
+                            level (warn, error, info, debug, ...) or a diagnostic prepared in Optional.of( /
+                            Optional.ofNullable( whose message renders a Path, a File or a String whose name ends
+                            in Path, Root, Dir, Directory, File or Home (javaHome): operand of +, toString(),
+                            String.valueOf, an argument of String.format / formatted, a path derived from it by
+                            getParent / normalize / getRoot / resolve / resolveSibling, a path built by Path.of /
+                            Paths.get, or the result of toAbsolutePath / toRealPath / getAbsolutePath /
+                            getCanonicalPath. A message names the entry by its role or by its file name
+                            (getFileName(), PublicErrorMessages.leafName), never by its absolute path.
 
 The two path rules (LOGGER.log(Path) and message(Path)) also apply to the four primitives, whose messages
 reach their callers, and to minos-intellij, which shows its exception messages in the IDE and writes them to
@@ -138,8 +141,9 @@ _ABSOLUTE_RENDERED = re.compile(
 _FORMAT_CALL = re.compile(r"\b(?:String\s*\.\s*format|formatted)\s*\(")
 # A path that is not a `Path x` / `File x` variable: a String the file declares with a path-like name
 # (legacyRoot, configuredSecretPath), or a call without argument whose name says it returns one
-# (project.rootPath(), config.secretFile()). The name is the only thing the gate can read.
-_PATH_LIKE_SUFFIX = r"(?:Path|Root|Dir|Directory|File)"
+# (project.rootPath(), config.secretFile(), javaHome, layout.minosHome()). The name is the only thing the gate
+# can read.
+_PATH_LIKE_SUFFIX = r"(?:Path|Root|Dir|Directory|File|Home)"
 _PATH_LIKE_STRING_DECLARATION = re.compile(rf"\bString\s+(\w*{_PATH_LIKE_SUFFIX})\b")
 _PATH_ACCESSOR = rf"\b(?!\w*[Rr]elative)\w*{_PATH_LIKE_SUFFIX}\s*\(\s*\)"
 _ACCESSOR_CHAIN = r"(?:[\w.\s]|\(\s*\))*?"
@@ -149,6 +153,17 @@ _ACCESSOR_RENDERED = re.compile(
     rf"|{_PATH_ACCESSOR}\s*\.\s*toString\s*\("
     rf"|\bString\s*\.\s*valueOf\s*\(\s*{_ACCESSOR_CHAIN}{_PATH_ACCESSOR}\s*\)")
 _BARE_ACCESSOR = re.compile(rf"\s*{_ACCESSOR_CHAIN}{_PATH_ACCESSOR}\s*")
+# A call that still returns the path it is called on, or a path derived from it: getParent(), normalize(),
+# getRoot(), resolve(...), resolveSibling(...), chained any number of times and optionally ended by toString().
+# A chain ended by any other call (getFileName(), relativize(...)) does not render the path.
+_CALL_ARGUMENTS = r"\((?:[^()]|\([^()]*\))*\)"
+_DERIVED_CALLS = (rf"(?:\s*\.\s*(?:getParent|normalize|getRoot)\s*\(\s*\)"
+                  rf"|\s*\.\s*(?:resolve|resolveSibling)\s*{_CALL_ARGUMENTS})")
+_DERIVED_END = r"(?:\s*\.\s*toString\s*\(\s*\))?"
+# A path built in the message itself: Path.of(...) / Paths.get(...), optionally followed by derived calls.
+_BUILT_PATH = rf"\b(?:Path\s*\.\s*of|Paths\s*\.\s*get)\s*{_CALL_ARGUMENTS}{_DERIVED_CALLS}*{_DERIVED_END}"
+# A message prepared for a diagnostic (problem() of a runtime, read by `minos doctor`) and not thrown.
+_OPTIONAL_MESSAGE = re.compile(r"\bOptional\s*\.\s*(of|ofNullable)\s*\(")
 
 _FILES_METHODS = ("createDirectories", "write", "writeString", "newInputStream", "newOutputStream",
                   "newBufferedWriter", "newByteChannel", "createFile", "createDirectory", "createTempFile",
@@ -314,20 +329,34 @@ def _arguments_from(code: str, start: int) -> str:
     return code[start:i - 1]
 
 
+def _derived_forms(bases: list[str]) -> tuple[re.Pattern[str], re.Pattern[str]]:
+    """(rendered, bare format argument) for a path derived from one of the bases, or built by Path.of."""
+    derived = [rf"{base}{_DERIVED_CALLS}+{_DERIVED_END}" for base in bases] + [_BUILT_PATH]
+    either = "|".join(f"(?:{form})" for form in derived)
+    rendered = re.compile(rf"\+\s*(?:{either})(?!\s*[.(\w])|(?:{either})\s*\+(?!\+)")
+    return rendered, re.compile(rf"\s*(?:{either})\s*")
+
+
 def _renders_path(arguments: str, names: set[str]) -> bool:
     """A path rendered into a message: a declared name or a path accessor (_renders, this.name, a format
-    argument), or an absolute form."""
+    argument), a path derived from one of them or built by Path.of / Paths.get, or an absolute form."""
     if _renders(arguments, names) or _ABSOLUTE_RENDERED.search(arguments) or _ACCESSOR_RENDERED.search(arguments):
         return True
     bare_names = None
+    bases = [rf"{_ACCESSOR_CHAIN}{_PATH_ACCESSOR}"]
     if names:
         alternatives = "|".join(re.escape(name) for name in sorted(names))
         if re.search(rf"\+\s*this\s*\.\s*(?:{alternatives})\b(?!\s*[.(\w])", arguments):
             return True
         bare_names = re.compile(rf"\s*(?:this\s*\.\s*)?(?:{alternatives})\s*")
+        bases.insert(0, rf"\b(?:this\s*\.\s*)?(?:{alternatives})\b")
+    derived_rendered, derived_bare = _derived_forms(bases)
+    if derived_rendered.search(arguments):
+        return True
     for match in _FORMAT_CALL.finditer(arguments):
         for part in _split_top_level(_arguments_from(arguments, match.end())):
-            if _BARE_ACCESSOR.fullmatch(part) or (bare_names and bare_names.fullmatch(part)):
+            if (_BARE_ACCESSOR.fullmatch(part) or (bare_names and bare_names.fullmatch(part))
+                    or derived_bare.fullmatch(part)):
                 return True
     return False
 
@@ -335,16 +364,19 @@ def _renders_path(arguments: str, names: set[str]) -> bool:
 def path_rule_sites(code: str) -> list[tuple[int, str, str, str]]:
     """(line, rule, construct, exposure) of each site of the two path rules in lexed code.
 
-    Exposure is "a" (public: an exception message, a log line at WARNING or above) or "b" (internal: a log
-    line below WARNING). Like the logging rules, the gate does not know types and reads names only. A path is
-    a name the file declares as `Path name` / `File name`, a `String` it declares with a name ending in Path,
-    Root, Dir, Directory or File, a call without argument whose name ends the same way (`project.rootPath()`),
-    or the result of toAbsolutePath / toRealPath, rendered by `+`, toString, String.valueOf or a format
-    argument. A name that says it is relative is a path under a confined root; leafName(...), getFileName()
-    and any other call on the path wrap it and are not a rendering. Still invisible, and fixed by the
-    self-test: a message prepared in a variable and thrown later, a path reached through a field or an
-    accessor whose name does not end as above (`path()`, `getLocation()`), a String declared elsewhere (a
-    parameter of another file, a record component) and a cause that carries a path.
+    Exposure is "a" (public: an exception message, a diagnostic in Optional.of, which can reach `minos doctor`,
+    a log line at WARNING or above) or "b" (internal: a log line below WARNING). Like the logging rules, the
+    gate does not know types and reads names only. A path is a name the file declares as `Path name` /
+    `File name`, a `String` it declares with a name ending in Path, Root, Dir, Directory, File or Home, a call
+    without argument whose name ends the same way (`project.rootPath()`, `layout.minosHome()`), the same
+    followed by getParent() / normalize() / getRoot() / resolve(...) / resolveSibling(...), a Path.of(...) /
+    Paths.get(...) built in the message, or the result of toAbsolutePath / toRealPath, rendered by `+`,
+    toString, String.valueOf or a format argument. A name that says it is relative is a path under a confined
+    root; leafName(...), getFileName(), relativize(...) and any other call that does not return the path wrap
+    it and are not a rendering. Still invisible, and fixed by the self-test: a message prepared in a variable
+    and thrown later, a path reached through a field or an accessor whose name does not end as above
+    (`path()`, `getLocation()`), a String declared elsewhere (a parameter of another file, a record
+    component) and a cause that carries a path.
     """
     names = {name for name in _FILE_OR_PATH_DECLARATION.findall(code) if "relative" not in name.lower()}
     names |= {name for name in _PATH_LIKE_STRING_DECLARATION.findall(code) if "relative" not in name.lower()}
@@ -361,6 +393,9 @@ def path_rule_sites(code: str) -> list[tuple[int, str, str, str]]:
         if _renders_path(_arguments_from(code, match.end()), names):
             exposure = "a" if match.group(1) in _PUBLIC_LEVELS else "b"
             sites.append((line_of(match.start()), MESSAGE_PATH_RULE, f"log.{match.group(1)}", exposure))
+    for match in _OPTIONAL_MESSAGE.finditer(code):
+        if _renders_path(_arguments_from(code, match.end()), names):
+            sites.append((line_of(match.start()), MESSAGE_PATH_RULE, f"Optional.{match.group(1)}", "a"))
     for match in _LOG_CALL.finditer(code):
         arguments = _arguments_from(code, match.end())
         if _renders(arguments, log_names):

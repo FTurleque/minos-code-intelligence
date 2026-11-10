@@ -501,6 +501,66 @@ class PrivateIoGateTest(unittest.TestCase):
             with self.subTest(body=body):
                 self.assertEqual([], self.violations(java(body)))
 
+    def test_a_home_a_derived_path_or_a_diagnostic_in_an_optional_fails(self):
+        for body in ('String javaHome = env; throw new IllegalStateException("x: " + javaHome);',
+                     'String javaHome = env; throw new IllegalStateException(javaHome + " is not a JDK");',
+                     'String javaHome = env; LOG.warn("x: " + javaHome);',
+                     'throw new IOException("x: " + layout.minosHome());',
+                     'Path root = p; throw new IOException("x: " + root.getParent());',
+                     'Path root = p; throw new IOException("x: " + root.normalize());',
+                     'Path root = p; throw new IOException("x: " + root.resolve("bin"));',
+                     'Path root = p; throw new IOException("x: " + root.resolve("bin").normalize());',
+                     'Path root = p; throw new IOException("x: " + root.resolveSibling("b"));',
+                     'Path root = p; throw new IOException("x: " + root.getParent().toString());',
+                     'Path root = p; throw new IOException(root.getParent() + " is missing");',
+                     'Path root = p; throw new IOException("x: " + this.root.getParent());',
+                     'Path root = p; throw new IOException(String.format("x %s", root.getParent()));',
+                     'throw new IOException("x: " + project.rootPath().getParent());',
+                     'throw new IOException("x: " + Path.of(home));',
+                     'throw new IOException("x: " + Paths.get(home));',
+                     'throw new IOException("x: " + Path.of(home).getParent());',
+                     'String javaHome = env; return Optional.of("JAVA_HOME does not contain javac: " + javaHome);',
+                     'Path root = p; return Optional.ofNullable("x: " + root.getParent());'):
+            with self.subTest(body=body):
+                violations = self.violations(java(body))
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("message(Path)", violations[0])
+
+    def test_a_home_named_by_its_role_or_a_path_not_rendered_passes(self):
+        for body in ('String javaHome = env; throw new IllegalStateException("JAVA_HOME does not contain javac");',
+                     'String javaHome = env; throw new IllegalStateException("x: " + leafName(Path.of(javaHome)));',
+                     'String javaHome = env; throw new IllegalStateException('
+                     '"x: " + PublicErrorMessages.leafName(Path.of(javaHome)));',
+                     'String javaHome = env; return Optional.of("JAVA_HOME does not contain javac");',
+                     'Path root = p; throw new IOException("x: " + root.resolve("bin").getFileName());',
+                     'Path root = p; throw new IOException("x: " + leafName(root.resolve("bin")));',
+                     'Path root = p; throw new IOException("x: " + root.getParent().relativize(other));',
+                     'throw new IOException("x: " + Path.of(a).getFileName());',
+                     'throw new IOException("x: " + leafName(Path.of(a)));',
+                     'Path root = p; return Optional.of(root);',
+                     'Path root = p; return Optional.of(root.resolve("bin"));',
+                     'Path root = p; Path bin = root.resolve("bin").normalize(); throw new IOException("x " + count);',
+                     'String homeless = env; throw new IOException("x: " + homeless);'):
+            with self.subTest(body=body):
+                self.assertEqual([], self.violations(java(body)))
+
+    def test_a_home_site_takes_a_justified_entry_and_a_stale_entry_is_refused(self):
+        self.repo.put(SOURCE, java('String javaHome = env;\n'
+                                   '        throw new IllegalStateException("x: " + javaHome);'))
+        self.repo.allow(entry(method="message(Path)", why="Diagnostic interne jamais rendu : le chemin sert au débogage."))
+        violations, _, listed = self.repo.check()
+        self.assertEqual(([], 1), (violations, listed))
+        self.repo.put(SOURCE, java('String javaHome = env;\n'
+                                   '        throw new IllegalStateException("JAVA_HOME does not point to a JDK containing javac");'))
+        violations = self.repo.check()[0]
+        self.assertEqual(1, len(violations))
+        self.assertIn("ratchet", violations[0])
+
+    def test_the_inventory_lists_a_diagnostic_in_an_optional_as_public(self):
+        self.repo.put(SOURCE, java('String javaHome = env; return Optional.of("x: " + javaHome);'))
+        lines = _MODULE.inventory(self.repo.root, self.repo.allowlist)
+        self.assertIn(f"{SOURCE}:5\tmessage(Path)\tOptional.of\t(a)", lines[0])
+
     def test_an_accessor_site_takes_a_justified_entry_and_a_stale_entry_is_refused(self):
         self.repo.put(SOURCE, java('throw new IOException("x: " + project.rootPath());'))
         self.repo.allow(entry(method="message(Path)", why="Diagnostic interne jamais rendu : le chemin sert au débogage."))
