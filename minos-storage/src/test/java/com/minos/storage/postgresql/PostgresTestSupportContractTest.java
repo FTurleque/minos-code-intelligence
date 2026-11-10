@@ -12,6 +12,7 @@ import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,7 +105,7 @@ class PostgresTestSupportContractTest {
         String second = PostgresTestSupport.newDatabaseName();
 
         assertTrue(first.matches("minos_t_[0-9a-f]{12}"), first);
-        assertFalse(first.equals(second));
+        assertNotEquals(first, second);
     }
 
     private static UnaryOperator<String> properties(String url) {
