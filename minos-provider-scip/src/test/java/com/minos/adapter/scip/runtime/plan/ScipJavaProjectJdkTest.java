@@ -73,13 +73,25 @@ class ScipJavaProjectJdkTest {
     }
 
     @Test
-    void aJavaHomeWithoutJavacKeepsItsNativeDiagnostic() throws IOException {
+    void theDiagnosticOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath() throws IOException {
         Path notAJdk = Files.createDirectories(temp.resolve("no-jdk"));
         ScipJavaProjectJdk jdk = ScipJavaProjectJdk.of(null, env(notAJdk.toString()));
 
-        assertEquals("JAVA_HOME does not contain javac: " + notAJdk, jdk.problem().orElseThrow());
-        assertTrue(assertThrows(IllegalStateException.class, jdk::home).getMessage()
-                .startsWith("JAVA_HOME does not point to a JDK containing javac"));
+        String problem = jdk.problem().orElseThrow();
+
+        assertEquals("JAVA_HOME does not contain javac", problem);
+        assertFalse(problem.contains(notAJdk.toString()), problem);
+    }
+
+    @Test
+    void theRefusalOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath() throws IOException {
+        Path notAJdk = Files.createDirectories(temp.resolve("no-jdk"));
+        ScipJavaProjectJdk jdk = ScipJavaProjectJdk.of(null, env(notAJdk.toString()));
+
+        String refusal = assertThrows(IllegalStateException.class, jdk::home).getMessage();
+
+        assertEquals("JAVA_HOME does not point to a JDK containing javac", refusal);
+        assertFalse(refusal.contains(notAJdk.toString()), refusal);
     }
 
     @Test

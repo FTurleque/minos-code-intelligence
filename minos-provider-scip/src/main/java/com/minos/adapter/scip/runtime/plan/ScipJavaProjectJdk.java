@@ -12,8 +12,8 @@ import java.util.function.UnaryOperator;
  * {@link #ENVIRONMENT}, then MINOS configuration file key, read like {@link ScipJavaMavenOffline#REPOSITORY_SETTING}),
  * otherwise the JDK of {@code JAVA_HOME}.
  *
- * <p>Either source must name a JDK that contains {@code javac}. A JDK designated by the setting is never named by its
- * path in a message: the message names the setting.</p>
+ * <p>Either source must name a JDK that contains {@code javac}. No message names the JDK by its path, whatever its
+ * source: a message names the setting or the {@code JAVA_HOME} variable, never their value.</p>
  */
 public final class ScipJavaProjectJdk {
 
@@ -65,7 +65,7 @@ public final class ScipJavaProjectJdk {
             return Optional.of("JAVA_HOME is not set to the project JDK and " + SETTING + " is not set");
         }
         return containsJavac(javaHome) ? Optional.empty()
-                : Optional.of("JAVA_HOME does not contain javac: " + javaHome);
+                : Optional.of("JAVA_HOME does not contain javac");
     }
 
     /**
@@ -87,7 +87,7 @@ public final class ScipJavaProjectJdk {
                     "scip-java requires a project JDK: JAVA_HOME is not set and " + SETTING + " is not set");
         }
         if (!containsJavac(javaHome)) {
-            throw new IllegalStateException("JAVA_HOME does not point to a JDK containing javac: " + javaHome);
+            throw new IllegalStateException("JAVA_HOME does not point to a JDK containing javac");
         }
         return Path.of(javaHome);
     }
