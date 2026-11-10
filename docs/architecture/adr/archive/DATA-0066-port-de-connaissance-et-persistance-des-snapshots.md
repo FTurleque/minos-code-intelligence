@@ -7,13 +7,13 @@ rules: false
 
 # Port de connaissance et persistance des snapshots : format V3, compatibilité, dédoublonnage
 
-> **Archivé le 2026-11-07** : Superseded by [DATA-0078](../DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md) (plafonds de taille, poids estimé d'une vue et invariant du cache).
+> **Archivé le 2026-11-07** : Superseded by [DATA-0078](DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md) (plafonds de taille, poids estimé d'une vue et invariant du cache).
 
 - **Statut** : Superseded
 - **Date** : 2026-10-23
 - **Origine** : consolidation du registre (décision du propriétaire du 2026-10-23)
 - **Remplace** : [ADR-0003](0003-glean-behind-code-knowledge-store.md), [ADR-0023](0023-decomposed-local-snapshot-persistence.md), [ADR-0046](0046-format-de-snapshot-v3-chaines-utf8.md) ; reprend les règles durables de l'[ADR-0047](0047-snapshot-pagine-ou-mappe-et-table-de-chaines.md) (archivé sans successeur direct)
-- **Remplacé par** : [DATA-0078](../DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md)
+- **Remplacé par** : [DATA-0078](DATA-0078-port-de-connaissance-et-persistance-des-snapshots-plafonds-de-taille.md)
 
 ## Context
 
