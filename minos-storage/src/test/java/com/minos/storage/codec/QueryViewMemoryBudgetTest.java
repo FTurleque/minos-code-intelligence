@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,7 +52,7 @@ class QueryViewMemoryBudgetTest {
     }
 
     @Test
-    void theSystemPropertyComesBeforeTheVariableAndFiftyIsTheDefault() throws IOException {
+    void theSystemPropertyComesBeforeTheVariableAndFiftyIsTheDefault() {
         Properties properties = new Properties();
         properties.setProperty(QueryViewMemoryBudget.PROPERTY, "30");
 
@@ -222,7 +223,7 @@ class QueryViewMemoryBudgetTest {
 
     @Test
     void theSharedBudgetIsOnePerProcessAndWaitsThirtySeconds() {
-        assertTrue(QueryViewMemoryBudget.shared() == QueryViewMemoryBudget.shared());
+        assertSame(QueryViewMemoryBudget.shared(), QueryViewMemoryBudget.shared());
         assertEquals(Duration.ofSeconds(30), SnapshotLimits.VIEW_ADMISSION_WAIT);
     }
 

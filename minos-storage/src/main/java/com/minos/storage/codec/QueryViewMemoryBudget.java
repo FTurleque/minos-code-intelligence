@@ -48,7 +48,7 @@ public final class QueryViewMemoryBudget {
     public static final int MINIMUM_PERCENT = 10;
     public static final int MAXIMUM_PERCENT = 80;
 
-    private static final long PERCENT = 100L;
+    private static final long HUNDRED = 100L;
     private static final String SETTING_REFUSAL = VARIABLE + " (or -D" + PROPERTY + ") must be an integer from "
             + MINIMUM_PERCENT + " to " + MAXIMUM_PERCENT;
 
@@ -127,7 +127,7 @@ public final class QueryViewMemoryBudget {
     public long effectiveCacheCeiling(long configuredCeiling) {
         if (configuredCeiling < 1L) throw new IllegalArgumentException("configuredCeiling must be greater than zero");
         if (settingRefusal != null) return configuredCeiling;
-        return Math.max(1L, Math.min(configuredCeiling, budgetBytes));
+        return Math.clamp(budgetBytes, 1L, configuredCeiling);
     }
 
     /** Registers a store whose cached views count against the budget and may be evicted; held weakly. */
@@ -160,8 +160,8 @@ public final class QueryViewMemoryBudget {
                         + "-byte maximum heap); raise the maximum heap (-Xmx or -XX:MaxRAMPercentage) or "
                         + VARIABLE);
             }
-            long deadline = System.nanoTime() + admissionWaitNanos;
-            boolean waited = false;
+            long remaining = admissionWaitNanos;
+            long rounds = 0L;
             boolean evicted = false;
             while (true) {
                 if (weightBytes <= budgetBytes - reservedBytes - residentBytes()) {
@@ -173,7 +173,6 @@ public final class QueryViewMemoryBudget {
                     evicted = true;
                     continue;
                 }
-                long remaining = deadline - System.nanoTime();
                 if (remaining <= 0L) {
                     refusals++;
                     throw new SnapshotMemoryExhaustedException(SnapshotMemoryExhaustedException.MESSAGE_PREFIX
@@ -181,11 +180,8 @@ public final class QueryViewMemoryBudget {
                             + describe(admissionWaitNanos) + " while other snapshot views use the " + budgetBytes
                             + "-byte budget; retry later, raise the maximum heap or " + VARIABLE);
                 }
-                if (!waited) {
-                    waits++;
-                    waited = true;
-                }
-                released.awaitNanos(remaining);
+                if (rounds++ == 0L) waits++;
+                remaining = released.awaitNanos(remaining);
                 // Views cached since the last eviction may now be all that stands in the way.
                 evicted = false;
             }
@@ -261,7 +257,7 @@ public final class QueryViewMemoryBudget {
     }
 
     private static long fraction(long bytes, int percent) {
-        return (bytes / PERCENT) * percent + (bytes % PERCENT) * percent / PERCENT;
+        return (bytes / HUNDRED) * percent + (bytes % HUNDRED) * percent / HUNDRED;
     }
 
     private static Integer parsePercent(String raw) {
@@ -293,7 +289,7 @@ public final class QueryViewMemoryBudget {
     /** Weight held for one load; closing it releases what a conversion did not already release. */
     public final class Reservation implements AutoCloseable {
         private final long bytes;
-        private boolean released;
+        private boolean done;
 
         private Reservation(long bytes) {
             this.bytes = bytes;
@@ -314,8 +310,8 @@ public final class QueryViewMemoryBudget {
         }
 
         private void releaseLocked() {
-            if (released) return;
-            released = true;
+            if (done) return;
+            done = true;
             reservedBytes -= bytes;
             QueryViewMemoryBudget.this.released.signalAll();
         }

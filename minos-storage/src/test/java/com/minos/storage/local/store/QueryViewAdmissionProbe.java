@@ -49,9 +49,9 @@ public final class QueryViewAdmissionProbe {
                     start.await(1, TimeUnit.MINUTES);
                     // The view is not kept: its symbol count is all this thread retains.
                     int symbols = store.loadActiveReadView(projectId).orElseThrow().snapshot().symbols().size();
-                    record(lines, LINE + projectId + " loaded " + symbols);
+                    appendLine(lines, LINE + projectId + " loaded " + symbols);
                 } catch (SnapshotMemoryExhaustedException refused) {
-                    record(lines, LINE + projectId + " refused");
+                    appendLine(lines, LINE + projectId + " refused");
                 } catch (Exception failure) {
                     synchronized (failures) {
                         failures.add(failure);
@@ -71,7 +71,7 @@ public final class QueryViewAdmissionProbe {
         }
     }
 
-    private static void record(List<String> lines, String line) {
+    private static void appendLine(List<String> lines, String line) {
         synchronized (lines) {
             lines.add(line);
         }
