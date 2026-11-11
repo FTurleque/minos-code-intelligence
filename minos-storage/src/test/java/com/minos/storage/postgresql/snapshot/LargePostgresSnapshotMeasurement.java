@@ -15,7 +15,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Publishes a large file-store snapshot into the managed PostgreSQL store and reads it back, to measure what a
@@ -45,7 +45,8 @@ class LargePostgresSnapshotMeasurement extends PostgresTestSupport {
     void measuresAPayloadOfTheSizeOfALargeProject() throws Exception {
         String store = System.getProperty(STORE_PROPERTY);
         String project = System.getProperty(PROJECT_PROPERTY);
-        assertTrue(store != null && project != null, "set -D" + STORE_PROPERTY + " and -D" + PROJECT_PROPERTY);
+        // A measurement, not a check: a run that names no snapshot (verify, PIT) skips it instead of failing.
+        assumeTrue(store != null && project != null, "set -D" + STORE_PROPERTY + " and -D" + PROJECT_PROPERTY);
         UUID projectId = UUID.fromString(project);
         CodeKnowledgeSnapshot snapshot = readLargestSnapshot(Path.of(store).resolve(project));
         print("symbols", snapshot.symbols().size());
