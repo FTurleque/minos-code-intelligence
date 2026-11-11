@@ -23,6 +23,8 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -83,7 +85,7 @@ class LargePostgresSnapshotMeasurement extends PostgresTestSupport {
 
         for (int read = 1; read <= READS; read++) {
             long readStarted = System.nanoTime();
-            postgres.loadActiveReadView(projectId).orElseThrow();
+            assertTrue(postgres.loadActiveReadView(projectId).isPresent(), "the published snapshot is active");
             print("read." + read + ".millis", millis(readStarted));
         }
         PostgresCodeKnowledgeSnapshotStore.QueryCacheStats stats = postgres.queryCacheStats();
@@ -95,7 +97,8 @@ class LargePostgresSnapshotMeasurement extends PostgresTestSupport {
     /**
      * Fetches the active payload the way the store does (one row, {@code getBinaryStream} on the {@code bytea}
      * column, streamed through a small buffer) and records the heap peak above the settled heap for each fetch. The
-     * fetch is repeated on the pool so that the driver's switch to server-prepared statements is measured too.
+     * same statement is executed repeatedly so that the driver's switch to a server-prepared statement is measured
+     * too.
      */
     private void measureFetchTransient(UUID projectId) throws Exception {
         long payloadBytes = connections.withConnection(connection -> {
@@ -110,27 +113,29 @@ class LargePostgresSnapshotMeasurement extends PostgresTestSupport {
             }
         });
         print("payload.bytes", payloadBytes);
-        long maximum = 0L;
-        for (int fetch = 1; fetch <= FETCHES; fetch++) {
-            long before = settledHeap();
-            resetPeaks();
-            long streamed = connections.withConnection(connection -> {
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a JOIN knowledge_snapshots s "
-                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id WHERE a.project_id=?")) {
-                    statement.setObject(1, projectId);
+        long maximum = connections.withConnection(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a JOIN knowledge_snapshots s "
+                            + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id WHERE a.project_id=?")) {
+                statement.setObject(1, projectId);
+                long peak = 0L;
+                for (int fetch = 1; fetch <= FETCHES; fetch++) {
+                    long before = settledHeap();
+                    resetPeaks();
+                    long streamed;
                     try (ResultSet result = statement.executeQuery()) {
                         result.next();
-                        return drain(result.getBinaryStream(2));
+                        streamed = drain(result.getBinaryStream(2));
                     }
+                    long transientBytes = peakHeap() - before;
+                    peak = Math.max(peak, transientBytes);
+                    assertEquals(payloadBytes, streamed, "the whole payload is streamed");
+                    print("fetch." + fetch + ".transient.bytes", transientBytes);
+                    print("fetch." + fetch + ".transient.over.payload", ratio(transientBytes, payloadBytes));
                 }
-            });
-            long transientBytes = peakHeap() - before;
-            maximum = Math.max(maximum, transientBytes);
-            print("fetch." + fetch + ".streamed.bytes", streamed);
-            print("fetch." + fetch + ".transient.bytes", transientBytes);
-            print("fetch." + fetch + ".transient.over.payload", ratio(transientBytes, payloadBytes));
-        }
+                return peak;
+            }
+        });
         print("fetch.transient.max.over.payload", ratio(maximum, payloadBytes));
     }
 
@@ -184,10 +189,10 @@ class LargePostgresSnapshotMeasurement extends PostgresTestSupport {
         return total;
     }
 
-    private static long settledHeap() throws InterruptedException {
+    private static long settledHeap() {
+        // An explicit collection is a full, synchronous collection unless -XX:+ExplicitGCInvokesConcurrent is set.
         for (int round = 0; round < 4; round++) {
             System.gc();
-            Thread.sleep(150L);
         }
         return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
     }
