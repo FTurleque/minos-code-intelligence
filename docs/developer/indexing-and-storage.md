@@ -233,7 +233,7 @@ Deux `main` et un test des sources de `minos-storage`, hors `verify` (leur nom n
 | Outil | Rôle |
 |---|---|
 | `LargeSnapshotMeasurement` (`com.minos.storage.local.store`) | taille persistée, tas retenu par la vue avec l'index des arêtes, pic de tas au chargement, lectures successives et état du cache ; mode `synthetic <racine> <fichiers>` ou `existing <MINOS_HOME>/symbol-snapshots <projectId>` |
-| `LargePostgresSnapshotMeasurement` (`com.minos.storage.postgresql.snapshot`) | publication d'un snapshot du magasin fichier dans le store PostgreSQL géré (Docker, image pgvector épinglée déjà tirée), puis lectures successives ; lancé par `-Dtest=LargePostgresSnapshotMeasurement -Dminos.largeSnapshot.store=… -Dminos.largeSnapshot.project=…` |
+| `LargePostgresSnapshotMeasurement` (`com.minos.storage.postgresql.snapshot`) | publication d'un snapshot du magasin fichier, ou d'un dépôt synthétique, dans le store PostgreSQL, pic de tas du pilote pendant le rapatriement de la charge utile (huit rapatriements, rapport au poids de la charge utile), puis lectures successives ; serveur de test de `scripts/dev/start-test-postgres.sh` ; lancé par `-Dtest=LargePostgresSnapshotMeasurement` avec `-Dminos.largeSnapshot.store=… -Dminos.largeSnapshot.project=…` ou `-Dminos.largeSnapshot.files=<fichiers>` |
 | `SnapshotReadCeilingTest` (`com.minos.storage.codec`) | exécuté par `verify` : le plafond borne aussi la lecture, sans chemin dans le message |
 
 Le classpath du `main` sur poste Windows ajoute `minos-storage/src/test/platform-access-control` (fournisseur de contrôle d'accès des tests du module).
@@ -275,7 +275,7 @@ Un processus a un seul budget de mémoire des vues de snapshot (`QueryViewMemory
 | Étape | Magasin fichier | PostgreSQL |
 |---|---|---|
 | Avant toute lecture de la charge utile | pointeur actif, présence du fichier, `Files.size` | métadonnées avec `octet_length(payload)` et les 8 octets d'en-tête ; une taille hors `[1, plafond de persistance]` est refusée (`snapshot payload exceeds persisted byte limit: <taille>/<plafond>`) sans demander la charge utile ni créer de fichier temporaire |
-| Réservation | poids estimé de la vue | le plus grand du poids estimé et du transitoire du pilote pendant le rapatriement (`SnapshotLimits.fetchTransientBytes`, 300 % de la charge utile, valeur prudente non mesurée) |
+| Réservation | poids estimé de la vue | le plus grand du poids estimé et du transitoire du pilote pendant le rapatriement (`SnapshotLimits.fetchTransientBytes`, 310 % de la charge utile : pire cas mesuré de 305 %, avant que le pilote passe au rapatriement binaire d'une requête préparée côté serveur) |
 | Vue mise en cache | la réservation devient du poids résident sous le verrou du budget | idem |
 | Vue non mise en cache, erreur, pointeur déplacé | la réservation est libérée | idem |
 
