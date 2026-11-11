@@ -87,12 +87,12 @@ class SnapshotLimitsTest {
     }
 
     @Test
-    void theFetchTransientIsThreeTimesThePayloadRoundedUpAndSaturated() {
+    void theFetchTransientIsTheMeasuredAmplificationOfThePayloadRoundedUpAndSaturated() {
         SnapshotLimits production = SnapshotLimits.production();
 
-        assertEquals(300L, SnapshotLimits.POSTGRES_FETCH_AMPLIFICATION_PERCENT);
-        assertEquals(3_000L, production.fetchTransientBytes(1_000L));
-        assertEquals(3L, production.fetchTransientBytes(1L));
+        assertEquals(310L, SnapshotLimits.POSTGRES_FETCH_AMPLIFICATION_PERCENT);
+        assertEquals(3_100L, production.fetchTransientBytes(1_000L));
+        assertEquals(4L, production.fetchTransientBytes(1L));
         assertEquals(0L, production.fetchTransientBytes(-1L));
         assertEquals(Long.MAX_VALUE, production.fetchTransientBytes(Long.MAX_VALUE));
     }

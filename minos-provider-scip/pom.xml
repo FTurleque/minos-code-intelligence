@@ -47,7 +47,7 @@
     </dependencies>
     <build>
         <resources>
-            <!-- osv-scanner.toml sits next to the npm lockfiles it scopes (OSV reads it per directory); it is not shipped. -->
+            <!-- An osv-scanner.toml placed next to the npm lockfiles scopes OSV waivers to them (OSV reads it per directory); it is never shipped. -->
             <resource>
                 <directory>src/main/resources</directory>
                 <excludes>

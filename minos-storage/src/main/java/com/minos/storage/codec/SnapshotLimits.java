@@ -41,9 +41,10 @@ public record SnapshotLimits(
     public static final long UNMEASURED_FORMAT_AMPLIFICATION_PERCENT = 200L;
     /**
      * Heap the PostgreSQL driver holds while it fetches a payload, as a percentage of the payload: the text form of a
-     * {@code bytea} arrives in hexadecimal (two bytes per byte), then is decoded. A cautious value until measured.
+     * {@code bytea} arrives in hexadecimal (two bytes per byte), then is decoded. Measured at 305 % for a 306 MiB
+     * payload before the driver switches to a server-prepared binary fetch (102 % after it), rounded up.
      */
-    public static final long POSTGRES_FETCH_AMPLIFICATION_PERCENT = 300L;
+    public static final long POSTGRES_FETCH_AMPLIFICATION_PERCENT = 310L;
     /** Longest wait of a view load for room in the view memory budget before it is refused. */
     public static final Duration VIEW_ADMISSION_WAIT = Duration.ofSeconds(30);
 
