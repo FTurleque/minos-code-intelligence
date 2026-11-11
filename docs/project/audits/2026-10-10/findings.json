@@ -757,8 +757,8 @@
     "changement": "surveiller-les-outils-embarques",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "docs/architecture/risks/register.md:26 R-30 (GHSA-g3hv-75wg-m249, minimatch 3.1.5 via glob 7.2.3, accepté jusqu'au 2027-01-31, origine, exposition, motif technique) ; minos-provider-scip/src/main/resources/com/minos/adapter/scip/runtime/osv-scanner.toml:13-15 (`ignoreUntil = 2027-01-31`). Les références restantes à l'ADR 0060 sont historiques et correctes (09-decisions.md:97, adr/README.md:129, SEC-0074:13/88 « Remplace ADR-0060 »). (revérifié indépendamment le 09/11 sur `32ac85e4`)",
-      "reserve": "R-30 reprend une dérogation (commit 9e9144b6) sans décision écrite du propriétaire ; osv-scanner.toml ne renvoie pas à R-30 (lien à sens unique) ; passé le 2027-01-31 le check `osv-scan` échoue. Veille OSV des outils embarqués (check-embedded-tools-advisories.py) non exécutable ici (proxy 403) : aucun verdict sur l'état actuel des avis."
+      "preuve": "R-30 résolu le 2026-11-11 : GitHub a restreint GHSA-g3hv-75wg-m249 aux versions >= 7.0.0, < 11.0.1 (mise à jour du 2026-11-04, reprise par OSV) ; api.osv.dev/v1/query sur minimatch@3.1.5 ne rend aucun avis ; la dérogation osv-scanner.toml de minos-provider-scip est retirée et R-30 passe en risques résolus (branche sec/clore-r-30-et-accepter-sec-0080). R-29 résolu par la PR #711 (guava forcé en 33.7.2-jre, ADR SEC-0080 accepté le 2026-11-11) ; embedded-tools-advisory-waivers.json sans dérogation. (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": "Aucune dérogation OSV en vigueur sur les outils embarqués ; restent la veille planifiée du catalogue, non vérifiée en exécution, et l'absence de Dependabot npm (choix assumé)."
     }
   },
   {
@@ -1236,8 +1236,8 @@
     "changement": "idem",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "minos14 (32ac85e4) : LocalProjectRegistry.java:330-331 `\"project path cannot be represented by configured runtime mapping: \" + leafName(project.rootPath())` et :400 message fixe sans valeur ; ProjectPathMapping.java:165, :223 et :280 sans chemin (cause chaînée sans chemin non plus). Gate : check-private-io.py:142 `_PATH_LIKE_SUFFIX = (Path|Root|Dir|Directory|File)`, :146 `_ACCESSOR_RENDERED`, :317 `_renders_path`, :335 `path_rule_sites`. Rejoué sur copie LF : SUCCESS (sources=653, allowlisted-occurrences=54) ; test_check_private_io.py 57 tests OK. Mutations sur copie (scratchpad/n14) : réintroduire `+ project.rootPath()` dans le `new IOException(` → FAILED ligne 330 ; `+ legacyRoot` → FAILED ligne 400 ; `String.format(\"…%s\", legacyRoot)` → FAILED ; `\"…%s\".formatted(legacyRoot)` → FAILED ; `+ project.rootPath().toFile()` → FAILED. Les deux réserves du 05/11 sont levées. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
-      "reserve": "Le gate reste syntaxique et laisse passer (mutations vertes sur copie) : message préparé dans une variable puis `new IOException(msg, e)` ; accesseur au nom non couvert (`+ project.location()`) ; expression de chemin chaînée `+ project.rootPath().getParent()`, `.normalize()`, `.resolve(\"x\")`, `+ entry.getParent()` ; `+ Path.of(legacyRoot)`. Site réel restant : ScipJavaProjectJdk.java:68 `\"JAVA_HOME does not contain javac: \" + javaHome` et :90 `IllegalStateException(\"JAVA_HOME does not point to a JDK containing javac: \" + javaHome)` (suffixe `Home` non couvert) — c'est le site `ScipJavaProcessPlanFactory.java:373` déjà signalé par l'auditeur le 05/11, déplacé dans une nouvelle classe et dédoublé, non corrigé ; la barrière aval (PublicErrorMessages.sanitize dans WslJarProbeProtocol.java:109, looksSensitive) le masque sur la voie doctor/WSL, mais pas par construction. Incohérence de findings.json : `statut` d'AUD-SEC-04 vaut toujours « Partiel » alors que `verification.verdict` (réécrit par l'agent du mainteneur, « Revérifié le 06/11 ») vaut « fermé avec réserve »."
+      "preuve": "PR #710 (fusionnée le 2026-11-10, changement garder-les-chemins-de-jdk-hors-des-messages) : les deux messages `+ javaHome` de ScipJavaProjectJdk sont retirés (git grep \"+ javaHome\" -- \"*.java\" vide), le diagnostic et le refus nomment la variable sans son chemin (ScipJavaProjectJdkTest#theDiagnosticOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath, #theRefusalOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath) ; check-private-io.py reconnaît le suffixe Home, les formes chaînées (getParent, normalize, resolve, Path.of, Paths.get) et Optional.of/ofNullable (test_check_private_io.py, témoin de mutation du site réel). minos14 (32ac85e4) : LocalProjectRegistry.java:330-331 `\"project path cannot be represented by configured runtime mapping: \" + leafName(project.rootPath())` et :400 message fixe sans valeur ; ProjectPathMapping.java:165, :223 et :280 sans chemin (cause chaînée sans chemin non plus). Gate : check-private-io.py:142 `_PATH_LIKE_SUFFIX = (Path|Root|Dir|Directory|File)`, :146 `_ACCESSOR_RENDERED`, :317 `_renders_path`, :335 `path_rule_sites`. Rejoué sur copie LF : SUCCESS (sources=653, allowlisted-occurrences=54) ; test_check_private_io.py 57 tests OK. Mutations sur copie (scratchpad/n14) : réintroduire `+ project.rootPath()` dans le `new IOException(` → FAILED ligne 330 ; `+ legacyRoot` → FAILED ligne 400 ; `String.format(\"…%s\", legacyRoot)` → FAILED ; `\"…%s\".formatted(legacyRoot)` → FAILED ; `+ project.rootPath().toFile()` → FAILED. Les deux réserves du 05/11 sont levées. (revérifié indépendamment le 09/11 sur `32ac85e4`) (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": "Réserve de la revérification du 09/11 (deux sites `+ javaHome`, suffixe Home) levée par la PR #710. Le gate reste syntaxique : un message préparé dans une variable, un champ ou un accesseur au nom non reconnu, une String venue d'un autre fichier et la cause chaînée lui échappent (limites écrites dans sa docstring)."
     }
   },
   {
@@ -1972,12 +1972,12 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Risque accepté",
-    "changement": "aucun nouveau changement : `aligner-dependances-de-test-testcontainers`, tâche 4.1",
+    "statut": "Fermé",
+    "changement": "tester-postgresql-sans-testcontainers",
     "verification": {
-      "verdict": "risque accepté",
-      "preuve": "testcontainers.version 2.0.5 (pom.xml:62) inchangé ; R-27 inchangé au registre (accepté jusqu'au 2027-01-15). La règle retirée de quality/dependency-check-suppressions.xml est le faux positif minos-storage ↔ cpe:/a:postgresql:postgresql (devenue sans correspondance, failBuildOnUnusedSuppressionRule) : elle ne touchait pas httpclient5/httpcore5 ; la seule règle restante vise minos-nexus. Profils audit-dependency-check(-tests) inchangés (pom.xml:445-484, report-only failBuildOnCVSS=11). (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
-      "reserve": "R-27 toujours couvert (CVE visibles dans le rapport, aucune exception) ; échéance 2027-01-15."
+      "verdict": "fermé",
+      "preuve": "PR #713 (fusionnée le 2026-11-10) : Testcontainers, docker-java et PrePulledImagesOnlyPullPolicy retirés ; PostgresTestSupport se connecte à un serveur fourni (minos.postgresql.test.url/.user/.password, repli MINOS_TEST_POSTGRES_*), une base par classe ; dependency:tree sans org.testcontainers ni com.github.docker-java. code-audit.yml, run 42924868976 (develop 702d2b0a, NVD du 2026-11-10) : rapports Dependency-Check principal (36 dépendances) et des tests (46 dépendances) sans aucune vulnérabilité, aucune trace de httpclient5, httpcore5, testcontainers ni docker-java. Verify (ubuntu-24.04) de la PR #713 (run 42868644914) : 41 classes PostgreSQL exécutées sans saut, mot de passe masqué. PIT (code-audit.yml, run 42948640323, branche fix/ignorer-les-champs-synthetiques-sous-pit, classes com.minos.storage.postgresql.snapshot.*, tests com.minos.storage.postgresql.*) : 178 mutations dans 4 classes, 140 tuées (79 %), couverture des lignes des classes mutées de 96 % ; le run complet de minos-storage avec ses modules amont dépasse le délai de 120 min du job (run 42934271101 annulé). R-27 en risques résolus. (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": null
     }
   },
   {
@@ -2278,12 +2278,12 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert",
-    "changement": null,
+    "statut": "Fermé avec réserve",
+    "changement": "borner-les-gros-snapshots-au-tas",
     "verification": {
-      "verdict": "non fermé",
-      "preuve": "Constat ajouté le 09/11 par la revérification de `32ac85e4`.",
-      "reserve": null
+      "verdict": "fermé avec réserve",
+      "preuve": "PR #712 (fusionnée le 2026-11-10) : QueryViewMemoryBudget (minos-storage, com.minos.storage.codec), budget unique par processus de 50 % de Runtime.maxMemory() (minos.storage.viewHeapPercent / MINOS_VIEW_HEAP_PERCENT, 10 à 80), réservation du poids estimé avant décodage dans FileSymbolSnapshotStore et PostgresCodeKnowledgeSnapshotStore, attente bornée à 30 s puis SnapshotMemoryExhaustedException rendue par la CLI (code 1) et le MCP ; plafond effectif du cache min(512 Mio, budget) ; PostgreSQL lit octet_length(payload) avant la charge utile ; images de requête en -XX:MaxRAMPercentage=35 (MINOS_MCP_HEAP_PERCENT) ; ADR DATA-0081. Tests : QueryViewMemoryBudgetTest, FileSymbolSnapshotStoreViewBudgetTest, PostgresCodeKnowledgeSnapshotStoreViewBudgetTest, QueryViewAdmissionChildJvmTest (JVM fille -Xmx256m : OutOfMemoryError sans budget, code 0 avec). Mesures : pic d'une vue qui remplit le budget d'environ 0,84 du tas sous Windows (10/11) et 0,83 sous Linux (WSL2, 11/11) ; transitoire du pilote PostgreSQL mesuré à 3,05 fois la charge utile avant le passage en requête préparée, réservé à 310 % (branche perf/mesurer-le-budget-memoire-des-vues) ; tas de l'image de requête sous --memory 3g de 1 076 Mio. Risque décrit au registre inutile (décision du propriétaire 6 du changement). (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": "L'attente d'admission (30 s au plus) se fait sous le verrou de build du projet et bloque les autres requêtes du même projet ; le budget vaut par JVM, et plusieurs clients MCP d'un même conteneur additionnent leurs tas ; sous la limite par défaut du plan de requête, un snapshot PostgreSQL au-delà d'environ 173 Mio est refusé à l'admission ; sous un seul CPU (ramasse-miettes série), la marge du budget sur la vue V3 maximale tombe à une vingtaine de Mio."
     }
   }
 ]
