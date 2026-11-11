@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -61,7 +62,7 @@ class LargePostgresSnapshotMeasurement extends PostgresTestSupport {
 
         for (int read = 1; read <= 4; read++) {
             long readStarted = System.nanoTime();
-            postgres.loadActiveReadView(projectId).orElseThrow();
+            assertTrue(postgres.loadActiveReadView(projectId).isPresent(), "the published snapshot is active");
             print("read." + read + ".millis", millis(readStarted));
         }
         PostgresCodeKnowledgeSnapshotStore.QueryCacheStats stats = postgres.queryCacheStats();
