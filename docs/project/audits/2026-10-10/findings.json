@@ -74,8 +74,8 @@
     "changement": "migrer-le-socle-vers-java-25",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Revérifié le 06/11 sur develop 0e464f24 : la baseline passe à Java 21 (ADR GEN-0077, qui remplace GEN-0067 ; PR #665). pom.xml:43 `maven.compiler.release` 21 et :214 `[21,22)` ; eclipse-temurin 21.0.12.1_1 dans Dockerfile.mcp et Dockerfile.mcp.release ; ScipIndexerCatalog.java:332 « Java 21 JDK » ; docs/developer/TOOLCHAIN_POLICY.md. `python -I scripts/quality/check-toolchain-baseline.py` : SUCCESS (java=21, 38 places). `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts sur la PR.",
-      "reserve": "Candidat A : release-promotion-gate.yml:80 et docker-upgrade-qualification.yml:63 installent Java 25 tant que `main` est construit en Java 25 (exception tracée dans le gate, `PREVIOUS_JAVA = \"25\"`, à retirer quand `main` sera en Java 21). Images Docker de release, installateur Windows et mise à jour sur place vérifiés sous Java 21 par la CI de la PR #665 (runs 42215327960, 42215328008, 42215328011) ; indexation Java hors ligne sous bubblewrap dans Verify (ubuntu-24.04) (run 42230669977) ; l'indexation Java sous le bac à sable Windows reste hors de portée (scip-java BLOCKED, SEC-0074) ; release-promotion-gate ne se déclenche que sur une PR vers main. Fixture java-24-smoke voulue."
+      "preuve": "Baseline cohérente : pom.xml:43 `maven.compiler.release` 21, :214 enforcer `[21,22)` ; docker/Dockerfile.mcp:12,:22 et Dockerfile.mcp.release:26,:37,:69 `eclipse-temurin:21.0.12.1_1-(jdk|jre)-noble@sha256:…` ; 20 étapes `java-version: '21'` dans 13 workflows ; dependabot.yml:69-71 (majeur ignoré, commentaire à 21) ; TOOLCHAIN_POLICY.md:10 (Temurin 21 LTS, support ≥ 2029-12, changement ouvert 12 mois avant). check-toolchain-baseline.py rejoué : SUCCESS (java=21, 38 places) ; mutation Dockerfile.mcp:22 en temurin 25 → FAILED. Décision documentée : ADR GEN-0077 (Accepted 2026-11-06, « Remplace GEN-0067 ») ; archive/GEN-0067 « Superseded », « Remplacé par GEN-0077 » ; 0059 et 0004 marquées superseded dans adr/README.md. Motif écrit : MORPHEUS lance MINOS avec un runtime Java 21 embarqué (classes v69 refusées). Ce n'est pas une régression de sécurité par rapport au constat (JDK 24 non LTS hors support) : 21 est LTS et corrigé ; c'est un recul de durée de support par rapport à la cible Java 25 de l'ADR 0059, assumé et écrit (GEN-0077, Conséquences négatives : changement suivant au plus tard en décembre 2028). (revérifié indépendamment le 09/11 sur `32ac85e4`) 10/11 sur `3cadc4ca` : Dockerfile.mcp et Dockerfile.mcp.release passent à eclipse-temurin:21.0.13_9 (jdk et jre, épinglés par digest), le JDK de distribution de la CI à openjdk-21-jre-headless 21.0.13.0.3 ; check-toolchain-baseline.py SUCCESS (java=21, gradle=9.9.0, 38 places).",
+      "reserve": "Correctifs d'octobre 2026 appliqués le 10/11 (réserve de niveau de correctif levée). Restent : candidat A encore en Java 25 dans release-promotion-gate.yml et docker-upgrade-qualification.yml (exception tracée, à retirer après la première construction de main en Java 21) ; verify-run-configurations.ps1 hors du gate de baseline ; runtime de l'installeur Windows sur setup-java '21' flottant."
     }
   },
   {
@@ -102,8 +102,8 @@
     "changement": "figer-la-dette-de-frontieres-par-des-cliquets` (règle A11)",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "ProjectPathMappings n'est plus nommé par aucune surface : DockerRuntimeBootstrap passe par com.minos.application.ProjectPathMappingService et le record domaine ProjectPathMapping ; seuls minos-engine (déclaration), minos-application, minos-bootstrap le nomment. Scan indépendant (imports + noms qualifiés) : 8 imports de 4 types moteur dans 6 fichiers (CLI 4 : query.SymbolResult/UsageResult/RelationshipResult, runtime.MinosVersion ; API 3 : query.* dans LocalMinosApi ; MCP 1 : MinosVersion ; NEXUS 0), aucun import joker = ENGINE_TYPES_NAMED_BY_SURFACE (8 entrées, contre 9). MinosApplication : 15 accesseurs publics typés moteur (relus dans la source, l. 260-283 : projectRegistry, snapshotStore, indexStateStore, fingerprintStore, runtimeObservationStore, retentionService, discoveryService, fingerprintService, invalidationService, incrementalIndexingPlanner, providerRuntimeManager, indexerDescriptors, snapshotStager, snapshotPromoter, indexerRegistry(String)), tous dans le cliquet MINOS_APPLICATION_ENGINE_ACCESSORS (19 le 28/10) ; semanticVectorStore est du domaine. (revérifié le 29/10 sur `7f5d886d`)",
-      "reserve": "Les POM minos-cli, minos-api et minos-mcp dépendent toujours de minos-engine en portée compile (plus un test-jar en test pour CLI et MCP) : nécessaire tant qu'ils nomment query.* et MinosVersion (modèles publiés, ADR 0057 § 6). 15 accesseurs typés moteur restent publics (dont runtimeObservationStore « gardé pour un test »). Cliquet en Python, pas d'équivalent bytecode pour les accesseurs."
+      "preuve": "check-module-boundaries.py SUCCESS, 252 auto-tests OK ; nouveau code WSL : port WslIndexingRoute/WslIndexingWorker dans minos-application, implémentation dans minos-bootstrap (LocalWslIndexingRoute, DefaultMinosApplicationComposer:205-224), minos-cli (WslWorkerLaunch) ne nomme aucun type com.minos.remote. Pas de régression. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée."
     }
   },
   {
@@ -263,8 +263,8 @@
     "changement": "figer-la-dette-de-frontieres-par-des-cliquets` (règle A13)",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Snapshot 810dcfb2. pom.xml : reactor à 13 modules, un seul `minos-storage` (packages codec, home, local, postgresql), plus aucun minos-storage-local/-postgresql. Codec commun : minos-storage/src/main/java/com/minos/storage/codec (9 classes : KnowledgeSnapshotCodecs, SnapshotCodec V1-V3, SnapshotIntegrityService, SnapshotBinaryPrimitives…), ProjectPathMappingStore dans com.minos.storage.home ; PostgreSQL n'importe plus que codec/home (PostgresCodeKnowledgeSnapshotStore.java:12-13 et :282, PostgresSnapshotPayloadCodec.java:4-5, PostgresProjectRegistry.java:7). Interdiction local <-> postgresql : STORAGE_PACKAGE_RULES de check-module-boundaries.py (local->postgresql+driver, postgresql->local, codec/home->backends+JDBC, sources main ET test) + liste fermée STORAGE_PACKAGES, doublée en ArchUnit sur le bytecode (minos-app ModuleArchitectureTest : thePostgresqlBackendDoesNotUseTheLocalBackend, theSharedStoragePackagesUseNoBackend). Bootstrap sans PostgreSQL : R1 (POSTGRESQL_BLIND_MODULES, sources de minos-bootstrap sans import ni nom qualifié de com.minos.storage.postgresql / org.postgresql), ArchUnit onlyThePostgresqlBackendUsesPostgresql (bootstrap, adapter.scip, storage.local), test de chargement T1 LocalCompositionLoadsNoPostgresqlClassTest (chargeur isolé, aucune classe org.postgresql./storage.postgresql. chargée) ; service déclaré par minos-app/src/main/resources/META-INF/services/com.minos.storage.StorageBackendProvider. SCIP : aucun `new FileSymbolSnapshotStore` dans minos-provider-scip/src/main (seule instanciation de prod : LocalStorageBackend.java:49 ; bootstrap passe `FileSymbolSnapshotStore::new`, DefaultMinosApplicationComposer.java:91) ; ScipProjectSnapshotLifecycle reçoit StagingSnapshotStores (port moteur com.minos.store) ; aucun import com.minos.storage dans le provider ; minos-provider-scip/pom.xml:29-31 minos-storage en <scope>test</scope>, gardé par TEST_ONLY_DEPENDENCIES. A13 : ADAPTER_TYPES_NAMED_BY_ADAPTER = un seul couple provider-scip -> runtime-local, 9 types (StrongProcessOwnershipIndexerExecutor, BoundedProcessOutput, CommandLocator, IndexerProcessPlan, IndexerProcessPlanFactory, InstallationProcessEnvironment, ProcessIndexerExecutor, WorkerSandboxBackend, WorkerSandboxBackends), 28 usages-fichiers ; ADAPTER_COUPLING_REASONS : 1 raison écrite (plans de processus, environnement filtré, sorties bornées, propriété forte et sandbox ; ADR 0068/0070), le garde refuse couple sans raison et raison sans couple. Compte réel : 28 imports com.minos.runtime.local dans 12 fichiers de minos-provider-scip/src/main (inchangé depuis le 24/10, +3 vs audit). Rejoué : check-module-boundaries.py SUCCESS (modules=13, sources=577 ; A13 9 types/28 fichiers, 1 couple justifié ; R1/R2 2 modules ; Storage packages 4 règles ; A14 36 racines/13 modules) ; test_check_module_boundaries.py : 238 tests OK (unittest, pas de pytest). (revérifié le 28/10 sur `810dcfb2`)",
-      "reserve": "1) « Bootstrap ne dépend pas de PostgreSQL en compilation » n'est vrai qu'au niveau des sources et du bytecode : minos-storage/pom.xml:37-40 déclare org.postgresql:postgresql en portée compile, donc le pilote et com.minos.storage.postgresql sont sur le classpath de compilation de minos-bootstrap (et de provider-scip en test) ; la garde est R1 (regex sources) + ArchUnit + T1, pas Maven (choix assumé, `build-helper` refusé). 2) L'impact de l'audit n'est que partiellement levé : le staging SCIP reste sur fichiers pour les deux backends (bootstrap injecte FileSymbolSnapshotStore::new quel que soit le backend, ADR 0068 § 2/§ 5 « pour les deux backends »), et PostgresProjectRegistry lit toujours ProjectPathMappingStore sous MINOS_HOME (fichier) : le backend PostgreSQL n'est toujours pas autonome, désormais par décision documentée plutôt que par couplage. 3) Le couplage SCIP -> runtime-local reste à 28 imports (25 à l'audit), justifié mais pas réduit ; A13 compte des usages-fichiers par type, pas des références. 4) Pas de build Java : ArchUnit, T1 et la portée test non exécutés ici (CI verte affirmée par SUIVI, non vérifiée)."
+      "preuve": "Gate de frontières vert ; WslIndexerExecutor (minos-runtime-local) réutilise DistributedArtifactBundleStore du même module ; pas de nouveau couplage adaptateur→adaptateur visible. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée."
     }
   },
   {
@@ -416,8 +416,8 @@
     "changement": "epingler-et-isoler-l-installation-des-providers, executer-scip-java-sur-classpath-verifie",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "ScipJavaProcessPlanFactory.java:174-178 : commande = lanceur PATH ou classpathCommand vérifié (ScipJavaClasspath.verify l. 201), puis `--` + ligne Maven fixe ; plan refusé avant copie si dépôt/Maven 3.9 absents (l. 158-160, ScipJavaMavenOffline.prepare). Nouveau : la CI rejoue une indexation scip-java réelle sous bwrap (pr-ci.yml:401-411 → scripts/ci/qualify-linux-offline-maven-index.sh, Coursier épinglé par commit+SHA-256 lus dans Dockerfile.mcp.release:80-81, vérifiés par sha256sum -c l. 104). (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
-      "reserve": "Réserve « indexation réelle non rejouée » partiellement levée côté Linux (étape CI, non exécutable ici) ; inchangé : lanceur scip-java du PATH exécuté sans vérification (l. 162), AppContainer non couvert."
+      "preuve": "Coursier Linux désormais installé depuis le catalogue : embedded-tools.json:100-106 (coursier linux-x64, commit 15f36c16…, sha256 62b141b1…) ; CoursierLauncherInstallation.java : `PinnedArtifactSource.acquire` (empreinte vérifiée avant extraction), décompression bornée (256 Mio), fichier privé 0700, déplacement atomique. Amélioration, pas de régression. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "Repli `CommandLocator.find(\"cs\")` du PATH conservé (ManagedScipProviderRuntimeManager.java:677, préexistant) ; `managedExecutable()` filtre par `Files::isRegularFile` (suit un lien)."
     }
   },
   {
@@ -444,8 +444,8 @@
     "changement": "idem",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "check-jacoco.py:26-35 scope `storage-codec-and-state` (SnapshotBinaryCodecSupport, FileIndexStateStore, FileProjectFingerprintSnapshotStore, LocalProjectRegistry, 0.89/0.73) ; :41-44 `com/minos/io/` + plancher LeaseDeadline ; LeaseDeadlineTest présent (revérifié le 16/10 sur `0e5f14a7`)",
-      "reserve": "Couverture ciblée seulement ~246/531 fichiers (déclaré) ; PrivateLocalStorage absent de tout scope nominatif (seul `global` le couvre)."
+      "preuve": "check-jacoco.py inchangé. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "Aggravation de périmètre, pas régression : le nouveau paquet com/minos/runtime/local/wsl (19 classes, ~1 900 lignes, frontière de confiance Windows↔WSL) et ScipJavaProjectJdk/CoursierLauncherInstallation ne sont dans aucun scope nominatif ; seul le scope global les couvre."
     }
   },
   {
@@ -473,8 +473,8 @@
     "changement": "idem",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Revérifié le 06/11 sur develop 0e464f24. LinuxSandboxToolchainHomeTest.java:53 passe par `SandboxTestSupport.decide(SandboxTestSupport.required(), packaged.isPresent(), …)` : en mode requis, un JDK de distribution absent fait échouer le test. `scripts/ci/install-linux-sandbox-toolchain.sh --with-packaged-jdk` (l. 35-40, appelé par pr-ci.yml seulement) installe `openjdk-21-jre-headless=21.0.12.1+1-1~24.04.4` (PR #663, e0a9bb77). Sur le runner : run 42125613723 (develop cc38f352), `LinuxSandboxToolchainHomeTest` 13 tests, 0 échec, 0 sauté.",
-      "reserve": "Le paquet Ubuntu est épinglé par version : chaque mise à jour trimestrielle d'OpenJDK fait échouer l'installation volontairement, il faut alors changer PACKAGED_JDK_PACKAGE. Les autres `assumeTrue` annexes relevés le 05/11 (bundle CA, …) n'ont pas été revérifiés."
+      "preuve": "LinuxSandboxToolchainHomeTest.java:53 et :263 passent par `SandboxTestSupport.decide(SandboxTestSupport.required(), …)` ; scripts/ci/install-linux-sandbox-toolchain.sh:35-40 installe `openjdk-21-jre-headless=21.0.12.1+1-1~24.04.4` avec `--with-packaged-jdk` ; pr-ci.yml:381 (installation) et :399/:415 (`-Dminos.sandbox.tests.required=true`, Linux et Windows). Plus aucun octet NUL dans le fichier (contrôle Python : 0). (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "Deux `assumeTrue` restent hors de `decide` (LinuxSandboxToolchainHomeTest.java:90 bundle CA de l'hôte, :151 user.home) : hypothèses d'environnement bénignes, mais elles se sautent aussi en mode requis. Paquet Ubuntu épinglé : chaque mise à jour trimestrielle d'OpenJDK casse volontairement l'installation (et le JDK 21.0.12.1 n'est pas le dernier correctif, voir AUD-DEP-01). Preuve CI (run 42125613723, 13 tests, 0 sauté) non rejouable ici."
     }
   },
   {
@@ -576,8 +576,8 @@
     "changement": "ramener-le-poids-des-vues-a-la-mesure",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "FileSymbolSnapshotStore.java:51 et PostgresCodeKnowledgeSnapshotStore.java:58 QUERY_VIEW_PERSISTED_AMPLIFICATION = 2L (les deux stores) ; fusionné PR #442 ; check-mne.py rc=0 Revérifié le 07/11 : facteur de V3 mesuré à 1,05 (snapshot réel de 339,5 Mio) et 1,47 (corpus synthétique) fois le fichier ; amplification V3 à 125 %, V1 et V2 à 200 %, plafond du cache inchangé à 512 Mio, plafond de persistance à 400 Mio (`SnapshotLimits`, DATA-0078).",
-      "reserve": "Mesure sur corpus réel faite (tâche 2.4, 2026-10-15, puis snapshot de 339,5 Mio le 2026-11-07). Restent : un corpus riche en relations garde un poids estimé au-dessus du plafond du cache et se recharge à chaque requête ; plusieurs chargements simultanés d'une vue non mise en cache épuisent le tas (deux vues échouent sous 640 Mo) ; Linux non mesuré."
+      "preuve": "SnapshotLimits.java : plafond de persistance 400 Mio (SnapshotBinaryCodecSupport.java:91), cache 512 Mio, amplification V3 125 % / V1-V2 200 %, `requireCacheCoversPersistable()` (500 Mio ≤ 512 Mio). Lecture fichier : `requireSnapshotFileSize` avant ouverture puis flux borné (SnapshotBinaryCodecSupport.java:171-226). PostgreSQL : `copyBounded(…, limits.maxPersistedBytes())` (PostgresCodeKnowledgeSnapshotStore.java:314, :409). Cohérent avec la correction attendue. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "Voir NOUVEAU-1 : une vue maximale occupe à elle seule ~500 Mio du cache de 512 Mio, le plafond du cache est fixe (aucune référence à Runtime.maxMemory) et les chargements simultanés ne sont pas bornés (DATA-0078:102-106, « reste à proposer »). Sous PostgreSQL, le pilote matérialise la colonne bytea avant `copyBounded` : le plafond borne la copie, pas l'allocation."
     }
   },
   {
@@ -757,8 +757,8 @@
     "changement": "surveiller-les-outils-embarques",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Revérifié le 06/11 sur develop 0e464f24. La dérogation minimatch GHSA-g3hv-75wg-m249 (osv-scanner.toml:12-15, jusqu'au 2027-01-31) est le risque R-30 de docs/architecture/risks/register.md (l. 26) : origine dans le verrou de scip-python, exposition, décision datée, révision au plus tard le 2027-01-31. Les références à l'ADR 0060 sont remplacées par SEC-0074 dans embedded-tools-advisory-waivers.json (PR #664, cc38f352).",
-      "reserve": "R-30 reprend la dérogation du 2026-10-31 sans décision écrite du propriétaire : à confirmer. Le risque expire le 2027-01-31 : passé ce jour, le check exigé `osv-scan` échoue."
+      "preuve": "R-30 résolu le 2026-11-11 : GitHub a restreint GHSA-g3hv-75wg-m249 aux versions >= 7.0.0, < 11.0.1 (mise à jour du 2026-11-04, reprise par OSV) ; api.osv.dev/v1/query sur minimatch@3.1.5 ne rend aucun avis ; la dérogation osv-scanner.toml de minos-provider-scip est retirée et R-30 passe en risques résolus (branche sec/clore-r-30-et-accepter-sec-0080). R-29 résolu par la PR #711 (guava forcé en 33.7.2-jre, ADR SEC-0080 accepté le 2026-11-11) ; embedded-tools-advisory-waivers.json sans dérogation. (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": "Aucune dérogation OSV en vigueur sur les outils embarqués ; restent la veille planifiée du catalogue, non vérifiée en exécution, et l'absence de Dependabot npm (choix assumé)."
     }
   },
   {
@@ -1011,8 +1011,8 @@
     "changement": "idem (arêtes d'exécution) et décision D3",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Décision documentée sans déplacement (ADR 0062 D3, reprise dans ARCH-0068:67) : minos-app inchangé (DockerMcpTransport 214 l. avec 2 ProcessBuilder :114 :190, McpBackendConfigurationStore, McpBackendRouter, com.minos.integration.nexus.NexusExportBridgeMain). L'arête cachée est désormais publiée et contrôlée : module-dependencies.md § 'Arêtes d'exécution par service' liste minos-cli → minos-app (McpLaunchRoute) ; le garde affiche 4 arêtes d'exécution documentées et échoue si une manque. minos-cli/pom.xml ne déclare toujours pas minos-app (attendu). (revérifié le 24/10 sur `bf633fc7`)",
-      "reserve": "Dette fonctionnelle non corrigée : transport et persistance MCP restent dans le module à la politique la plus permissive ; aucun cliquet sur le contenu de minos-app (ALLOWED l'autorise toujours vers les 13 modules, ProcessBuilder non surveillé dans minos-app)."
+      "preuve": "Aucun fichier de minos-app/src/main modifié (seulement des tests de caractérisation). Pas de régression. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée."
     }
   },
   {
@@ -1086,8 +1086,8 @@
     "changement": "decouper-les-methodes-d-analyse-et-d-ingestion",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Même script de mesure (scratchpad/methods.py) sur les deux snapshots : seules différences ≥ 80 lignes : WindowsAppContainerWorkerSandboxBackend.sandboxPlan 108 → 104 ; DistributedArtifactBundleStore.accept apparaît à 80 l. ; CodeSearchService.search 119 et LocalIsolatedIndexWorker.execute 107 inchangés. (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
-      "reserve": "Les trois méthodes citées restent longues ; aucun seuil (conforme à l'audit)."
+      "preuve": "Pas de seuil ; nouvelles classes WSL de taille modérée (WslLinuxWorker.run ~50 lignes, WslIndexWorker.execute ~35). Pas de régression notable. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée."
     }
   },
   {
@@ -1211,8 +1211,8 @@
     "changement": "etendre-le-garde-d-e-s-privees-aux-ecritures-brutes",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "LocalIsolatedIndexWorker.java:188 `PrivateLocalStorage.ensurePrivateDirectory(workspace)` remplace Files.createDirectory ; private-io-allowlist.json : 24 entrées / 54 occurrences (25/56 au 29/10), l'entrée LocalIsolatedIndexWorker retirée et la sonde bubblewrap ramenée de max 2 à 1. Nouveau code d'écriture (ScipJavaMavenOffline.java:244-249, ProjectPathMappingStore.java:110-117) passe par PrivateLocalStorage/DurableAtomicFile. Gate SUCCESS. (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
-      "reserve": "54 occurrences restent derrière la liste blanche (amélioration, pas de régression)."
+      "preuve": "check-private-io.py rejoué SUCCESS, 54 occurrences en liste blanche (inchangé) ; le nouveau code WSL écrit par PrivateLocalStorage (WslIndexWorker : ensurePrivateDirectory, createPrivateTempDirectory, writePrivateFile ; WslIndexerExecutor.copyUnderRun : createPrivateOutputStream). Pas de régression. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée (liste blanche de 54)."
     }
   },
   {
@@ -1232,12 +1232,12 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Partiel",
+    "statut": "Fermé avec réserve",
     "changement": "idem",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Revérifié le 06/11 sur develop 0e464f24. Les deux messages de LocalProjectRegistry.java n'ont plus de chemin : l. 330-331 `+ leafName(project.rootPath())`, l. 400 « legacy project root cannot be migrated with configured mapping » sans valeur (PR #662, 7ad45c93). La règle `message(Path)` de check-private-io.py reconnaît maintenant l'accesseur sans argument dont le nom finit par Path, Root, Dir, Directory ou File, la String déclarée avec un tel nom et toAbsolutePath/toRealPath concaténé (l. 318-346) ; elle était rouge sur le dépôt réel avant les corrections. `python -I scripts/architecture/check-private-io.py` : SUCCESS (sources=621, allowlisted-occurrences=54) ; `python scripts/architecture/test_check_private_io.py` : 57 tests OK.",
-      "reserve": "La règle reste syntaxique, sans moteur de types : un message préparé dans une variable, un accesseur au nom différent ou une String déclarée ailleurs échappent encore au gate (docstring l. 343-346). Un message d'exception de JGit contenait le chemin du fichier de configuration d'un dépôt analysé malformé (GitIntelligenceService, ouverture du dépôt) : corrigé par la PR #666."
+      "preuve": "PR #710 (fusionnée le 2026-11-10, changement garder-les-chemins-de-jdk-hors-des-messages) : les deux messages `+ javaHome` de ScipJavaProjectJdk sont retirés (git grep \"+ javaHome\" -- \"*.java\" vide), le diagnostic et le refus nomment la variable sans son chemin (ScipJavaProjectJdkTest#theDiagnosticOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath, #theRefusalOfAJavaHomeWithoutJavacNamesTheVariableWithoutItsPath) ; check-private-io.py reconnaît le suffixe Home, les formes chaînées (getParent, normalize, resolve, Path.of, Paths.get) et Optional.of/ofNullable (test_check_private_io.py, témoin de mutation du site réel). minos14 (32ac85e4) : LocalProjectRegistry.java:330-331 `\"project path cannot be represented by configured runtime mapping: \" + leafName(project.rootPath())` et :400 message fixe sans valeur ; ProjectPathMapping.java:165, :223 et :280 sans chemin (cause chaînée sans chemin non plus). Gate : check-private-io.py:142 `_PATH_LIKE_SUFFIX = (Path|Root|Dir|Directory|File)`, :146 `_ACCESSOR_RENDERED`, :317 `_renders_path`, :335 `path_rule_sites`. Rejoué sur copie LF : SUCCESS (sources=653, allowlisted-occurrences=54) ; test_check_private_io.py 57 tests OK. Mutations sur copie (scratchpad/n14) : réintroduire `+ project.rootPath()` dans le `new IOException(` → FAILED ligne 330 ; `+ legacyRoot` → FAILED ligne 400 ; `String.format(\"…%s\", legacyRoot)` → FAILED ; `\"…%s\".formatted(legacyRoot)` → FAILED ; `+ project.rootPath().toFile()` → FAILED. Les deux réserves du 05/11 sont levées. (revérifié indépendamment le 09/11 sur `32ac85e4`) (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": "Réserve de la revérification du 09/11 (deux sites `+ javaHome`, suffixe Home) levée par la PR #710. Le gate reste syntaxique : un message préparé dans une variable, un champ ou un accesseur au nom non reconnu, une String venue d'un autre fichier et la cause chaînée lui échappent (limites écrites dans sa docstring)."
     }
   },
   {
@@ -1290,8 +1290,8 @@
     "changement": "conserver-les-refus-conditionnels-windows",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "PrivateLocalStorage.java:72-79 : lecture complète de la DACL par icacls /save, refus si une XD est présente. Le backend AppContainer passe désormais par PrivateLocalStorage.ensurePrivateDirectory (:329, :375-376). 18 occurrences de conditional/XD dans les tests de minos-engine. Le SUIVI cite les runs Windows 20/20, 9/9 et 15/15. (revérifié le 21/10 sur `1492113e`)",
-      "reserve": "La Javadoc :79 reconnaît une fenêtre de course : une XD ajoutée entre la lecture et la réécriture est toujours supprimée. Tests Windows non rejoués ici. icacls reste mentionné dans la Javadoc du backend (:56) ; je n'ai pas vérifié s'il l'invoque encore directement."
+      "preuve": "WindowsIcacls.java, WindowsIcaclsAccessControl.java, WindowsAclGrants.java : seuls changements `catch (… _)` → `catch (… ignored)` (passage à Java 21). Pas de régression. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée (fenêtre de course reconnue ; tests Windows non rejoués)."
     }
   },
   {
@@ -1315,8 +1315,8 @@
     "changement": "reserver-minos-ollama-au-runtime-docker",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "OllamaEmbeddingProvider.java identique au 29/10 ; compose-mcp.connected.yaml:360 ollama 0.40.13@sha256:b2f0122c… (digest épinglé, check-image-pins SUCCESS files=4). SUIVI « Clôtures OpenSpec du 2026-10-31 » rapporte la preuve Docker (non vérifiable ici). (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
-      "reserve": "Le suivi passe à « Fermé » ; restent : :190 accepte minos-ollama sans condition, HTTP clair, Dockerfile.mcp sans MINOS_RUNTIME_LOCATION (reconnu par le suivi)."
+      "preuve": "Aucun fichier Ollama modifié depuis le 05/11 (diff -r). Pas de régression. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée."
     }
   },
   {
@@ -1492,8 +1492,8 @@
     "changement": "borner-la-couverture-globale-et-du-coeur",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "scripts/quality/check-jacoco.py:19-24 scope `global` com/minos/ (hors app) line 0.84/0.81, branch 0.69/0.67 par plateforme ; exécuté en CI .github/workflows/pr-ci.yml:335 et :356 ; `check-jacoco.py --self-test` -> MINOS JACOCO GATE SELF-TEST SUCCESS (16 scenarios) (revérifié le 16/10 sur `0e5f14a7`)",
-      "reserve": "Pas de `jacoco:check` Maven (pom.xml inchangé) : le seuil vit dans le gate Python ; minos-app exclu du global ; mesures CI non rejouables ici (pas de JDK 25)."
+      "preuve": "check-jacoco.py inchangé depuis le 05/11 ; --self-test SUCCESS (16 scénarios) ; le gate réel exige target/site/jacoco-aggregate (non exécutable ici). (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "inchangée."
     }
   },
   {
@@ -1951,8 +1951,8 @@
     "changement": "idem",
     "verification": {
       "verdict": "fermé avec réserve",
-      "preuve": "Revérifié le 06/11 sur develop 0e464f24. check-workflow-pins.py ignore les lignes commentées (`_without_comment`, l. 71-72) et n'accepte une étape que si `docker logout` est exécuté directement ou dans une fonction qu'un `trap <fonction> EXIT` actif appelle (`TRAP_ON_EXIT` et `TRAP_CLEARED`, l. 228-229 ; `_logout_runs`, l. 254-257) (PR #663, e0a9bb77). `python -I scripts/quality/check-workflow-pins.py` : SUCCESS (external uses=104) ; `python scripts/quality/test_check_workflow_pins.py` : 86 tests OK.",
-      "reserve": "La portée « Public Repo Read-only » du jeton Docker Hub n'est pas vérifiée (tâche 4.1, propriétaire) ; `release-promotion-gate.yml` et `docker-upgrade-qualification.yml` restent dans DOCKER_LOGIN_KEPT avec leur raison. Seules les formes de shell présentes dans les workflows sont reconnues."
+      "preuve": "check-workflow-pins.py:71 `_without_comment`, :228-229 `TRAP_ON_EXIT`/`TRAP_CLEARED`, :254 `_logout_runs` ; pr-ci.yml:328-329 et code-audit.yml:161-162 `log_out() { docker logout || …; }` + `trap log_out EXIT`. Rejoué : SUCCESS (external uses=104) ; test_check_workflow_pins.py 86 OK. Mutations sur copie de pr-ci.yml : trap commenté → FAILED (pr-ci.yml:321) ; trap supprimé → FAILED ; `trap \"\" EXIT` sur la ligne suivante → FAILED ; `trap log_out INT` → FAILED. La réserve du 05/11 (trap retiré/commenté resté vert) est levée. (revérifié indépendamment le 09/11 sur `32ac85e4`)",
+      "reserve": "Formes encore vertes (mutations sur copie) : `trap log_out EXIT; trap - EXIT` sur la même ligne ; un second `trap \"echo bye\" EXIT` qui remplace le handler ; `exec …` après le trap ; `echo docker logout` dans la fonction. Ce sont des contournements volontaires plutôt que des régressions accidentelles, mais « trap effacé » n'est reconnu que sur une ligne à part. La portée « Public Repo Read-only » du jeton reste à vérifier par le propriétaire ; release-promotion-gate.yml et docker-upgrade-qualification.yml restent dans la liste fermée."
     }
   },
   {
@@ -1972,12 +1972,12 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Risque accepté",
-    "changement": "aucun nouveau changement : `aligner-dependances-de-test-testcontainers`, tâche 4.1",
+    "statut": "Fermé",
+    "changement": "tester-postgresql-sans-testcontainers",
     "verification": {
-      "verdict": "risque accepté",
-      "preuve": "testcontainers.version 2.0.5 (pom.xml:62) inchangé ; R-27 inchangé au registre (accepté jusqu'au 2027-01-15). La règle retirée de quality/dependency-check-suppressions.xml est le faux positif minos-storage ↔ cpe:/a:postgresql:postgresql (devenue sans correspondance, failBuildOnUnusedSuppressionRule) : elle ne touchait pas httpclient5/httpcore5 ; la seule règle restante vise minos-nexus. Profils audit-dependency-check(-tests) inchangés (pom.xml:445-484, report-only failBuildOnCVSS=11). (revérifié le 05/11 sur `e9ae6cfe`) (revérifié le 05/11 sur `e9ae6cfe`)",
-      "reserve": "R-27 toujours couvert (CVE visibles dans le rapport, aucune exception) ; échéance 2027-01-15."
+      "verdict": "fermé",
+      "preuve": "PR #713 (fusionnée le 2026-11-10) : Testcontainers, docker-java et PrePulledImagesOnlyPullPolicy retirés ; PostgresTestSupport se connecte à un serveur fourni (minos.postgresql.test.url/.user/.password, repli MINOS_TEST_POSTGRES_*), une base par classe ; dependency:tree sans org.testcontainers ni com.github.docker-java. code-audit.yml, run 42924868976 (develop 702d2b0a, NVD du 2026-11-10) : rapports Dependency-Check principal (36 dépendances) et des tests (46 dépendances) sans aucune vulnérabilité, aucune trace de httpclient5, httpcore5, testcontainers ni docker-java. Verify (ubuntu-24.04) de la PR #713 (run 42868644914) : 41 classes PostgreSQL exécutées sans saut, mot de passe masqué. PIT (code-audit.yml, run 42948640323, branche fix/ignorer-les-champs-synthetiques-sous-pit, classes com.minos.storage.postgresql.snapshot.*, tests com.minos.storage.postgresql.*) : 178 mutations dans 4 classes, 140 tuées (79 %), couverture des lignes des classes mutées de 96 % ; le run complet de minos-storage avec ses modules amont dépasse le délai de 120 min du job (run 42934271101 annulé). R-27 en risques résolus. (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": null
     }
   },
   {
@@ -2260,5 +2260,30 @@
     "statut": "Info",
     "changement": null,
     "verification": null
+  },
+  {
+    "id": "AUD-PERF-15",
+    "titre": "Gros snapshots : le cache de vues (512 Mio fixes) et des chargements simultanés non bornés peuvent épuiser le tas du serveur MCP, sans entrée au registre des risques",
+    "severite": "Moyenne",
+    "axe": "Performance",
+    "axes": [
+      "Performance"
+    ],
+    "preuve": "SnapshotLimits.java : DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES = 512 Mio, constant, aucune lecture de Runtime.maxMemory() dans minos-storage ni minos-engine (grep) ; plafond 400 Mio × 125 % = 500 Mio, donc une seule vue maximale remplit le cache. DATA-0078:102-103 : « deux vues échouent sous 640 Mo », « le tas par défaut du conteneur MCP (25 % de 3 Gio, 768 Mio) supporte une vue […] en cache, pas deux chargements simultanés » ; :106 pic de décodage et Linux non mesurés ; SUIVI 2026-11-06 « Non fait : bornage des chargements simultanés ». docker/compose-mcp.*.yaml : mem_limit 3g, aucun Xmx/MaxRAMPercentage. Sous PostgreSQL (PostgresCodeKnowledgeSnapshotStore.java:407-409) la ligne bytea est déjà en mémoire dans le pilote quand `copyBounded` s'applique. docs/architecture/risks/register.md : aucune entrée (grep tas/heap/simultané vide).",
+    "impact": "Avec le support des gros snapshots (plafond 400 Mio), une seule vue maximale remplit le cache de 512 Mio ; deux chargements simultanés de gros snapshots dépassent le tas par défaut du serveur MCP (environ 768 Mio) et provoquent un OutOfMemoryError qui interrompt toutes les requêtes en cours.",
+    "effort": "M",
+    "action": "Borner les chargements de vue non mise en cache (sémaphore ou admission au poids), dériver le plafond du cache d'une fraction du tas maximal (min(512 Mio, x % de maxMemory)) avec refus explicite à l'admission, fixer MaxRAMPercentage ou -Xmx dans l'image MCP, et inscrire le risque au registre avec échéance tant que le bornage n'existe pas ; mesurer sous Linux et sous PostgreSQL le pic de décodage d'un snapshot de 400 Mio.",
+    "connu": "ADR DATA-0078 (risque reconnu, non suivi)",
+    "confiance": "confirmé",
+    "sprint": null,
+    "depends_on": [],
+    "bloque": [],
+    "statut": "Fermé avec réserve",
+    "changement": "borner-les-gros-snapshots-au-tas",
+    "verification": {
+      "verdict": "fermé avec réserve",
+      "preuve": "PR #712 (fusionnée le 2026-11-10) : QueryViewMemoryBudget (minos-storage, com.minos.storage.codec), budget unique par processus de 50 % de Runtime.maxMemory() (minos.storage.viewHeapPercent / MINOS_VIEW_HEAP_PERCENT, 10 à 80), réservation du poids estimé avant décodage dans FileSymbolSnapshotStore et PostgresCodeKnowledgeSnapshotStore, attente bornée à 30 s puis SnapshotMemoryExhaustedException rendue par la CLI (code 1) et le MCP ; plafond effectif du cache min(512 Mio, budget) ; PostgreSQL lit octet_length(payload) avant la charge utile ; images de requête en -XX:MaxRAMPercentage=35 (MINOS_MCP_HEAP_PERCENT) ; ADR DATA-0081. Tests : QueryViewMemoryBudgetTest, FileSymbolSnapshotStoreViewBudgetTest, PostgresCodeKnowledgeSnapshotStoreViewBudgetTest, QueryViewAdmissionChildJvmTest (JVM fille -Xmx256m : OutOfMemoryError sans budget, code 0 avec). Mesures : pic d'une vue qui remplit le budget d'environ 0,84 du tas sous Windows (10/11) et 0,83 sous Linux (WSL2, 11/11) ; transitoire du pilote PostgreSQL mesuré à 3,05 fois la charge utile avant le passage en requête préparée, réservé à 310 % (branche perf/mesurer-le-budget-memoire-des-vues) ; tas de l'image de requête sous --memory 3g de 1 076 Mio. Risque décrit au registre inutile (décision du propriétaire 6 du changement). (auto-vérification du 11/11 par l'agent qui a implémenté et fusionné ces changements, sur `develop` `702d2b0a` et les branches citées ; à revérifier par l'auditeur)",
+      "reserve": "L'attente d'admission (30 s au plus) se fait sous le verrou de build du projet et bloque les autres requêtes du même projet ; le budget vaut par JVM, et plusieurs clients MCP d'un même conteneur additionnent leurs tas ; sous la limite par défaut du plan de requête, un snapshot PostgreSQL au-delà d'environ 173 Mio est refusé à l'admission ; sous un seul CPU (ramasse-miettes série), la marge du budget sur la vue V3 maximale tombe à une vingtaine de Mio."
+    }
   }
 ]
