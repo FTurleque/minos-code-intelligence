@@ -287,6 +287,24 @@ MANAGED_POSTGRESQL = ("# MINOS runtime configuration managed by the Windows inst
                       "minos.postgres.managed=true\nminos.postgres.user=minos\nminos.postgres.schema=minos\n")
 
 
+def set_folder_acl(folder: Path, inheritable: bool) -> None:
+    """Gives a folder the access list of a real data folder, or one that no file can inherit from (Windows only).
+
+    A file created in a folder with at least one inheritable entry only receives inherited entries, which the
+    restriction of a secret file removes. In a folder with none (what ``tempfile`` creates on some hosts), Windows
+    gives the file the default access list of the process as explicit entries (SYSTEM, administrators), which the
+    restriction keeps: the secret file is then refused, as it must be.
+    """
+    if not WINDOWS:
+        return
+    icacls = str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "icacls.exe")
+    # S-1-5-32-545: the local users group, readable like a data folder on a shared volume. S-1-3-4: owner rights.
+    arguments = ["/grant", "*S-1-5-32-545:(OI)(CI)R"] if inheritable else ["/inheritance:r", "/grant:r", "*S-1-3-4:F"]
+    completed = subprocess.run([icacls, str(folder), *arguments], capture_output=True, check=False)
+    if completed.returncode != 0:
+        raise AssertionError(f"the test could not set the folder access list (icacls exit {completed.returncode})")
+
+
 def install_fake_docker(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     program = directory / "fake_docker.py"
@@ -303,13 +321,15 @@ def install_fake_docker(directory: Path) -> Path:
 class Runtime:
     """An installed MINOS Docker runtime in a temporary folder, with a recording docker."""
 
-    def __init__(self, directory: Path, compose: Path = CONNECTED, managed_postgresql: bool = True):
+    def __init__(self, directory: Path, compose: Path = CONNECTED, managed_postgresql: bool = True,
+                 inheritable_secrets_acl: bool = True):
         self.root = directory
         self.runtime = directory / "install" / "runtime"
         self.runtime.mkdir(parents=True)
         self.data = directory / "data"
         (self.data / "config").mkdir(parents=True)
         (self.data / "secrets").mkdir()
+        set_folder_acl(self.data / "secrets", inheritable_secrets_acl)
         (self.runtime / "compose-mcp.prod.yaml").write_text(compose.read_text(encoding="utf-8"), encoding="utf-8")
         environment = QUERY_ENVIRONMENT
         if managed_postgresql:
@@ -540,6 +560,21 @@ class EnableTests(lifecycle.PowerShellCase):
                 self.assertIn("MINOS_PGADMIN_IMAGE", output, label)
                 self.assertFalse(runtime.password.exists(), label)
                 self.assertEqual(-1, index_of(runtime.calls(), " up "), (label, runtime.calls()))
+
+    def test_a_secret_file_that_cannot_be_made_private_is_refused(self):
+        # A secrets folder with no inheritable entry: the new file keeps entries for other accounts after the
+        # restriction. The verification refuses it; nothing is started and no secret is left on disk.
+        for label, executable in self.runtimes:
+            with tempfile.TemporaryDirectory() as tmp:
+                runtime = Runtime(Path(tmp), inheritable_secrets_acl=False)
+                code, output = runtime.run(executable, "EnablePgAdmin")
+                self.assertNotEqual(0, code, (label, output))
+                self.assertIn("secrets/pgadmin.password", output, label)
+                self.assertIn("not restricted to the current user", output, (label, "the cause must be named"))
+                self.assertNotIn(tmp, output, (label, "no absolute path in a public message"))
+                self.assertFalse(runtime.password.exists(), (label, "a refused secret file must not stay on disk"))
+                self.assertEqual(-1, index_of(runtime.calls(), f"up -d --wait {SERVICE}"), (label, runtime.calls()))
+                self.assertEqual(-1, index_of(runtime.calls(), "exec -i"), (label, "the role must not be created"))
 
     def test_stop_keeps_the_configuration(self):
         for label, executable in self.runtimes:

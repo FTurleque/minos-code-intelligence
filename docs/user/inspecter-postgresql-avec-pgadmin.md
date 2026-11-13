@@ -69,6 +69,7 @@ La désinstallation du runtime Docker (`-Action Uninstall`) retire le conteneur,
 | `The managed PostgreSQL ... is not running` | `minos-postgres` est arrêté | reconfigurer le stockage PostgreSQL, puis rejouer |
 | `the configured schema holds no MINOS tables` | le schéma désigné par `minos.postgres.schema` ne contient pas les tables de MINOS | vérifier ce réglage et qu'une commande MINOS a déjà ouvert le stockage PostgreSQL, puis rejouer |
 | `pgAdmin cannot be started: MINOS_PGADMIN_..._FILE is missing` | un fichier privé a disparu | rejouer `EnablePgAdmin` |
+| `The private file secrets/pgadmin.password ... (File ACL is not restricted to the current user ...)` | le fichier garde un accès pour d'autres comptes : il existait avec une liste d'accès plus large, ou le dossier `secrets` n'a aucune permission héritable et Windows donne alors au fichier des accès explicites que MINOS ne retire pas | supprimer le fichier ; si l'erreur revient, rétablir l'héritage des permissions du dossier `secrets`, puis rejouer |
 | `The environment of this session defines MINOS_PGADMIN_...` | une variable `MINOS_PGADMIN_*` du terminal remplacerait le réglage du `.env` | la retirer du terminal, puis rejouer |
 | `the role minos_inspect is a member of another role` | le rôle a été modifié à la main | `RemovePgAdmin`, puis `EnablePgAdmin` |
 | `bind source path does not exist: /MINOS_PGADMIN_PASSWORD_FILE-is-required` | pgAdmin démarré directement par `docker compose`, sans ses fichiers | passer par `EnablePgAdmin` |
