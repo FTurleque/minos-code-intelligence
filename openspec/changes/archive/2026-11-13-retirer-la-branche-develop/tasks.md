@@ -14,7 +14,7 @@ Aucun constat d'audit (`AUD-…`) n'est à l'origine de ce changement : décisio
 - [x] 2.1 **(manuelle)** `python scripts/quality/verify-ruleset.py` contre GitHub : les checks du ruleset « Protect main » correspondent à la déclaration
 - [x] 2.2 **(manuelle)** Supprimer `develop` : `git push origin --delete develop`, puis `git branch -D develop` sur chaque poste ; vérifier qu'aucune PR ni aucune règle de protection ne la cite encore
 - [x] 2.3 **(manuelle)** Vérifier la première PR Dependabot : elle cible `main`
-- [ ] 2.4 **(manuelle)** Décider du sort de la qualification Docker A → B sur toute PR (proposition, « Questions ouvertes »)
+- [x] 2.4 **(manuelle)** Décider du sort de la qualification Docker A → B sur toute PR (proposition, « Questions ouvertes ») — décision du propriétaire, 2026-11-13 : la garder sur toute PR ; une restriction se tranche à part, mesure de durée à l'appui
 
 ## 3. Clôture
 
