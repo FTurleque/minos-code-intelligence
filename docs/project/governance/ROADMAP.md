@@ -38,7 +38,7 @@ Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-d
 - le runtime packagé doit être testé, pas seulement le JAR ;
 - une publication est bloquée par les vulnérabilités connues ou l'absence de qualification exacte du candidat ;
 - l'indexation Windows ne requiert pas de droits administrateur ;
-- `main` doit rester ancêtre de la ligne `develop` afin que les promotions ne réintroduisent pas une divergence d'historique.
+- `main` doit rester ancêtre de tout candidat afin qu'une fusion ne réintroduise pas une divergence d'historique.
 
 ## Trajectoire livrée
 
