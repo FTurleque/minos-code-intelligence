@@ -5,6 +5,7 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.EmbeddingProvider;
 import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
+import com.minos.application.semantic.SemanticCorpusQueryService;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.application.semantic.SemanticSearchService;
 import com.minos.application.team.TeamControlPlane;
@@ -133,7 +134,8 @@ public final class MinosApplication implements AutoCloseable {
             SemanticIndexService semanticIndexService,
             SemanticSearchService semanticSearchService,
             HybridSearchService hybridSearchService,
-            HybridContextBuilder hybridContextBuilder
+            HybridContextBuilder hybridContextBuilder,
+            SemanticCorpusQueryService semanticCorpusQueryService
     ) {
     }
 
@@ -202,7 +204,8 @@ public final class MinosApplication implements AutoCloseable {
                 programGraphService, advancedImpactService, securityAnalysisService, workspaceIntelligence,
                 runtimeIntelligenceService);
         this.semantic = new Semantic(
-                semanticIndexService, semanticSearchService, hybridSearchService, hybridContextBuilder);
+                semanticIndexService, semanticSearchService, hybridSearchService, hybridContextBuilder,
+                new SemanticCorpusQueryService(projectRegistry, resolver, snapshotStore, semanticIndexService));
         this.hostedControlPlaneService = Objects.requireNonNull(
                 hostedControlPlaneService, "hostedControlPlaneService");
         this.teamControlPlane = hostedControlPlaneService.map(TeamControlPlane::new);
@@ -312,6 +315,7 @@ public final class MinosApplication implements AutoCloseable {
     public SemanticSearchService semanticSearchService() { return semantic.semanticSearchService(); }
     public HybridSearchService hybridSearchService() { return semantic.hybridSearchService(); }
     public HybridContextBuilder hybridContextBuilder() { return semantic.hybridContextBuilder(); }
+    public SemanticCorpusQueryService semanticCorpusQueryService() { return semantic.semanticCorpusQueryService(); }
 
     // Hosted team control plane (opt-in).
     /** Engine service behind {@link #teamControlPlane()}; empty when the hosted mode is disabled. */

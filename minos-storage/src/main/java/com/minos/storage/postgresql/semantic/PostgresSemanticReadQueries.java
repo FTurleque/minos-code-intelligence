@@ -3,11 +3,13 @@ package com.minos.storage.postgresql.semantic;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
+import com.minos.semantic.SemanticVectorStore.DocumentPage;
 import com.minos.semantic.SemanticVectorStore.IndexChecksums;
 import com.minos.semantic.SemanticVectorStore.IndexDocuments;
 import com.minos.semantic.SemanticVectorStore.IndexMetadata;
 import com.minos.semantic.SemanticVectorStore.IndexSnapshot;
 import com.minos.semantic.SemanticVectorStore.IndexedDocument;
+import com.minos.semantic.SemanticVectorStore.StoredDocument;
 import com.minos.semantic.SemanticVectorStore.VectorHit;
 
 import java.io.IOException;
@@ -114,6 +116,85 @@ final class PostgresSemanticReadQueries {
                         new IndexMetadata(projectId, snapshotId, providerId, modelId, dimensions, builtAt,
                                 checksums.size()),
                         checksums));
+            }
+        }
+    }
+
+    /**
+     * One page of the documents of the index, with the metadata of that index and its document count, in one
+     * statement that does not read the embedding column. The page asks for one row more than {@code limit} to
+     * know whether a document follows; the count is a scalar subquery evaluated in the same statement, so the
+     * page, the metadata and the count describe one state of the index.
+     */
+    static Optional<DocumentPage> documentPage(Connection connection, String projectId, UUID id,
+                                               String afterStableKey, int limit) throws SQLException, IOException {
+        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
+                + "AND c.snapshot_id=m.snapshot_id),"
+                + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
+                + "d.content,d.checksum FROM semantic_index_meta m "
+                + "LEFT JOIN LATERAL (SELECT p.document_id,p.stable_key,p.snapshot_id,p.kind,p.source_id,p.file_id,"
+                + "p.start_line,p.end_line,p.content,p.checksum FROM semantic_documents p "
+                + "WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
+                + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
+                + "WHERE m.project_id=? ORDER BY d.stable_key";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, afterStableKey);
+            statement.setString(2, afterStableKey);
+            statement.setInt(3, limit + 1);
+            statement.setObject(4, id);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                long count = result.getLong(6);
+                if (count > Integer.MAX_VALUE) {
+                    throw new IOException("semantic document count exceeds supported integer range");
+                }
+                IndexMetadata metadata = new IndexMetadata(projectId, result.getString(1), result.getString(2),
+                        result.getString(3), result.getInt(4), result.getLong(5), (int) count);
+                List<SemanticDocument> documents = new ArrayList<>();
+                boolean hasMore = false;
+                do {
+                    if (result.getString(7) == null) continue;
+                    if (documents.size() == limit) {
+                        hasMore = true;
+                        break;
+                    }
+                    documents.add(document(projectId, result, 7));
+                } while (result.next());
+                return Optional.of(new DocumentPage(metadata, documents, hasMore));
+            }
+        }
+    }
+
+    /**
+     * One document, its stored vector and the metadata of its index, in one statement: no row when the
+     * project has no index, a row without document when the index holds none under {@code stableKey}.
+     */
+    static Optional<StoredDocument> storedDocument(Connection connection, String projectId, UUID id,
+                                                   String stableKey) throws SQLException, IOException {
+        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
+                + "AND c.snapshot_id=m.snapshot_id),"
+                + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
+                + "d.content,d.checksum,d.embedding::text FROM semantic_index_meta m "
+                + "LEFT JOIN semantic_documents d ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id "
+                + "AND d.stable_key=? WHERE m.project_id=?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, stableKey);
+            statement.setObject(2, id);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                long count = result.getLong(6);
+                if (count > Integer.MAX_VALUE) {
+                    throw new IOException("semantic document count exceeds supported integer range");
+                }
+                int dimensions = result.getInt(4);
+                IndexMetadata metadata = new IndexMetadata(projectId, result.getString(1), result.getString(2),
+                        result.getString(3), dimensions, result.getLong(5), (int) count);
+                if (result.getString(7) == null) return Optional.of(new StoredDocument(metadata, Optional.empty()));
+                SemanticDocument document = document(projectId, result, 7);
+                SemanticVector vector = SemanticVector.fromArray(stableKey, parseVector(result.getString(17), dimensions));
+                return Optional.of(new StoredDocument(metadata, Optional.of(new IndexedDocument(document, vector))));
             }
         }
     }
