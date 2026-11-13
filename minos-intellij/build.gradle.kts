@@ -14,7 +14,7 @@ buildscript {
     // (osv-scan). Not shipped by MINOS, but run by the build: raised to their first fixed versions until the plugins
     // bring them. undertow-core has no fixed version: its exception is minos-intellij/osv-scanner.toml.
     dependencies {
-        classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.4"))
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.23.0"))
         constraints {
             classpath("org.jsoup:jsoup:1.24.1")
         }
@@ -25,7 +25,7 @@ plugins {
     java
     // AUD-TST-05: the coverage of the plugin is measured by Gradle's own JaCoCo plugin (no third-party plugin).
     jacoco
-    id("org.jetbrains.intellij.platform") version "2.20.0"
+    id("org.jetbrains.intellij.platform") version "2.20.1"
     // Audit only (MINOS-AUD-H09, docs/developer/quality/code-audit.md): their tasks run when called by name, never in
     // `test buildPlugin`. Versions and settings mirror the reactor's audit profiles. Dependency-Check is left out
     // until it can refresh its database (H04): its Gradle task does not reuse the Maven one.

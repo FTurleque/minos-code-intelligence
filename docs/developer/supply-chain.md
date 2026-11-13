@@ -280,8 +280,8 @@ python scripts/quality/check-reproducible-build.py twice --work <dossier vide>
 ### Montée d'une dépendance du plugin
 
 1. Changer la version dans `minos-intellij/build.gradle.kts`.
-2. Régénérer les verrous : `./gradlew --no-configuration-cache dependencies buildEnvironment --write-locks`.
-3. Régénérer les sommes **sous Linux puis sous Windows** (WSL convient) avec les tâches des jobs du plugin : `./gradlew --no-configuration-cache --write-verification-metadata sha256 buildEnvironment dependencies test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin spotbugsMain`.
+2. Régénérer les verrous : `./gradlew --no-configuration-cache --dependency-verification lenient dependencies buildEnvironment --write-locks`. La tâche `dependencies` résout toutes les configurations, y compris celles que le greffon IntelliJ Platform crée sans que le plugin les utilise (`testUi*`, qui tire la pile IDE Starter) : `lenient` l'empêche d'échouer sur leurs sommes absentes, et cette commande n'écrit aucune somme.
+3. Régénérer les sommes **sous Linux puis sous Windows** (WSL convient) avec les tâches des jobs du plugin, **sans** `dependencies` : `./gradlew --no-configuration-cache --write-verification-metadata sha256 buildEnvironment test jacocoTestReport jacocoTestCoverageVerification buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin spotbugsMain`. Seul ce que ces tâches résolvent reçoit une somme ; `./gradlew dependencies` sans `--dependency-verification lenient` échoue sur les configurations non utilisées.
 4. Relire le diff : une nouvelle somme pour une version qui ne change pas, ou une `<trust>` ajoutée, se justifie par écrit ou s'annule.
 5. Rejouer `python scripts/quality/check-toolchain-baseline.py` et la qualification du plugin de `docs/developer/TOOLCHAIN_POLICY.md`.
 
