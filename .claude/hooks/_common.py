@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
-PROTECTED_BRANCHES = ("main", "develop")
+PROTECTED_BRANCHES = ("main",)
 
 
 def read_event() -> dict:

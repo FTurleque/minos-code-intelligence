@@ -2,13 +2,13 @@ name: Docker Release Validation
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
       - 'scripts/history/**'
   push:
-    branches: [main, develop]
+    branches: [main]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: docker-release-validation-${{ github.event.pull_request.number || github.ref }}
-  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  # Never cancel a push-triggered run on main: only a duplicate PR run is obsolete.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

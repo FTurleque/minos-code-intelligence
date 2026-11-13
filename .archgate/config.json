@@ -2,7 +2,7 @@
   "domains": {
     "security": "SEC"
   },
-  "baseBranch": "origin/develop",
+  "baseBranch": "origin/main",
   "paths": {
     "adrs": "docs/architecture/adr"
   }

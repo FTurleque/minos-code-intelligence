@@ -18,10 +18,10 @@ STATUS_BEFORE="$(git status --porcelain=v1 --untracked-files=all)"
 if [[ "$(date +%s)" -lt "$(date -d '2026-08-01T00:00:00+02:00' +%s)" ]]; then
   if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
     BASE_REF="origin/${GITHUB_BASE_REF}"
-  elif git show-ref --verify --quiet refs/heads/develop; then
-    BASE_REF="develop"
+  elif git show-ref --verify --quiet refs/heads/main; then
+    BASE_REF="main"
   else
-    BASE_REF="origin/develop"
+    BASE_REF="origin/main"
   fi
   git diff --exit-code "${BASE_REF}...HEAD" -- .github/workflows
 fi

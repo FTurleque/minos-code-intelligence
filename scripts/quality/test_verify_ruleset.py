@@ -136,7 +136,7 @@ class CommandLineTest(unittest.TestCase):
 
     def test_the_declared_manifest_of_the_repository_is_readable(self):
         manifest = json.loads(tool.MANIFEST.read_text(encoding="utf-8"))
-        self.assertIn("Protect main & develop", tool.declared(manifest))
+        self.assertIn("Protect main", tool.declared(manifest))
 
 
 if __name__ == "__main__":

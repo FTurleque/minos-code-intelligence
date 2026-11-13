@@ -37,7 +37,7 @@ context: |
     et rejouer le check concerné.
   - Les gates JaCoCo (scripts/quality/check-jacoco.py) sont ciblés par scope. Sur
     poste Windows, le scope m24-polyglot-provider-platform est rouge hors régression
-    (code Linux-only) ; comparer avec develop avant d'investiguer.
+    (code Linux-only) ; comparer avec main avant d'investiguer.
   - Les goldens de caractérisation (minos-app/src/test/resources/characterization/)
     ne doivent pas dépendre de l'outillage de l'hôte.
 
@@ -49,7 +49,7 @@ context: |
     de openspec/specs/<capacité>/spec.md.
 
   Workflow Git : branches thématiques (docs/, build/, sec/, feat/…) fusionnées par PR
-  dans develop, puis promotion de develop vers main. Releases immuables (tags
+  dans main, seule branche d'intégration. Releases immuables (tags
   vX.Y.Z), jamais retaguées.
 
 rules:

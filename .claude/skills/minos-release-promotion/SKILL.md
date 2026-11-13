@@ -1,16 +1,16 @@
 ---
 name: minos-release-promotion
-description: Préparer et contrôler (sans jamais publier de soi-même) une promotion develop → main ou une release MINOS — pré-requis d'ascendance, checks exigés, preuves Docker et Windows, qualification hors ligne, plugin IntelliJ, tags immuables, notes. À utiliser quand l'utilisateur parle de release, de candidat, de promotion vers main, de tag vX.Y.Z, de publication Windows ou Docker, ou demande « est-on prêt à promouvoir ».
+description: Préparer et contrôler (sans jamais publier de soi-même) une fusion vers main ou une release MINOS — pré-requis d'ascendance, checks exigés, preuves Docker et Windows, qualification hors ligne, plugin IntelliJ, tags immuables, notes. À utiliser quand l'utilisateur parle de release, de candidat, de promotion vers main, de tag vX.Y.Z, de publication Windows ou Docker, ou demande « est-on prêt à promouvoir ».
 ---
 
 # Release et promotion
 
-**Ce skill contrôle et prépare ; il ne publie, ne tague et ne promeut jamais sans demande explicite de l'utilisateur, et il ne contourne aucun ruleset.** Les hooks refusent déjà : push direct sur `main`/`develop`, suppression ou déplacement d'un tag `vX.Y.Z`, `gh pr merge --admin`, modification d'une release publiée.
+**Ce skill contrôle et prépare ; il ne publie, ne tague et ne promeut jamais sans demande explicite de l'utilisateur, et il ne contourne aucun ruleset.** Les hooks refusent déjà : push direct sur `main`, suppression ou déplacement d'un tag `vX.Y.Z`, `gh pr merge --admin`, modification d'une release publiée.
 
 ## Principes (docs/developer/supply-chain.md, docs/developer/TOOLCHAIN_POLICY.md)
 - **Releases immuables** : tags `vX.Y.Z`, jamais retaguées, jamais supprimées. Un défaut dans une release se corrige par une release suivante.
-- Flux : `develop` → PR vers `main`. `develop` doit **contenir l'ascendance de `main`** avant tout candidat (vérifié par la CI, étape « Require main ancestry in every candidate »).
-- Un baseline Java/Maven/Gradle/IntelliJ ne change que par décision et promotion d'abord par `develop`.
+- Flux : branche thématique → PR vers `main`, seule branche d'intégration. La branche candidate doit **contenir l'ascendance de `main`** (vérifié par la CI, étape « Require main ancestry in every candidate »).
+- Un baseline Java/Maven/Gradle/IntelliJ ne change que par décision, par une PR vers `main`.
 
 ## Liste de contrôle d'un candidat
 1. Branche à jour de `main` : `git fetch origin main && git merge-base --is-ancestor origin/main HEAD`.

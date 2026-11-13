@@ -264,7 +264,7 @@ try {
 
     $CandidateSha = Resolve-Commit $CandidateRef
     if ([string]::IsNullOrWhiteSpace($PreviousRef)) {
-        $MergeBase = ((& git -C $RepoRoot merge-base $CandidateSha origin/develop) | Select-Object -First 1).Trim()
+        $MergeBase = ((& git -C $RepoRoot merge-base $CandidateSha origin/main) | Select-Object -First 1).Trim()
         if ($LASTEXITCODE -eq 0 -and $MergeBase -match '^[0-9a-f]{40}$' -and $MergeBase -ne $CandidateSha) {
             $PreviousRef = $MergeBase
         }

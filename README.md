@@ -159,7 +159,7 @@ Le hardening post-audit impose notamment :
 - Jackson 2 et Jackson 3 sur des versions corrigées ;
 - scan OSV bloquant sur les dépendances ;
 - PostgreSQL/pgvector réel obligatoire sur le gate Linux ;
-- CI sur PR puis sur les HEAD intégrés de `develop`/`main` ;
+- CI sur PR puis sur les HEAD intégrés de `main` ;
 - JaCoCo étendu aux responsabilités M29/M30 ;
 - handshake MCP réel sur ZIP et setup installé ;
 - build + Plugin Verifier IntelliJ ;

@@ -90,7 +90,7 @@ def main() -> int:
             "Post-228 — invariants statiques ciblés",
             "Docker release et upgrade réel",
             "deux commits/JAR distincts",
-            "main ⊆ develop",
+            "ascendance de `main`",
         )
         forbid("docs/project/governance/ROADMAP.md", "Vérification manuelle encore ouverte")
 

@@ -186,7 +186,7 @@ def validate_ci_contracts() -> None:
     require_sandbox_qualification_on_every_verify(workflow)
     require_regex(PR_WORKFLOW, workflow, r"(?m)^\s*push:\s*$", "push qualification trigger")
     require_all(PR_WORKFLOW, workflow, (
-        "branches: [main, develop]", "Dependency vulnerability gate",
+        "branches: [main]", "Dependency vulnerability gate",
         "google/osv-scanner-action", "fail-on-vuln: true",
         "-Dminos.postgresql.tests.required=true",
         "--skip-scope m30-postgresql-pgvector",
@@ -201,7 +201,7 @@ def validate_ci_contracts() -> None:
     intellij = read(INTELLIJ_WORKFLOW)
     require_regex(INTELLIJ_WORKFLOW, intellij, r"(?m)^\s*push:\s*$", "IntelliJ push trigger")
     require_all(INTELLIJ_WORKFLOW, intellij, (
-        "branches: [main, develop]", "Checkout exact candidate", "buildPlugin",
+        "branches: [main]", "Checkout exact candidate", "buildPlugin",
         "verifyPluginProjectConfiguration", "verifyPluginStructure", "verifyPlugin",
     ))
 

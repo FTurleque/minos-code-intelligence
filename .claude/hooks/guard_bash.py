@@ -1,6 +1,6 @@
 """PreToolUse (Bash) : garde-fous de gouvernance Git et GitHub de MINOS.
 
-Refuse : push forcé, push direct vers `main` ou `develop`, contournement des hooks (`--no-verify`,
+Refuse : push forcé, push direct vers `main`, contournement des hooks (`--no-verify`,
 signature désactivée), `gh pr merge --admin`, suppression ou déplacement d'un tag de release
 (les tags `vX.Y.Z` sont immuables, jamais retaguées), suppression d'une release.
 Demande confirmation : `git reset --hard`, `git clean`, `git push --force-with-lease`,
@@ -66,7 +66,7 @@ def check_git_push(words: list[str]) -> None:
         short = destination.removeprefix("refs/heads/")
         if short in PROTECTED_BRANCHES:
             permission("deny", f"Push direct vers {short} refusé : passer par une branche thématique et une PR "
-                               "(ruleset « Protect main & develop »).")
+                               "(ruleset « Protect main »).")
     if not refspecs and "--tags" not in args and current_branch() in PROTECTED_BRANCHES:
         permission("deny", f"La branche courante est {current_branch()} : pousser depuis une branche thématique "
                            "(docs/, ci/, fix/, feat/, refactor/, build/, sec/, chore/) puis ouvrir une PR.")

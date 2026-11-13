@@ -30,7 +30,7 @@ openspec validate --all --strict              # spécifications
 
 - Windows : `mvnw.cmd` lancé depuis PowerShell 7 exige `powershell.exe` 5.1 (`C:\Windows\System32\WindowsPowerShell\v1.0`) dans le `PATH` et un `PSModulePath` de Windows PowerShell ; **citer** les arguments `-Dx.y=z`.
 - `clean` à la racine supprime `target/` racine (JAR ombré utilisé par d'autres consommateurs) : le dire avant de le lancer.
-- Sur poste Windows, le scope JaCoCo `m24-polyglot-provider-platform` est rouge hors régression : comparer à `develop` avant d'investiguer.
+- Sur poste Windows, le scope JaCoCo `m24-polyglot-provider-platform` est rouge hors régression : comparer à `main` avant d'investiguer.
 
 ## Architecture (ne pas contourner)
 
@@ -43,9 +43,9 @@ openspec validate --all --strict              # spécifications
 
 ## Gouvernance Git et CI
 
-- Branches thématiques (`docs/`, `ci/`, `fix/`, `feat/`, `refactor/`, `build/`, `sec/`, `chore/`) → PR vers `develop` → promotion `develop` → `main`. **Jamais de push direct** sur `main` ni `develop`, jamais de push forcé. Releases immuables (tags `vX.Y.Z`, jamais retaguées).
+- Branches thématiques (`docs/`, `ci/`, `fix/`, `feat/`, `refactor/`, `build/`, `sec/`, `chore/`) → PR vers `main`, seule branche d'intégration (la branche `develop` n'est plus utilisée depuis le 2026-11-13). **Jamais de push direct** sur `main`, jamais de push forcé. Releases immuables (tags `vX.Y.Z`, jamais retaguées).
 - Commits : Conventional Commits en français (`type(portée): sujet`), un sujet par commit.
-- Ruleset « Protect main & develop » : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)`, `SonarCloud Code Analysis` (liste déclarée dans `.github/required-checks.json`). Branche **à jour** exigée : une PR « BEHIND » passe par `gh pr update-branch` puis un nouveau CI.
+- Ruleset « Protect main » : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)`, `SonarCloud Code Analysis` (liste déclarée dans `.github/required-checks.json`). Branche **à jour** exigée : une PR « BEHIND » passe par `gh pr update-branch` puis un nouveau CI.
 - SonarCloud juge la couverture du **nouveau code module par module** (seuil 80 %) : une classe déplacée compte comme code neuf, ses tests doivent vivre dans son module.
 - Aucune CI, aucun push, aucune PR sans que l'utilisateur l'ait demandé.
 

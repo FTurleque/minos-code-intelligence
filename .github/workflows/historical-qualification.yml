@@ -13,7 +13,7 @@ on:
       git_ref:
         description: Commit SHA, tag or branch to qualify (immutable SHA recommended)
         required: true
-        default: develop
+        default: main
         type: string
 
 permissions:

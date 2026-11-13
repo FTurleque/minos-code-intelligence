@@ -2,9 +2,9 @@ name: PR Validation
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   push:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: pr-validation-${{ github.event.pull_request.number || github.ref }}
-  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  # Never cancel a push-triggered run on main: only a duplicate PR run is obsolete.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -365,7 +365,7 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor origin/main HEAD; then
-            echo 'main is not an ancestor of the candidate HEAD. Synchronize main into develop before continuing.' >&2
+            echo 'main is not an ancestor of the candidate HEAD. Update the branch from main before continuing.' >&2
             exit 1
           fi
 
