@@ -8,7 +8,7 @@
 
 [[PackageOverrides]]
 name = "io.undertow:undertow-core"
-version = "2.4.3.Final"
+version = "2.4.4.Final"
 ecosystem = "Maven"
 vulnerability.ignore = true
 effectiveUntil = 2027-01-15

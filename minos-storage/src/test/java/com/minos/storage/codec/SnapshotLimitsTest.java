@@ -75,6 +75,40 @@ class SnapshotLimitsTest {
     }
 
     @Test
+    void anEffectiveCeilingBelowTheInvariantUnderASmallHeapLeavesTheInvariantOnTheConfiguredCeiling() {
+        SnapshotLimits production = SnapshotLimits.production();
+        QueryViewMemoryBudget small = QueryViewMemoryBudget.of(512L * 1024L * 1024L, 50, SnapshotLimits.VIEW_ADMISSION_WAIT);
+
+        long effective = small.effectiveCacheCeiling(production.maxQueryCacheWeightBytes());
+
+        assertEquals(small.budgetBytes(), effective);
+        assertTrue(effective < production.largestPersistableViewWeightBytes(), "the effective ceiling is below the invariant");
+        assertDoesNotThrow(production::requireCacheCoversPersistable, "the invariant holds on the configured ceiling");
+    }
+
+    @Test
+    void theFetchTransientIsTheMeasuredAmplificationOfThePayloadRoundedUpAndSaturated() {
+        SnapshotLimits production = SnapshotLimits.production();
+
+        assertEquals(310L, SnapshotLimits.POSTGRES_FETCH_AMPLIFICATION_PERCENT);
+        assertEquals(3_100L, production.fetchTransientBytes(1_000L));
+        assertEquals(4L, production.fetchTransientBytes(1L));
+        assertEquals(0L, production.fetchTransientBytes(-1L));
+        assertEquals(Long.MAX_VALUE, production.fetchTransientBytes(Long.MAX_VALUE));
+    }
+
+    @Test
+    void aStoredSizeOutsideThePersistedCeilingIsRefusedWithSizesOnly() throws Exception {
+        SnapshotLimits limits = SnapshotLimits.production().withMaxPersistedBytes(100L);
+
+        limits.requirePersistedSize(1L);
+        limits.requirePersistedSize(100L);
+        java.io.IOException above = assertThrows(java.io.IOException.class, () -> limits.requirePersistedSize(101L));
+        assertEquals("snapshot payload exceeds persisted byte limit: 101/100", above.getMessage());
+        assertThrows(java.io.IOException.class, () -> limits.requirePersistedSize(0L));
+    }
+
+    @Test
     void aLimitBelowItsMinimumIsRefused() {
         assertThrows(IllegalArgumentException.class, () -> new SnapshotLimits(0L, 1L, 100L, 100L));
         assertThrows(IllegalArgumentException.class, () -> new SnapshotLimits(1L, 0L, 100L, 100L));

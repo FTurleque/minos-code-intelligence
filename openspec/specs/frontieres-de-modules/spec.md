@@ -51,7 +51,7 @@ Le garde SHALL refuser `sourceDirectory`, `testSourceDirectory` et les `includes
 - **THEN** le garde échoue en nommant le module et le profil
 
 #### Scenario: Profils existants
-- **WHEN** le garde s'exécute sur le dépôt (profils `audit-*` et `windows-docker-desktop-testcontainers`)
+- **WHEN** le garde s'exécute sur le dépôt (profils `audit-*` du POM racine)
 - **THEN** il se termine avec le code 0
 
 ### Requirement: Un cycle de packages absent de la table des cycles connus est refusé

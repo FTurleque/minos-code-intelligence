@@ -28,7 +28,7 @@ Objectif : donner une preuve **exécutée** (commande + résultat), pas « ça d
 - `clean` à la racine efface `target/` racine (JAR ombré, 14 consommateurs) : éviter ou prévenir.
 - Goldens et tests ne dépendent pas de l'hôte ; un test qui lit l'environnement pose lui-même ses variables.
 - Scope JaCoCo `m24-polyglot-provider-platform` rouge sous Windows **hors régression** : comparer à `develop`. `python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector` est la forme du job Windows.
-- Tests PostgreSQL/pgvector : Testcontainers (Docker) ; sans Docker ils sont sautés localement, pas verts.
+- Tests PostgreSQL/pgvector : serveur démarré par `scripts/dev/start-test-postgres.(sh|ps1)` (Docker), propriétés affichées par le script ; sans serveur ils sont sautés localement, pas verts (`docs/developer/testing.md`).
 
 ## 3. Rapporter
 

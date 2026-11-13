@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql.snapshot;
 
+import com.minos.storage.codec.QueryViewMemoryBudget;
 import com.minos.storage.codec.SnapshotLimits;
 import com.minos.storage.postgresql.PostgresTestSupport;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,9 @@ class PostgresCodeKnowledgeSnapshotStoreLimitsTest extends PostgresTestSupport {
         PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
 
         assertEquals(SnapshotLimits.production(), store.limits());
-        assertEquals(store.limits().maxQueryCacheWeightBytes(), store.queryCacheStats().maximumWeightBytes());
+        // The effective ceiling is the smaller of the configured one and the view budget of this JVM (AUD-PERF-15).
+        assertEquals(QueryViewMemoryBudget.shared().effectiveCacheCeiling(store.limits().maxQueryCacheWeightBytes()),
+                store.queryCacheStats().maximumWeightBytes());
         assertDoesNotThrow(store.limits()::requireCacheCoversPersistable);
     }
 

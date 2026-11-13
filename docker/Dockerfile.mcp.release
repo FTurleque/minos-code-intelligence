@@ -40,8 +40,12 @@ ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
 ARG MINOS_BUILD_TIMESTAMP=unknown
 
+# The query plane sizes its heap from the container memory limit; with the default 3 GiB, 35 percent
+# leaves the view memory budget (half the heap) room for the heaviest persistable snapshot view, and two
+# MCP JVMs with a full heap still fit (M29DockerQueryImageContractTest).
 ENV MINOS_HOME=/var/lib/minos \
-    MINOS_RUNTIME_LOCATION=docker
+    MINOS_RUNTIME_LOCATION=docker \
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=35"
 
 WORKDIR /opt/minos
 COPY minos.jar /opt/minos/minos.jar

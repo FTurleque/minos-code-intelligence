@@ -109,6 +109,18 @@ class ClasspathLockTest {
         assertTrue(packaged.names().size() > 10, "le verrou doit épingler tout le graphe de dépendances");
     }
 
+    @Test
+    void thePackagedLockForcesGuavaForItsAdvisory() throws Exception {
+        ClasspathLock packaged = ClasspathLock.packaged();
+
+        assertTrue(packaged.names().contains("guava-33.7.2-jre.jar"), "guava 33.7.2-jre doit être épinglé");
+        assertFalse(packaged.names().contains("guava-33.6.0-jre.jar"), "guava 33.6.0-jre ne doit plus être épinglé");
+        assertEquals(List.of(new ClasspathLock.ForcedVersion("com.google.guava:guava", "33.7.2-jre")), packaged.forcedVersions());
+        try (java.io.InputStream input = ClasspathLock.class.getResourceAsStream(ClasspathLock.RESOURCE)) {
+            assertTrue(new String(input.readAllBytes(), StandardCharsets.UTF_8).contains("\"advisory\": \"GHSA-xxph-c9ww-hj94\""));
+        }
+    }
+
     // ------------------------------------------------------------------ l'installation, avec un faux coursier
 
     private Path fakeCoursier(String classpathLine) throws IOException {
@@ -139,6 +151,55 @@ class ClasspathLockTest {
         assertEquals(List.of(alpha, beta), jars);
         String arguments = Files.readString(coursier.resolveSibling("arguments.txt")).trim();
         assertEquals("fetch --classpath org.scip-code:scip-java:0.13.2", arguments);
+    }
+
+    private static final byte[] GUAVA = "guava 33.7.2".getBytes(StandardCharsets.UTF_8);
+
+    private static String forced(String module, String version) {
+        return "{\"module\":\"" + module + "\",\"version\":\"" + version
+                + "\",\"advisory\":\"GHSA-xxph-c9ww-hj94\",\"reason\":\"R-29\"}";
+    }
+
+    private static String forcedLockJson(String... forced) {
+        return "{\"coordinate\":\"org.scip-code:scip-java:0.13.1\",\"version\":\"0.13.1\",\"forcedVersions\":["
+                + String.join(",", forced) + "],\"jars\":[" + jar("alpha.jar", ALPHA) + "," + jar("guava-33.7.2-jre.jar", GUAVA) + "]}";
+    }
+
+    @Test
+    void theInstallationForcesTheVersionsOfTheLock() throws Exception {
+        Path alpha = jar("alpha.jar", "alpha");
+        Path guava = jar("guava-33.7.2-jre.jar", "guava 33.7.2");
+        Path coursier = fakeCoursier(alpha + java.io.File.pathSeparator + guava);
+        ClasspathLock lock = ClasspathLock.parse(new StringReader(forcedLockJson(forced("com.google.guava:guava", "33.7.2-jre"))));
+
+        List<Path> jars = ScipJavaClasspathInstallation.fetchVerifiedClasspath(
+                coursier, temp, temp.resolve("logs").resolve("install.log"), lock);
+
+        assertEquals(List.of(alpha, guava), jars);
+        String arguments = Files.readString(coursier.resolveSibling("arguments.txt")).trim();
+        assertEquals("fetch --classpath --force-version com.google.guava:guava:33.7.2-jre org.scip-code:scip-java:0.13.2", arguments);
+        assertFalse(arguments.contains("launch"));
+        assertFalse(arguments.contains("--main"));
+    }
+
+    @Test
+    void aLockWithoutForcedVersionsResolvesWithoutForcing() throws Exception {
+        assertEquals(List.of("cs", "fetch", "--classpath", "org.scip-code:scip-java:0.13.2"),
+                ScipJavaClasspathInstallation.scipJavaFetchCommand(Path.of("cs"), twoJarLock()));
+    }
+
+    @Test
+    void aMalformedForcedVersionIsRefusedBeforeAnyResolution() {
+        for (String entry : List.of(forced("guava", "33.7.2-jre"), forced("com.google.guava:guava:1", "33.7.2-jre"),
+                forced("com.google.guava:guava", " "), forced("com.google.guava:guava", "33.6.0-jre"),
+                forced("org.scip-code:scip-java", "0.13.1"), "\"com.google.guava:guava:33.7.2-jre\"",
+                "{\"module\":\"com.google.guava:guava\",\"version\":\"33.7.2-jre\",\"advisory\":\"\",\"reason\":\"R-29\"}")) {
+            IOException failure = assertThrows(IOException.class,
+                    () -> ClasspathLock.parse(new StringReader(forcedLockJson(entry))), entry);
+            assertTrue(failure.getMessage().contains("malformed"), failure.getMessage());
+        }
+        String twice = forced("com.google.guava:guava", "33.7.2-jre");
+        assertThrows(IOException.class, () -> ClasspathLock.parse(new StringReader(forcedLockJson(twice, twice))));
     }
 
     @Test

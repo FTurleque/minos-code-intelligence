@@ -22,7 +22,7 @@ public final class PostgresTestPools {
 
     /**
      * A second pool on the server {@code source} is connected to, with its own size and acquire timeout. The
-     * password is the fixture credential the test container is created with in {@code PostgresTestSupport}.
+     * password is the one of the test server ({@link PostgresTestServer#currentPassword()}).
      */
     public static PostgresConnectionFactory sized(
             PostgresConnectionFactory source, Path home, int maximumSize, Duration acquireTimeout
@@ -30,7 +30,7 @@ public final class PostgresTestPools {
         String url = source.withConnection(connection -> connection.getMetaData().getURL());
         String user = source.withConnection(connection -> connection.getMetaData().getUserName());
         StorageBackendConfiguration configuration = new StorageBackendConfiguration(
-                "postgresql", home, url, user, "test-secret", source.schema());
+                "postgresql", home, url, user, PostgresTestServer.currentPassword(), source.schema());
         return new PostgresConnectionFactory(configuration, maximumSize, acquireTimeout, 10, 120);
     }
 
@@ -44,7 +44,7 @@ public final class PostgresTestPools {
         String url = source.withConnection(connection -> connection.getMetaData().getURL());
         String user = source.withConnection(connection -> connection.getMetaData().getUserName());
         StorageBackendConfiguration configuration = new StorageBackendConfiguration(
-                "postgresql", home, url, user, "test-secret", source.schema());
+                "postgresql", home, url, user, PostgresTestServer.currentPassword(), source.schema());
         PostgresConnectionFactory.ConnectionSource counting = (jdbcUrl, properties) -> {
             Connection driverConnection = DriverManager.getConnection(jdbcUrl, properties);
             return (Connection) Proxy.newProxyInstance(

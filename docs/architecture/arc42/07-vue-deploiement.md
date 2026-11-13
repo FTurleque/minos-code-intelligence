@@ -1,7 +1,7 @@
 # Section 7 — Vue de déploiement
 
 > Preuves : ADR-0021, ADR-0037, `minos-app/pom.xml` (shade, jar, failsafe),
-> `minos-storage/pom.xml` (DOCKER_HOST, Testcontainers),
+> `scripts/dev/start-test-postgres.sh` (serveur PostgreSQL de test),
 > ADR-0035 (Windows + Linux), ADR-0027 (IntelliJ Java 21).
 
 ---
@@ -12,7 +12,7 @@
 |--------------|-------------|
 | **Poste développeur Windows** | Installation principale : Advanced Installer / JPackage, `minos.exe` |
 | **Poste développeur Linux / macOS** | Shaded JAR (`minos-code-intelligence-<version>-all.jar`) + wrapper script |
-| **CI (GitHub Actions / pipeline local)** | Build Maven `./mvnw clean verify`, Testcontainers PostgreSQL via Docker Desktop |
+| **CI (GitHub Actions / pipeline local)** | Build Maven `./mvnw clean verify` ; sous Linux, tests PostgreSQL contre le conteneur pgvector démarré par `scripts/dev/start-test-postgres.sh` (Docker Desktop et le `.ps1` en local Windows) |
 | **Container Docker (opt-in)** | Backend MCP durable, indexation autonome (parité en cours — ADR-0037) |
 
 ---

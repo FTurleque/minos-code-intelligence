@@ -121,21 +121,21 @@ Le poids d'une vue de requête et celui d'une entrée du cache de graphe de prog
 - **THEN** l'estimation est supérieure ou égale à la mesure
 
 ### Requirement: Un snapshot de la taille de ce dépôt est admis au cache de vues
-Les deux stores de snapshots SHALL estimer le poids d'une vue de requête d'après une amplification mesurée de la taille persistée. Un snapshot au format courant dont la vue tient sous le plafond du cache SHALL être mis en cache : deux lectures consécutives de la vue active SHALL ne provoquer qu'un seul chargement complet.
+Les deux stores de snapshots SHALL estimer le poids d'une vue de requête d'après une amplification mesurée de la taille persistée. Un snapshot au format courant dont la vue tient sous le plafond effectif du cache SHALL être mis en cache : deux lectures consécutives de la vue active SHALL ne provoquer qu'un seul chargement complet.
 
 #### Scenario: Snapshot de plus de 64 Mio persistés
-- **GIVEN** un snapshot actif au format courant de plus de 64 Mio persistés, dont la vue pèse moins que le plafond du cache
+- **GIVEN** un snapshot actif au format courant de plus de 64 Mio persistés, dont la vue pèse moins que le plafond effectif du cache
 - **WHEN** la vue active est lue deux fois de suite
 - **THEN** le compteur de chargements complets vaut 1
 
 #### Scenario: Snapshot de plus de 300 Mio persistés
-- **GIVEN** un snapshot actif au format courant de plus de 300 Mio persistés, dont le poids estimé est inférieur au plafond du cache
+- **GIVEN** un snapshot actif au format courant de plus de 300 Mio persistés, dont le poids estimé est inférieur au plafond effectif du cache
 - **WHEN** la vue active est lue deux fois de suite
 - **THEN** le compteur de chargements complets vaut 1
 - **AND** la seconde lecture est servie sans relire le fichier
 
 #### Scenario: Vue plus lourde que le plafond
-- **GIVEN** un snapshot dont la vue estimée dépasse le plafond du cache
+- **GIVEN** un snapshot dont la vue estimée dépasse le plafond effectif du cache sans dépasser le budget de mémoire des vues
 - **WHEN** la vue active est lue deux fois de suite
 - **THEN** elle n'est pas mise en cache et le compteur de chargements complets vaut 2
 
@@ -309,9 +309,9 @@ Les réponses des requêtes de lecture, leur ordre, leurs limites et leurs budge
 - **THEN** les tests de caractérisation et d'impact passent sans fichier de référence modifié
 
 #### Scenario: Store PostgreSQL, sous Linux seulement
-- **GIVEN** un poste Linux avec Docker
-- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test "-Dminos.postgresql.tests.required=true"` est exécuté
-- **THEN** les tests du cache de vues PostgreSQL passent avec les mêmes décomptes que le store fichier ; sans Docker les tests sont sautés, ce qui n'est pas une preuve
+- **GIVEN** un poste Linux avec un serveur PostgreSQL de test démarré par `scripts/dev/start-test-postgres.sh`
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test "-Dminos.postgresql.tests.required=true"` est exécuté avec les propriétés affichées par le script
+- **THEN** les tests du cache de vues PostgreSQL passent avec les mêmes décomptes que le store fichier ; sans serveur fourni les tests sont sautés, ce qui n'est pas une preuve
 
 ### Requirement: L'ancien contrat de vue reste disponible sans seconde construction d'index
 `SnapshotQueryView`, son accesseur de la classe mémoire, ses métriques et la lecture `loadActiveQueryView` SHALL rester disponibles, dépréciés, avec les mêmes résultats. Sous un store du dépôt, l'ancien et le nouveau contrat SHALL partager le même index : lire les deux pour un même snapshot actif SHALL construire une seule vue et au plus un index des arêtes entrantes.
@@ -528,7 +528,7 @@ La liaison d'un projet hébergé à un snapshot et la reprise d'un run dont le s
 - **THEN** le run est reconnu comme promu sans chargement du snapshot, et un run dont le snapshot préparé n'est pas actif ne l'est pas
 
 ### Requirement: Un snapshot de plus de 256 Mio est persisté jusqu'au plafond de persistance
-Les deux stores de snapshots SHALL publier un snapshot de connaissance dont l'encodage dépasse 256 Mio sans dépasser le plafond de persistance, et SHALL le relire avec la même garantie d'intégrité qu'un petit snapshot.
+Les deux stores de snapshots SHALL publier un snapshot de connaissance dont l'encodage dépasse 256 Mio sans dépasser le plafond de persistance, et SHALL le relire avec la même garantie d'intégrité qu'un petit snapshot dès que le budget de mémoire des vues couvre sa réservation.
 
 #### Scenario: Snapshot de plus de 256 Mio sous le plafond
 - **GIVEN** un snapshot de connaissance dont l'encodage dépasse 256 Mio et ne dépasse pas le plafond de persistance
@@ -537,7 +537,7 @@ Les deux stores de snapshots SHALL publier un snapshot de connaissance dont l'en
 - **AND** sa relecture est authentifiée par l'empreinte et rend un modèle égal à l'original
 
 #### Scenario: Relecture d'un snapshot de plus de 256 Mio
-- **GIVEN** un snapshot de plus de 256 Mio publié sous le plafond de persistance
+- **GIVEN** un snapshot de plus de 256 Mio publié sous le plafond de persistance, dans une JVM dont le budget de mémoire des vues couvre sa réservation
 - **WHEN** la vue active est lue
 - **THEN** la lecture réussit sans erreur de taille
 
@@ -551,7 +551,7 @@ Les deux stores de snapshots SHALL refuser, avant toute écriture, un snapshot d
 - **AND** aucun fichier ni aucune ligne n'est écrit et le snapshot actif précédent reste actif
 
 ### Requirement: Le plafond du cache de vues couvre tout snapshot persistable
-Le plafond du cache de vues de requête SHALL être au moins égal au plafond de persistance multiplié par l'amplification estimée, de sorte qu'un snapshot persistable ne soit jamais refusé par le cache pour son seul poids estimé.
+Le plafond configuré du cache de vues de requête SHALL être au moins égal au plafond de persistance multiplié par l'amplification estimée, de sorte qu'un snapshot persistable ne soit jamais refusé par le cache configuré pour son seul poids estimé. Le plafond effectif, dérivé du tas, SHALL NOT être soumis à cet invariant : sous un petit tas, une vue plus lourde que le budget est refusée à l'admission.
 
 #### Scenario: Invariant respecté
 - **GIVEN** le plafond de persistance, l'amplification estimée et le plafond du cache de chacun des deux stores
@@ -562,6 +562,11 @@ Le plafond du cache de vues de requête SHALL être au moins égal au plafond de
 - **GIVEN** un plafond de cache inférieur au produit du plafond de persistance par l'amplification
 - **WHEN** le test d'invariant s'exécute
 - **THEN** il échoue en nommant les trois valeurs
+
+#### Scenario: Plafond effectif sous l'invariant dans un petit tas
+- **GIVEN** une JVM dont le budget de mémoire des vues est inférieur au produit du plafond de persistance par l'amplification
+- **WHEN** un store est ouvert
+- **THEN** l'ouverture réussit et le plafond effectif rapporté est égal au budget
 
 ### Requirement: Un import manuel applique la même rétention que l'indexation
 Après qu'un import SCIP explicite (`import-scip`, ou `index --scip`) a publié son snapshot, MINOS SHALL appliquer au projet la politique de rétention par défaut appliquée après une indexation, sans attendre la prochaine indexation. Le snapshot actif et celui que désigne l'état du projet SHALL rester. Un import refusé ou en échec SHALL NOT déclencher la rétention.
@@ -609,6 +614,191 @@ Sur le backend PostgreSQL, la rétention appliquée après un import SHALL suppr
 - **WHEN** la rétention par défaut s'exécute sur le projet
 - **THEN** il reste trois snapshots de connaissance : l'actif et les deux historiques les plus récents
 - **AND** le snapshot actif et celui de l'état du projet sont conservés
+
+### Requirement: Un chargement de vue non mise en cache réserve son poids avant décodage
+Avant de lire ou de décoder un snapshot dont la vue n'est pas en cache, chaque store SHALL réserver le poids estimé de cette vue sur un budget de mémoire des vues commun à tout le processus. Si la réservation ne tient pas, le chargement SHALL attendre au plus la durée d'attente bornée, puis échouer par une erreur d'E/S explicite. Un dépassement du budget SHALL NOT se manifester par un `OutOfMemoryError`.
+
+#### Scenario: Second chargement qui attend la fin du premier
+- **GIVEN** un budget qui contient une vue du projet A mais pas les vues de A et de B ensemble, et la vue de A en cours de chargement
+- **WHEN** la vue active du projet B est demandée et que le chargement de A se termine avant la fin de l'attente bornée
+- **THEN** le chargement de B attend, puis réussit
+- **AND** la somme des réservations et des vues en cache n'a jamais dépassé le budget
+
+#### Scenario: Attente bornée expirée
+- **GIVEN** la vue du projet A en cours de chargement et un budget qui ne contient pas aussi celle du projet B
+- **WHEN** la vue de B est demandée et que l'attente bornée expire avant la fin du chargement de A
+- **THEN** la lecture de B échoue par une erreur d'E/S dont le message commence par « insufficient memory to load this snapshot »
+- **AND** aucun octet du snapshot de B n'a été décodé et le chargement de A se termine normalement
+
+#### Scenario: Deux chargements simultanés dans une JVM au tas réduit
+- **GIVEN** une JVM fille lancée avec un `-Xmx` réduit, où deux vues décodées en même temps dépassent le tas mais où une seule tient dans le budget
+- **WHEN** les vues actives de deux projets sont demandées en même temps
+- **THEN** l'une est chargée et l'autre attend puis réussit, ou échoue par l'erreur explicite de mémoire insuffisante
+- **AND** la JVM fille se termine avec le code 0, sans `OutOfMemoryError`
+
+### Requirement: Une vue plus lourde que le budget de mémoire des vues est refusée à l'admission
+Un store SHALL refuser sans attendre, et avant toute lecture de la charge utile, le chargement d'une vue dont le poids estimé dépasse le budget de mémoire des vues. Le message SHALL commencer par « insufficient memory to load this snapshot », donner le poids estimé, le budget et le tas maximal en octets, et nommer le réglage à changer, sans chemin.
+
+#### Scenario: Vue plus lourde que le budget
+- **GIVEN** un snapshot actif dont le poids estimé de la vue dépasse le budget de mémoire des vues
+- **WHEN** sa vue active est demandée, par le store fichier puis par le store PostgreSQL
+- **THEN** la lecture échoue aussitôt par une erreur d'E/S dont le message nomme `MINOS_VIEW_HEAP_PERCENT` et le tas maximal
+- **AND** aucune réservation n'est retenue, aucun fichier temporaire n'est créé et le message ne contient aucun chemin absolu
+
+### Requirement: Le plafond effectif du cache de vues dérive du tas maximal
+Le budget de mémoire des vues SHALL valoir la fraction réglée du tas maximal de la JVM. Le plafond effectif du cache de vues SHALL valoir le plus petit du plafond configuré et de ce budget. Les vues en cache et les chargements en cours SHALL tenir ensemble sous le budget ; une vue en cache SHALL pouvoir être évincée pour admettre un chargement.
+
+#### Scenario: Petit tas
+- **GIVEN** une JVM dont la fraction réglée du tas maximal est inférieure au plafond configuré du cache
+- **WHEN** un store est ouvert
+- **THEN** le plafond effectif rapporté par ses statistiques de cache est égal à cette fraction du tas maximal
+
+#### Scenario: Grand tas
+- **GIVEN** une JVM dont la fraction réglée du tas maximal dépasse le plafond configuré du cache
+- **WHEN** un store est ouvert
+- **THEN** le plafond effectif rapporté est le plafond configuré
+
+#### Scenario: Éviction pour admettre un chargement
+- **GIVEN** la vue du projet A en cache et un budget qui ne contient pas aussi la vue du projet B
+- **WHEN** la vue de B est demandée et qu'aucun autre chargement n'est en cours
+- **THEN** la vue de A est retirée du cache et la vue de B est chargée sans attendre l'expiration du délai
+
+### Requirement: Le budget de mémoire des vues est réglable et une valeur invalide est refusée
+La fraction du tas réservée aux vues SHALL se lire dans la propriété système `minos.storage.viewHeapPercent`, puis dans la variable `MINOS_VIEW_HEAP_PERCENT`, et valoir 50 par défaut. Une valeur qui n'est pas un entier de 10 à 80 SHALL être refusée au premier chargement de vue par une erreur qui nomme le réglage et la plage, sans repli silencieux sur la valeur par défaut.
+
+#### Scenario: Valeur réglée
+- **GIVEN** la propriété système `minos.storage.viewHeapPercent` fixée à 30
+- **WHEN** le budget de mémoire des vues est résolu
+- **THEN** il vaut 30 % du tas maximal, arrondi à l'octet inférieur
+
+#### Scenario: Valeur invalide
+- **GIVEN** la variable `MINOS_VIEW_HEAP_PERCENT` fixée à `95`, ou à `abc`
+- **WHEN** une vue active est demandée
+- **THEN** la lecture échoue par une erreur qui nomme `MINOS_VIEW_HEAP_PERCENT` et la plage de 10 à 80
+- **AND** aucun snapshot n'est lu
+
+### Requirement: PostgreSQL lit la taille d'un snapshot avant de rapatrier sa charge utile
+Le store PostgreSQL SHALL lire la taille en octets et l'en-tête de format de la charge utile active avec ses métadonnées, avant de demander la charge utile. Une charge utile plus grande que le plafond de persistance SHALL être refusée sans être demandée au serveur, par une erreur sans chemin. Le transitoire du pilote pendant le rapatriement SHALL être compté dans la réservation de la vue.
+
+#### Scenario: Ligne au-delà du plafond
+- **GIVEN** une ligne active de `knowledge_snapshots` dont la charge utile dépasse le plafond de persistance du store, insérée directement en base
+- **WHEN** la vue active du projet est demandée
+- **THEN** la lecture échoue par une erreur d'E/S dont le message commence par « snapshot payload exceeds persisted byte limit »
+- **AND** aucune requête ne sélectionne la colonne `payload` entière et aucun fichier temporaire n'est créé
+
+#### Scenario: Réservation qui couvre le rapatriement
+- **GIVEN** une charge utile dont le transitoire de rapatriement estimé dépasse le budget alors que le poids de la vue le respecte
+- **WHEN** la vue active est demandée
+- **THEN** la lecture est refusée à l'admission par l'erreur de mémoire insuffisante, avant toute demande de la charge utile
+
+### Requirement: Un refus de mémoire est rendu par la CLI et le MCP avec son message
+Une erreur de mémoire insuffisante d'un chargement de vue SHALL être rendue sur la CLI avec son message et le code de sortie d'erreur d'exécution existant, et par un outil MCP avec le même message au lieu de l'erreur générique. Le rendu SHALL rester additif : aucun code de sortie nouveau, aucun champ retiré, goldens inchangés.
+
+#### Scenario: Outil MCP refusé faute de mémoire
+- **GIVEN** un backend MCP dont la lecture de vue échoue par l'erreur de mémoire insuffisante
+- **WHEN** un outil de requête est appelé
+- **THEN** le résultat est une erreur d'outil dont le texte commence par « error: insufficient memory to load this snapshot »
+
+#### Scenario: Commande CLI refusée faute de mémoire
+- **GIVEN** une application dont la lecture de vue échoue par l'erreur de mémoire insuffisante
+- **WHEN** une commande de requête de la CLI s'exécute
+- **THEN** elle écrit le message sur la sortie d'erreur et se termine avec le code 1
+- **AND** les goldens de caractérisation restent identiques à l'octet
+
+### Requirement: Les tests PostgreSQL utilisent un serveur fourni de l'extérieur
+Les tests d'intégration PostgreSQL SHALL se connecter au serveur désigné par les propriétés système `minos.postgresql.test.url`, `minos.postgresql.test.user` et `minos.postgresql.test.password`, et SHALL NOT démarrer eux-mêmes de conteneur ni dialoguer avec un démon Docker.
+
+#### Scenario: Serveur démarré par le script local
+- **GIVEN** un conteneur pgvector démarré par `scripts/dev/start-test-postgres.sh` (ou `.ps1`) et les propriétés qu'il affiche
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am verify "-Dminos.postgresql.tests.required=true"` est exécuté avec ces propriétés
+- **THEN** les tests PostgreSQL s'exécutent contre ce serveur et passent
+- **AND** `docker ps -a` ne liste aucun conteneur créé pendant le build
+
+#### Scenario: Aucune bibliothèque de pilotage de Docker dans les tests
+- **GIVEN** les sources de test du réacteur
+- **WHEN** `grep -rlF "import org.testcontainers" --include=*.java .` est exécuté à la racine
+- **THEN** la commande ne trouve aucun fichier
+
+### Requirement: Un serveur absent ou injoignable fait échouer les tests en mode requis
+Avec `-Dminos.postgresql.tests.required=true`, une URL de test absente, un serveur injoignable, une authentification refusée ou un droit de création de base manquant SHALL faire échouer chaque classe de test PostgreSQL avec un message qui nomme la propriété ou la cause, sans afficher le mot de passe.
+
+#### Scenario: URL absente en mode requis
+- **GIVEN** aucune propriété `minos.postgresql.test.url`
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test "-Dminos.postgresql.tests.required=true"` est exécuté
+- **THEN** le build échoue et le rapport Surefire nomme `minos.postgresql.test.url`
+- **AND** aucun test PostgreSQL n'est compté comme réussi ni comme sauté
+
+#### Scenario: Serveur injoignable en mode requis
+- **GIVEN** `minos.postgresql.test.url` désignant un port local sans serveur
+- **WHEN** la même commande est exécutée
+- **THEN** le build échoue avec un message qui dit que le serveur PostgreSQL de test est injoignable
+- **AND** la sortie du build ne contient pas la valeur du mot de passe
+
+### Requirement: Sans mode requis, l'absence de serveur saute les tests et les compte
+Sans `-Dminos.postgresql.tests.required=true`, une URL de test absente ou un serveur injoignable SHALL marquer les tests PostgreSQL comme sautés, avec la raison, dans le décompte Surefire ; les autres tests du module SHALL s'exécuter normalement.
+
+#### Scenario: Poste sans serveur
+- **GIVEN** aucune propriété `minos.postgresql.test.url`
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test` est exécuté
+- **THEN** le build réussit et le rapport Surefire compte les tests PostgreSQL comme `skipped` avec une raison qui nomme `minos.postgresql.test.url`
+
+#### Scenario: Job Windows de la CI
+- **GIVEN** le job `Verify (windows-2022)` de `pr-ci.yml`, qui ne démarre aucun PostgreSQL
+- **WHEN** `python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector` suit le `verify` Windows
+- **THEN** le `verify` réussit, les tests PostgreSQL y sont comptés comme sautés et le gate JaCoCo passe
+
+### Requirement: Chaque classe de test PostgreSQL travaille dans sa propre base
+Chaque classe de test PostgreSQL SHALL disposer d'une base créée pour elle avant son premier test et supprimée après son dernier, au nom unique par exécution. Le résultat d'une classe SHALL NOT dépendre de l'ordre d'exécution des classes ni des données d'une autre classe.
+
+#### Scenario: Ordre des classes inversé
+- **GIVEN** un serveur de test démarré par le script local
+- **WHEN** les tests PostgreSQL de `minos-storage` sont exécutés deux fois, avec `-Dsurefire.runOrder=alphabetical` puis `-Dsurefire.runOrder=reversealphabetical`
+- **THEN** les deux exécutions donnent les mêmes décomptes de tests réussis
+
+#### Scenario: Aucune base laissée derrière
+- **GIVEN** la même exécution terminée
+- **WHEN** `psql` liste les bases du serveur de test
+- **THEN** aucune base créée par une classe de test ne subsiste
+
+### Requirement: Le mot de passe du serveur de test de la CI est généré par le job
+Le mot de passe du serveur PostgreSQL de test des jobs de CI SHALL être généré aléatoirement à chaque exécution du job et masqué dans ses journaux. Il SHALL NOT être écrit en clair dans un workflow, un script, un POM ni une source de test.
+
+#### Scenario: Aucun mot de passe figé dans le dépôt
+- **GIVEN** le dépôt au HEAD
+- **WHEN** `grep -rn "test-secret" minos-storage/src .github/workflows scripts` est exécuté
+- **THEN** la commande ne trouve rien
+
+#### Scenario: Deux démarrages, deux mots de passe
+- **GIVEN** le script `scripts/dev/start-test-postgres.sh` sous son auto-test
+- **WHEN** l'auto-test démarre le conteneur deux fois avec un `docker` simulé
+- **THEN** les deux mots de passe transmis diffèrent et aucun n'apparaît dans les arguments de la ligne de commande `docker`
+
+### Requirement: Le script local démarre le conteneur de test épinglé
+`scripts/dev/start-test-postgres.sh` et `scripts/dev/start-test-postgres.ps1` SHALL démarrer l'image pgvector lue dans sa source unique (défaut de `MINOS_POSTGRES_IMAGE`), liée à `127.0.0.1`, attendre son healthcheck dans un délai borné, puis afficher les propriétés à passer à `mvnw`. Un défaut d'image absent ou non épinglé SHALL faire échouer le script.
+
+#### Scenario: Démarrage nominal
+- **GIVEN** un poste avec Docker
+- **WHEN** `bash scripts/dev/start-test-postgres.sh` est exécuté
+- **THEN** le script se termine avec le code 0 après un healthcheck sain et affiche `-Dminos.postgresql.test.url=jdbc:postgresql://127.0.0.1:<port>/…`
+- **AND** `docker port` montre le port lié à `127.0.0.1` seulement
+
+#### Scenario: Image non épinglée
+- **GIVEN** un arbre temporaire dont `docker/compose-mcp.connected.yaml` donne à `MINOS_POSTGRES_IMAGE` un défaut sans `@sha256:`
+- **WHEN** l'auto-test du script l'exécute sur cet arbre
+- **THEN** le script échoue avec un code non nul et un message qui nomme `MINOS_POSTGRES_IMAGE`, sans démarrer de conteneur
+
+### Requirement: L'arbre de dépendances ne contient ni Testcontainers ni docker-java
+L'arbre de dépendances Maven du réacteur, portée test comprise, SHALL NOT contenir d'artefact `org.testcontainers` ni `com.github.docker-java`.
+
+#### Scenario: Arbre de dépendances
+- **GIVEN** le réacteur au HEAD
+- **WHEN** `./mvnw -B -ntp dependency:tree` est exécuté et sa sortie filtrée sur `org.testcontainers` et `com.github.docker-java`
+- **THEN** le filtre ne trouve aucune ligne
+
+#### Scenario: Rapport Dependency-Check des tests
+- **GIVEN** le profil `audit-dependency-check-tests` avec une base NVD à jour
+- **WHEN** `./mvnw -B -ntp -Paudit-dependency-check-tests org.owasp:dependency-check-maven:aggregate` est exécuté
+- **THEN** le rapport ne cite ni CVE-2026-71290, ni CVE-2026-64607, ni CVE-2026-54399, ni CVE-2026-54428
 
 ## Documentation liée
 

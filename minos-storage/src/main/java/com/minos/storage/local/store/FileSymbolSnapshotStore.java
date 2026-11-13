@@ -3,6 +3,7 @@ package com.minos.storage.local.store;
 import com.minos.storage.codec.KnowledgeSnapshotCodecs;
 import com.minos.storage.codec.SnapshotCodec;
 import com.minos.storage.codec.SnapshotCodecV1;
+import com.minos.storage.codec.QueryViewMemoryBudget;
 import com.minos.storage.codec.SnapshotLimits;
 import com.minos.storage.codec.SnapshotIntegrityService;
 import com.minos.domain.Relationship;
@@ -37,7 +38,9 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  * Compatibility facade for local versioned snapshot persistence and active read views.
  *
  * <p>Binary encoding, active-pointer state and retention remain delegated to dedicated components.
- * The in-process query cache is LRU-bounded by both entry count and estimated retained memory.</p>
+ * The in-process query cache is LRU-bounded by both entry count and estimated retained memory. A view that is not
+ * cached reserves its estimated weight on the process-wide {@link QueryViewMemoryBudget} before its snapshot is
+ * read; the effective weight ceiling of the cache is the smaller of the configured one and that budget.</p>
  */
 public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore {
 
@@ -57,6 +60,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final long maxQueryCacheWeightBytes;
     private final int maxActiveQueryRetries;
     private final ActiveQueryBuildHook activeQueryBuildHook;
+    private final QueryViewMemoryBudget memoryBudget;
+    private final QueryViewMemoryBudget.Tenant budgetTenant = new CacheTenant();
     private final Object cacheLock = new Object();
     private final ReentrantLock[] buildLocks = buildLocks();
     private final WeightedLruCache<CacheKey, SnapshotReadView> queryCache;
@@ -111,8 +116,21 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             int maxActiveQueryRetries,
             ActiveQueryBuildHook activeQueryBuildHook
     ) throws IOException {
+        this(storageRoot, maxQueryCacheEntries, limits, maxActiveQueryRetries, activeQueryBuildHook,
+                QueryViewMemoryBudget.shared());
+    }
+
+    FileSymbolSnapshotStore(
+            Path storageRoot,
+            int maxQueryCacheEntries,
+            SnapshotLimits limits,
+            int maxActiveQueryRetries,
+            ActiveQueryBuildHook activeQueryBuildHook,
+            QueryViewMemoryBudget memoryBudget
+    ) throws IOException {
         Objects.requireNonNull(limits, "limits");
-        long cacheWeightCeiling = limits.maxQueryCacheWeightBytes();
+        this.memoryBudget = Objects.requireNonNull(memoryBudget, "memoryBudget");
+        long cacheWeightCeiling = memoryBudget.effectiveCacheCeiling(limits.maxQueryCacheWeightBytes());
         if (maxQueryCacheEntries < 1) {
             throw new IllegalArgumentException("maxQueryCacheEntries must be greater than zero");
         }
@@ -134,6 +152,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this.queryCache = new WeightedLruCache<>(maxQueryCacheEntries, cacheWeightCeiling);
         this.maxActiveQueryRetries = maxActiveQueryRetries;
         this.activeQueryBuildHook = Objects.requireNonNull(activeQueryBuildHook, "activeQueryBuildHook");
+        memoryBudget.register(budgetTenant);
     }
 
     @Override
@@ -238,12 +257,17 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             PointerState beforeBuild = pointerState(projectId, descriptor);
             if (beforeBuild == PointerState.MISSING) return QueryResolution.complete(Optional.empty());
             if (beforeBuild == PointerState.CHANGED) return QueryResolution.retryResolution();
-            SnapshotReadView built = buildReadView(projectId, descriptor);
-            activeQueryBuildHook.afterBuild(projectId, descriptor);
-            PointerState afterBuild = pointerState(projectId, descriptor);
-            if (afterBuild == PointerState.MISSING) return QueryResolution.complete(Optional.empty());
-            if (afterBuild == PointerState.CHANGED) return QueryResolution.retryResolution();
-            return publishBuiltView(projectId, key, descriptor, built);
+            requireSnapshotFile(projectId, descriptor);
+            long weight = estimateQueryViewWeight(projectId, descriptor);
+            // AUD-PERF-15: the weight is reserved before a byte of the snapshot is read; every exit releases it.
+            try (QueryViewMemoryBudget.Reservation reservation = memoryBudget.reserve(weight)) {
+                SnapshotReadView built = buildReadView(projectId, descriptor);
+                activeQueryBuildHook.afterBuild(projectId, descriptor);
+                PointerState afterBuild = pointerState(projectId, descriptor);
+                if (afterBuild == PointerState.MISSING) return QueryResolution.complete(Optional.empty());
+                if (afterBuild == PointerState.CHANGED) return QueryResolution.retryResolution();
+                return publishBuiltView(projectId, key, descriptor, built, weight, reservation);
+            }
         } finally {
             buildLock.unlock();
         }
@@ -274,19 +298,23 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             UUID projectId,
             CacheKey key,
             SnapshotDescriptor descriptor,
-            SnapshotReadView built
-    ) throws IOException {
-        long weight = estimateQueryViewWeight(projectId, descriptor);
-        synchronized (cacheLock) {
-            SnapshotReadView raced = queryCache.get(key);
-            if (raced != null && raced.descriptor().equals(descriptor)) {
-                cacheHits++;
-                return QueryResolution.complete(Optional.of(raced));
+            SnapshotReadView built,
+            long weight,
+            QueryViewMemoryBudget.Reservation reservation
+    ) {
+        // The reservation becomes resident weight under the budget lock, then the cache lock (lock order).
+        return memoryBudget.convert(reservation, () -> {
+            synchronized (cacheLock) {
+                SnapshotReadView raced = queryCache.get(key);
+                if (raced != null && raced.descriptor().equals(descriptor)) {
+                    cacheHits++;
+                    return QueryResolution.complete(Optional.of(raced));
+                }
+                removeProjectEntries(projectId, key);
+                queryCache.put(key, built, weight);
+                return QueryResolution.complete(Optional.of(built));
             }
-            removeProjectEntries(projectId, key);
-            queryCache.put(key, built, weight);
-            return QueryResolution.complete(Optional.of(built));
-        }
+        });
     }
 
     public Path storageRoot() { return storageRoot; }
@@ -305,11 +333,16 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         }
     }
 
-    private SnapshotReadView buildReadView(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
+    private Path requireSnapshotFile(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
         Path snapshotFile = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
         if (!Files.isRegularFile(snapshotFile)) {
             throw new IOException("active symbol snapshot file is missing: " + leafName(snapshotFile));
         }
+        return snapshotFile;
+    }
+
+    private SnapshotReadView buildReadView(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
+        Path snapshotFile = requireSnapshotFile(projectId, descriptor);
         // One pass: the codec hashes what it decodes and returns nothing unless the SHA-256 is the pointer's.
         CodeKnowledgeSnapshot snapshot =
                 codecFor(descriptor.formatVersion()).readVerified(snapshotFile, descriptor.sha256());
@@ -361,6 +394,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     private void invalidateProjectCache(UUID projectId) {
         synchronized (cacheLock) { removeProjectEntries(projectId, null); }
+        memoryBudget.signalReleased();
     }
 
     private void removeProjectEntries(UUID projectId, CacheKey except) {
@@ -417,6 +451,19 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
         for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
         return locks;
+    }
+
+    /** The cached views of this store, as the memory budget counts and evicts them. */
+    private final class CacheTenant implements QueryViewMemoryBudget.Tenant {
+        @Override
+        public long residentWeightBytes() {
+            return queryCache.weight();
+        }
+
+        @Override
+        public void evictAll() {
+            synchronized (cacheLock) { queryCache.removeIf(key -> true); }
+        }
     }
 
     private enum PointerState { MATCH, CHANGED, MISSING }

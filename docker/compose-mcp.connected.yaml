@@ -57,6 +57,8 @@ services:
       MINOS_SEMANTIC_DIMENSIONS: "${MINOS_SEMANTIC_DIMENSIONS:-}"
       MINOS_SEMANTIC_ENDPOINT: "${MINOS_SEMANTIC_ENDPOINT:-}"
       MINOS_SEMANTIC_TIMEOUT_SECONDS: "${MINOS_SEMANTIC_TIMEOUT_SECONDS:-}"
+      # Heap of each MCP JVM started by docker exec, as a share of mem_limit (docs/user/docker-runtime.md).
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=${MINOS_MCP_HEAP_PERCENT:-35}"
     working_dir: /workspace/projects
     volumes:
       - type: bind

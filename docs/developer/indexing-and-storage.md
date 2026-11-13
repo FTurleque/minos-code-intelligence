@@ -233,7 +233,7 @@ Deux `main` et un test des sources de `minos-storage`, hors `verify` (leur nom n
 | Outil | Rôle |
 |---|---|
 | `LargeSnapshotMeasurement` (`com.minos.storage.local.store`) | taille persistée, tas retenu par la vue avec l'index des arêtes, pic de tas au chargement, lectures successives et état du cache ; mode `synthetic <racine> <fichiers>` ou `existing <MINOS_HOME>/symbol-snapshots <projectId>` |
-| `LargePostgresSnapshotMeasurement` (`com.minos.storage.postgresql.snapshot`) | publication d'un snapshot du magasin fichier dans le store PostgreSQL géré (Docker, image pgvector épinglée déjà tirée), puis lectures successives ; lancé par `-Dtest=LargePostgresSnapshotMeasurement -Dminos.largeSnapshot.store=… -Dminos.largeSnapshot.project=…` |
+| `LargePostgresSnapshotMeasurement` (`com.minos.storage.postgresql.snapshot`) | publication d'un snapshot du magasin fichier, ou d'un dépôt synthétique, dans le store PostgreSQL, pic de tas du pilote pendant le rapatriement de la charge utile (huit rapatriements, rapport au poids de la charge utile), puis lectures successives ; serveur de test de `scripts/dev/start-test-postgres.sh` ; lancé par `-Dtest=LargePostgresSnapshotMeasurement` avec `-Dminos.largeSnapshot.store=… -Dminos.largeSnapshot.project=…` ou `-Dminos.largeSnapshot.files=<fichiers>` |
 | `SnapshotReadCeilingTest` (`com.minos.storage.codec`) | exécuté par `verify` : le plafond borne aussi la lecture, sans chemin dans le message |
 
 Le classpath du `main` sur poste Windows ajoute `minos-storage/src/test/platform-access-control` (fournisseur de contrôle d'accès des tests du module).
@@ -267,6 +267,23 @@ Mesures du 2026-11-07 avec un build non modifié de `develop` `bc2995a8` (persis
 | `QueryViewWeightTest` avec `-Dminos.queryViewWeight.print=true` (150 fichiers, 14,8 à 15,0 Mo persistés) | tas retenu de 1,43 (ascii, latin1) à 1,48 (cjk) fois le fichier ; poids estimé de 1,53 à 1,57 fois le tas retenu ; amplification V3 seule de 0,84 à 0,88 |
 
 Un import publié applique la même rétention que l'indexation : `PublishedSnapshotRetention` (`minos-application`) sert à `LocalProjectOperations.importScipLocked` et aux deux chemins de succès de `ProjectIndexingUseCase`. Quatre imports distincts laissent l'actif et deux historiques (`minos-cli/src/test/java/com/minos/cli/ImportScipRetentionTest.java`) ; un verrou occupé laisse l'import réussi avec un diagnostic sans cause ni chemin.
+
+## Budget de mémoire des vues
+
+Un processus a un seul budget de mémoire des vues de snapshot (`QueryViewMemoryBudget.shared()`, `com.minos.storage.codec`), commun aux deux stores (`FileSymbolSnapshotStore`, `PostgresCodeKnowledgeSnapshotStore`) et à toutes leurs instances, magasins de travail SCIP compris. Il vaut une fraction du tas maximal (`Runtime.maxMemory()`) : propriété système `minos.storage.viewHeapPercent`, puis variable `MINOS_VIEW_HEAP_PERCENT`, 50 par défaut ; une valeur qui n'est pas un entier de 10 à 80 fait échouer chaque chargement de vue (`MINOS_VIEW_HEAP_PERCENT (or -Dminos.storage.viewHeapPercent) must be an integer from 10 to 80`), sans repli. Le fichier de configuration de `MINOS_HOME` n'est pas lu : le tas est un fait du processus.
+
+| Étape | Magasin fichier | PostgreSQL |
+|---|---|---|
+| Avant toute lecture de la charge utile | pointeur actif, présence du fichier, `Files.size` | métadonnées avec `octet_length(payload)` et les 8 octets d'en-tête ; une taille hors `[1, plafond de persistance]` est refusée (`snapshot payload exceeds persisted byte limit: <taille>/<plafond>`) sans demander la charge utile ni créer de fichier temporaire |
+| Réservation | poids estimé de la vue | le plus grand du poids estimé et du transitoire du pilote pendant le rapatriement (`SnapshotLimits.fetchTransientBytes`, 310 % de la charge utile : pire cas mesuré de 305 %, avant que le pilote passe au rapatriement binaire d'une requête préparée côté serveur) |
+| Vue mise en cache | la réservation devient du poids résident sous le verrou du budget | idem |
+| Vue non mise en cache, erreur, pointeur déplacé | la réservation est libérée | idem |
+
+Une réservation plus lourde que tout le budget est refusée aussitôt (`SnapshotMemoryExhaustedException`, `minos-domain`, message `insufficient memory to load this snapshot: …` qui donne poids, budget, pourcentage et tas, et nomme `-Xmx`, `-XX:MaxRAMPercentage` et `MINOS_VIEW_HEAP_PERCENT`). Une réservation qui ne tient pas à côté des autres vide d'abord les vues en cache de tous les stores inscrits, puis attend une libération au plus `SnapshotLimits.VIEW_ADMISSION_WAIT` (30 s), et échoue alors par `insufficient memory to load this snapshot now: …`. Le plafond effectif du cache d'un store vaut le plus petit de `SnapshotLimits.maxQueryCacheWeightBytes()` (512 Mio) et du budget ; c'est lui que rapportent `cacheStats()` et `queryCacheStats()`. L'invariant `requireCacheCoversPersistable` porte sur le plafond configuré, jamais sur le plafond effectif. La CLI rend le message avec le code de sortie 1, le serveur MCP le rend tel quel (`error: insufficient memory…`) au lieu de l'erreur générique.
+
+Ordre des verrous : le verrou de projet d'un store, puis le verrou du budget, puis le verrou du cache du store ; un store n'appelle jamais le budget en tenant son verrou de cache. Une vue vidée du cache mais encore tenue par une requête en cours n'est plus comptée : la marge du budget (la moitié du tas) la couvre.
+
+Preuves : `QueryViewMemoryBudgetTest` (réglage, refus, attente, éviction, conversion), `FileSymbolSnapshotStoreViewBudgetTest`, `PostgresCodeKnowledgeSnapshotStoreViewBudgetTest`, et `QueryViewAdmissionChildJvmTest`, qui lance une JVM fille `-Xmx256m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError` sur deux snapshots de 148 Mio chargés au même instant : sans admission elle meurt d'une `OutOfMemoryError` (code 3), avec un budget de 80 % du tas elle se termine avec le code 0. `LargeSnapshotMeasurement` rapporte le plafond effectif (`cache.maximum.bytes`) et le pic de tas d'une vue admise.
 
 ## Cohérence concurrente
 

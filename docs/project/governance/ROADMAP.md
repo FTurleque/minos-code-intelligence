@@ -106,7 +106,7 @@ Les replays M15/M28 sont disponibles par `workflow_dispatch` dans `historical-qu
 
 ### IntelliJ
 
-Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.8.2 / IntelliJ Platform 2026.1**, avec `buildPlugin`, `verifyPluginProjectConfiguration`, `verifyPluginStructure`, **Plugin Verifier** et les tests Windows ownership. Dependabot couvre désormais `/minos-intellij` en plus de Maven et GitHub Actions. Le workflow s'exécute sur toute PR avec une portée calculée et une gate agrégatrice `IntelliJ plugin (gate)`, check exigé par le ruleset.
+Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.9.0 / IntelliJ Platform 2026.1**, avec `buildPlugin`, `verifyPluginProjectConfiguration`, `verifyPluginStructure`, **Plugin Verifier** et les tests Windows ownership. Dependabot couvre désormais `/minos-intellij` en plus de Maven et GitHub Actions. Le workflow s'exécute sur toute PR avec une portée calculée et une gate agrégatrice `IntelliJ plugin (gate)`, check exigé par le ruleset.
 
 ### Docker release et upgrade réel
 
@@ -129,7 +129,7 @@ Le blocage historique `docker compose` interactif de #246 est ainsi couvert par 
 ## Supply-chain et toolchains
 
 - cœur : Java 21 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
-- IntelliJ : Java 21 / Gradle 9.8.2 / IntelliJ Platform 2026.1 ;
+- IntelliJ : Java 21 / Gradle 9.9.0 / IntelliJ Platform 2026.1 ;
 - Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
 - workflows GitHub : actions épinglées par SHA ;
 - Docker release : toolchains/images/checksums immuables lorsque cette garantie est revendiquée ;
@@ -153,7 +153,7 @@ Les releases 1.1.0 et 1.2.0 ont été publiées depuis (voir [`STATUS.md`](STATU
 
 | Sprint | Titre |
 |---|---|
-| 3 | Socle d'exécution supporté (JDK LTS, Node) — **fait**, sauf les CVE de Testcontainers (AUD-DEP-14, bloqué) et deux preuves à relever |
+| 3 | Socle d'exécution supporté (JDK LTS, Node) — **fait** ; les CVE de Testcontainers (AUD-DEP-14) partent avec Testcontainers (`tester-postgresql-sans-testcontainers`) ; restent deux preuves à relever |
 | 4 | Chemin de requête : ne plus relire le snapshot |
 | 5 | Chaîne de release et d'approvisionnement |
 | 6 | Couverture réelle et plugin IntelliJ |
@@ -170,6 +170,7 @@ Les sprints 1 et 2 sont terminés ; suite ouverte par le sprint 2 : un changemen
 | Sujet | Décision | État |
 |---|---|---|
 | Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](../../architecture/adr/archive/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
+| Exploration de l'index sémantique dans un navigateur : pgAdmin optionnel et explorateur vectoriel ([plan](../roadmap/explorateur-vectoriel-2026-11/README.md), [étude](../research/explorateur-vectoriel-2026-11/README.md)) | [ARCH-0082](../../architecture/adr/ARCH-0082-surface-http-locale-optionnelle-de-consultation.md), acceptée le 2026-11-13 | spécifiée, aucune implémentation : changements OpenSpec `inspecter-postgresql-avec-pgadmin`, `explorer-l-index-semantique-dans-un-navigateur`, `projeter-l-index-semantique-en-2d` |
 
 La reprise d'une indexation interrompue ([ADR 0039](../../architecture/adr/BE-0039-reprise-indexation-apres-interruption.md)) n'est plus en conception : l'ADR est acceptée et implémentée au sprint 2 (`IndexingResumePlanner`, `IndexingRun.Status.INTERRUPTED` dans `minos-engine`).
 

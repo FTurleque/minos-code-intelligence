@@ -46,7 +46,7 @@ Audit du **8 octobre 2026** avec les cinq outils SpotBugs, PIT, ArchUnit, OWASP 
 | `minos-intellij` (plugin IntelliJ) | **Gradle**, hors réacteur, Java 21 | 24 + 1 script PowerShell embarqué | 68 (recompilées) | 15 | 71 (8, réservés Unix) par le harnais |
 | Agrégateur `minos-parent` | Maven `pom` | 0 | 0 | 0 | — |
 
-Aucun module n'est activé par profil : les deux profils de module (`windows-docker-desktop-testcontainers` dans `minos-bootstrap` et `minos-storage-postgresql`, `jacoco-aggregate-report` dans `minos-app`) changent la configuration des tests ou des rapports, pas la liste des modules. Aucun code généré (`target/generated-sources` vide), aucune source tierce copiée dans les modules.
+Aucun module n'est activé par profil : les deux profils de module (`windows-docker-desktop-testcontainers` dans `minos-bootstrap` et `minos-storage-postgresql`, `jacoco-aggregate-report` dans `minos-app`) changent la configuration des tests ou des rapports, pas la liste des modules (le profil `windows-docker-desktop-testcontainers` a disparu depuis avec Testcontainers, `tester-postgresql-sans-testcontainers`). Aucun code généré (`target/generated-sources` vide), aucune source tierce copiée dans les modules.
 
 Le projet ouvert dans IntelliJ (MCP JetBrains) déclare 15 modules dont un doublon `minos-code-intelligence (1)` ; **`minos-app` et `minos-intellij` n'y figurent pas** : l'IDE ne peut pas servir de référence d'inventaire (configuration locale, `.idea/` ignoré par Git).
 
@@ -73,7 +73,7 @@ Le projet ouvert dans IntelliJ (MCP JetBrains) déclare 15 modules dont un doubl
 | Livrées, agrégées sur le réacteur | 40 (13 modules MINOS + 27 artefacts tiers) | Dependency-Check, profil `audit-dependency-check` |
 | Avec la portée test | 68 (dont 28 propres aux tests) | profil `audit-dependency-check-tests` |
 | Plugin IntelliJ (`build.gradle.kts`) | 10 (gson 2.14.0 livré ; JUnit 6.1.3 et sa plateforme en test) | POM de reconstitution hors dépôt |
-| Non couvertes par ces vues | plugins Maven et leurs dépendances, plugin Gradle `org.jetbrains.intellij.platform` 2.19.0, plateforme IntelliJ (fournie par l'IDE), images Docker, outils SCIP embarqués, dépendances Python (aucun fichier `requirements`) | |
+| Non couvertes par ces vues | plugins Maven et leurs dépendances, plugin Gradle `org.jetbrains.intellij.platform` 2.20.0, plateforme IntelliJ (fournie par l'IDE), images Docker, outils SCIP embarqués, dépendances Python (aucun fichier `requirements`) | |
 
 Le jar ombré embarque `slf4j-api` 2.0.20 ; les arbres des modules intermédiaires résolvent 2.0.16 (`minos-mcp`) et 2.0.18 (`minos-integration-git`, `minos-cli`, `minos-api`), et l'agrégat Dependency-Check voit aussi 1.7.36 (constat H05).
 
@@ -360,10 +360,9 @@ Après levée de l'incident H23, depuis la racine du dépôt :
 ./mvnw -B -ntp -fn -Paudit-mutation -DfailWhenNoMutations=false -Dpit.threads=10 -Djacoco.skip=true \
   '-DtargetClasses=com.minos.cli.*,com.minos.bootstrap.*,com.minos.app.*,com.minos.integration.nexus.*' \n  '-DtargetTests=com.minos.cli.*,com.minos.bootstrap.*,com.minos.app.*,com.minos.integration.nexus.*' \
   test-compile org.pitest:pitest-maven:mutationCoverage
-# (paquets des 7 modules restants au 8 octobre 15 h 30 ; minos-storage-postgresql et minos-bootstrap démarrent
-#  PostgreSQL par Testcontainers : sous Windows, Ryuk est désactivé par le profil windows-docker-desktop-testcontainers
-#  et chaque minion tué laisse un conteneur (H24). Les muter sur Linux (profil inactif, Ryuk actif) ou avec
-#  -Dpit.threads=2 en surveillant `docker ps --filter label=org.testcontainers=true`.)
+# (paquets des 7 modules restants au 8 octobre 15 h 30 ; les tests PostgreSQL de minos-storage se connectent au
+#  serveur démarré par `bash scripts/dev/start-test-postgres.sh` : exporter MINOS_TEST_POSTGRES_URL, _USER et
+#  _PASSWORD avant PIT, dont les minions héritent de l'environnement mais pas des propriétés -D de Maven.)
 # 2. minos-runtime-local, à rejouer en entier, dans une machine jetable uniquement :
 ./mvnw -B -ntp -Paudit-mutation -pl minos-runtime-local -am -DfailWhenNoMutations=false -Dpit.threads=10 \
   -Djacoco.skip=true -DtargetClasses='com.minos.runtime.local.*' test-compile org.pitest:pitest-maven:mutationCoverage

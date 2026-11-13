@@ -37,7 +37,7 @@
 | **HMAC-SHA-256** | Algorithme de signature utilisé pour les tokens bearer `mht1` et la chaîne d'audit tenant |
 | **AES-256-GCM** | Algorithme de chiffrement symétrique utilisé pour le control plane tenant |
 | **JGit** | Bibliothèque Java pure implémentant le protocole Git, utilisée par `minos-integration-git` |
-| **Testcontainers** | Framework Java permettant d'instancier des conteneurs Docker dans les tests (PostgreSQL) |
+| **Serveur PostgreSQL de test** | Conteneur pgvector démarré par `scripts/dev/start-test-postgres.sh` (ou `.ps1`) sur `127.0.0.1`, auquel se connectent les tests d'intégration PostgreSQL |
 | **CI-friendly version** | Pattern Maven `${revision}` permettant de définir la version au build sans modifier les POM |
 | **ProcessBuilder** | API Java utilisée par `minos-runtime-local` pour lancer les processus indexeurs externes |
 
