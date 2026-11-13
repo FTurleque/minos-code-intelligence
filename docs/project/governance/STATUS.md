@@ -154,7 +154,7 @@ Les quatre phases du chantier (AUD-ARC-01, -05, -08, -12) sont **fusionnées dan
 - **A11** : 9 types de `minos-engine` nommés par les surfaces (CLI 5, API 3, MCP 1, NEXUS 0), chacun depuis un nombre de fichiers listé, aussi vérifié sur le bytecode.
 - **A12** : vide ; `minos-domain`, `minos-engine` et `minos-application` ne lancent aucun processus, l'ACL Windows passe par le port `PlatformAccessControl` de `minos-runtime-local`.
 - **A13** : un seul couple, `minos-provider-scip` → `minos-runtime-local` (9 types, 28 fichiers), justifié par écrit ; le provider SCIP ne nomme plus le stockage.
-- **Stockage** : un seul module `minos-storage` (reactor à 13 modules), codec commun dans `com.minos.storage.codec`, backends isolés par des règles de packages.
+- **Stockage** : un seul module `minos-storage` (reactor à 14 modules), codec commun dans `com.minos.storage.codec`, backends isolés par des règles de packages.
 
 Reste au plan du chantier hexagonal : SH-12. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 

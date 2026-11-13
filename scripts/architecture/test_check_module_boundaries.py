@@ -1040,7 +1040,7 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.assertEqual(1, self.check()["minos-cli"])
 
     def test_a_conforming_tree_is_accepted_with_the_count_per_surface(self):
-        self.assertEqual({"minos-api": 0, "minos-cli": 1, "minos-mcp": 0, "minos-nexus": 0}, self.check())
+        self.assertEqual({"minos-api": 0, "minos-cli": 1, "minos-explorer": 0, "minos-mcp": 0, "minos-nexus": 0}, self.check())
 
     def test_an_imported_type_outside_the_list_is_refused_naming_surface_file_and_type(self):
         self.write("minos-cli", "com.minos.cli", "Leak", "final class Leak { HostedRole r; }",

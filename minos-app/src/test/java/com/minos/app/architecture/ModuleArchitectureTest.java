@@ -48,7 +48,7 @@ class ModuleArchitectureTest {
         for (String module : List.of(
                 "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
                 "minos-provider-scip", "minos-integration-git", "minos-application",
-                "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp")) {
+                "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp", "minos-explorer")) {
             OUTPUTS.put(module, Path.of(module, "target", "classes"));
         }
         OUTPUTS.put("minos-app", Path.of("target", "classes"));
@@ -71,14 +71,17 @@ class ModuleArchitectureTest {
                     Set.of("minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap")),
             Map.entry("minos-api", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-mcp", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
+            Map.entry("minos-explorer",
+                    Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
             Map.entry("minos-app", Set.of("minos-domain", "minos-engine", "minos-runtime-local",
                     "minos-storage", "minos-provider-scip",
                     "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli",
-                    "minos-api", "minos-mcp")));
+                    "minos-api", "minos-mcp", "minos-explorer")));
 
     private static final Set<String> ADAPTERS = Set.of("minos-runtime-local", "minos-storage",
             "minos-provider-scip", "minos-integration-git");
-    private static final Set<String> SURFACES = Set.of("minos-cli", "minos-api", "minos-mcp", "minos-nexus");
+    private static final Set<String> SURFACES =
+            Set.of("minos-cli", "minos-api", "minos-mcp", "minos-nexus", "minos-explorer");
 
     /**
      * A11 on the bytecode (AUD-ARC-01, ADR 0058 § 3): per surface, the top-level minos-engine types its compiled classes
@@ -100,7 +103,9 @@ class ModuleArchitectureTest {
             "minos-mcp", Map.ofEntries(
                     Map.entry("runtime.MinosVersion", 1)),
             // The NEXUS export goes through KnowledgeExportUseCase; minos-nexus does not depend on the engine.
-            "minos-nexus", Map.of());
+            "minos-nexus", Map.of(),
+            // The exploration surface reads through the application services only.
+            "minos-explorer", Map.of());
 
     private static final String GROUP_PREFIX = "com.minos.";
 
@@ -227,6 +232,24 @@ class ModuleArchitectureTest {
                 .should().dependOnClassesThat().resideInAnyPackage("com.minos.storage.local..",
                         "com.minos.storage.postgresql..", "org.postgresql..", "java.sql..", "javax.sql..")
                 .because("ADR 0068 section 4: the shared storage packages sit below both backends")
+                .check(all);
+    }
+
+    /**
+     * ADR 0082 (points 5 and 8): the exploration surface reads the index through the application services. It uses
+     * no storage adapter, no JDBC and no other surface, and it is the only module that uses the JDK HTTP server.
+     */
+    @Test
+    void theExplorationSurfaceUsesNoStorageAdapterAndOwnsTheHttpServer() {
+        noClasses().that().resideInAPackage("com.minos.explorer..")
+                .should().dependOnClassesThat().resideInAnyPackage("com.minos.storage..", "org.postgresql..",
+                        "java.sql..", "javax.sql..", "com.minos.cli..", "com.minos.mcp..", "com.minos.api..",
+                        "com.minos.nexus..")
+                .because("ADR 0082: the exploration surface depends on no storage adapter and on no other surface")
+                .check(all);
+        noClasses().that().resideOutsideOfPackage("com.minos.explorer..")
+                .should().dependOnClassesThat().resideInAPackage("com.sun.net.httpserver..")
+                .because("ADR 0082 point 8: no other module listens over HTTP")
                 .check(all);
     }
 

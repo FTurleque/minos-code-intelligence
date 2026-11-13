@@ -39,7 +39,7 @@ Les versions Maven sont des propriétés du `pom.xml` parent (`spotbugs.*`, `pit
 
 **PIT** mute toutes les classes `com.minos.*` de chaque module avec tous les tests `com.minos.*` du même module (profil `audit-mutation`). La restriction initiale à trois classes de `minos-engine` (7 octobre 2026) n'est plus le défaut ; `-DtargetClasses` / `-DtargetTests` restreignent une exécution sans toucher au POM. `-Dpit.crossModule=true` mute aussi les classes amont du réacteur contre les tests du module courant (voir « Limites »).
 
-**ArchUnit** importe le bytecode de production des **13 modules** depuis leurs `target/classes` (`minos-app` : `target/classes` de la racine) dans `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java`. Le test vérifie d'abord que chaque module est importé **en entier** (nombre de `.class` sur disque = nombre de classes importées) : une sortie de compilation absente ou vide fait échouer le test au lieu de laisser les règles passer sur un périmètre vide. ArchUnit fait de plus échouer par défaut une règle dont le sujet est vide.
+**ArchUnit** importe le bytecode de production des **14 modules** depuis leurs `target/classes` (`minos-app` : `target/classes` de la racine) dans `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java`. Le test vérifie d'abord que chaque module est importé **en entier** (nombre de `.class` sur disque = nombre de classes importées) : une sortie de compilation absente ou vide fait échouer le test au lieu de laisser les règles passer sur un périmètre vide. ArchUnit fait de plus échouer par défaut une règle dont le sujet est vide.
 
 **Dependency-Check** analyse les dépendances de tous les modules du réacteur en un rapport agrégé : livrées (portées compile, runtime, provided, system) avec `audit-dependency-check`, et avec la portée test en plus avec `audit-dependency-check-tests`. Il ne voit **pas** : les plugins Maven et leurs dépendances (outillage de build), le plugin IntelliJ (Gradle), les images Docker, les outils SCIP embarqués, les scripts Python. Les dépendances du plugin IntelliJ sont analysées à part (voir « Plugin IntelliJ »).
 
@@ -131,7 +131,7 @@ Les règles établies et leur source :
 
 | Test | Décision |
 |---|---|
-| `everyModuleIsImportedCompletely` | garde contre un périmètre vide ou partiel (13 modules, chaque `.class` importée) |
+| `everyModuleIsImportedCompletely` | garde contre un périmètre vide ou partiel (14 modules, chaque `.class` importée) |
 | `everyPackageBelongsToOneModule` | ADR 0044 § 1 sur le bytecode (aucun package compilé par deux modules) |
 | `adaptersDoNotReachBackIntoUpperLayers` | ADR 0042 (A2) : un adaptateur n'atteint ni l'application, ni la racine de composition, ni une surface, ni l'assemblage |
 | `applicationOnlyKnowsPorts` | ADR 0042 (A2) : `minos-application` ne connaît que des ports |

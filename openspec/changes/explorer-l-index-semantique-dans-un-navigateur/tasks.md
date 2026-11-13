@@ -6,9 +6,9 @@ La numérotation des groupes est celle du plan commun : le groupe 1 (pgAdmin) es
 
 ## 2. Décision et frontières (préalable aux lots 2 et 3)
 
-- [ ] 2.1 Décisions prises par le propriétaire le 2026-11-13 : ARCH-0082 acceptée, module `minos-explorer` retenu. Relire `ALLOWED_DEPENDENCIES` (`scripts/architecture/check-module-boundaries.py:59`) et fixer les dépendances permises du module et l'arête `minos-cli → minos-explorer` avant d'écrire le rouge 2.2.
-- [ ] 2.2 Rouge : déclarer `minos-explorer` dans `ALLOWED_DEPENDENCIES` avec ses seules dépendances permises et un test ArchUnit « la surface ne dépend d'aucun adaptateur de stockage » ; vérifier que `check-module-boundaries.py` échoue tant que le module n'existe pas.
-- [ ] 2.3 Correction : module `minos-explorer` vide de logique (POM, package racine, déclaration dans le reactor et dans `minos-app`) ; régénérer `docs/architecture/diagrams/module-dependencies.md` par `check-module-boundaries.py --write-doc` ; rejouer `python .claude/scripts/run_gates.py --fast`.
+- [x] 2.1 Décisions prises par le propriétaire le 2026-11-13 : ARCH-0082 acceptée, module `minos-explorer` retenu. Relire `ALLOWED_DEPENDENCIES` (`scripts/architecture/check-module-boundaries.py:59`) et fixer les dépendances permises du module et l'arête `minos-cli → minos-explorer` avant d'écrire le rouge 2.2.
+- [x] 2.2 Rouge : déclarer `minos-explorer` dans `ALLOWED_DEPENDENCIES` avec ses seules dépendances permises et un test ArchUnit « la surface ne dépend d'aucun adaptateur de stockage » ; vérifier que `check-module-boundaries.py` échoue tant que le module n'existe pas.
+- [x] 2.3 Correction : module `minos-explorer` vide de logique (POM, package racine, déclaration dans le reactor et dans `minos-app`) ; régénérer `docs/architecture/diagrams/module-dependencies.md` par `check-module-boundaries.py --write-doc` ; rejouer `python .claude/scripts/run_gates.py --fast`.
 
 ## 3. Lot 2 — Lectures de l'index (domaine, stockage, application, API Java)
 

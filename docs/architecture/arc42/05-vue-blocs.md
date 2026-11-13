@@ -15,7 +15,7 @@
 flowchart TB
     clients(["Développeur, IDE, agent IA"])
     app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, route MCP"]
-    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus"]
+    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus · minos-explorer"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
     application["<b>minos-application</b><br/>services applicatifs"]
     adapters["<b>Adaptateurs</b><br/>minos-storage (local · PostgreSQL optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
@@ -115,6 +115,11 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Types clés** : `MinosMcpServer`, `MinosMcpApplicationTools`, `MinosApplicationMcpBackend`.
 - **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`, `io.modelcontextprotocol.sdk:mcp 2.0.0`.
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
+
+### minos-explorer
+- **Responsabilité** : surface HTTP locale, optionnelle et en lecture seule, d'exploration de l'index sémantique ([ADR 0082](../adr/ARCH-0082-surface-http-locale-optionnelle-de-consultation.md)) ; démarrée par `minos explorer serve`, seul module à porter une écoute HTTP.
+- **Dépendances** : `minos-application`, `minos-bootstrap` (runtime), serveur HTTP du JDK (`jdk.httpserver`), aucune dépendance tierce.
+- **Sources** : `minos-explorer/src/main/java/com/minos/explorer/`.
 
 ### minos-bootstrap
 - **Responsabilité** : racine de composition ([ADR 0042](../adr/ARCH-0042-racine-de-composition.md)) : seul module non adaptateur qui connaît des classes concrètes d'adaptateur ; découvert par `ServiceLoader` derrière `MinosApplication.open(home)` / `Builder.build()`.

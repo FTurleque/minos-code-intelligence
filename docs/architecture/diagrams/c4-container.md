@@ -2,14 +2,14 @@
 
 > Vue de niveau 2, volontairement simplifiée : une flèche relie des couches, pas chaque paire de modules. Les
 > arêtes Maven exactes sont dans [module-dependencies.md](module-dependencies.md) (fichier généré, qui fait foi).
-> Détail de chaque module : [arc42 § 5.2](../arc42/05-vue-blocs.md). Preuves : `pom.xml` (13 modules),
+> Détail de chaque module : [arc42 § 5.2](../arc42/05-vue-blocs.md). Preuves : `pom.xml` (14 modules),
 > ADR-0042 (racine de composition dans `minos-bootstrap`), ADR-0044.
 
 ```mermaid
 flowchart TB
     clients(["Développeur, IDE, agent IA"])
     app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, route MCP"]
-    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus"]
+    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus · minos-explorer"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
     application["<b>minos-application</b><br/>services applicatifs"]
     adapters["<b>Adaptateurs</b><br/>minos-storage (local · PostgreSQL optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
