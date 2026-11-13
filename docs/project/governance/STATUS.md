@@ -2,7 +2,7 @@
 
 État produit revérifié le : **7 octobre 2026** ; mis à jour le **13 octobre 2026** (sprints 1 et 2 de l'audit du 10 octobre, sprint 3 en partie). Planification additionnelle : **5 octobre 2026**.
 
-Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](../history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `develop` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après promotion.
+Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](../history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `main` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après fusion.
 
 ## Planification additionnelle — 2026-10-05
 
@@ -229,7 +229,7 @@ La qualification courante est volontairement séparée entre gates produit actue
 
 - **`vulnerability-scan`** : gate de vulnérabilités des dépendances (OSV-Scanner, workflow réutilisable épinglé par SHA) ;
 - **`invariants`** : un unique **gate statique ciblé Ubuntu**, sans Maven ni Java — épinglage supply-chain des workflows, frontières de modules, cohérence documentaire courante, `product-facts`, garde-fou de non-réaccumulation d'artefacts de jalon, invariants MND/MNE/post-MNE (y compris les neuf gates de jalon actifs M21–M28), invariants post-#228, invariants d'audit-remédiation v2/P0-P2/MINOS-01, provenance Inno Setup, tests unitaires du vérificateur Docker upgrade — chaque contrôle une seule fois, quel que soit l'OS de `verify` ;
-- **`verify`** (Ubuntu 24.04 et Windows Server 2022), **seul build Maven d'une PR** (les workflows M19 et M20, qui en répétaient une copie filtrée par chemins, sont retirés : constat C2, gardé par `scripts/quality/check-single-execution.py`) : `clean verify` Maven complet, PostgreSQL obligatoire sur Linux, tests sandbox/cgroup/AppContainer applicables, seuils JaCoCo ciblés Linux/Windows, invariant d'ascendance (`main` doit être ancêtre du candidat, afin d'empêcher une nouvelle divergence silencieuse `main/develop`).
+- **`verify`** (Ubuntu 24.04 et Windows Server 2022), **seul build Maven d'une PR** (les workflows M19 et M20, qui en répétaient une copie filtrée par chemins, sont retirés : constat C2, gardé par `scripts/quality/check-single-execution.py`) : `clean verify` Maven complet, PostgreSQL obligatoire sur Linux, tests sandbox/cgroup/AppContainer applicables, seuils JaCoCo ciblés Linux/Windows, invariant d'ascendance (`main` doit être ancêtre du candidat : une branche qui a divergé de `main` échoue).
 
 **Checks exigés.** Le ruleset exige `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)` et `SonarCloud Code Analysis` ; la liste est déclarée dans `.github/required-checks.json` et vérifiée par `scripts/quality/check-ci-wiring.py` (jobs résolus, déclencheurs sans filtre de chemins, auto-tests de gates câblés dans `invariants`). Les deux jobs `verify` passent `-Dminos.sandbox.tests.required=true` : un confinement OS indisponible est un échec, pas un saut. L'heuristique `check-partial-result-consumers.py`, autrefois consultative, est bloquante depuis que `invariants` est exigé.
 
@@ -251,7 +251,7 @@ Les replays M15/M28 historiques sont isolés dans `.github/workflows/historical-
 
 La qualification réelle **Docker MCP A → B** tourne sur un runner **GitHub-hosted `ubuntu-24.04`** standard — aucun runner auto-hébergé, aucune machine personnelle, aucun repository d'infrastructure privé (le dépôt est public). `scripts/ci/qualify-docker-upgrade.ps1` (pwsh, portable) construit deux commits/JAR distincts, chacun avec son propre Dockerfile/Compose, pilote le cœur portable `docker/scripts/mcp-lifecycle.ps1` (extrait de `prod-mcp-release.ps1`, qui reste l'interface produit Windows inchangée pour les utilisateurs), les providers/Compose réels, indexe un projet fixture, exécute le handshake MCP avant/après upgrade, vérifie la persistance du `MINOS_HOME` et s'assure qu'un candidat suivant invalide ne remplace pas le candidat B qualifié.
 
-La promotion `develop → main` déclenche cette qualification automatiquement via `.github/workflows/release-promotion-gate.yml` (job `docker-upgrade-qualification` puis `docker-upgrade-evidence` en dépendance, jamais l'inverse). `.github/workflows/docker-upgrade-qualification.yml` reste disponible en `workflow_dispatch` pour un usage manuel ponctuel, mais ne déclenche plus rien automatiquement lui-même — cela évite toute double exécution pour un même candidat. `scripts/release/check-docker-upgrade-evidence.py` télécharge et valide le manifeste `qualification.json` de la preuve (candidat exact, résultat `PASS`, et éventuellement le SHA précédent attendu), pas seulement le nom de l'artifact.
+Toute PR vers `main` déclenche cette qualification automatiquement via `.github/workflows/release-promotion-gate.yml` (job `docker-upgrade-qualification` puis `docker-upgrade-evidence` en dépendance, jamais l'inverse). `.github/workflows/docker-upgrade-qualification.yml` reste disponible en `workflow_dispatch` pour un usage manuel ponctuel, mais ne déclenche plus rien automatiquement lui-même — cela évite toute double exécution pour un même candidat. `scripts/release/check-docker-upgrade-evidence.py` télécharge et valide le manifeste `qualification.json` de la preuve (candidat exact, résultat `PASS`, et éventuellement le SHA précédent attendu), pas seulement le nom de l'artifact.
 
 ### SonarCloud
 
@@ -294,7 +294,7 @@ La **gate JaCoCo ciblée** de `PR Validation` (`scripts/quality/check-jacoco.py`
 - indexation Windows non-admin et mutations ACL additives/ciblées ;
 - mise à jour Docker MCP non interactive et fail-fast ;
 - runtime Docker : aucune racine des projets montée ; `/workspace/projects` ne contient que les projets inscrits, chacun monté en lecture seule sur `/workspace/projects/<nom>` par `prod-mcp-release.ps1 -Action AddProject` et retiré par `RemoveProject` ; une installation à racine unique migre au premier `Install` vers un montage par projet inscrit, sans réécrire le registre (refusée avec PostgreSQL) ; l'installeur ne demande plus de racine ([ADR SEC-0075](../../architecture/adr/SEC-0075-exposer-au-runtime-docker-seulement-les-projets-inscrits.md), [`docs/user/docker-runtime.md`](../../user/docker-runtime.md)) ;
-- branches de promotion : `develop` doit contenir l'ascendance de `main` avant tout candidat, vérifié par CI ;
+- branches : tout candidat contient l'ascendance de `main`, vérifié par CI ;
 - aucun cycle de packages dans le code de production ni dans le plugin (règle A8 de `check-module-boundaries.py`, table `KNOWN_PACKAGE_CYCLES` vide) ;
 - une qualification de confinement OS indisponible échoue dans la CI au lieu d'être sautée (`minos.sandbox.tests.required`).
 

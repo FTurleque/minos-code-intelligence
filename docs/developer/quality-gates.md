@@ -6,7 +6,7 @@ Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135
 
 ## Gate de PR autoritatif
 
-`.github/workflows/pr-ci.yml` s'exécute sur les PR et pushes `main` / `develop`.
+`.github/workflows/pr-ci.yml` s'exécute sur les PR vers `main` et les pushes sur `main`.
 
 La matrice obligatoire couvre :
 
