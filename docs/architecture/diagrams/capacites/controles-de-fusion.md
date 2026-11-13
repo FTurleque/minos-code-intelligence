@@ -23,7 +23,7 @@ exécution d'un gate », « Le plugin IntelliJ rend un verdict sur toute pull re
 
 ```mermaid
 flowchart TD
-  PR["Pull request vers develop ou main"] --> W["Workflows exigés sans filtre paths (pr-ci.yml, secret-scan.yml, intellij-plugin.yml)"]
+  PR["Pull request vers main"] --> W["Workflows exigés sans filtre paths (pr-ci.yml, secret-scan.yml, intellij-plugin.yml)"]
   W --> INV["Job invariants : gates Python et leurs auto-tests"]
   W --> VER["Jobs Verify Linux et Windows : mvnw clean verify, gate JaCoCo une fois par système"]
   W --> PLG["IntelliJ plugin (gate) : portée calculée, verdict toujours rendu"]
@@ -45,7 +45,7 @@ flowchart TD
   RS["verify-ruleset.py, lancé à la main"] -.->|"compare le ruleset réel à required-checks.json"| OK
 ```
 
-Le ruleset GitHub « Protect main & develop » se règle à la main ; `scripts/quality/verify-ruleset.py` mesure à la
+Le ruleset GitHub « Protect main » se règle à la main ; `scripts/quality/verify-ruleset.py` mesure à la
 demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 2 lecture impossible). L'exigence
 « branche à jour » ne relève que de ce réglage manuel (écart E6). Le job `gate` du plugin s'exécute toujours
 (`if: always()`) et refuse un job sauté alors que la portée l'incluait.
