@@ -75,6 +75,10 @@ class ApplicationOwnershipGuardTest {
                 new Owner(1, "référence MinosApplication::open injectée dans serving(), qui ferme dans un try-avec-ressources",
                         List.of("try (MinosApplication application = opener.open(home))",
                                 "this(serving(MinosApplication::open, MinosMcpServer::run),")));
+        OWNERS.put("minos-app/src/main/java/com/minos/app/ExplorerLaunchRouteProvider.java",
+                new Owner(1, "référence MinosApplication::open injectée dans run(), qui ferme dans un try-avec-ressources",
+                        List.of("try (MinosApplication application = opener.open(validatedHome))",
+                                "this(MinosApplication::open, ExplorerSession::serve,")));
         OWNERS.put("minos-cli/src/main/java/com/minos/cli/MinosLauncher.java",
                 new Owner(1, "référence MinosApplication::open injectée dans launch(), qui la confie à une LazyApplication "
                         + "ouverte à la demande, fermée par un try-avec-ressources",

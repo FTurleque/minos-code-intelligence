@@ -13,6 +13,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.cache.WeightedLruCache;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -68,8 +68,10 @@ public final class SemanticCorpusQueryService {
     static final int MAX_SYMBOL_LOOKUPS = 4;
 
     private final Object cacheLock = new Object();
-    private final Map<String, FingerprintedIndex> fingerprints = leastRecentlyUsed(MAX_FINGERPRINTED_PROJECTS);
-    private final Map<String, SymbolLookup> lookups = leastRecentlyUsed(MAX_SYMBOL_LOOKUPS);
+    private final WeightedLruCache<String, FingerprintedIndex> fingerprints =
+            new WeightedLruCache<>(MAX_FINGERPRINTED_PROJECTS, MAX_FINGERPRINTED_PROJECTS);
+    private final WeightedLruCache<String, SymbolLookup> lookups =
+            new WeightedLruCache<>(MAX_SYMBOL_LOOKUPS, MAX_SYMBOL_LOOKUPS);
 
     public SemanticCorpusQueryService(ProjectRegistry registry, ProjectResolver projects,
                                       CodeKnowledgeSnapshotStore snapshots, SemanticIndexService indexService,
@@ -112,7 +114,7 @@ public final class SemanticCorpusQueryService {
         SemanticVectorStore store = indexService.vectorStore();
         boolean goOn = true;
         while (goOn) {
-            goOn = walk.readNextPage(store);
+            goOn = walk.hasMoreAfterReading(store);
         }
         return walk.page();
     }
@@ -148,7 +150,7 @@ public final class SemanticCorpusQueryService {
         }
 
         /** Reads the next page of the store; false when the answer needs no other page. */
-        boolean readNextPage(SemanticVectorStore store) throws IOException {
+        boolean hasMoreAfterReading(SemanticVectorStore store) throws IOException {
             Optional<SemanticVectorStore.DocumentPage> read = store.documentPage(projectId, after, batch);
             if (read.isEmpty()) {
                 // An index that was there for the cursor or for a previous page is gone: it was replaced.
@@ -363,21 +365,9 @@ public final class SemanticCorpusQueryService {
         if (!metadata.equals(checksums.metadata())) throw new IndexChangedException();
         String fingerprint = fingerprint(checksums.checksumsByStableKey());
         synchronized (cacheLock) {
-            fingerprints.put(metadata.projectId(), new FingerprintedIndex(metadata, fingerprint));
+            fingerprints.put(metadata.projectId(), new FingerprintedIndex(metadata, fingerprint), 1L);
         }
         return IndexIdentity.of(metadata, fingerprint);
-    }
-
-    /** A map that forgets its least recently read entry once it holds more than {@code maximum}. */
-    private static <V> Map<String, V> leastRecentlyUsed(int maximum) {
-        return new LinkedHashMap<>(16, 0.75f, true) {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, V> eldest) {
-                return size() > maximum;
-            }
-        };
     }
 
     /** The kind named by {@code value}, whatever its case, or {@code null} for no kind. */
@@ -415,7 +405,7 @@ public final class SemanticCorpusQueryService {
         }
         SymbolLookup built = SymbolLookup.of(projectId, loaded.orElseThrow());
         synchronized (cacheLock) {
-            lookups.put(projectId, built);
+            lookups.put(projectId, built, 1L);
         }
         return built;
     }

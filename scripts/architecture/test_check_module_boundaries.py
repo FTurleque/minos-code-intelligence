@@ -978,7 +978,7 @@ class ServiceLoaderClassLoaderTest(unittest.TestCase):
         self.assertEqual(0, self.check())
 
     def test_the_real_tree_passes_a_loader_at_every_site(self):
-        self.assertEqual(5, _MODULE.check_service_loader_class_loaders())
+        self.assertEqual(6, _MODULE.check_service_loader_class_loaders())
 
 
 class RatchetTreeTestCase(unittest.TestCase):

@@ -102,6 +102,51 @@ class ExplorerCommandLineTest {
         assertFalse(Files.exists(absentHome), "a missing entry point must not create MINOS_HOME");
     }
 
+    @Test
+    void exactlyOneRegisteredEntryPointIsAcceptedAndSeveralAreRefusedByName(@TempDir Path root) throws Exception {
+        Path one = services(root.resolve("one"), FirstRoute.class.getName());
+        Path two = services(root.resolve("two"), FirstRoute.class.getName() + "\n" + SecondRoute.class.getName());
+        ClassLoader parent = ExplorerCommandLineTest.class.getClassLoader();
+
+        try (java.net.URLClassLoader single = new java.net.URLClassLoader(new java.net.URL[] {one.toUri().toURL()}, parent);
+             java.net.URLClassLoader several = new java.net.URLClassLoader(new java.net.URL[] {two.toUri().toURL()}, parent)) {
+            ExplorerLaunchRoute resolved = ExplorerCommandLine.registeredRoute(single);
+            IllegalStateException refused = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> ExplorerCommandLine.registeredRoute(several));
+
+            assertEquals(FirstRoute.class, resolved.getClass());
+            assertEquals(41, resolved.run(root, 0, new StringBuilder()));
+            assertTrue(refused.getMessage().startsWith("MINOS refuses to choose an explorer entry point: 2 "),
+                    refused.getMessage());
+            assertTrue(refused.getMessage().contains(FirstRoute.class.getName() + ", " + SecondRoute.class.getName()),
+                    refused.getMessage());
+            assertFalse(refused.getMessage().contains(root.toString()), refused.getMessage());
+        }
+    }
+
+    private static Path services(Path directory, String providers) throws IOException {
+        Path file = Files.createDirectories(directory.resolve("META-INF").resolve("services"))
+                .resolve(ExplorerLaunchRoute.class.getName());
+        Files.writeString(file, providers + "\n", StandardCharsets.UTF_8);
+        return directory;
+    }
+
+    /** A test entry point that opens nothing and returns a recognizable code. */
+    public static final class FirstRoute implements ExplorerLaunchRoute {
+        @Override
+        public int run(Path home, int port, Appendable error) {
+            return 41;
+        }
+    }
+
+    /** A second test entry point, to register two of them. */
+    public static final class SecondRoute implements ExplorerLaunchRoute {
+        @Override
+        public int run(Path home, int port, Appendable error) {
+            return 42;
+        }
+    }
+
     private record Launch(int exit, String output, String error) {
     }
 

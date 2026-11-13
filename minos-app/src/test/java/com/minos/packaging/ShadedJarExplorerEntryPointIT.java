@@ -49,7 +49,7 @@ class ShadedJarExplorerEntryPointIT {
         assertTrue(help.output().contains("Usage: minos explorer serve [--port <n>]"), help.output());
         assertTrue(help.output().contains("loopback only (127.0.0.1)"), help.output());
         assertEquals(2, widened.exitCode(), widened.error());
-        assertTrue(widened.error().contains("unknown option for explorer serve"), widened.error());
+        assertTrue(widened.error().contains("unknown explorer serve option: --host"), widened.error());
         assertFalse(widened.error().contains("http://"), "nothing listens after a usage error");
     }
 

@@ -24,13 +24,13 @@ final class JsonObjectReader {
     static Map<String, Object> read(String text) {
         if (text == null) throw new IllegalArgumentException(INVALID);
         JsonObjectReader reader = new JsonObjectReader(text);
-        Map<String, Object> members = reader.readObject();
+        Map<String, Object> members = reader.parseMembers();
         reader.skipWhitespace();
         if (reader.position != text.length()) throw new IllegalArgumentException(INVALID);
         return members;
     }
 
-    private Map<String, Object> readObject() {
+    private Map<String, Object> parseMembers() {
         Map<String, Object> members = new LinkedHashMap<>();
         skipWhitespace();
         expect('{');

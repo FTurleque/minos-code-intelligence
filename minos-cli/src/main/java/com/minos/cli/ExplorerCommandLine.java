@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliOptions;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -63,26 +64,13 @@ final class ExplorerCommandLine {
             return usageError(error, arguments.length < 2 ? "missing operation: serve"
                     : "unknown explorer operation (expected: serve)");
         }
-        int port = 0;
-        boolean portGiven = false;
-        for (int index = 2; index < arguments.length; index++) {
-            if (!PORT.equals(arguments[index])) {
-                return usageError(error, "unknown option for explorer serve (expected: --port <n>)");
-            }
-            if (portGiven) return usageError(error, "--port is given twice");
-            if (index + 1 == arguments.length) return usageError(error, "--port needs a value");
-            Integer parsed = port(arguments[++index]);
-            if (parsed == null) return usageError(error, "--port must be an integer between 0 and " + MAX_PORT);
-            port = parsed;
-            portGiven = true;
+        CliOptions options;
+        try {
+            options = CliOptions.spec().integer(PORT, 0, MAX_PORT).scope("explorer serve ").parse(arguments, 2);
+        } catch (IllegalArgumentException usage) {
+            return usageError(error, usage.getMessage());
         }
-        return route.get().run(home, port, error);
-    }
-
-    private static Integer port(String value) {
-        if (!value.matches("[0-9]{1,5}")) return null;
-        int parsed = Integer.parseInt(value);
-        return parsed > MAX_PORT ? null : parsed;
+        return route.get().run(home, options.integer(PORT, 0), error);
     }
 
     private static int usageError(Appendable error, String message) throws IOException {
@@ -93,8 +81,12 @@ final class ExplorerCommandLine {
 
     /** The single explorer entry point visible from the class loader of MINOS itself. */
     private static ExplorerLaunchRoute registeredRoute() {
-        List<ServiceLoader.Provider<ExplorerLaunchRoute>> providers = ServiceLoader
-                .load(ExplorerLaunchRoute.class, ExplorerLaunchRoute.class.getClassLoader()).stream().toList();
+        return registeredRoute(ExplorerLaunchRoute.class.getClassLoader());
+    }
+
+    static ExplorerLaunchRoute registeredRoute(ClassLoader loader) {
+        List<ServiceLoader.Provider<ExplorerLaunchRoute>> providers =
+                ServiceLoader.load(ExplorerLaunchRoute.class, loader).stream().toList();
         if (providers.isEmpty()) throw new IllegalStateException(MISSING);
         if (providers.size() > 1) {
             throw new IllegalStateException("MINOS refuses to choose an explorer entry point: " + providers.size()
