@@ -131,7 +131,7 @@ Changement OpenSpec `explorer-l-index-semantique-dans-un-navigateur`.
 - **Sortie réseau du conteneur.** Le réseau d'entrée du service `minos-explorer` n'est pas interne : ce
   conteneur a une route sortante, que `minos-mcp` n'a pas. Couper le masquerading d'adresse ne la ferme pas
   sur Docker Desktop (relevé le 2026-11-13). L'écart est déclaré dans l'étiquette du service et dans
-  `docs/user/docker-runtime.md` ; sa fermeture demande une décision.
+  `docs/user/docker-runtime.md` ; le propriétaire l'accepte en l'état (décision du 2026-11-13), le service restant optionnel et non qualifié.
 - **`::1`.** La surface écoute sur `::1` quand la machine a cette adresse ; elle ne démarre pas si le port y
   est déjà pris, et n'y écoute pas sur une machine sans IPv6.
 - **Jeton et journaux (point 3).** L'adresse d'accès, jeton compris, est écrite une fois sur la sortie

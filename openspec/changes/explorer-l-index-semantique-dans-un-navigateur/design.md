@@ -426,7 +426,7 @@ Skill `minos-security-checklist` déroulé et agent `minos-security-reviewer` ex
 | Constat | Gravité | Traitement |
 |---|---|---|
 | Connexions lentes : aucune borne sur la lecture d'une requête, 8 fils saturables sans jeton | moyenne | corrigé : `sun.net.httpserver.maxReqTime` = 10 s et `maxRspTime` = 60 s posés au démarrage ; test `connectionsThatNeverFinishTheirRequestAreCutByTheServerWhichThenAnswersAgain`. Reste : une requête arrivée pendant la saturation peut être coupée ; documenté |
-| Réseau d'entrée Docker non interne : route sortante du conteneur explorateur | moyenne | **non corrigé** : couper le masquerading ne ferme pas la sortie sur Docker Desktop (relevé) ; étiquette du service corrigée (`loopback-published-outbound-not-denied`), écart consigné dans ARCH-0082 et `docs/user/docker-runtime.md` ; décision du propriétaire attendue |
+| Réseau d'entrée Docker non interne : route sortante du conteneur explorateur | moyenne | **non corrigé** : couper le masquerading ne ferme pas la sortie sur Docker Desktop (relevé) ; étiquette du service corrigée (`loopback-published-outbound-not-denied`), écart consigné dans ARCH-0082 et `docs/user/docker-runtime.md` ; accepté en l'état par le propriétaire le 2026-11-13 |
 | Échec de liaison sur `::1` ignoré même si le port est pris par un autre processus | faible | corrigé : la surface ne démarre pas ; test `theSurfaceDoesNotStartBesideAnotherProcessThatHoldsItsPortOnTheIpv6Loopback` |
 | Jeton écrit sur stderr, donc dans le journal du conteneur | faible | commentaire de `SessionToken` corrigé ; documenté |
 | Cache d'empreinte et de symboles à une seule entrée | faible | corrigé : caches par projet, bornés (64 et 4) |
