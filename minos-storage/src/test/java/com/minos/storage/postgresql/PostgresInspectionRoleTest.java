@@ -195,10 +195,17 @@ class PostgresInspectionRoleTest extends PostgresTestSupport {
         assertEquals(0L, countAsOwner("SELECT count(*) FROM pg_roles WHERE rolname = '" + ROLE + "'"));
         assertEquals(1L, before);
         assertEquals(before, countAsOwner("SELECT count(*) FROM semantic_documents"));
-        SQLException refused = assertThrows(SQLException.class, () -> openAs(ROLE, password, SCHEMA).close());
+        SQLException refused = assertThrows(SQLException.class, this::connectAsTheRole);
         assertTrue(refused.getSQLState().startsWith("28"), refused.getSQLState());
         // Replayable: removing a role that is already gone is not an error.
         executeAsOwner(script("InspectRoleRemovalSql"), false);
+    }
+
+    /** Opens then closes a session of the role; the single call an {@code assertThrows} of a refused login needs. */
+    private void connectAsTheRole() throws SQLException {
+        try (Connection inspect = openAs(ROLE, password, SCHEMA)) {
+            assertTrue(inspect.isValid(5), "the session of the role is not usable");
+        }
     }
 
     private void applyRole() throws Exception {

@@ -1020,7 +1020,10 @@ function Get-PrivateSecret([string] $Path, [string] $Label, [scriptblock] $Creat
         $Content = [System.IO.File]::ReadAllText($Path).Trim()
     }
     catch {
-        throw "The private file $Label of the MINOS Docker data folder could not be created, restricted to the current user or read. pgAdmin was not started. If the file existed with a wider access list, remove it and run -Action EnablePgAdmin again: its password is then generated anew."
+        # The cause is kept for the operator, with the path replaced by the label: the helpers name the file they
+        # could not restrict and the access list they found (security identifiers, no secret).
+        $Cause = ([string] $_.Exception.Message).Replace($Path, $Label).Replace((Split-Path -Parent $Path), 'secrets')
+        throw "The private file $Label of the MINOS Docker data folder could not be created, restricted to the current user or read ($Cause). pgAdmin was not started. If the file existed with a wider access list, remove it and run -Action EnablePgAdmin again: its password is then generated anew."
     }
     if ([string]::IsNullOrWhiteSpace($Content)) {
         throw "The private file $Label of the MINOS Docker data folder is empty. pgAdmin was not started. Remove the file and run -Action EnablePgAdmin again."
