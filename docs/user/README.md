@@ -17,6 +17,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Activer le retrieval sémantique learned local | [Semantic Retrieval 2.0](../developer/semantic-retrieval-2.md) |
 | Indexer C/C++, C#, Go ou Rust | [Providers polyglottes qualifiés avec contraintes](polyglot-providers.md) |
 | Indexer une révision GitHub/GitLab exacte | [Remote & Distributed Indexing](remote-indexing.md) |
+| Lire le contenu de l'index sémantique PostgreSQL du runtime Docker | [Inspecter PostgreSQL avec pgAdmin](inspecter-postgresql-avec-pgadmin.md) |
 | Importer et lire des observations runtime partielles | [Runtime & Dynamic Intelligence](runtime-intelligence.md) |
 | Administrer des espaces partagés opt-in | [Team / Hosted Mode](team-hosted-mode.md) |
 | Utiliser MINOS depuis Java | [API Java locale](java-api.md) |

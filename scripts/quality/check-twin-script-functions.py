@@ -53,16 +53,18 @@ CI_STEPS = ("scripts/quality/check-twin-script-functions.py", "scripts/quality/t
 
 _DOCKER_SERVICES = "docker/scripts/configure-m30-docker-services.ps1"
 _RUNTIME_SETTINGS = "scripts/install/configure-runtime-settings.ps1"
+_DOCKER_LIFECYCLE = "docker/scripts/mcp-lifecycle.ps1"
 
 # (function, files). A closed list: an entry is added with the copy it declares, removed with it.
 TWINS = (
     # Secret file of the PostgreSQL password and bounded reads, shipped in docker\scripts\ and integration\.
+    # The private files of pgAdmin (docker\scripts\mcp-lifecycle.ps1) are written by the same four ACL helpers.
     ("Require-Identifier", (_DOCKER_SERVICES, _RUNTIME_SETTINGS)),
     ("Read-BoundedUtf8", (_DOCKER_SERVICES, _RUNTIME_SETTINGS)),
-    ("Restrict-FileToCurrentUser", (_DOCKER_SERVICES, _RUNTIME_SETTINGS)),
-    ("Get-FileAccessSecurity", (_DOCKER_SERVICES, _RUNTIME_SETTINGS)),
-    ("Assert-FileRestrictedToCurrentUser", (_DOCKER_SERVICES, _RUNTIME_SETTINGS)),
-    ("Write-PrivateSecretFile", (_DOCKER_SERVICES, _RUNTIME_SETTINGS)),
+    ("Restrict-FileToCurrentUser", (_DOCKER_SERVICES, _RUNTIME_SETTINGS, _DOCKER_LIFECYCLE)),
+    ("Get-FileAccessSecurity", (_DOCKER_SERVICES, _RUNTIME_SETTINGS, _DOCKER_LIFECYCLE)),
+    ("Assert-FileRestrictedToCurrentUser", (_DOCKER_SERVICES, _RUNTIME_SETTINGS, _DOCKER_LIFECYCLE)),
+    ("Write-PrivateSecretFile", (_DOCKER_SERVICES, _RUNTIME_SETTINGS, _DOCKER_LIFECYCLE)),
     # Ceiling overrides kept across a restart of the Docker MCP runtime.
     ("Test-CeilingOverride", ("docker/scripts/mcp-lifecycle.ps1", "docker/scripts/prod-mcp.ps1")),
     ("Get-PreservedCeilingOverrides", ("docker/scripts/mcp-lifecycle.ps1", "docker/scripts/prod-mcp.ps1")),

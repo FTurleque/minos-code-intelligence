@@ -33,6 +33,11 @@ x-limits-ollama: &limits-ollama
   mem_limit: "${MINOS_OLLAMA_MEM_LIMIT:-2g}"
   memswap_limit: "${MINOS_OLLAMA_MEM_LIMIT:-2g}"
   pids_limit: "${MINOS_OLLAMA_PIDS_LIMIT:-256}"
+x-limits-pgadmin: &limits-pgadmin
+  cpus: "${MINOS_PGADMIN_CPUS:-0}"
+  mem_limit: "${MINOS_PGADMIN_MEM_LIMIT:-1g}"
+  memswap_limit: "${MINOS_PGADMIN_MEM_LIMIT:-1g}"
+  pids_limit: "${MINOS_PGADMIN_PIDS_LIMIT:-256}"
 
 services:
   minos-mcp:
@@ -389,12 +394,101 @@ services:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
       io.minos.runtime-plane: semantic
 
+  # Optional inspection of the managed PostgreSQL with pgAdmin. Started only by
+  # `mcp-lifecycle.ps1 -Action EnablePgAdmin`, which creates the read-only role minos_inspect and
+  # the three private files mounted below; never part of a default start (profile `pgadmin`).
+  #
+  # Compose interpolates the services of inactive profiles too, so no variable of this service is
+  # required (`${VAR:?}`): a runtime that never enabled pgAdmin must keep working. A missing file
+  # variable resolves instead to a path that cannot exist and that names the variable, and
+  # `create_host_path: false` makes Docker refuse the mount.
+  #
+  # The image starts as the unprivileged uid 5050. With every capability dropped it cannot bind
+  # port 80, hence PGADMIN_LISTEN_PORT. Its own entrypoint writes its settings under /pgadmin4,
+  # read-only here: the update check is disabled through /etc/pgadmin/config_system.py instead.
+  # libpq ignores a password file it does not own with mode 0600, so the mounted one is copied
+  # into the storage folder of the pgAdmin account (PassFile of the registered server).
+  minos-pgadmin:
+    <<: *limits-pgadmin
+    profiles: [pgadmin]
+    # The ONLY place that names this image (see minos-postgres). Gate: scripts/quality/check-image-pins.py.
+    image: "${MINOS_PGADMIN_IMAGE:-dpage/pgadmin4:9.19.0@sha256:3591b3d02910dcd817dec6fcaa681c278ba6966945283dd0ea0042731c330c83}"
+    depends_on:
+      minos-postgres:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        echo 'UPGRADE_CHECK_ENABLED = False' > /etc/pgadmin/config_system.py
+        storage="/var/lib/pgadmin/storage/$$(printf '%s' "$${PGADMIN_DEFAULT_EMAIL}" | sed 's/@/_/')"
+        mkdir -p "$$storage"
+        cp /run/secrets/minos-pgadmin-pgpass "$$storage/pgpass"
+        chmod 600 "$$storage/pgpass"
+        exec /entrypoint.sh
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "${MINOS_PGADMIN_EMAIL:-inspect@minos.example}"
+      PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/minos-pgadmin-password
+      PGADMIN_SERVER_JSON_FILE: /run/secrets/minos-pgadmin-servers.json
+      PGADMIN_LISTEN_PORT: "8080"
+      PGADMIN_DISABLE_POSTFIX: "true"
+    volumes:
+      - type: volume
+        source: minos-pgadmin-data
+        target: /var/lib/pgadmin
+      - type: bind
+        source: "${MINOS_PGADMIN_PASSWORD_FILE:-/MINOS_PGADMIN_PASSWORD_FILE-is-required}"
+        target: /run/secrets/minos-pgadmin-password
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${MINOS_PGADMIN_PGPASS_FILE:-/MINOS_PGADMIN_PGPASS_FILE-is-required}"
+        target: /run/secrets/minos-pgadmin-pgpass
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${MINOS_PGADMIN_SERVERS_FILE:-/MINOS_PGADMIN_SERVERS_FILE-is-required}"
+        target: /run/secrets/minos-pgadmin-servers.json
+        read_only: true
+        bind:
+          create_host_path: false
+    # The single published port of the runtime, on the loopback interface of the host only.
+    ports:
+      - "127.0.0.1:${MINOS_PGADMIN_PORT:-5050}:8080"
+    networks: [minos-runtime, minos-inspect-ingress]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/misc/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+      - /var/log/pgadmin:rw,nosuid,nodev,noexec,size=16m,mode=0700,uid=5050,gid=0
+      - /etc/pgadmin:rw,nosuid,nodev,noexec,size=1m,mode=0700,uid=5050,gid=0
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.runtime-plane: inspection
+
 networks:
   minos-runtime:
     internal: true
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
       io.minos.network-policy: internal-only
+  # A container attached to the internal network alone cannot publish a port: pgAdmin enters by
+  # this network, and reaches PostgreSQL by minos-runtime. It gives pgAdmin an outbound route: disabling the IP
+  # masquerade of the bridge does not close it under Docker Desktop (measured), so the option is not set.
+  minos-inspect-ingress:
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.network-policy: inspection-loopback-ingress
   minos-admin-egress:
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
@@ -405,6 +499,11 @@ volumes:
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
       io.minos.runtime-plane: provider-tools
+  # pgAdmin's own configuration (its account, its registered server). No MINOS data.
+  minos-pgadmin-data:
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
+      io.minos.runtime-plane: inspection
   minos-postgres-data:
     external: true
     name: "${MINOS_POSTGRES_VOLUME:?MINOS_POSTGRES_VOLUME is required}"

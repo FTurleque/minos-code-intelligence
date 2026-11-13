@@ -61,7 +61,7 @@ function Test-CeilingOverride([string] $Name, [string] $Value) {
 
 function Get-PreservedCeilingOverrides([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
-    $Lines = @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_(MCP|ADMIN|JOB|POSTGRES|OLLAMA)_(CPUS|MEM_LIMIT|PIDS_LIMIT)=' })
+    $Lines = @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_(MCP|ADMIN|JOB|POSTGRES|OLLAMA|PGADMIN)_(CPUS|MEM_LIMIT|PIDS_LIMIT)=' })
     foreach ($Line in $Lines) {
         $Name, $Value = $Line.Split('=', 2)
         if (-not (Test-CeilingOverride -Name $Name -Value $Value)) {
