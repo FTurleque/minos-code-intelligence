@@ -1,2 +1,3 @@
 - [Fusion de PR sans suppression anticipée](feedback_fusion_pr.md) — vérifier MERGED avant de supprimer la branche ; auto-merge interdit ; PR fermée non réouvrable
 - [review-context sans texte d'ADR](reference_review_context_sans_texte.md) — Archgate 0.18 : lire Decision/Do's des ADR soi-même pour la revue
+- [Clôture finale de l'audit, 2026-11-05](project_cloture_finale_audit_2026_11_05.md) — PR #662-664 fusionnées ; restent findings.json/ETAT (auditeur), R-30 à confirmer
