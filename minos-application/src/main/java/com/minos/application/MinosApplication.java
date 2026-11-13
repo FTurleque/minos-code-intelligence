@@ -205,7 +205,8 @@ public final class MinosApplication implements AutoCloseable {
                 runtimeIntelligenceService);
         this.semantic = new Semantic(
                 semanticIndexService, semanticSearchService, hybridSearchService, hybridContextBuilder,
-                new SemanticCorpusQueryService(projectRegistry, resolver, snapshotStore, semanticIndexService));
+                new SemanticCorpusQueryService(projectRegistry, resolver, snapshotStore, semanticIndexService,
+                        semanticSearchService, hybridSearchService));
         this.hostedControlPlaneService = Objects.requireNonNull(
                 hostedControlPlaneService, "hostedControlPlaneService");
         this.teamControlPlane = hostedControlPlaneService.map(TeamControlPlane::new);

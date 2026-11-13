@@ -66,6 +66,8 @@ class SemanticCorpusQueryServiceTest {
     private InMemoryVectorStore vectors;
     private RefusingProvider provider;
     private SemanticCorpusQueryService corpus;
+    private SemanticSearchService semanticSearch;
+    private HybridSearchService hybridSearch;
 
     @BeforeEach
     void wire(@TempDir Path temp) throws Exception {
@@ -85,7 +87,111 @@ class SemanticCorpusQueryServiceTest {
         vectors.replace(indexOf(new SemanticDocumentFactory().build(project, snapshots.active), ACTIVE, 1_000L));
         ProjectResolver resolver = new ProjectResolver(registry);
         SemanticIndexService index = new SemanticIndexService(resolver, snapshots, vectors, Optional.of(provider));
-        corpus = new SemanticCorpusQueryService(registry, resolver, snapshots, index);
+        semanticSearch = new SemanticSearchService(index);
+        hybridSearch = new HybridSearchService(resolver, snapshots, index, semanticSearch);
+        corpus = new SemanticCorpusQueryService(registry, resolver, snapshots, index, semanticSearch, hybridSearch);
+    }
+
+    @Test
+    void aSemanticSearchKeepsTheRanksAndScoresOfTheSearchServiceAndNamesTheScore() throws Exception {
+        SemanticSearchService.SearchResponse direct = semanticSearch.search(projectId,
+                new SemanticSearchService.SearchRequest("alpha run", 10, -1.0));
+
+        SemanticCorpusQueryService.SearchResult explored = corpus.search(projectId,
+                new SemanticCorpusQueryService.SearchRequest("alpha run",
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 10, -1.0, null, null, null, null));
+
+        assertFalse(direct.hits().isEmpty());
+        assertEquals(direct.hits().stream().map(hit -> hit.document().stableKey()).toList(),
+                explored.hits().stream().map(hit -> hit.document().stableKey()).toList());
+        assertEquals(direct.hits().stream().map(SemanticSearchService.SearchHit::score).toList(),
+                explored.hits().stream().map(SemanticCorpusQueryService.SearchHit::score).toList());
+        for (int index = 0; index < explored.hits().size(); index++) {
+            assertEquals(index + 1, explored.hits().get(index).rank());
+            assertEquals("COSINE_SIMILARITY", explored.hits().get(index).scoreKind());
+        }
+        assertEquals(direct.limitations(), explored.limitations());
+        assertEquals(direct.hits().size(), explored.rankedCount());
+        assertEquals("SEMANTIC", explored.mode());
+        assertEquals(ACTIVE, explored.identity().orElseThrow().snapshotId());
+        assertTrue(explored.limitations().contains("REFUSING_PROVIDER_LIMITATION"));
+    }
+
+    @Test
+    void aHybridSearchKeepsTheRanksScoresAndSignalsOfTheHybridService() throws Exception {
+        HybridSearchService.HybridResponse direct = hybridSearch.search(projectId,
+                new HybridSearchService.HybridRequest("alpha", 10, 0.0));
+
+        SemanticCorpusQueryService.SearchResult explored = corpus.search(projectId,
+                new SemanticCorpusQueryService.SearchRequest("alpha",
+                        SemanticCorpusQueryService.SearchMode.HYBRID, 10, 0.0, null, null, null, null));
+
+        assertFalse(direct.hits().isEmpty());
+        assertEquals(direct.hits().stream().map(hit -> hit.document().stableKey()).toList(),
+                explored.hits().stream().map(hit -> hit.document().stableKey()).toList());
+        assertEquals(direct.hits().stream().map(HybridSearchService.HybridHit::score).toList(),
+                explored.hits().stream().map(SemanticCorpusQueryService.SearchHit::score).toList());
+        assertTrue(explored.hits().stream().allMatch(hit -> "HYBRID_SCORE".equals(hit.scoreKind())));
+        assertEquals(direct.hits().getFirst().signals().stream().map(HybridSearchService.RankingSignal::type).toList(),
+                explored.hits().getFirst().signals().stream().map(SemanticCorpusQueryService.ScoreSignal::type).toList());
+        assertEquals(direct.limitations(), explored.limitations());
+    }
+
+    @Test
+    void aSearchFilterRemovesHitsWithoutChangingAScoreOrARank() throws Exception {
+        SemanticCorpusQueryService.SearchResult all = corpus.search(projectId,
+                new SemanticCorpusQueryService.SearchRequest("alpha run",
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 10, -1.0, null, null, null, null));
+
+        SemanticCorpusQueryService.SearchResult chunks = corpus.search(projectId,
+                new SemanticCorpusQueryService.SearchRequest("alpha run",
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 10, -1.0,
+                        SemanticDocumentKind.FILE, null, null, null));
+
+        assertEquals(all.hits().stream().filter(hit -> "FILE".equals(hit.document().kind())).toList(), chunks.hits());
+        assertEquals(2, chunks.hits().size());
+        assertTrue(chunks.hits().size() < all.hits().size());
+        assertEquals(all.rankedCount(), chunks.rankedCount());
+        assertTrue(chunks.hits().stream().anyMatch(hit -> hit.rank() > chunks.hits().indexOf(hit) + 1),
+                "a kept hit keeps the rank it had before the filter");
+    }
+
+    @Test
+    void aSearchOnAnIndexThatIsNotReadyIsEmptyAndSaysWhy() throws Exception {
+        snapshots.active = new CodeKnowledgeSnapshot(projectUuid, "snapshot-2", snapshots.active.symbols(),
+                List.of(), List.of());
+
+        SemanticCorpusQueryService.SearchResult stale = corpus.search(projectId,
+                new SemanticCorpusQueryService.SearchRequest("alpha",
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 10, -1.0, null, null, null, null));
+
+        assertEquals(List.of(), stale.hits());
+        assertEquals(0, stale.rankedCount());
+        assertTrue(stale.limitations().contains("SEMANTIC_SEARCH_REQUIRES_READY_INDEX"), stale.limitations().toString());
+        assertTrue(stale.limitations().contains("SEMANTIC_INDEX_SNAPSHOT_STALE"));
+        assertEquals(Optional.empty(), stale.identity());
+    }
+
+    @Test
+    void theBoundsOfASearchAreThoseOfTheServiceThatRanks() {
+        assertEquals("limit must be between 1 and 1000", assertThrows(IllegalArgumentException.class,
+                () -> new SemanticCorpusQueryService.SearchRequest("q",
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 1_001, 0.0, null, null, null, null)).getMessage());
+        assertEquals("limit must be between 1 and 500", assertThrows(IllegalArgumentException.class,
+                () -> new SemanticCorpusQueryService.SearchRequest("q",
+                        SemanticCorpusQueryService.SearchMode.HYBRID, 501, 0.0, null, null, null, null)).getMessage());
+        assertEquals("minimumScore must be between 0 and 1", assertThrows(IllegalArgumentException.class,
+                () -> new SemanticCorpusQueryService.SearchRequest("q",
+                        SemanticCorpusQueryService.SearchMode.HYBRID, 10, -0.5, null, null, null, null)).getMessage());
+        assertThrows(IllegalArgumentException.class,
+                () -> new SemanticCorpusQueryService.SearchRequest(" ",
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 10, 0.0, null, null, null, null));
+        assertEquals("query exceeds 65536 UTF-8 bytes", assertThrows(IllegalArgumentException.class,
+                () -> new SemanticCorpusQueryService.SearchRequest("q".repeat(65_537),
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 10, 0.0, null, null, null, null)).getMessage());
+        assertThrows(IllegalArgumentException.class,
+                () -> new SemanticCorpusQueryService.SearchRequest("q",
+                        SemanticCorpusQueryService.SearchMode.SEMANTIC, 10, Double.NaN, null, null, null, null));
     }
 
     @Test

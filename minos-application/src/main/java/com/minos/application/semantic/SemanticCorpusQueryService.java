@@ -58,6 +58,8 @@ public final class SemanticCorpusQueryService {
     private final ProjectResolver projects;
     private final CodeKnowledgeSnapshotStore snapshots;
     private final SemanticIndexService indexService;
+    private final SemanticSearchService semanticSearch;
+    private final HybridSearchService hybridSearch;
 
     private final Object cacheLock = new Object();
     private SemanticVectorStore.IndexMetadata fingerprintedIndex;
@@ -65,11 +67,14 @@ public final class SemanticCorpusQueryService {
     private SymbolLookup cachedLookup;
 
     public SemanticCorpusQueryService(ProjectRegistry registry, ProjectResolver projects,
-                                      CodeKnowledgeSnapshotStore snapshots, SemanticIndexService indexService) {
+                                      CodeKnowledgeSnapshotStore snapshots, SemanticIndexService indexService,
+                                      SemanticSearchService semanticSearch, HybridSearchService hybridSearch) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.projects = Objects.requireNonNull(projects, "projects");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
         this.indexService = Objects.requireNonNull(indexService, "indexService");
+        this.semanticSearch = Objects.requireNonNull(semanticSearch, "semanticSearch");
+        this.hybridSearch = Objects.requireNonNull(hybridSearch, "hybridSearch");
     }
 
     /** The registered projects, by name, with the state of their semantic index. No root path is returned. */
@@ -220,6 +225,61 @@ public final class SemanticCorpusQueryService {
         return new Neighbors(projectId, identity, stableKey, neighbors, limitations);
     }
 
+    /**
+     * A search ranked by the semantic or the hybrid search service, unchanged: the ranks and the scores are
+     * theirs, with their bounds and their limitations. A filter removes hits from the answer; a hit that stays
+     * keeps the rank and the score the service gave it. Every score is named by {@code scoreKind}.
+     */
+    public SearchResult search(String projectReference, SearchRequest request) throws IOException {
+        Objects.requireNonNull(request, "request");
+        RegisteredProject project = projects.resolve(projectReference);
+        String projectId = project.id().toString();
+        List<RankedDocument> ranked = new ArrayList<>();
+        String snapshotId;
+        List<String> limitations;
+        long latencyMillis;
+        if (request.mode() == SearchMode.SEMANTIC) {
+            SemanticSearchService.SearchResponse response = semanticSearch.search(projectId,
+                    new SemanticSearchService.SearchRequest(request.query(), request.limit(), request.minimumScore()));
+            for (SemanticSearchService.SearchHit hit : response.hits()) {
+                ranked.add(new RankedDocument(hit.document(), hit.score(), ScoreKind.COSINE_SIMILARITY,
+                        List.of(new ScoreSignal("SEMANTIC", hit.score(), hit.nature().name()))));
+            }
+            snapshotId = response.snapshotId();
+            limitations = new ArrayList<>(response.limitations());
+            latencyMillis = response.latencyMillis();
+        } else {
+            HybridSearchService.HybridResponse response = hybridSearch.search(projectId,
+                    new HybridSearchService.HybridRequest(request.query(), request.limit(), request.minimumScore()));
+            for (HybridSearchService.HybridHit hit : response.hits()) {
+                ranked.add(new RankedDocument(hit.document(), hit.score(), ScoreKind.HYBRID_SCORE,
+                        hit.signals().stream()
+                                .map(signal -> new ScoreSignal(signal.type(), signal.score(), signal.nature().name()))
+                                .toList()));
+            }
+            snapshotId = response.snapshotId();
+            limitations = new ArrayList<>(response.limitations());
+            latencyMillis = response.latencyMillis();
+        }
+        SymbolLookup lookup = ranked.isEmpty() ? SymbolLookup.unresolved()
+                : lookup(project, ranked.getFirst().document().snapshotId());
+        if (!ranked.isEmpty() && !lookup.resolved()) limitations.add(SYMBOLS_UNRESOLVED);
+        List<SearchHit> hits = new ArrayList<>(ranked.size());
+        for (int index = 0; index < ranked.size(); index++) {
+            RankedDocument value = ranked.get(index);
+            DocumentSummary summary = lookup.summarize(value.document());
+            if (!request.matches(summary)) continue;
+            hits.add(new SearchHit(index + 1, summary, value.score(), value.scoreKind().name(), value.signals()));
+        }
+        SemanticVectorStore store = indexService.vectorStore();
+        Optional<SemanticVectorStore.IndexMetadata> metadata = store.metadata(projectId)
+                .filter(value -> value.snapshotId().equals(snapshotId));
+        Optional<IndexIdentity> identity = metadata.isEmpty() ? Optional.empty()
+                : Optional.of(identityOf(store, metadata.orElseThrow()));
+        return new SearchResult(projectId, snapshotId, request.mode().name(), request.query(), hits, ranked.size(),
+                identity, limitations, latencyMillis);
+    }
+
     private SourceComparison compareWithSource(RegisteredProject project, SemanticDocument document) {
         if (document.fileId() == null) return SourceComparison.none(Divergence.NON_COMPARABLE);
         Optional<LocalSourceReader.SourceFile> file;
@@ -310,7 +370,7 @@ public final class SemanticCorpusQueryService {
     }
 
     /** The index was replaced: the walk or the ranking in progress must be started again. */
-    public static final class IndexChangedException extends RuntimeException {
+    public static final class IndexChangedException extends IllegalStateException {
         private static final long serialVersionUID = 1L;
 
         public IndexChangedException() {
@@ -319,7 +379,7 @@ public final class SemanticCorpusQueryService {
     }
 
     /** The index holds no document under the requested stable key. */
-    public static final class DocumentNotFoundException extends RuntimeException {
+    public static final class DocumentNotFoundException extends IllegalArgumentException {
         private static final long serialVersionUID = 1L;
 
         public DocumentNotFoundException() {
@@ -443,6 +503,76 @@ public final class SemanticCorpusQueryService {
             Objects.requireNonNull(divergence, "divergence");
             limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations"));
         }
+    }
+
+    /** Which service ranks a search. */
+    public enum SearchMode { SEMANTIC, HYBRID }
+
+    /** What a score is: an exact cosine similarity, or the hybrid score built from the signals listed with it. */
+    public enum ScoreKind { COSINE_SIMILARITY, HYBRID_SCORE }
+
+    /**
+     * A search and the filters applied to its answer. {@code limit} and {@code minimumScore} are those of the
+     * service that ranks: 1 to 1 000 and -1 to 1 for {@link SearchMode#SEMANTIC}, 1 to 500 and 0 to 1 for
+     * {@link SearchMode#HYBRID}; the query is at most 64 KiB of UTF-8.
+     */
+    public record SearchRequest(String query, SearchMode mode, int limit, double minimumScore,
+                                SemanticDocumentKind kind, String module, String language, String filePrefix) {
+        public SearchRequest {
+            Objects.requireNonNull(mode, "mode");
+            if (query == null || query.isBlank()) throw new IllegalArgumentException("query must not be blank");
+            if (query.getBytes(StandardCharsets.UTF_8).length > SemanticSearchService.MAX_QUERY_UTF8_BYTES) {
+                throw new IllegalArgumentException(
+                        "query exceeds " + SemanticSearchService.MAX_QUERY_UTF8_BYTES + " UTF-8 bytes");
+            }
+            int maximum = mode == SearchMode.SEMANTIC ? SemanticSearchService.MAX_RESULTS : HybridSearchService.MAX_RESULTS;
+            if (limit < 1 || limit > maximum) {
+                throw new IllegalArgumentException("limit must be between 1 and " + maximum);
+            }
+            double lowest = mode == SearchMode.SEMANTIC ? -1.0 : 0.0;
+            if (!Double.isFinite(minimumScore) || minimumScore < lowest || minimumScore > 1.0) {
+                throw new IllegalArgumentException(
+                        "minimumScore must be between " + (mode == SearchMode.SEMANTIC ? "-1" : "0") + " and 1");
+            }
+            module = requireFilter(module, "module");
+            language = requireFilter(language, "language");
+            filePrefix = requireFilter(filePrefix, "filePrefix");
+        }
+
+        boolean matches(DocumentSummary document) {
+            return new DocumentsRequest(null, 1, kind, module, language, filePrefix).matches(document);
+        }
+    }
+
+    /** One signal of a score, as the ranking service reports it. */
+    public record ScoreSignal(String type, double score, String nature) {
+    }
+
+    /** One hit: {@code rank} is its 1-based rank in the ranking of the service, before any filter. */
+    public record SearchHit(int rank, DocumentSummary document, double score, String scoreKind,
+                            List<ScoreSignal> signals) {
+        public SearchHit {
+            Objects.requireNonNull(document, "document");
+            signals = List.copyOf(Objects.requireNonNull(signals, "signals"));
+        }
+    }
+
+    /**
+     * The hits kept by the filters, in rank order, out of the {@code rankedCount} hits the service ranked;
+     * {@code identity} is empty when no index answers the search.
+     */
+    public record SearchResult(String projectId, String snapshotId, String mode, String query, List<SearchHit> hits,
+                               int rankedCount, Optional<IndexIdentity> identity, List<String> limitations,
+                               long latencyMillis) {
+        public SearchResult {
+            hits = List.copyOf(Objects.requireNonNull(hits, "hits"));
+            Objects.requireNonNull(identity, "identity");
+            limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations"));
+        }
+    }
+
+    private record RankedDocument(SemanticDocument document, double score, ScoreKind scoreKind,
+                                  List<ScoreSignal> signals) {
     }
 
     /** One neighbour and its cosine similarity with the document asked for. */
