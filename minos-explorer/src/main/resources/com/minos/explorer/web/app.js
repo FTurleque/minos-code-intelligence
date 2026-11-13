@@ -42,16 +42,28 @@ let view = "list";          // "list" or "search"
 let nextCursor = null;
 let selectedKey = null;
 let requestNumber = 0;
+let tabStorageRefused = null;
+
+// The tab storage keeps the token across a reload of the page. A browser may refuse it (private mode,
+// storage disabled): the page then works until it is reloaded, and says so instead of failing later.
+function tabStorage(operation) {
+  try {
+    return operation(window.sessionStorage);
+  } catch (unavailable) {
+    tabStorageRefused = unavailable.name || "storage unavailable";
+    return null;
+  }
+}
 
 function readToken() {
   const match = /^#token=([0-9a-f]{64})$/.exec(window.location.hash);
   if (match) {
     token = match[1];
-    try { window.sessionStorage.setItem(TOKEN_KEY, token); } catch (ignored) { /* storage may be disabled */ }
+    tabStorage(storage => storage.setItem(TOKEN_KEY, token));
     window.history.replaceState(null, "", window.location.pathname);
     return;
   }
-  try { token = window.sessionStorage.getItem(TOKEN_KEY); } catch (ignored) { token = null; }
+  token = tabStorage(storage => storage.getItem(TOKEN_KEY));
 }
 
 class ApiError extends Error {
@@ -91,7 +103,7 @@ async function api(path, body) {
 
 function refuse() {
   token = null;
-  try { window.sessionStorage.removeItem(TOKEN_KEY); } catch (ignored) { /* nothing to forget */ }
+  tabStorage(storage => storage.removeItem(TOKEN_KEY));
   $("explorer").hidden = true;
   $("banner").hidden = true;
   $("refused").hidden = false;
@@ -161,8 +173,12 @@ function renderHeader() {
 }
 
 function stateBanner() {
-  if (!project) return "";
+  const storageNote = tabStorageRefused
+    ? "Ce navigateur refuse le stockage de l'onglet (" + tabStorageRefused + ") : recharger la page demandera de rouvrir l'adresse imprimée par « minos explorer serve »."
+    : "";
+  if (!project) return storageNote;
   let text = STATE_HELP[project.indexState] || "";
+  if (storageNote) text = text ? text + "\n" + storageNote : storageNote;
   if (project.indexState === "STALE") {
     const causes = project.limitations.filter(name => STALE_CAUSES[name]).map(name => STALE_CAUSES[name]);
     if (causes.length) text += "\nCause : " + causes.join(" ; ") + ".";
@@ -188,9 +204,9 @@ function row(document, cells) {
   line.dataset.key = document.stableKey;
   if (document.stableKey === selectedKey) line.className = "selected";
   for (const cell of cells) {
-    const data = el("td", cell.text, cell.number ? "number" : "");
-    data.title = String(cell.text);
-    line.appendChild(data);
+    const cellNode = el("td", cell.text, cell.number ? "number" : "");
+    cellNode.title = String(cell.text);
+    line.appendChild(cellNode);
   }
   const open = () => showDetail(document.stableKey);
   line.addEventListener("click", open);
@@ -279,6 +295,18 @@ async function loadDocuments(first) {
   }
 }
 
+// Why a search shows no line, or an empty text when it shows some.
+function emptySearchMessage(result) {
+  if (result.hits.length > 0) return "";
+  if (result.limitations.includes("SEMANTIC_SEARCH_REQUIRES_READY_INDEX")) {
+    return "La recherche exige un index prêt (READY). La liste reste consultable.";
+  }
+  if (result.limitations.includes("SEMANTIC_INDEX_CHANGED_DURING_QUERY")) {
+    return "L'index a changé pendant la recherche. Relancez-la.";
+  }
+  return result.rankedCount > 0 ? "Aucun résultat ne correspond aux filtres actifs. Élargissez-les." : "Aucun résultat.";
+}
+
 async function search() {
   const query = $("query").value.trim();
   if (!query || !project) return;
@@ -311,16 +339,7 @@ async function search() {
       ? "Score hybride : sémantique 50 %, lexical 35 %, graphe 15 %. Signal heuristique, pas un fait structurel."
       : "Similarité cosinus exacte avec le vecteur de la requête. Signal heuristique, pas un fait structurel.";
     renderLimitations(result.limitations);
-    if (result.hits.length === 0) {
-      showEmpty(result.limitations.includes("SEMANTIC_SEARCH_REQUIRES_READY_INDEX")
-        ? "La recherche exige un index prêt (READY). La liste reste consultable."
-        : result.limitations.includes("SEMANTIC_INDEX_CHANGED_DURING_QUERY")
-          ? "L'index a changé pendant la recherche. Relancez-la."
-          : result.rankedCount > 0 ? "Aucun résultat ne correspond aux filtres actifs. Élargissez-les."
-          : "Aucun résultat.");
-    } else {
-      showEmpty("");
-    }
+    showEmpty(emptySearchMessage(result));
   } catch (error) {
     if (error instanceof ApiError && error.status === 500) {
       banner("La recherche a échoué : le provider d'embeddings est peut-être indisponible. La liste, le détail et les voisins restent disponibles.");

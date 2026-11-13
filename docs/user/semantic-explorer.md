@@ -90,6 +90,14 @@ Le jeton protège d'une page web tierce et d'un autre processus qui ne le conna�
 programme qui lit la sortie d'erreur de la commande ou la mémoire du navigateur : c'est la limite d'une surface
 locale mono-utilisateur.
 
+Un processus du poste peut rendre la surface indisponible sans jeton : des connexions qui n'achèvent jamais
+leur requête occupent ses fils. La surface les coupe au bout de 10 secondes et répond de nouveau seule, mais une
+requête arrivée pendant ce temps peut être coupée avec elles ; il suffit de la relancer.
+
+Utilisez l'adresse `127.0.0.1` imprimée par la commande, pas `localhost` : avec un port imposé par `--port`,
+la surface refuse de démarrer si un autre processus tient déjà ce port sur `::1`, mais elle n'écoute pas sur
+`::1` quand la machine n'a pas cette adresse.
+
 ## Runtime Docker
 
 Le fichier Compose du runtime connecté déclare un service optionnel `minos-explorer` (profil `explorer`) :

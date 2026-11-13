@@ -100,7 +100,44 @@ Exclus : écoute sur une interface non locale, TLS et comptes utilisateurs, expo
 
 ## Mise en œuvre
 
-(Complété à l'implémentation : écarts à la conception, preuves.)
+Changement OpenSpec `explorer-l-index-semantique-dans-un-navigateur`.
+
+- Surface : module `minos-explorer` (`ExplorerSession`, `ExplorerServer`, `RequestGuard`, `ExplorerApi`,
+  `ListeningPolicy`, page embarquée). Aucune dépendance tierce ; `jdk.httpserver` est tenu explicite dans le
+  runtime Windows embarqué (`scripts/release/build-windows-distribution.ps1`).
+- Commande : `minos explorer serve [--port <n>]`. `minos-cli` déclare `ExplorerLaunchRoute`, que `minos-app`
+  fournit par `ServiceLoader` (`ExplorerLaunchRouteProvider`) : aucune surface ne dépend de `minos-explorer`.
+- Lectures : `SemanticVectorStore.documentPage` et `storedDocument`, `SemanticCorpusQueryService`,
+  `SemanticExplorationApi` v1.
+- Contrôles tenus par des tests : `ExplorerServerTest` (boucle locale, jeton, `Host`, `Origin`, absence de CORS
+  et de cookie, en-têtes, bornes), `ExplorerRoutesTest` (aucune écriture dans `MINOS_HOME`, aucun chemin absolu,
+  inventaire des méthodes), `ExplorerSessionTest` et `ExplorerLaunchRouteProviderTest` (refus en mode équipe),
+  `ModuleArchitectureTest` (seule la route de l'assemblage atteint la surface ; aucun autre module n'ouvre
+  d'écoute réseau ; la surface n'utilise aucun adaptateur de stockage), `WebResourcesContentTest` (contenu
+  inséré comme texte, aucune ressource externe).
+- Aucune règle Archgate compagnon n'est écrite (`rules: false`) : les contraintes sont tenues par ces tests et
+  par `scripts/architecture/check-module-boundaries.py`.
+
+## Écarts constatés
+
+- **Écoute en conteneur (point 2).** Un port publié par Docker atteint le processus par l'interface du
+  conteneur, pas par sa boucle locale. Dans le runtime Docker, la surface écoute donc sur cette interface. Il
+  n'existe toujours aucune option utilisateur : l'écoute n'est élargie que par la variable interne
+  `MINOS_EXPLORER_CONTAINER_LISTEN=enabled`, posée par le Compose, et seulement si
+  `MINOS_RUNTIME_LOCATION=docker` et si le processus tourne sous Linux avec un marqueur de conteneur ; toute
+  autre combinaison est un refus de démarrage (`ExplorerUnitsTest`, `ExplorerSessionTest`). Le port n'est
+  publié que sur `127.0.0.1` de l'hôte ; jeton, `Host` et `Origin` sont inchangés. Décision du propriétaire,
+  2026-11-13.
+- **Sortie réseau du conteneur.** Le réseau d'entrée du service `minos-explorer` n'est pas interne : ce
+  conteneur a une route sortante, que `minos-mcp` n'a pas. Couper le masquerading d'adresse ne la ferme pas
+  sur Docker Desktop (relevé le 2026-11-13). L'écart est déclaré dans l'étiquette du service et dans
+  `docs/user/docker-runtime.md` ; sa fermeture demande une décision.
+- **`::1`.** La surface écoute sur `::1` quand la machine a cette adresse ; elle ne démarre pas si le port y
+  est déjà pris, et n'y écoute pas sur une machine sans IPv6.
+- **Jeton et journaux (point 3).** L'adresse d'accès, jeton compris, est écrite une fois sur la sortie
+  d'erreur. En Docker, elle reste dans le journal du conteneur jusqu'à sa suppression.
+- **Disponibilité.** Un processus local peut occuper les fils de connexion sans jeton ; la surface coupe ces
+  connexions après 10 secondes et se rétablit seule.
 
 ## References
 

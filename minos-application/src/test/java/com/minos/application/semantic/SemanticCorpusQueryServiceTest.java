@@ -700,7 +700,6 @@ class SemanticCorpusQueryServiceTest {
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
             throw new UnsupportedOperationException("query views are not used by this test");
         }

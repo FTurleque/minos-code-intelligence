@@ -363,6 +363,40 @@ Réparation, dans tous les cas : relancer l'installateur MINOS, ou
 
 Si la construction d'une des deux images échoue, le runtime installé n'est pas modifié. La qualification de mise à niveau (`scripts/ci/qualify-docker-upgrade.ps1`) rejoue ce passage d'une image à deux et vérifie que le plan de requête mis à niveau tourne sur l'image de requête.
 
+## Service optionnel `minos-explorer`
+
+Le fichier `compose-mcp.connected.yaml` déclare un service `minos-explorer`, **arrêté par défaut** (profil
+Compose `explorer`), qui sert la page d'[exploration de l'index sémantique](semantic-explorer.md) :
+
+- image de requête, racine en lecture seule, données et outils montés en lecture seule, aucune capacité ;
+- plafonds du rôle « requêtes » (`MINOS_MCP_MEM_LIMIT`, `MINOS_MCP_PIDS_LIMIT`, `MINOS_MCP_CPUS`) ;
+- port publié sur `127.0.0.1` de l'hôte seulement : `MINOS_EXPLORER_PORT` (défaut `8765`), le même dans le
+  conteneur et sur l'hôte ;
+- réseaux `minos-runtime` (PostgreSQL, Ollama) et `minos-explorer-ingress`, qui porte la publication du port.
+
+L'adresse à ouvrir, avec le jeton de la session, est écrite dans le journal du conteneur
+(`docker compose logs minos-explorer`) : ce journal contient donc le jeton jusqu'à la suppression du conteneur ;
+le jeton cesse de valoir dès que le conteneur s'arrête.
+
+Dans le conteneur, la surface écoute sur l'interface du conteneur et non sur sa boucle locale, parce qu'un port
+publié n'atteint pas cette dernière. Ce comportement n'est activé que par la variable interne
+`MINOS_EXPLORER_CONTAINER_LISTEN`, posée par le Compose et refusée hors d'un conteneur ; le jeton, le contrôle de
+`Host` et celui d'`Origin` sont inchangés.
+
+Limites connues, à lire avant usage :
+
+- **Service non qualifié sur une installation réelle.** Relevé sur Docker Desktop (Windows) avec un
+  `MINOS_HOME` vide : démarrage, port publié sur `127.0.0.1`, `401` sans jeton, `403` pour un hôte ou une
+  origine étrangers, connexion refusée par une adresse non locale de l'hôte. Non relevé : données réelles,
+  PostgreSQL géré, hôte Linux. Aucune action des scripts d'installation ne démarre ce service.
+- **Sortie réseau non coupée.** `minos-explorer-ingress` n'est pas un réseau interne : contrairement à
+  `minos-mcp`, ce conteneur a une route sortante (constaté : une connexion sortante aboutit, y compris sans
+  masquerading d'adresse sur Docker Desktop).
+- **Autres conteneurs.** Un conteneur des mêmes réseaux peut joindre le port ; il lui faut le jeton pour l'API.
+- **Source actuelle.** Les projets ne sont pas montés dans ce service : le détail d'un document affiche
+  « source introuvable » ; le contenu indexé reste affiché.
+- Le runtime hors ligne (`compose-mcp.prod.yaml`) n'a pas ce service.
+
 ## Limites de ressources
 
 Chaque service des deux fichiers compose a un plafond **mémoire** et **PID**, défini une fois par rôle (blocs `x-limits-<rôle>` en tête de `docker/compose-mcp.prod.yaml` et `docker/compose-mcp.connected.yaml`, identiques dans les deux) et surchargeable depuis le `.env` du runtime. `memswap_limit` égale `mem_limit` : aucun swap. Les variables, leurs défauts et leurs unités sont aussi listés dans [`docker/.env.example`](../../docker/.env.example). Une ligne `MINOS_<RÔLE>_…` ajoutée au `.env` survit à une mise à jour (l'installation régénère le `.env` et reporte ces lignes). Docker applique ces clés hors Swarm : vérifié par `docker inspect` et par les fichiers cgroup du conteneur (`memory.max`, `memory.swap.max`, `pids.max`).

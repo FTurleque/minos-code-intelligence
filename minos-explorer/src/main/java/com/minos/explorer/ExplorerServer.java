@@ -42,6 +42,8 @@ final class ExplorerServer implements AutoCloseable {
     static final int MAX_BODY_BYTES = 512 * 1024;
     static final int MAX_CONCURRENT_API_CALLS = 4;
     static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    static final int MAX_REQUEST_READ_SECONDS = 10;
+    static final int MAX_RESPONSE_WRITE_SECONDS = 60;
 
     /** Policy of the page: its own scripts, styles and requests, nothing inline and nothing from elsewhere. */
     static final String PAGE_CONTENT_SECURITY_POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; "
@@ -66,10 +68,10 @@ final class ExplorerServer implements AutoCloseable {
     private final int port;
     private boolean closed;
 
-    /** What serves an accepted API request; in production {@link ExplorerApi#handle}. */
+    /** What answers an accepted API request; in production {@link ExplorerApi#answer}. */
     @FunctionalInterface
     interface Calls {
-        ExplorerApi.Answer handle(String method, List<String> segments, Map<String, String> parameters,
+        ExplorerApi.Answer answer(String method, List<String> segments, Map<String, String> parameters,
                                   ExplorerApi.Body body, Consumer<Exception> failures);
     }
 
@@ -95,7 +97,7 @@ final class ExplorerServer implements AutoCloseable {
      */
     static ExplorerServer start(SemanticCorpusQueryService corpus, int requestedPort, ListeningPolicy.Scope scope,
                                 Duration requestTimeout, Consumer<String> log) throws IOException {
-        return start(new ExplorerApi(Objects.requireNonNull(corpus, "corpus"))::handle, requestedPort, scope,
+        return start(new ExplorerApi(Objects.requireNonNull(corpus, "corpus"))::answer, requestedPort, scope,
                 requestTimeout, log);
     }
 
@@ -103,24 +105,46 @@ final class ExplorerServer implements AutoCloseable {
                                 Duration requestTimeout, Consumer<String> log) throws IOException {
         Objects.requireNonNull(api, "api");
         Objects.requireNonNull(log, "log");
+        boundConnectionTimes();
         List<InetAddress> addresses = ListeningPolicy.addresses(scope);
         HttpServer first = HttpServer.create(new InetSocketAddress(addresses.getFirst(), requestedPort), BACKLOG);
         ExplorerServer server = new ExplorerServer(api, SessionToken.generate(), first,
                 Objects.requireNonNull(requestTimeout, "requestTimeout"), log);
         server.listen(first);
         for (InetAddress address : addresses.subList(1, addresses.size())) {
+            if (!ListeningPolicy.hostHasAddress(address)) {
+                log.accept("the exploration surface does not listen on " + address.getHostAddress()
+                        + " (this machine has no such address); use the 127.0.0.1 address");
+                continue;
+            }
             try {
                 server.listen(HttpServer.create(new InetSocketAddress(address, server.port), BACKLOG));
-            } catch (IOException unavailable) {
-                log.accept("the exploration surface does not listen on " + address.getHostAddress()
-                        + " (" + unavailable.getClass().getSimpleName() + "); use the 127.0.0.1 address");
+            } catch (IOException taken) {
+                // The machine has this loopback address and the port is not ours there: whoever holds it would
+                // answer under the name localhost. The surface does not start beside it.
+                server.close();
+                throw taken;
             }
         }
         return server;
     }
 
+    /**
+     * Bounds, for the HTTP server of the JDK, the time a client may take to send a request and to read its
+     * answer: without it, a few connections that send one byte and wait would hold every connection thread.
+     * The server reads these system properties once per JVM; a value already set is kept.
+     */
+    private static void boundConnectionTimes() {
+        setIfAbsent("sun.net.httpserver.maxReqTime", Integer.toString(MAX_REQUEST_READ_SECONDS));
+        setIfAbsent("sun.net.httpserver.maxRspTime", Integer.toString(MAX_RESPONSE_WRITE_SECONDS));
+    }
+
+    private static void setIfAbsent(String property, String value) {
+        if (System.getProperty(property) == null) System.setProperty(property, value);
+    }
+
     private void listen(HttpServer listener) {
-        listener.createContext("/", this::handle);
+        listener.createContext("/", this::serve);
         listener.setExecutor(connections);
         listener.start();
         listeners.add(listener);
@@ -152,7 +176,7 @@ final class ExplorerServer implements AutoCloseable {
         workers.shutdownNow();
     }
 
-    private void handle(HttpExchange exchange) {
+    private void serve(HttpExchange exchange) {
         try (exchange) {
             String path = exchange.getRequestURI().getRawPath();
             boolean apiRequest = path.startsWith(API_ROOT);
@@ -220,7 +244,7 @@ final class ExplorerServer implements AutoCloseable {
         try {
             pending = workers.submit(() -> {
                 try {
-                    return api.handle(method, segments, parameters, () -> body(exchange),
+                    return api.answer(method, segments, parameters, () -> body(exchange),
                             failure -> log.accept("request failed: " + failure.getClass().getSimpleName()));
                 } finally {
                     apiCalls.release();

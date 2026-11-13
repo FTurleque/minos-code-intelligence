@@ -347,6 +347,19 @@ $env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed'
 
 Voir `docs/developer/semantic-retrieval-2.md` pour les limitations et gates.
 
+### `explorer serve`
+
+```bash
+minos explorer serve [--port <n>]
+```
+
+Sert, jusqu'à `Ctrl+C`, la page locale et en lecture seule d'exploration de l'index sémantique. L'écoute est
+limitée à la boucle locale ; l'adresse à ouvrir, qui porte le jeton de la session, est écrite sur la sortie
+d'erreur. `--port` (0 à 65535, défaut 0 : port libre choisi par le système) est la seule option. La commande
+refuse de démarrer en mode équipe et sur un poste dont le backend est Docker. Codes de sortie : `0` arrêt
+demandé, `1` port indisponible, `2` erreur d'usage ou démarrage refusé. Détail :
+[Explorer l'index sémantique](semantic-explorer.md).
+
 ## Activité Git
 
 ```powershell

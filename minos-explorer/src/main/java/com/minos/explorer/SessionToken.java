@@ -6,8 +6,9 @@ import java.security.SecureRandom;
 import java.util.HexFormat;
 
 /**
- * The random secret of one exploration session: 256 bits drawn when the surface starts, never stored, never
- * logged. It lives as long as the process and is compared in constant time.
+ * The random secret of one exploration session: 256 bits drawn when the surface starts and never stored by
+ * MINOS. It is printed once, inside the access address the command writes on standard error, and appears in
+ * no other line; it lives as long as the process and is compared in constant time.
  */
 final class SessionToken {
 

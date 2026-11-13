@@ -24,13 +24,13 @@ final class JsonObjectReader {
     static Map<String, Object> read(String text) {
         if (text == null) throw new IllegalArgumentException(INVALID);
         JsonObjectReader reader = new JsonObjectReader(text);
-        Map<String, Object> members = reader.object();
+        Map<String, Object> members = reader.readObject();
         reader.skipWhitespace();
         if (reader.position != text.length()) throw new IllegalArgumentException(INVALID);
         return members;
     }
 
-    private Map<String, Object> object() {
+    private Map<String, Object> readObject() {
         Map<String, Object> members = new LinkedHashMap<>();
         skipWhitespace();
         expect('{');
@@ -41,12 +41,12 @@ final class JsonObjectReader {
         }
         while (true) {
             skipWhitespace();
-            String key = string();
+            String key = readString();
             skipWhitespace();
             expect(':');
             skipWhitespace();
             if (members.size() == MAX_MEMBERS || members.containsKey(key)) throw new IllegalArgumentException(INVALID);
-            members.put(key, value());
+            members.put(key, readValue());
             skipWhitespace();
             char next = next();
             if (next == '}') return members;
@@ -54,22 +54,22 @@ final class JsonObjectReader {
         }
     }
 
-    private Object value() {
+    private Object readValue() {
         char first = peek();
-        if (first == '"') return string();
-        if (first == 't') return literal("true", Boolean.TRUE);
-        if (first == 'f') return literal("false", Boolean.FALSE);
-        if (first == 'n') return literal("null", null);
-        return number();
+        if (first == '"') return readString();
+        if (first == 't') return readLiteral("true", Boolean.TRUE);
+        if (first == 'f') return readLiteral("false", Boolean.FALSE);
+        if (first == 'n') return readLiteral("null", null);
+        return readNumber();
     }
 
-    private Object literal(String word, Object value) {
+    private Object readLiteral(String word, Object value) {
         if (!text.startsWith(word, position)) throw new IllegalArgumentException(INVALID);
         position += word.length();
         return value;
     }
 
-    private Double number() {
+    private Double readNumber() {
         int start = position;
         while (position < text.length() && "+-0123456789.eE".indexOf(text.charAt(position)) >= 0) position++;
         String digits = text.substring(start, position);
@@ -81,7 +81,7 @@ final class JsonObjectReader {
         return parsed;
     }
 
-    private String string() {
+    private String readString() {
         expect('"');
         StringBuilder value = new StringBuilder();
         while (true) {
@@ -97,14 +97,14 @@ final class JsonObjectReader {
             if (simple >= 0) {
                 value.append("\"\\/\b\f\n\r\t".charAt(simple));
             } else if (escaped == 'u') {
-                value.append(unicode());
+                value.append(readUnicodeEscape());
             } else {
                 throw new IllegalArgumentException(INVALID);
             }
         }
     }
 
-    private char unicode() {
+    private char readUnicodeEscape() {
         if (position + 4 > text.length()) throw new IllegalArgumentException(INVALID);
         int code = 0;
         for (int index = 0; index < 4; index++) {

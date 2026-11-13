@@ -93,14 +93,19 @@ Le contrat évolue de façon additive sous ce préfixe ; une rupture publie `/ap
 | Durée d'un appel | 30 s, puis abandon et `503` | `ExplorerServer.DEFAULT_REQUEST_TIMEOUT` |
 | Fils de connexion | 8, file de 64 | `ExplorerServer` |
 | Page de documents, voisins | 200 | `SemanticCorpusQueryService` |
+| Lecture d'une requête, écriture d'une réponse | 10 s et 60 s | propriétés `sun.net.httpserver.maxReqTime` et `maxRspTime`, posées par `ExplorerServer` si elles sont absentes |
+| Empreintes d'index, tables de symboles gardées | 64 projets, 4 projets | `SemanticCorpusQueryService` |
 
-Non borné par la surface : la durée d'une connexion lente côté serveur HTTP du JDK (ses délais se règlent par
-les propriétés système `sun.net.httpserver.*`, laissées à leur défaut). Aucun seuil de performance n'est fixé :
-la mesure est planifiée avec le changement de projection.
+Le serveur HTTP du JDK lit ces deux propriétés une fois par JVM : une valeur déjà posée par l'hôte est gardée.
+Des connexions qui n'achèvent pas leur requête occupent les fils de connexion jusqu'à ce délai ; une requête
+arrivée entre-temps peut être coupée avec elles (`ExplorerServerTest`, test des connexions bloquées). Un appel
+abandonné après 30 s garde son jeton de concurrence tant que la lecture sous-jacente n'a pas rendu la main.
+Aucun seuil de performance n'est fixé : la mesure est planifiée avec le changement de projection.
 
 ## Écoute
 
-`ListeningPolicy` ne connaît que deux portées. Sur un poste : `127.0.0.1`, et `::1` si la machine l'offre.
+`ListeningPolicy` ne connaît que deux portées. Sur un poste : `127.0.0.1`, et `::1` si la machine a cette
+adresse ; si elle l'a et que le port y est déjà pris, la surface ne démarre pas.
 Dans le runtime Docker : l'interface du conteneur, parce qu'un port publié n'atteint pas la boucle locale du
 conteneur ; elle n'est accordée que si la variable interne `MINOS_EXPLORER_CONTAINER_LISTEN=enabled` est posée
 (par le Compose), que `MINOS_RUNTIME_LOCATION=docker`, **et** que le processus tourne sous Linux avec un

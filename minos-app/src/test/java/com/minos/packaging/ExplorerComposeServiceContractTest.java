@@ -110,6 +110,9 @@ class ExplorerComposeServiceContractTest {
         assertTrue(block.contains("      MINOS_RUNTIME_LOCATION: docker\n"));
         String networks = text(COMPOSE).substring(text(COMPOSE).indexOf("\nnetworks:\n"));
         assertTrue(networks.contains("  minos-explorer-ingress:\n"), "the ingress network of the explorer is declared");
+        // The ingress network is not internal: the label of the service must say so, never promise a denied egress.
+        assertTrue(block.contains("      io.minos.network-policy: loopback-published-outbound-not-denied\n"),
+                "the network policy label of the explorer states that its outbound route is not denied");
         assertTrue(networks.contains("  minos-runtime:\n    internal: true\n"), "the runtime network stays internal");
     }
 

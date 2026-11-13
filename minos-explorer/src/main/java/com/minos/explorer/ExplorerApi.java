@@ -4,13 +4,11 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.SemanticCorpusQueryService;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.json.DeterministicJson;
-import com.minos.semantic.SemanticDocumentKind;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -44,6 +42,14 @@ final class ExplorerApi {
 
         String template() {
             return String.join("/", pattern);
+        }
+
+        /** The route these segments name, or {@code null}. */
+        static Route matching(List<String> segments) {
+            for (Route candidate : values()) {
+                if (candidate.matches(segments)) return candidate;
+            }
+            return null;
         }
 
         boolean matches(List<String> segments) {
@@ -93,12 +99,9 @@ final class ExplorerApi {
      * {@code 500} and is reported to {@code failures}, which receives the exception itself and decides what
      * may be logged.
      */
-    Answer handle(String method, List<String> segments, Map<String, String> parameters, Body body,
+    Answer answer(String method, List<String> segments, Map<String, String> parameters, Body body,
                   java.util.function.Consumer<Exception> failures) {
-        Route route = null;
-        for (Route candidate : Route.values()) {
-            if (candidate.matches(segments)) route = candidate;
-        }
+        Route route = Route.matching(segments);
         if (route == null) return Answer.error(404, "NOT_FOUND", "no such route in /api/v" + ExplorerContract.VERSION);
         if (!route.method().equals(method)) {
             return new Answer(405, Answer.error(405, "METHOD_NOT_ALLOWED",
@@ -152,7 +155,7 @@ final class ExplorerApi {
         SemanticCorpusQueryService.DocumentsPage page = corpus.documents(project,
                 new SemanticCorpusQueryService.DocumentsRequest(parameters.get("cursor"),
                         integer(parameters.get("limit"), "limit", SemanticCorpusQueryService.DEFAULT_PAGE_SIZE),
-                        kind(parameters.get("kind")), parameters.get("module"), parameters.get("language"),
+                        SemanticCorpusQueryService.parseKind(parameters.get("kind")), parameters.get("module"), parameters.get("language"),
                         parameters.get("filePrefix")));
         return Answer.ok(DeterministicJson.object(
                 "projectId", page.projectId(),
@@ -207,11 +210,12 @@ final class ExplorerApi {
         for (String member : members.keySet()) {
             if (!SEARCH_MEMBERS.contains(member)) throw new IllegalArgumentException("unknown search member");
         }
-        SemanticCorpusQueryService.SearchMode mode = mode(text(members, "mode"));
+        SemanticCorpusQueryService.SearchMode mode =
+                SemanticCorpusQueryService.SearchMode.parse(text(members, "mode"));
         SemanticCorpusQueryService.SearchResult result = corpus.search(project,
                 new SemanticCorpusQueryService.SearchRequest(text(members, "query"), mode,
                         (int) number(members, "limit", DEFAULT_SEARCH_LIMIT, true),
-                        number(members, "minimumScore", 0.0, false), kind(text(members, "kind")),
+                        number(members, "minimumScore", 0.0, false), SemanticCorpusQueryService.parseKind(text(members, "kind")),
                         text(members, "module"), text(members, "language"), text(members, "filePrefix")));
         List<Object> hits = new ArrayList<>();
         for (SemanticCorpusQueryService.SearchHit hit : result.hits()) {
@@ -275,24 +279,6 @@ final class ExplorerApi {
             return Integer.parseInt(value);
         } catch (NumberFormatException invalid) {
             throw new IllegalArgumentException(name + " must be an integer");
-        }
-    }
-
-    private static SemanticDocumentKind kind(String value) {
-        if (value == null) return null;
-        try {
-            return SemanticDocumentKind.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            throw new IllegalArgumentException("kind must be SYMBOL, CHUNK or FILE");
-        }
-    }
-
-    private static SemanticCorpusQueryService.SearchMode mode(String value) {
-        if (value == null) return SemanticCorpusQueryService.SearchMode.SEMANTIC;
-        try {
-            return SemanticCorpusQueryService.SearchMode.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            throw new IllegalArgumentException("mode must be semantic or hybrid");
         }
     }
 

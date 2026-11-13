@@ -2,10 +2,8 @@ package com.minos.api;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.semantic.SemanticCorpusQueryService;
-import com.minos.semantic.SemanticDocumentKind;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 
 /** Local implementation of the exploration API, backed by the shared long-lived MinosApplication. */
@@ -35,7 +33,7 @@ public final class LocalSemanticExplorationApi implements SemanticExplorationApi
             DocumentPageQuery value = MinosApiSupport.required(query, QUERY);
             SemanticCorpusQueryService.DocumentsPage page = corpus().documents(projectIdentifier,
                     new SemanticCorpusQueryService.DocumentsRequest(value.cursor(), value.limit(),
-                            kind(value.kind()), value.module(), value.language(), value.filePrefix()));
+                            SemanticCorpusQueryService.parseKind(value.kind()), value.module(), value.language(), value.filePrefix()));
             return new DocumentPageDto(page.projectId(), page.identity().map(LocalSemanticExplorationApi::identity)
                     .orElse(null), page.documents().stream().map(LocalSemanticExplorationApi::document).toList(),
                     page.nextCursor(), page.totalDocuments(), page.limitations());
@@ -60,8 +58,8 @@ public final class LocalSemanticExplorationApi implements SemanticExplorationApi
         return MinosApiSupport.execute(() -> {
             SearchQuery value = MinosApiSupport.required(query, QUERY);
             SemanticCorpusQueryService.SearchResult result = corpus().search(projectIdentifier,
-                    new SemanticCorpusQueryService.SearchRequest(value.query(), mode(value.mode()), value.limit(),
-                            value.minimumScore(), kind(value.kind()), value.module(), value.language(),
+                    new SemanticCorpusQueryService.SearchRequest(value.query(), SemanticCorpusQueryService.SearchMode.parse(value.mode()), value.limit(),
+                            value.minimumScore(), SemanticCorpusQueryService.parseKind(value.kind()), value.module(), value.language(),
                             value.filePrefix()));
             return new SearchDto(result.projectId(), result.snapshotId(), result.mode(), result.query(),
                     result.hits().stream().map(hit -> new SearchHitDto(hit.rank(), document(hit.document()),
@@ -88,23 +86,6 @@ public final class LocalSemanticExplorationApi implements SemanticExplorationApi
 
     private SemanticCorpusQueryService corpus() {
         return application.semanticCorpusQueryService();
-    }
-
-    private static SemanticDocumentKind kind(String value) {
-        if (value == null) return null;
-        try {
-            return SemanticDocumentKind.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            throw new IllegalArgumentException("kind must be SYMBOL, CHUNK or FILE");
-        }
-    }
-
-    private static SemanticCorpusQueryService.SearchMode mode(String value) {
-        try {
-            return SemanticCorpusQueryService.SearchMode.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            throw new IllegalArgumentException("mode must be semantic or hybrid");
-        }
     }
 
     private static IndexIdentityDto identity(SemanticCorpusQueryService.IndexIdentity value) {

@@ -21,7 +21,9 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -61,10 +63,13 @@ public final class SemanticCorpusQueryService {
     private final SemanticSearchService semanticSearch;
     private final HybridSearchService hybridSearch;
 
+    /** Projects whose fingerprint, a few bytes each, is kept; and projects whose symbols, far heavier, are. */
+    static final int MAX_FINGERPRINTED_PROJECTS = 64;
+    static final int MAX_SYMBOL_LOOKUPS = 4;
+
     private final Object cacheLock = new Object();
-    private SemanticVectorStore.IndexMetadata fingerprintedIndex;
-    private String cachedFingerprint;
-    private SymbolLookup cachedLookup;
+    private final Map<String, FingerprintedIndex> fingerprints = leastRecentlyUsed(MAX_FINGERPRINTED_PROJECTS);
+    private final Map<String, SymbolLookup> lookups = leastRecentlyUsed(MAX_SYMBOL_LOOKUPS);
 
     public SemanticCorpusQueryService(ProjectRegistry registry, ProjectResolver projects,
                                       CodeKnowledgeSnapshotStore snapshots, SemanticIndexService indexService,
@@ -103,63 +108,100 @@ public final class SemanticCorpusQueryService {
         SemanticIndexService.Status status = indexService.statusWithoutSize(projectId);
         List<String> limitations = new ArrayList<>(status.limitations());
         Cursor cursor = request.cursor() == null ? null : Cursor.decode(request.cursor());
+        DocumentWalk walk = new DocumentWalk(project, request, cursor, limitations);
         SemanticVectorStore store = indexService.vectorStore();
+        boolean goOn = true;
+        while (goOn) {
+            goOn = walk.readNextPage(store);
+        }
+        return walk.page();
+    }
 
-        String after = cursor == null ? null : cursor.lastStableKey();
-        int batch = request.filtered() ? MAX_PAGE_SIZE : request.limit();
-        IndexIdentity identity = null;
-        SemanticVectorStore.IndexMetadata metadata = null;
-        SymbolLookup lookup = null;
-        List<DocumentSummary> selected = new ArrayList<>(request.limit());
-        String nextCursor = null;
-        int scanned = 0;
-        while (true) {
+    /**
+     * The reading of one answer page: pages of the store are read one after the other, on one index, until
+     * the answer is full, the index is exhausted or the scan bound is reached.
+     */
+    private final class DocumentWalk {
+        private final RegisteredProject project;
+        private final String projectId;
+        private final DocumentsRequest request;
+        private final Cursor cursor;
+        private final List<String> limitations;
+        private final List<DocumentSummary> selected;
+        private final int batch;
+        private String after;
+        private IndexIdentity identity;
+        private SemanticVectorStore.IndexMetadata metadata;
+        private SymbolLookup lookup;
+        private String nextCursor;
+        private int scanned;
+
+        DocumentWalk(RegisteredProject project, DocumentsRequest request, Cursor cursor, List<String> limitations) {
+            this.project = project;
+            this.projectId = project.id().toString();
+            this.request = request;
+            this.cursor = cursor;
+            this.limitations = limitations;
+            this.selected = new ArrayList<>(request.limit());
+            this.batch = request.filtered() ? MAX_PAGE_SIZE : request.limit();
+            this.after = cursor == null ? null : cursor.lastStableKey();
+        }
+
+        /** Reads the next page of the store; false when the answer needs no other page. */
+        boolean readNextPage(SemanticVectorStore store) throws IOException {
             Optional<SemanticVectorStore.DocumentPage> read = store.documentPage(projectId, after, batch);
             if (read.isEmpty()) {
+                // An index that was there for the cursor or for a previous page is gone: it was replaced.
                 if (cursor != null || metadata != null) throw new IndexChangedException();
                 if (!limitations.contains(INDEX_MISSING)) limitations.add(INDEX_MISSING);
-                return new DocumentsPage(projectId, Optional.empty(), List.of(), null, 0, limitations);
+                return false;
             }
             SemanticVectorStore.DocumentPage page = read.orElseThrow();
-            if (metadata == null) {
-                metadata = page.metadata();
-                identity = identityOf(store, metadata);
-                if (cursor != null && !cursor.identityToken().equals(identity.token())) {
-                    throw new IndexChangedException();
-                }
-                lookup = lookup(project, metadata.snapshotId());
-                if (!lookup.resolved()) limitations.add(SYMBOLS_UNRESOLVED);
-            } else if (!metadata.equals(page.metadata())) {
+            bindToIndex(store, page.metadata());
+            int consumed = select(page.documents());
+            if (!page.hasMore() && consumed == page.documents().size()) return false;
+            boolean full = selected.size() == request.limit();
+            if (!full && scanned < MAX_SCANNED_DOCUMENTS) return true;
+            nextCursor = new Cursor(identity.token(), after).encode();
+            if (!full) limitations.add(FILTER_SCAN_BOUNDED);
+            return false;
+        }
+
+        /** The first page names the index of the walk; every other page must come from the same one. */
+        private void bindToIndex(SemanticVectorStore store, SemanticVectorStore.IndexMetadata read) throws IOException {
+            if (metadata != null) {
+                if (!metadata.equals(read)) throw new IndexChangedException();
+                return;
+            }
+            metadata = read;
+            identity = identityOf(store, read);
+            if (cursor != null && !cursor.identityToken().equals(identity.token())) {
                 throw new IndexChangedException();
             }
-            boolean full = false;
+            lookup = lookup(project, read.snapshotId());
+            if (!lookup.resolved()) limitations.add(SYMBOLS_UNRESOLVED);
+        }
+
+        /** Keeps the documents the request asks for, up to its limit; returns how many were looked at. */
+        private int select(List<SemanticDocument> documents) {
             int consumed = 0;
-            for (SemanticDocument document : page.documents()) {
+            for (SemanticDocument document : documents) {
                 consumed++;
                 scanned++;
                 after = document.stableKey();
                 DocumentSummary summary = lookup.summarize(document);
                 if (!request.matches(summary)) continue;
                 selected.add(summary);
-                if (selected.size() == request.limit()) {
-                    full = true;
-                    break;
-                }
+                if (selected.size() == request.limit()) break;
             }
-            boolean more = page.hasMore() || consumed < page.documents().size();
-            if (!more) break;
-            if (full) {
-                nextCursor = new Cursor(identity.token(), after).encode();
-                break;
-            }
-            if (scanned >= MAX_SCANNED_DOCUMENTS) {
-                nextCursor = new Cursor(identity.token(), after).encode();
-                limitations.add(FILTER_SCAN_BOUNDED);
-                break;
-            }
+            return consumed;
         }
-        return new DocumentsPage(projectId, Optional.of(identity), selected, nextCursor,
-                metadata.documentCount(), limitations);
+
+        DocumentsPage page() {
+            if (metadata == null) return new DocumentsPage(projectId, Optional.empty(), List.of(), null, 0, limitations);
+            return new DocumentsPage(projectId, Optional.of(identity), selected, nextCursor,
+                    metadata.documentCount(), limitations);
+        }
     }
 
     /**
@@ -311,17 +353,41 @@ public final class SemanticCorpusQueryService {
     private IndexIdentity identityOf(SemanticVectorStore store, SemanticVectorStore.IndexMetadata metadata)
             throws IOException {
         synchronized (cacheLock) {
-            if (metadata.equals(fingerprintedIndex)) return IndexIdentity.of(metadata, cachedFingerprint);
+            FingerprintedIndex known = fingerprints.get(metadata.projectId());
+            if (known != null && metadata.equals(known.metadata())) {
+                return IndexIdentity.of(metadata, known.fingerprint());
+            }
         }
         SemanticVectorStore.IndexChecksums checksums = store.checksums(metadata.projectId())
                 .orElseThrow(IndexChangedException::new);
         if (!metadata.equals(checksums.metadata())) throw new IndexChangedException();
         String fingerprint = fingerprint(checksums.checksumsByStableKey());
         synchronized (cacheLock) {
-            fingerprintedIndex = metadata;
-            cachedFingerprint = fingerprint;
+            fingerprints.put(metadata.projectId(), new FingerprintedIndex(metadata, fingerprint));
         }
         return IndexIdentity.of(metadata, fingerprint);
+    }
+
+    /** A map that forgets its least recently read entry once it holds more than {@code maximum}. */
+    private static <V> Map<String, V> leastRecentlyUsed(int maximum) {
+        return new LinkedHashMap<>(16, 0.75f, true) {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, V> eldest) {
+                return size() > maximum;
+            }
+        };
+    }
+
+    /** The kind named by {@code value}, whatever its case, or {@code null} for no kind. */
+    public static SemanticDocumentKind parseKind(String value) {
+        if (value == null) return null;
+        try {
+            return SemanticDocumentKind.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException unknown) {
+            throw new IllegalArgumentException("kind must be SYMBOL, CHUNK or FILE");
+        }
     }
 
     static String fingerprint(Map<String, String> checksumsByStableKey) {
@@ -340,7 +406,8 @@ public final class SemanticCorpusQueryService {
             return SymbolLookup.unresolved();
         }
         synchronized (cacheLock) {
-            if (cachedLookup != null && cachedLookup.describes(projectId, indexedSnapshotId)) return cachedLookup;
+            SymbolLookup known = lookups.get(projectId);
+            if (known != null && known.describes(projectId, indexedSnapshotId)) return known;
         }
         Optional<CodeKnowledgeSnapshot> loaded = snapshots.loadActiveKnowledge(project.id());
         if (loaded.isEmpty() || !indexedSnapshotId.equals(loaded.orElseThrow().snapshotId())) {
@@ -348,7 +415,7 @@ public final class SemanticCorpusQueryService {
         }
         SymbolLookup built = SymbolLookup.of(projectId, loaded.orElseThrow());
         synchronized (cacheLock) {
-            cachedLookup = built;
+            lookups.put(projectId, built);
         }
         return built;
     }
@@ -506,7 +573,22 @@ public final class SemanticCorpusQueryService {
     }
 
     /** Which service ranks a search. */
-    public enum SearchMode { SEMANTIC, HYBRID }
+    public enum SearchMode {
+        SEMANTIC, HYBRID;
+
+        /** The mode named by {@code value}, whatever its case; {@link #SEMANTIC} when none is named. */
+        public static SearchMode parse(String value) {
+            if (value == null) return SEMANTIC;
+            try {
+                return valueOf(value.toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException unknown) {
+                throw new IllegalArgumentException("mode must be semantic or hybrid");
+            }
+        }
+    }
+
+    private record FingerprintedIndex(SemanticVectorStore.IndexMetadata metadata, String fingerprint) {
+    }
 
     /** What a score is: an exact cosine similarity, or the hybrid score built from the signals listed with it. */
     public enum ScoreKind { COSINE_SIMILARITY, HYBRID_SCORE }

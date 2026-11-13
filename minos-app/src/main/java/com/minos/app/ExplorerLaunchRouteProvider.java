@@ -86,7 +86,8 @@ public final class ExplorerLaunchRouteProvider implements ExplorerLaunchRoute {
 
     /**
      * Whether the host launcher of this home is switched to the Docker backend. The configuration is read when
-     * it exists and never created: a home without it is native, and this command writes nothing in the home.
+     * it exists and never created: a home without it is native. Reading it re-applies the owner-only
+     * permissions of the home, of its runtime directory and of the file; no content is written.
      * Inside the Docker runtime the question does not arise: the switch concerns the host launcher only.
      */
     private static boolean dockerBackend(Path validatedHome) throws IOException {

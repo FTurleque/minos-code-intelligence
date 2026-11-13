@@ -46,7 +46,7 @@ class ExplorerServerTest {
         server = ExplorerServer.start((method, segments, parameters, body, failures) -> {
             calls.incrementAndGet();
             methods.add(method);
-            return behaviour.handle(method, segments, parameters, body, failures);
+            return behaviour.answer(method, segments, parameters, body, failures);
         }, 0, ListeningPolicy.Scope.LOOPBACK, Duration.ofSeconds(2), log::add);
         port = server.port();
         token = server.accessUrl().substring(server.accessUrl().indexOf("#token=") + "#token=".length());
@@ -317,6 +317,71 @@ class ExplorerServerTest {
         assertTrue(failed.body().contains("\"code\":\"INTERNAL_ERROR\""), failed.body());
         assertTrue(log.contains("request failed: IllegalStateException"), log.toString());
         assertTrue(log.stream().noneMatch(line -> line.contains("secret")), log.toString());
+    }
+
+    @Test
+    void connectionsThatNeverFinishTheirRequestAreCutByTheServerWhichThenAnswersAgain() throws Exception {
+        List<Socket> slow = new ArrayList<>();
+        try {
+            for (int index = 0; index < 12; index++) {
+                Socket socket = new Socket(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), port);
+                socket.setSoTimeout(30_000);
+                socket.getOutputStream().write('G');
+                socket.getOutputStream().flush();
+                slow.add(socket);
+            }
+            long started = System.nanoTime();
+            long deadline = started + TimeUnit.SECONDS.toNanos(ExplorerServer.MAX_REQUEST_READ_SECONDS + 20);
+
+            // The slow connections are never closed by this test: the surface must get rid of them itself. A
+            // request that arrives while they hold every thread may be cut with them; the next one is served.
+            int status = -1;
+            while (status != 200 && System.nanoTime() < deadline) {
+                try {
+                    status = RawHttp.get(port, "/api/v1/projects", bearer()).status();
+                } catch (IOException | IllegalStateException cutWithTheSlowOnes) {
+                    status = -1;
+                }
+            }
+
+            long seconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started);
+            assertEquals(200, status, "the surface answers again " + seconds + " s after 12 stalled connections");
+            assertEquals(Integer.toString(ExplorerServer.MAX_REQUEST_READ_SECONDS),
+                    System.getProperty("sun.net.httpserver.maxReqTime"));
+            assertTrue(closedByTheServer(slow.getFirst()), "a stalled connection is closed by the surface");
+        } finally {
+            for (Socket socket : slow) socket.close();
+        }
+    }
+
+    private static boolean closedByTheServer(Socket socket) {
+        try {
+            return socket.getInputStream().read() == -1;
+        } catch (java.net.SocketTimeoutException stillOpen) {
+            return false;
+        } catch (IOException reset) {
+            return true;
+        }
+    }
+
+    @Test
+    void theSurfaceDoesNotStartBesideAnotherProcessThatHoldsItsPortOnTheIpv6Loopback() throws Exception {
+        byte[] loopback = new byte[16];
+        loopback[15] = 1;
+        InetAddress ipv6Loopback = InetAddress.getByAddress(loopback);
+        org.junit.jupiter.api.Assumptions.assumeTrue(ListeningPolicy.hostHasAddress(ipv6Loopback),
+                "this machine has no IPv6 loopback address");
+        try (java.net.ServerSocket other = new java.net.ServerSocket(0, 1, ipv6Loopback)) {
+            int taken = other.getLocalPort();
+
+            assertThrows(IOException.class, () -> ExplorerServer.start(behaviour, taken,
+                    ListeningPolicy.Scope.LOOPBACK, Duration.ofSeconds(2), log::add));
+
+            assertThrows(ConnectException.class, () -> RawHttp.get(taken, "/", Map.of()),
+                    "nothing is left listening on the IPv4 loopback of that port");
+        }
+        assertTrue(ListeningPolicy.hostHasAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1})));
+        assertFalse(ListeningPolicy.hostHasAddress(InetAddress.getByAddress(new byte[] {(byte) 203, 0, 113, 77})));
     }
 
     @Test

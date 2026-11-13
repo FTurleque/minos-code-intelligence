@@ -170,6 +170,7 @@ Reste au plan du chantier hexagonal : SH-12. Détail et preuves : [`docs/project
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
 - **Audit du 10 octobre 2026, sprints 1 à 9** : constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
 - Ligne de développement : **1.3.0-SNAPSHOT**.
+- **Exploration de l'index sémantique** (ARCH-0082, changement `explorer-l-index-semantique-dans-un-navigateur`) : module `minos-explorer`, commande `minos explorer serve` (page locale en lecture seule, boucle locale, jeton de session), `SemanticExplorationApi` v1, lectures paginées du port vectoriel sur les deux stockages. Testé automatiquement sous Windows et Linux ; **parcours dans un navigateur par le propriétaire non fait**. Service Compose `minos-explorer` déclaré et **non qualifié** (relevé sur Docker Desktop avec un `MINOS_HOME` vide seulement ; sortie réseau du conteneur non coupée). Carte 2D : non livrée. Voir [`docs/user/semantic-explorer.md`](../../user/semantic-explorer.md).
 
 ## Release 1.0.1
 

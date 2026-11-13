@@ -156,7 +156,7 @@ services:
       io.minos.version: "${MINOS_VERSION:?MINOS_VERSION is required}"
       io.minos.revision: "${MINOS_GIT_COMMIT:?MINOS_GIT_COMMIT is required}"
       io.minos.runtime-plane: explorer
-      io.minos.network-policy: loopback-published-read-only
+      io.minos.network-policy: loopback-published-outbound-not-denied
 
   minos-admin:
     <<: *limits-admin
@@ -454,6 +454,8 @@ networks:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"
       io.minos.network-policy: internal-only
   # Entry network of the optional explorer: a container on an internal network alone cannot publish a port.
+  # Unlike minos-runtime it is not internal, so the explorer container, alone among the query-plane
+  # services, has an outbound route (docs/user/docker-runtime.md, "Service optionnel minos-explorer").
   minos-explorer-ingress:
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT:?MINOS_COMPOSE_PROJECT is required}"

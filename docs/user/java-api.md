@@ -289,6 +289,24 @@ ni `analyzeWorkspace`, ni `createWorkspace` ne changent : une mutation ou une an
 
 Les limites sont validées dans les DTOs publics : jusqu’à 10 000 commits/fichiers/relations selon la requête et profondeur de zone Git 1..8.
 
+## Exploration de l'index sémantique
+
+`SemanticExplorationApi` (contrat `1`, implémentation `LocalSemanticExplorationApi`) lit l'index sémantique sans
+rien écrire : `listProjects`, `listDocuments` (pages de 1 à 200 documents, par curseur), `getDocument` (contenu
+indexé, source actuelle, divergence), `search` (mode `semantic` ou `hybrid`, classement et scores des services
+existants, chaque score nommé par `scoreKind`) et `getNeighbors` (voisins classés depuis le vecteur stocké, sans
+appel au provider). `SemanticCodeIntelligenceApi` est inchangée.
+
+```java
+SemanticExplorationApi exploration = new LocalSemanticExplorationApi(application);
+var page = exploration.listDocuments("mon-projet", SemanticExplorationApi.DocumentPageQuery.firstPage());
+var detail = exploration.getDocument("mon-projet", page.documents().getFirst().stableKey());
+```
+
+Chaque réponse porte l'identité de l'index lu (`IndexIdentityDto`) ; aucune ne contient la racine d'un projet.
+Erreurs : document inconnu, curseur invalide ou borne dépassée → `INVALID_REQUEST` ; index remplacé pendant la
+lecture → `UNAVAILABLE`, la lecture reprend à la première page.
+
 ## Architecture du contrat
 
 ```mermaid

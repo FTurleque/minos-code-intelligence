@@ -393,9 +393,9 @@ Les relations entre tables existantes sont logiques : aucune clé étrangère ne
 
 | Capacité | Qualification | Limite |
 |---|---|---|
-| Liste, détail, voisins, recherche — natif, stockage local | **non supportée** (à qualifier au lot 2) | — |
-| Idem — natif, PostgreSQL externe | non supportée (lot 2) | — |
-| Idem — runtime Docker | non supportée (lot 2b) | service et réseau d'entrée à qualifier |
+| Liste, détail, voisins, recherche — natif, stockage local | **partielle** : tests automatisés verts sous Windows (poste) ; Linux par la CI ; parcours navigateur du propriétaire (tâche 5.6) non fait | index `local-hash` seulement dans les tests |
+| Idem — natif, PostgreSQL externe | **partielle** : lectures du port prouvées contre PostgreSQL/pgvector réel ; surface non exercée sur ce stockage | — |
+| Idem — runtime Docker | **non supportée** : service déclaré, relevé sur Docker Desktop (Windows) avec un `MINOS_HOME` vide seulement | données réelles, PostgreSQL géré, hôte Linux non relevés ; sortie réseau du conteneur non coupée ; projets non montés (source actuelle indisponible) |
 | Natif vers PostgreSQL géré | **non supportée, sans cible** | base non joignable de l'hôte |
 | Carte 2D (PCA) | non supportée (lot 3) | qualité exploratoire à mesurer |
 | UMAP, 3D, WebGL | non supportées, sans engagement | décision mesurée |
@@ -403,7 +403,7 @@ Les relations entre tables existantes sont logiques : aucune clé étrangère ne
 | pgAdmin — PostgreSQL géré | non supportée (lot 1) | — |
 | pgAdmin — PostgreSQL externe | non supportée, hors périmètre | — |
 
-Windows : `jdk.httpserver` dans le runtime embarqué à vérifier. Linux : aucun comportement propre identifié.
+Windows : `jdeps` sur le JAR ombré de la branche liste `jdk.httpserver`, et le script de distribution le tient explicite et vérifie le runtime empaqueté ; le build de la distribution elle-même n'a pas été exécuté (tâche 4.9, reste manuel). Linux : l'écoute de conteneur exige Linux et un marqueur de conteneur.
 
 ## Risques et compromis
 
@@ -419,35 +419,53 @@ Windows : `jdk.httpserver` dans le runtime embarqué à vérifier. Linux : aucun
 
 Vérifié pour cette spécification : `openspec validate --all --strict` ; script de la maquette exécuté sous Node avec un DOM factice, sur les 17 états.
 
+### Revue de sécurité (tâche 4.10, 2026-11-13)
+
+Skill `minos-security-checklist` déroulé et agent `minos-security-reviewer` exécuté sur `git diff origin/main...HEAD`. Vérifié sans constat : contrôle `Host` / `Origin` / jeton avant toute route (`OPTIONS` et `HEAD` compris), absence d'en-tête CORS, erreurs 500 opaques, journaux réduits au nom de la classe, lecture de source confinée, contenu inséré comme texte, CSP, requêtes SQL paramétrées, aucune vectorisation du corpus par HTTP.
+
+| Constat | Gravité | Traitement |
+|---|---|---|
+| Connexions lentes : aucune borne sur la lecture d'une requête, 8 fils saturables sans jeton | moyenne | corrigé : `sun.net.httpserver.maxReqTime` = 10 s et `maxRspTime` = 60 s posés au démarrage ; test `connectionsThatNeverFinishTheirRequestAreCutByTheServerWhichThenAnswersAgain`. Reste : une requête arrivée pendant la saturation peut être coupée ; documenté |
+| Réseau d'entrée Docker non interne : route sortante du conteneur explorateur | moyenne | **non corrigé** : couper le masquerading ne ferme pas la sortie sur Docker Desktop (relevé) ; étiquette du service corrigée (`loopback-published-outbound-not-denied`), écart consigné dans ARCH-0082 et `docs/user/docker-runtime.md` ; décision du propriétaire attendue |
+| Échec de liaison sur `::1` ignoré même si le port est pris par un autre processus | faible | corrigé : la surface ne démarre pas ; test `theSurfaceDoesNotStartBesideAnotherProcessThatHoldsItsPortOnTheIpv6Loopback` |
+| Jeton écrit sur stderr, donc dans le journal du conteneur | faible | commentaire de `SessionToken` corrigé ; documenté |
+| Cache d'empreinte et de symboles à une seule entrée | faible | corrigé : caches par projet, bornés (64 et 4) |
+| La route durcit les permissions du home alors qu'un commentaire disait « n'écrit rien » | information | commentaire corrigé ; la route ne crée plus `backend.properties` (test) |
+| Projets non montés dans le service Docker | information | limite déclarée dans la documentation |
+
+Non vérifié par la revue : comportement en conteneur sous Linux, persistance du fragment dans l'historique du navigateur.
+
 ## Documentation durable à mettre à jour
 
 À la livraison de chaque lot : `docs/architecture/diagrams/capacites/exploration-semantique.md` (nouveau), `docs/architecture/diagrams/capacites/distribution-docker.md`, `docs/user/` (explorateur, pgAdmin, `docker-runtime.md`), `docs/developer/` (surface, contrats), `docs/architecture/diagrams/module-dependencies.md` (généré), ADR ARCH-0082 (« Mise en œuvre »), `STATUS.md`, `ROADMAP.md`.
 
 ## Traçabilité
 
-Aucun test n'existe : chaque ligne est « à écrire ».
+Preuves exécutées le 2026-11-13 sur le poste Windows (tests Maven ciblés) ; Linux est couvert par la CI de la PR. Une ligne « partielle » nomme ce qui manque.
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration › surface optionnelle, boucle locale | Aucune écoute sans la commande | D1 ; contexte | 4.1–4.2 | à écrire |
-| idem | Écoute limitée à la boucle locale | D1 | 4.1–4.2 | à écrire |
-| idem | Refus en mode équipe | Sécurité | 4.1–4.2 | à écrire |
-| exploration › jeton et origine locale | Requête sans jeton | séquence de recherche | 4.3–4.4 | à écrire |
-| idem | Hôte détourné | Sécurité | 4.3–4.4 | à écrire |
-| idem | Page tierce | Sécurité | 4.3–4.4 | à écrire |
-| exploration › aucun état modifié | Données inchangées après consultation | composants | 4.5–4.6 | à écrire |
-| exploration › liste paginée | Parcours complet | Contrats | 3.1–3.2 | à écrire |
-| idem | Taille de page hors bornes | Contrats | 3.1–3.2 | à écrire |
-| idem | Index remplacé entre deux pages | Transactions | 3.1–3.2 | à écrire |
-| exploration › contenu indexé et source | Source modifiée depuis l'indexation | Modèle | 3.5–3.6 | à écrire |
-| idem | Source introuvable | Modèle | 3.5–3.6 | à écrire |
-| exploration › classement et scores | Même classement que la CLI | séquence de recherche | 5.1–5.2 | à écrire |
-| idem | Index non prêt | séquence de recherche | 5.1–5.2 | à écrire |
-| exploration › voisins | Provider indisponible | D3 | 3.3–3.4 | à écrire |
-| idem | Document inconnu | Contrats | 3.3–3.4 | à écrire |
-| exploration › aucun chemin ni secret | Fiche de projet | Sécurité | 4.7–4.8 | à écrire |
-| idem | Contenu indexé contenant du HTML | Sécurité | 4.7–4.8 | à écrire |
-| exploration › local-hash | Index local-hash | Contrats | 5.3–5.4 | à écrire |
+| exploration › surface optionnelle, boucle locale | Aucune écoute sans la commande | D1 ; contexte | 4.1–4.2 | preuve structurelle, pas d'observation des ports d'un processus : `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#onlyTheExplorerRouteOfTheAssemblyStartsTheExplorationSurface`, `#theExplorationSurfaceUsesNoStorageAdapterAndOwnsTheHttpServer` ; `minos-cli/src/test/java/com/minos/cli/ExplorerCommandLineTest.java#aUsageErrorNamesWhatToCorrectAndNeverResolvesTheRoute` |
+| idem | Écoute limitée à la boucle locale | D1 | 4.1–4.2 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#theSurfaceIsBoundToLoopbackAddressesOnlyAndItsUrlNamesTheIpv4Loopback` ; relevé `netstat` sur le poste (127.0.0.1 et ::1 seulement) |
+| idem | Refus en mode équipe | Sécurité | 4.1–4.2 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerSessionTest.java#theSurfaceRefusesToStartWhenTheTeamModeIsEnabledAndOpensNoPort` ; `minos-app/src/test/java/com/minos/app/ExplorerLaunchRouteProviderTest.java#aHomeInTeamModeIsRefusedBeforeAnythingIsOpened` |
+| exploration › jeton et origine locale | Requête sans jeton | séquence de recherche | 4.3–4.4 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#anApiRequestWithoutTheTokenIsRefusedWithoutDetailAndReachesNoService` |
+| idem | Hôte détourné | Sécurité | 4.3–4.4 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#aRequestWhoseHostIsNotALoopbackNameOfThisPortIsRefusedEvenWithTheToken` |
+| idem | Page tierce | Sécurité | 4.3–4.4 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#aRequestFromAnotherOriginIsRefusedAndNoCorsHeaderIsEverSent` |
+| exploration › aucun état modifié | Données inchangées après consultation | composants | 4.5–4.6 | partielle : `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#consultingEveryRouteLeavesTheHomeAndTheIndexByteForByteUnchanged` et `#anUnknownProjectOrRouteIsNotFoundAndNoMethodButGetAndTheSearchPostIsAccepted` ; le statut et les points de projection cités par le scénario appartiennent à `projeter-l-index-semantique-en-2d` |
+| exploration › liste paginée | Parcours complet | Contrats | 3.1–3.2 | `minos-engine/src/test/java/com/minos/testsupport/SemanticDocumentReadsContract.java#aFullWalkReturnsEveryDocumentOnceInStableKeyOrder` (magasins local et PostgreSQL) ; `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#aFullWalkReturnsEveryDocumentOnceInStableKeyOrderOnOneIndex` |
+| idem | Taille de page hors bornes | Contrats | 3.1–3.2 | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#aPageSizeOutOfBoundsIsAUsageErrorThatNamesTheBound` ; `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#theDocumentsAreWalkedByCursorOnOneIndexAndAPageSizeOutOfBoundsNamesTheBound` |
+| idem | Index remplacé entre deux pages | Transactions | 3.1–3.2 | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#aCursorIssuedForAnIndexIsRefusedOnceThatIndexIsReplaced` ; `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#aCursorOfAReplacedIndexIsAConflictThatAsksToStartAgain` |
+| exploration › contenu indexé et source | Source modifiée depuis l'indexation | Modèle | 3.5–3.6 | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#theDetailOfAChunkWhoseSourceChangedShowsBothContentsAndTheDivergence` |
+| idem | Source introuvable | Modèle | 3.5–3.6 | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#theDetailOfADocumentWhoseFileWasDeletedSaysTheSourceIsMissingAndShowsNoAbsolutePath`, `#aStoredFileIdentifierThatLeavesTheProjectRootIsNeverRead` |
+| exploration › classement et scores | Même classement que la CLI | séquence de recherche | 5.1–5.2 | égalité prouvée avec le service appelé par `semantic-search`, pas avec la sortie de la commande : `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#aSemanticSearchKeepsTheRanksAndScoresOfTheSearchServiceAndNamesTheScore`, `#aSearchFilterRemovesHitsWithoutChangingAScoreOrARank` ; `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#aSearchRanksLikeTheSemanticServiceAndAFilterOnlyRemovesHits` |
+| idem | Index non prêt | séquence de recherche | 5.1–5.2 | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#aSearchOnAnIndexThatIsNotReadyIsEmptyAndSaysWhy` ; `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#aSearchOnAStaleIndexIsEmptyAndItsUsageErrorsNameWhatToCorrect` |
+| exploration › voisins | Provider indisponible | D3 | 3.3–3.4 | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#neighboursAreRankedFromTheStoredVectorWithoutAnyCallToTheProvider` |
+| idem | Document inconnu | Contrats | 3.3–3.4 | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#anUnknownStableKeyIsNotFoundForNeighboursAndForTheDetail` |
+| exploration › aucun chemin ni secret | Fiche de projet | Sécurité | 4.7–4.8 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#theProjectListDescribesTheIndexAndNeverTheRootOfAProject`, `#noAnswerErrorOrLogLineNamesAnAbsoluteRootOrAProviderAddress` |
+| idem | Contenu indexé contenant du HTML | Sécurité | 4.7–4.8 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#theDetailSeparatesTheIndexedContentFromTheSourceAndCarriesHtmlAsJsonText` ; `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#everyAnswerCarriesTheSecurityHeadersAndNoCookie` ; `minos-explorer/src/test/java/com/minos/explorer/WebResourcesContentTest.java#indexedContentCanOnlyBeInsertedAsText` |
+| exploration › local-hash | Index local-hash | Contrats | 5.3–5.4 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#theProjectListDescribesTheIndexAndNeverTheRootOfAProject`, `#aSearchRanksLikeTheSemanticServiceAndAFilterOnlyRemovesHits`, `#theNeighboursLeaveTheDocumentOutNameTheirScoreAndRefuseAnUnknownKey` ; `minos-api/src/test/java/com/minos/api/SemanticExplorationApiContractTest.java#theFiveReadingsDescribeOneIndexAndNeverItsRoot` |
+
+Preuves manquantes : parcours dans un navigateur par le propriétaire (tâche 5.6) ; build de la distribution Windows (tâche 4.9) ; service Docker sur une installation réelle ; observation directe « aucun port ouvert » pour les autres commandes et pour le serveur MCP (preuve structurelle seulement).
 
 ## Questions ouvertes
 

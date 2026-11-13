@@ -40,9 +40,9 @@ final class IndexedHome implements AutoCloseable {
         this.application = application;
     }
 
-    static IndexedHome create(Path temp) throws IOException {
-        Path home = temp.resolve("home");
-        Path projectRoot = Files.createDirectories(temp.resolve("project"));
+    static IndexedHome create(Path workDirectory) throws IOException {
+        Path home = workDirectory.resolve("home");
+        Path projectRoot = Files.createDirectories(workDirectory.resolve("project"));
         Files.createDirectories(projectRoot.resolve("src"));
         Files.writeString(projectRoot.resolve("src/Greeting.java"),
                 "package fixture;\n\nclass GreetingService {\n    String greet() { return \"" + SCRIPT + "\"; }\n}\n",

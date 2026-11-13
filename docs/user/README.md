@@ -15,6 +15,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Connecter Copilot, Claude ou Codex au MCP natif | [Serveur MCP](mcp.md) |
 | Comprendre / lancer l'indexation automatique | [Indexation autonome](autonomous-indexing.md) |
 | Activer le retrieval sémantique learned local | [Semantic Retrieval 2.0](../developer/semantic-retrieval-2.md) |
+| Parcourir l'index sémantique dans un navigateur, en lecture seule | [Explorer l'index sémantique](semantic-explorer.md) |
 | Indexer C/C++, C#, Go ou Rust | [Providers polyglottes qualifiés avec contraintes](polyglot-providers.md) |
 | Indexer une révision GitHub/GitLab exacte | [Remote & Distributed Indexing](remote-indexing.md) |
 | Importer et lire des observations runtime partielles | [Runtime & Dynamic Intelligence](runtime-intelligence.md) |

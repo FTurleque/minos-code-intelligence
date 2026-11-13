@@ -1,6 +1,8 @@
 package com.minos.explorer;
 
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -74,6 +76,17 @@ final class ListeningPolicy {
             return List.of(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), InetAddress.getByAddress(ipv6Loopback));
         } catch (UnknownHostException impossible) {
             throw new IllegalStateException("a literal address always resolves", impossible);
+        }
+    }
+
+    /** Whether one of the network interfaces of this machine carries {@code address}. */
+    static boolean hostHasAddress(InetAddress address) {
+        try {
+            return NetworkInterface.getByInetAddress(address) != null;
+        } catch (SocketException unreadable) {
+            // The interfaces cannot be listed: the address is treated as present, so that a failed bind on it
+            // stops the surface instead of being skipped.
+            return true;
         }
     }
 
