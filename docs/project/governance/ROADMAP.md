@@ -38,7 +38,7 @@ Capacités OpenSpec créées ou étendues : `controles-de-fusion`, `frontieres-d
 - le runtime packagé doit être testé, pas seulement le JAR ;
 - une publication est bloquée par les vulnérabilités connues ou l'absence de qualification exacte du candidat ;
 - l'indexation Windows ne requiert pas de droits administrateur ;
-- `main` doit rester ancêtre de la ligne `develop` afin que les promotions ne réintroduisent pas une divergence d'historique.
+- `main` doit rester ancêtre de tout candidat afin qu'une fusion ne réintroduise pas une divergence d'historique.
 
 ## Trajectoire livrée
 
@@ -171,6 +171,7 @@ Les sprints 1 et 2 sont terminés ; suite ouverte par le sprint 2 : un changemen
 |---|---|---|
 | Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](../../architecture/adr/archive/0040-distribution-auto-portante-indexeurs-embarques.md) | implémentée (scip-java, scip-typescript ; qualification hors ligne physique à confirmer) |
 | Exploration de l'index sémantique dans un navigateur : pgAdmin optionnel et explorateur vectoriel ([plan](../roadmap/explorateur-vectoriel-2026-11/README.md), [étude](../research/explorateur-vectoriel-2026-11/README.md)) | [ARCH-0082](../../architecture/adr/ARCH-0082-surface-http-locale-optionnelle-de-consultation.md), acceptée le 2026-11-13 | spécifiée, aucune implémentation : changements OpenSpec `inspecter-postgresql-avec-pgadmin`, `explorer-l-index-semantique-dans-un-navigateur`, `projeter-l-index-semantique-en-2d` |
+| Coût de la CI par PR : depuis le retrait de `develop` (2026-11-13), la qualification Docker A → B réelle de `release-promotion-gate.yml` s'exécute sur toute PR | aucune ; à trancher par le propriétaire | ouverte : la garder telle quelle, ou la restreindre (chemins, étiquette, déclenchement manuel), mesure de durée à l'appui |
 
 La reprise d'une indexation interrompue ([ADR 0039](../../architecture/adr/BE-0039-reprise-indexation-apres-interruption.md)) n'est plus en conception : l'ADR est acceptée et implémentée au sprint 2 (`IndexingResumePlanner`, `IndexingRun.Status.INTERRUPTED` dans `minos-engine`).
 

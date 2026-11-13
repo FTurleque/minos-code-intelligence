@@ -36,5 +36,5 @@ Fait qui borne le changement : `release-promotion-gate.yml` se déclenche sur to
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Les checks exigés pour une fusion sont déclarés dans le dépôt | scénarios inchangés | D2 | 1.1–1.2 | `check-ci-wiring.py`, `test_verify_ruleset.py` |
+| controles-de-fusion › Les checks exigés pour une fusion sont déclarés dans le dépôt | scénarios inchangés | D2 | 1.1–1.2, 2.1 | `check-ci-wiring.py`, `test_verify_ruleset.py` ; `verify-ruleset.py` contre GitHub le 2026-11-13 : succès |
 | controles-de-fusion › Le plugin IntelliJ rend un verdict sur toute pull request | scénarios inchangés | D1 | 1.1–1.2 | `check-ci-wiring.py` (déclencheurs de `intellij-plugin.yml`) |

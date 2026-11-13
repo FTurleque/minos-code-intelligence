@@ -22,11 +22,10 @@ partir du commit », « Une release publiée par le chemin nominal contient le p
 
 ```mermaid
 flowchart TD
-  A["Branche thématique"] --> B["PR vers develop : pr-ci.yml (osv-scan, invariants, Verify Linux et Windows), Gitleaks, IntelliJ plugin (gate), SonarCloud"]
+  A["Branche thématique"] --> B["PR vers main : pr-ci.yml (osv-scan, invariants, Verify Linux et Windows), Gitleaks, IntelliJ plugin (gate), SonarCloud"]
   B -->|"un check exigé rouge"| R1["fusion bloquée"]
-  B --> C["develop"]
-  C --> D["PR develop vers main : ascendance de main, release-promotion-gate.yml (preuve de mise à niveau Docker)"]
-  D -->|"ascendance absente ou preuve rouge"| R2["promotion bloquée"]
+  B --> D["Même PR : ascendance de main, release-promotion-gate.yml (preuve de mise à niveau Docker)"]
+  D -->|"ascendance absente ou preuve rouge"| R2["fusion bloquée par la preuve Docker"]
   D --> E["release-windows.yml (workflow_dispatch, version)"]
   E --> F["build : réf exacte, tag et release inexistants, CI Windows verte, exigence de signature"]
   F -->|"tag existant, tête divergente, signature exigée sans mode"| R3["release refusée"]
@@ -39,7 +38,7 @@ flowchart TD
   K -->|"archive absente ou en double"| R5["release incomplète signalée"]
 ```
 
-Les checks exigés sur `develop` et `main` sont ceux de `.github/required-checks.json`. Tout ce qui suit la
+Les checks exigés sur `main` sont ceux de `.github/required-checks.json`. Tout ce qui suit la
 promotion vit dans `.github/workflows/release-windows.yml`, déclenché à la main : les contrôles qui ne tournent
 qu'à ce moment (double construction réelle, attestation, présence du plugin) ne sont prouvés sur chaque PR que par
 des gates statiques qui lisent les workflows (`check-workflow-pins.py`, `check-ci-wiring.py`,
