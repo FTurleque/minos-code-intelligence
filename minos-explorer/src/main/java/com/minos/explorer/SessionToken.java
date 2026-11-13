@@ -14,6 +14,7 @@ final class SessionToken {
 
     private static final int BYTES = 32;
     private static final String BEARER = "Bearer ";
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final String value;
     private final byte[] bytes;
@@ -26,7 +27,7 @@ final class SessionToken {
     /** A new token from the platform's secure random source. */
     static SessionToken generate() {
         byte[] random = new byte[BYTES];
-        new SecureRandom().nextBytes(random);
+        RANDOM.nextBytes(random);
         return new SessionToken(HexFormat.of().formatHex(random));
     }
 

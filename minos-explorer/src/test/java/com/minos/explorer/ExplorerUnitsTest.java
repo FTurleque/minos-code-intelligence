@@ -161,6 +161,11 @@ class ExplorerUnitsTest {
         assertEquals(java.util.Set.of("/", "/index.html", "/app.js", "/app.css"), WebResources.paths());
         assertEquals("text/html; charset=utf-8", WebResources.find("/").orElseThrow().mediaType());
         assertEquals(Optional.empty(), WebResources.find("/pom.xml"));
+        WebResources.Resource page = WebResources.find("/").orElseThrow();
+        assertEquals(page, WebResources.find("/index.html").orElseThrow(), "two readings of one resource are equal");
+        assertEquals(page.hashCode(), WebResources.find("/index.html").orElseThrow().hashCode());
+        assertFalse(page.equals(WebResources.find("/app.js").orElseThrow()));
+        assertEquals("Resource[mediaType=text/html; charset=utf-8, bytes=" + page.content().length + "]", page.toString());
         assertEquals(Optional.empty(), WebResources.find("/../web/app.js"));
         assertEquals("1", ExplorerContract.VERSION);
         assertEquals("/api/v1/", ExplorerContract.API_PREFIX);
