@@ -2,7 +2,7 @@ version: 2
 updates:
   - package-ecosystem: "maven"
     directory: "/"
-    target-branch: "develop"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -17,7 +17,7 @@ updates:
 
   - package-ecosystem: "gradle"
     directory: "/minos-intellij"
-    target-branch: "develop"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -31,7 +31,7 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: "develop"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -49,7 +49,7 @@ updates:
   # would be moved to `latest`. The compose files are covered by the docker-compose entry below.
   - package-ecosystem: "docker"
     directory: "/docker"
-    target-branch: "develop"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -76,7 +76,7 @@ updates:
   # reason for a bump: the PR must pass the qualification (docs/developer/supply-chain.md).
   - package-ecosystem: "docker-compose"
     directory: "/docker"
-    target-branch: "develop"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"

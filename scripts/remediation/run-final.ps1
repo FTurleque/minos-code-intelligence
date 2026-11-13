@@ -22,11 +22,11 @@ try {
         if ($env:GITHUB_BASE_REF) {
             $BaseRef = "origin/$($env:GITHUB_BASE_REF)"
         } else {
-            git show-ref --verify --quiet refs/heads/develop
+            git show-ref --verify --quiet refs/heads/main
             if ($LASTEXITCODE -eq 0) {
-                $BaseRef = 'develop'
+                $BaseRef = 'main'
             } else {
-                $BaseRef = 'origin/develop'
+                $BaseRef = 'origin/main'
             }
         }
         git diff --exit-code "$BaseRef...HEAD" -- .github/workflows

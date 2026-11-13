@@ -10,7 +10,7 @@ on:
   # must be re-qualified on the branch it lands on. GitHub Actions does not support YAML anchors, so
   # they are spelled out twice and check-workflow-pins.py enforces that they match.
   pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'packaging/windows/**'
       - 'scripts/install/**'
@@ -25,7 +25,7 @@ on:
       - '.github/workflows/windows-installer.yml'
       - '.github/workflows/release-windows.yml'
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'packaging/windows/**'
       - 'scripts/install/**'
@@ -46,7 +46,7 @@ permissions:
 
 concurrency:
   group: windows-installer-${{ github.event.pull_request.number || github.ref }}
-  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  # Never cancel a push-triggered run on main: only a duplicate PR run is obsolete.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:

@@ -37,7 +37,7 @@ def main() -> None:
     head = git("rev-parse", "--short", "HEAD")
     dirty = len([line for line in git("status", "--short").splitlines() if line.strip()])
     parts = [f"MINOS — branche {branch} @ {head}, {dirty} fichier(s) modifié(s) ou non suivi(s)."]
-    if branch in ("main", "develop"):
+    if branch == "main":
         parts.append("Branche protégée : créer une branche thématique avant tout commit (jamais de push direct).")
     changes = active_changes()
     if changes:

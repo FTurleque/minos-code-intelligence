@@ -1,6 +1,6 @@
 ---
 name: minos-pr-flow
-description: Conduire une branche MINOS jusqu'à la fusion dans develop — nommer la branche, commiter, ouvrir la PR, suivre le CI sans le contourner, traiter les rapports SonarCloud, mettre à jour une PR en retard (BEHIND), fusionner dans le bon ordre avec le style de l'historique, nettoyer les branches. À utiliser quand l'utilisateur demande d'ouvrir une PR, de suivre ou d'attendre le CI, de fusionner, de mettre à jour une branche ou de supprimer les branches fusionnées.
+description: Conduire une branche MINOS jusqu'à la fusion dans main — nommer la branche, commiter, ouvrir la PR, suivre le CI sans le contourner, traiter les rapports SonarCloud, mettre à jour une PR en retard (BEHIND), fusionner dans le bon ordre avec le style de l'historique, nettoyer les branches. À utiliser quand l'utilisateur demande d'ouvrir une PR, de suivre ou d'attendre le CI, de fusionner, de mettre à jour une branche ou de supprimer les branches fusionnées.
 ---
 
 # De la branche à la fusion
@@ -8,13 +8,13 @@ description: Conduire une branche MINOS jusqu'à la fusion dans develop — nomm
 Aucun push, aucune PR, aucune fusion sans demande de l'utilisateur. Un refus de permission n'est pas contourné : proposer la commande à lancer.
 
 ## 1. Branche et commits
-- Branche thématique depuis `develop` à jour : `docs/…`, `ci/…`, `fix/…`, `feat/…`, `refactor/…`, `build/…`, `sec/…`, `chore/…`. Jamais de commit sur `main`/`develop`.
+- Branche thématique depuis `main` à jour : `docs/…`, `ci/…`, `fix/…`, `feat/…`, `refactor/…`, `build/…`, `sec/…`, `chore/…`. Jamais de commit sur `main`.
 - Conventional Commits en français : `type(portée): sujet` (`docs(openspec): …`, `refactor(architecture): …`, `ci(gates): …`). Corps = pourquoi, constats (`AUD-…`), preuves.
 - **Ajouter des chemins explicites** (`git add chemin…`), jamais `git add -A` : les audits, scratchpads et fichiers d'autres outils (`.rtk/`, `Claude outputs/`) ne sont pas à vous.
 - Vérifier avant : skill `minos-verify-local`.
 
 ## 2. Ouvrir la PR
-`gh pr create --base develop --head <branche>` ; corps : objet, changements, écarts/décisions, vérifications exécutées (commandes réelles), puis la ligne d'attribution demandée par la session. Titre ≤ 70 caractères, Conventional Commits.
+`gh pr create --base main --head <branche>` ; corps : objet, changements, écarts/décisions, vérifications exécutées (commandes réelles), puis la ligne d'attribution demandée par la session. Titre ≤ 70 caractères, Conventional Commits.
 
 ## 3. Suivre le CI
 - Checks exigés (ruleset) : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)`, `SonarCloud Code Analysis`.
@@ -31,7 +31,7 @@ Seulement CI entièrement vert et demande explicite. Style de l'historique (comm
 ```bash
 gh pr merge <n> --merge --subject "Merge pull request #<n> from FTurleque/<branche>"
 ```
-Jamais `--admin`. PR empilées : fusionner dans l'ordre, re-cibler ou mettre à jour la suivante. Après fusion : `git checkout develop && git pull --ff-only`.
+Jamais `--admin`. PR empilées : fusionner dans l'ordre, re-cibler ou mettre à jour la suivante. Après fusion : `git checkout main && git pull --ff-only`.
 
 ## 6. Nettoyage (sur demande)
 Branches distantes fusionnées : `git push origin --delete <b>` ; locales : `git branch -d <b>` (jamais `-D` sans demande). Ne pas toucher `stash` ni les branches d'autres personnes.

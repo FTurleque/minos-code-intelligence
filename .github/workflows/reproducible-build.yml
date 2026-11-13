@@ -7,7 +7,7 @@ name: Reproducible build
 # Linux only: a JAR built on Windows is reproducible on Windows, not proven identical to this one.
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - '**/pom.xml'
       - '.mvn/**'

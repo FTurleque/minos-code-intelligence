@@ -1,7 +1,7 @@
 name: Docker A-to-B Upgrade Qualification
 
 # Manual/ad-hoc entry point for the real Docker A -> B upgrade qualification. The automatic path
-# used by the develop -> main promotion gate is embedded directly in release-promotion-gate.yml
+# used by the main promotion gate is embedded directly in release-promotion-gate.yml
 # (one workflow, sequential jobs) rather than triggered from here, so this workflow intentionally
 # has no pull_request trigger: it must never run twice for the same promotion candidate.
 #
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       previous_ref:
-        description: 'Previous MINOS commit/ref to install as candidate A; blank uses the merge-base with origin/develop, then first-parent fallback.'
+        description: 'Previous MINOS commit/ref to install as candidate A; blank uses the merge-base with origin/main, then first-parent fallback.'
         required: false
         default: ''
         type: string

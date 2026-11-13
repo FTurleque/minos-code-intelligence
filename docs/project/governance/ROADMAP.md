@@ -174,7 +174,7 @@ Les sprints 1 et 2 sont terminés ; suite ouverte par le sprint 2 : un changemen
 
 La reprise d'une indexation interrompue ([ADR 0039](../../architecture/adr/BE-0039-reprise-indexation-apres-interruption.md)) n'est plus en conception : l'ADR est acceptée et implémentée au sprint 2 (`IndexingResumePlanner`, `IndexingRun.Status.INTERRUPTED` dans `minos-engine`).
 
-Aucun nouveau jalon fonctionnel livré n'est déclaré par l'étude d'octobre ; le programme proposé ci-dessous reste en conception. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.
+Aucun nouveau jalon fonctionnel livré n'est déclaré par l'étude d'octobre ; le programme proposé ci-dessous reste en conception. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et l'ascendance de `main` dans tout candidat.
 
 ## Programme proposé — amélioration retrieval et intelligence IDE (4 octobre 2026)
 

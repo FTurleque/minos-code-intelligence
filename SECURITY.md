@@ -6,7 +6,7 @@ MINOS Code Intelligence is proprietary source-available software. Security repor
 
 ## Supported versions
 
-Security fixes are developed against the current `develop` branch and released through the normal `develop` -> `main` promotion flow. Older snapshots are not guaranteed to receive backports unless explicitly stated in release notes.
+Security fixes are developed against the current `main` branch and released from it. Older snapshots are not guaranteed to receive backports unless explicitly stated in release notes.
 
 ## Reporting a vulnerability
 

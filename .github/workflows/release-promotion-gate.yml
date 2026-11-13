@@ -1,9 +1,8 @@
 name: Release Promotion Gate
 
-# Gates a develop -> main promotion candidate on a real Docker A -> B upgrade qualification for the
-# exact candidate SHA. Only ever runs on PRs targeting main, so it is required only in a main-scoped
-# ruleset (never added to the shared main+develop ruleset) - a develop-targeting PR never sees this
-# workflow and must never be blocked waiting for a check that would never run.
+# Gates every candidate for main on a real Docker A -> B upgrade qualification for the exact
+# candidate SHA. It runs on PRs targeting main and is required by the main-scoped ruleset
+# "Release promotion gate (main only)": main is the only integration branch.
 #
 # The qualification and its evidence check both run here, as two jobs in one workflow (job 2
 # `needs` job 1) rather than as two independently-triggered workflows: that keeps the dependency
@@ -28,7 +27,7 @@ permissions:
 
 concurrency:
   group: release-promotion-gate-${{ github.event.pull_request.number || github.ref }}
-  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  # Never cancel a push-triggered run on main: only a duplicate PR run is obsolete.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -97,7 +96,7 @@ jobs:
         shell: pwsh
         env:
           EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          # For a develop -> main promotion, candidate A is real main - the last thing actually
+          # For a PR targeting main, candidate A is real main - the last thing actually
           # promoted - and candidate B is the exact SHA being promoted now. A manual
           # workflow_dispatch run (no base SHA available) falls back to the script's own
           # merge-base/first-parent resolution.

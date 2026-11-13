@@ -2,8 +2,8 @@
   "version": 1,
   "comment": "Status checks that each branch ruleset must require. Declares what is expected; configures nothing. Verified offline by scripts/quality/check-ci-wiring.py (every entry resolves to a job that can report on a pull request) and against GitHub by hand with scripts/quality/verify-ruleset.py.",
   "rulesets": {
-    "Protect main & develop": {
-      "branches": ["main", "develop"],
+    "Protect main": {
+      "branches": ["main"],
       "checks": [
         { "context": "Verify (ubuntu-24.04)", "source": "workflow", "workflow": "pr-ci.yml" },
         { "context": "Verify (windows-2022)", "source": "workflow", "workflow": "pr-ci.yml" },

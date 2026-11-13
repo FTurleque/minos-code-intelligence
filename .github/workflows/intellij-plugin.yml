@@ -5,9 +5,9 @@ on:
   # every pull request that does not touch those paths. The `changes` job computes the plugin scope instead
   # (scripts/ci/plugin-gate.py) and the `gate` job always reports a verdict.
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   push:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: intellij-plugin-${{ github.event.pull_request.number || github.ref }}
-  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  # Never cancel a push-triggered run on main: only a duplicate PR run is obsolete.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

@@ -18,8 +18,8 @@ class M29DockerReleaseCiGateContractTest {
         String qualification = normalizedText(root.resolve("scripts/ci/qualify-docker-release.sh"));
         String mcpSmoke = normalizedText(root.resolve("docker/scripts/MinosDockerMcpSmoke.java"));
 
-        assertTrue(workflow.contains("pull_request:\n    branches: [main, develop]"));
-        assertTrue(workflow.contains("push:\n    branches: [main, develop]"));
+        assertTrue(workflow.contains("pull_request:\n    branches: [main]"));
+        assertTrue(workflow.contains("push:\n    branches: [main]"));
         assertFalse(workflow.contains("paths:"),
                 "the provider-complete release gate must not silently skip transitive packaging changes");
         assertTrue(workflow.contains("github.event.pull_request.head.sha"));
