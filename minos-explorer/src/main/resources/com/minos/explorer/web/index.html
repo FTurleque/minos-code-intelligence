@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>MINOS · Explorateur de l'index sémantique</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <h1>MINOS · Explorateur</h1>
+  <label>Projet
+    <select id="project" aria-label="Projet"></select>
+  </label>
+  <span class="badge" id="state"></span>
+  <span class="badge" id="model"></span>
+  <span class="badge" id="snapshots"></span>
+  <span class="badge" id="count"></span>
+  <span class="badge warn" id="localHash" hidden>Référence déterministe (hachage de tokens) — pas un modèle de langage ; la proximité ne reflète pas le sens.</span>
+  <span class="readonly">lecture seule · boucle locale</span>
+</header>
+<div class="banner" id="banner" role="status" hidden></div>
+
+<main id="refused" hidden>
+  <div class="message">
+    <h2>Accès refusé</h2>
+    <p>Cette page ne porte pas le jeton de la session en cours.</p>
+    <p>Relancez <code>minos explorer serve</code> et ouvrez l'adresse qu'il affiche sur la sortie d'erreur.</p>
+  </div>
+</main>
+
+<main id="explorer">
+  <aside id="filters" aria-label="Filtres">
+    <h2>Nature</h2>
+    <select id="kind" aria-label="Nature du document">
+      <option value="">toutes</option>
+      <option value="CHUNK">CHUNK — extrait de source</option>
+      <option value="SYMBOL">SYMBOL — synthèse du symbole</option>
+      <option value="FILE">FILE — résumé du fichier</option>
+    </select>
+    <h2>Module</h2>
+    <input id="module" aria-label="Module" autocomplete="off" spellcheck="false">
+    <h2>Langage</h2>
+    <input id="language" aria-label="Langage" autocomplete="off" spellcheck="false">
+    <h2>Préfixe de fichier</h2>
+    <input id="filePrefix" aria-label="Préfixe de fichier" autocomplete="off" spellcheck="false">
+    <p class="note" id="filterNote"></p>
+    <button id="apply" type="button">Appliquer</button>
+    <button id="reset" type="button">Réinitialiser</button>
+    <p class="note">Un filtre retire des lignes. Il ne change ni un score ni un rang.</p>
+  </aside>
+
+  <section id="search" aria-label="Recherche">
+    <input id="query" aria-label="Recherche en langage naturel" autocomplete="off" spellcheck="false" maxlength="4096">
+    <select id="mode" aria-label="Mode de recherche">
+      <option value="semantic">Sémantique — similarité cosinus</option>
+      <option value="hybrid">Hybride — sémantique 50 %, lexical 35 %, graphe 15 %</option>
+    </select>
+    <button id="go" type="button">Chercher</button>
+    <button id="clear" type="button">Revenir à la liste</button>
+    <p class="note" id="scoreNote"></p>
+    <ul class="limits" id="limits" aria-label="Limitations rendues par le service"></ul>
+  </section>
+
+  <section id="table" aria-label="Documents">
+    <p class="note" id="tableTitle"></p>
+    <table>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <p class="message" id="empty" hidden></p>
+    <p><button id="more" type="button" hidden>Page suivante</button></p>
+  </section>
+
+  <aside id="detail" aria-label="Détail du document">
+    <p class="note">Sélectionnez un document pour afficher son contenu indexé et sa source actuelle.</p>
+  </aside>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

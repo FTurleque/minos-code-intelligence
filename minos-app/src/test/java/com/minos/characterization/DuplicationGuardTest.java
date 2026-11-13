@@ -32,7 +32,7 @@ class DuplicationGuardTest {
     private static final List<String> MODULES = List.of(
             "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
             "minos-provider-scip", "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus",
-            "minos-cli", "minos-api", "minos-mcp", "minos-app");
+            "minos-cli", "minos-api", "minos-mcp", "minos-explorer", "minos-app");
 
     private static final String PRECONDITIONS = "minos-domain/src/main/java/com/minos/domain/Preconditions.java";
     private static final String SHA256 = "minos-engine/src/main/java/com/minos/io/Sha256.java";

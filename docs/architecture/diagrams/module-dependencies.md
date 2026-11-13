@@ -59,6 +59,8 @@ flowchart LR
     minos_mcp --> minos_engine
     minos_explorer --> minos_application
     minos_explorer --> minos_bootstrap
+    minos_explorer --> minos_domain
+    minos_explorer --> minos_engine
     minos_app --> minos_api
     minos_app --> minos_application
     minos_app --> minos_bootstrap
@@ -94,7 +96,7 @@ flowchart LR
 | `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-nexus` |
 | `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-mcp` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
-| `minos-explorer` | `minos-application`, `minos-bootstrap` |
+| `minos-explorer` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-explorer`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage` |
 
 ## Arêtes d'exécution par service
@@ -106,7 +108,7 @@ Ces arêtes sont en pointillés dans le diagramme et ne comptent pas dans la pol
 | Module qui déclare | Module qui fournit | Services |
 |---|---|---|
 | `minos-application` | `minos-bootstrap` | `com.minos.application.MinosApplicationComposer` |
-| `minos-cli` | `minos-app` | `com.minos.cli.McpLaunchRoute` |
+| `minos-cli` | `minos-app` | `com.minos.cli.ExplorerLaunchRoute`, `com.minos.cli.McpLaunchRoute` |
 | `minos-engine` | `minos-runtime-local` | `com.minos.io.PlatformAccessControl`, `com.minos.orchestration.ExecutionPathIdentityProvider` |
 | `minos-engine` | `minos-storage` | `com.minos.storage.StorageBackendProvider` |
 

@@ -118,7 +118,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 
 ### minos-explorer
 - **Responsabilité** : surface HTTP locale, optionnelle et en lecture seule, d'exploration de l'index sémantique ([ADR 0082](../adr/ARCH-0082-surface-http-locale-optionnelle-de-consultation.md)) ; démarrée par `minos explorer serve`, seul module à porter une écoute HTTP.
-- **Dépendances** : `minos-application`, `minos-bootstrap` (runtime), serveur HTTP du JDK (`jdk.httpserver`), aucune dépendance tierce.
+- **Dépendances** : `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`
 - **Sources** : `minos-explorer/src/main/java/com/minos/explorer/`.
 
 ### minos-bootstrap

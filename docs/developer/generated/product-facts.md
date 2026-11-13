@@ -77,6 +77,7 @@ Nombre de tools : **31**
 - `ide handshake`
 - `git-activity`
 - `nexus-export`
+- `explorer serve`
 - `team`
 
 ## Providers qualifiés

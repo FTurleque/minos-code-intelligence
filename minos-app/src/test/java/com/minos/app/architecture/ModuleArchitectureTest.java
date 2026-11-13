@@ -248,8 +248,31 @@ class ModuleArchitectureTest {
                 .because("ADR 0082: the exploration surface depends on no storage adapter and on no other surface")
                 .check(all);
         noClasses().that().resideOutsideOfPackage("com.minos.explorer..")
-                .should().dependOnClassesThat().resideInAPackage("com.sun.net.httpserver..")
-                .because("ADR 0082 point 8: no other module listens over HTTP")
+                .should().dependOnClassesThat().resideInAnyPackage("com.sun.net.httpserver..")
+                .orShould().dependOnClassesThat().haveFullyQualifiedName("java.net.ServerSocket")
+                .orShould().dependOnClassesThat().haveFullyQualifiedName("java.nio.channels.ServerSocketChannel")
+                .orShould().dependOnClassesThat()
+                .haveFullyQualifiedName("java.nio.channels.AsynchronousServerSocketChannel")
+                .because("ADR 0082 point 8: no other module listens on the network")
+                .check(all);
+    }
+
+    /**
+     * ADR 0082 point 1: the exploration surface starts by its command only. Nothing in the reactor reaches it
+     * but the route the assembly registers for {@code minos explorer serve}: no other command, and not the MCP
+     * server, can open its port.
+     */
+    @Test
+    void onlyTheExplorerRouteOfTheAssemblyStartsTheExplorationSurface() {
+        noClasses().that().resideOutsideOfPackage("com.minos.explorer..")
+                .and().doNotHaveFullyQualifiedName("com.minos.app.ExplorerLaunchRouteProvider")
+                .should().dependOnClassesThat().resideInAPackage("com.minos.explorer..")
+                .because("ADR 0082 point 1: the surface exists only when minos explorer serve starts it")
+                .check(all);
+        noClasses().that().resideOutsideOfPackage("com.minos.cli..")
+                .and().doNotHaveFullyQualifiedName("com.minos.app.ExplorerLaunchRouteProvider")
+                .should().dependOnClassesThat().haveFullyQualifiedName("com.minos.cli.ExplorerLaunchRoute")
+                .because("ADR 0082 point 1: the explorer route is called by the launcher only")
                 .check(all);
     }
 

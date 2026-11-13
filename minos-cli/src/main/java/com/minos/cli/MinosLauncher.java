@@ -99,6 +99,11 @@ public final class MinosLauncher {
             // minos-mcp, so the route is an SPI resolved in MINOS's own class loader.
             return McpLaunchRoutes.resolve().run(home);
         }
+        if (ExplorerCommandLine.matches(arguments)) {
+            // Same rule as mcp: the surface is reached through the entry point the assembly registers, and the
+            // launcher opens no application for it.
+            return ExplorerCommandLine.run(arguments, home, err);
+        }
         if (WslWorkerLaunch.isWorkerCommand(arguments)) {
             // The internal worker of the WSL2 route runs one provider: it opens no application, and the
             // composition root offers it on Linux only.

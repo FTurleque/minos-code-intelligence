@@ -35,7 +35,7 @@ class JsonEscapeGuardTest {
     private static final List<String> MODULES = List.of(
             "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
             "minos-provider-scip", "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus",
-            "minos-cli", "minos-api", "minos-mcp", "minos-app");
+            "minos-cli", "minos-api", "minos-mcp", "minos-explorer", "minos-app");
 
     private static final String OUTPUT_DIRECTORY = "minos-application/src/main/java/com/minos/output";
     private static final String ENCODER = OUTPUT_DIRECTORY + "/json/DeterministicJson.java";
