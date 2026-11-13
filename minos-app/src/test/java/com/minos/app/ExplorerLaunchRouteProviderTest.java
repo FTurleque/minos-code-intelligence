@@ -3,12 +3,14 @@ package com.minos.app;
 import com.minos.application.MinosApplication;
 import com.minos.cli.ExplorerLaunchRoute;
 import com.minos.cli.command.FindSymbolCommand;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.storage.MinosRuntimeSettings;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.local.LocalStorageBackend;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
@@ -51,7 +53,7 @@ class ExplorerLaunchRouteProviderTest {
                 (application, port, error) -> {
                     events.add("served on " + port);
                     return 0;
-                });
+                }, () -> ProjectPathMapping.RuntimeLocation.NATIVE);
         StringBuilder error = new StringBuilder();
 
         int exit = route.run(home, 8765, error);
@@ -60,6 +62,9 @@ class ExplorerLaunchRouteProviderTest {
         assertEquals(List.of("opened", "served on 8765", "close"), events,
                 "the application is closed once, after the surface has stopped");
         assertEquals("", error.toString());
+        assertFalse(Files.exists(home.resolve(McpBackendConfigurationStore.RUNTIME_DIRECTORY)
+                        .resolve(McpBackendConfigurationStore.FILE_NAME)),
+                "the route reads the backend of the home and never writes its configuration");
     }
 
     @Test
@@ -71,7 +76,7 @@ class ExplorerLaunchRouteProviderTest {
                         .storageBackend(closeSpy(new LocalStorageBackend(validated), events)).build(),
                 (application, port, error) -> {
                     throw failure;
-                });
+                }, () -> ProjectPathMapping.RuntimeLocation.NATIVE);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
                 () -> route.run(temp.resolve("home"), 0, new StringBuilder()));
@@ -125,7 +130,7 @@ class ExplorerLaunchRouteProviderTest {
         int exit = new ExplorerLaunchRouteProvider(MinosApplication::open, (application, port, error) -> {
             served.add(port);
             return 0;
-        }).run(home, 0, new StringBuilder());
+        }, () -> ProjectPathMapping.RuntimeLocation.NATIVE).run(home, 0, new StringBuilder());
 
         assertEquals(0, exit);
         assertEquals(List.of(0), served);
@@ -156,6 +161,29 @@ class ExplorerLaunchRouteProviderTest {
                 },
                 (application, port, error) -> {
                     throw new AssertionError("a surface was started on a refused home");
-                });
+                }, () -> ProjectPathMapping.RuntimeLocation.NATIVE);
+    }
+
+    @Test
+    void insideTheDockerRuntimeTheHostBackendSwitchIsNotReadAndTheHomeIsNotCreated(@TempDir Path temp) throws Exception {
+        Path home = Files.createDirectories(temp.resolve("home"));
+        McpBackendConfiguration docker = new McpBackendConfiguration(McpBackendConfiguration.CURRENT_FORMAT_VERSION,
+                McpBackend.DOCKER, McpBackendConfiguration.DEFAULT_DOCKER_CONTAINER,
+                McpBackendConfiguration.DEFAULT_DOCKER_PROBE_TIMEOUT);
+        new McpBackendConfigurationStore(home).save(docker);
+        Path absent = temp.resolve("absent-home");
+        List<String> opened = new ArrayList<>();
+        ExplorerLaunchRouteProvider inContainer = new ExplorerLaunchRouteProvider(
+                validated -> {
+                    opened.add(validated.getFileName().toString());
+                    throw new IOException("stop before any store is opened");
+                },
+                (application, port, error) -> 0, () -> ProjectPathMapping.RuntimeLocation.DOCKER);
+
+        assertThrows(IOException.class, () -> inContainer.run(home, 0, new StringBuilder()));
+        assertThrows(IOException.class, () -> inContainer.run(absent, 0, new StringBuilder()));
+
+        assertEquals(List.of("home", "absent-home"), opened, "the home is handed to the application as it is");
+        assertFalse(Files.exists(absent), "the route creates nothing on the read-only data of the container");
     }
 }

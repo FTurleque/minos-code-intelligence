@@ -58,6 +58,7 @@ class M29DockerQueryImageContractTest {
     private static Map<String, String> serviceImages() {
         Map<String, String> images = new LinkedHashMap<>();
         images.put("minos-mcp", QUERY_IMAGE);
+        images.put("minos-explorer", QUERY_IMAGE);
         images.put("minos-bootstrap", QUERY_IMAGE);
         images.put("minos-data-bootstrap", QUERY_IMAGE);
         images.put("minos-ollama-bootstrap", QUERY_IMAGE);
