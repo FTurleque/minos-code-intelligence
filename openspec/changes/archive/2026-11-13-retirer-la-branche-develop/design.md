@@ -20,7 +20,7 @@ Fait qui borne le changement : `release-promotion-gate.yml` se déclenche sur to
 [Décision] Un document qui cite `develop` comme un fait de sa date reste tel quel (règle « liens oui, prose non »). Seuls changent les fichiers opératifs, les consignes en vigueur et les exigences courantes.
 
 ### D4 — Laisser le gate de promotion sur toute PR
-[Proposition] Aucun affaiblissement d'un check exigé dans un changement de nettoyage. Le coût par PR est signalé au propriétaire (proposition, « Questions ouvertes »).
+[Décision — propriétaire, 2026-11-13] Aucun affaiblissement d'un check exigé dans un changement de nettoyage : la qualification Docker A → B reste sur toute PR. Une restriction (chemins, étiquette, déclenchement manuel) se tranche à part, mesure de durée à l'appui.
 
 ### D5 — Supprimer la branche en dernier, à la main
 [Décision — propriétaire, 2026-11-13] La suppression de `develop` (distante puis locale) suit la fusion de ce changement.
@@ -33,7 +33,7 @@ Fait qui borne le changement : `release-promotion-gate.yml` se déclenche sur to
 - `python scripts/quality/verify-ruleset.py` contre l'API GitHub, 2026-11-13 : code 0, « 2 rulesets require exactly the declared checks » ; les rulesets « Protect main » et « Release promotion gate (main only) » visent `~DEFAULT_BRANCH` (tâche 2.1).
 - `git ls-remote --heads origin`, 2026-11-13 : aucune branche `develop` ; `main` est la seule branche protégée (tâche 2.2).
 - `gh pr list --state open`, 2026-11-13 : les PR Dependabot #722 à #725 ont `main` pour base (tâche 2.3).
-- Non vérifié : le coût réel de la qualification Docker A → B par PR (tâche 2.4, décision du propriétaire).
+- Non mesuré : la durée de la qualification Docker A → B par PR (tâche 2.4 ; décision D4).
 
 ## Traçabilité
 
