@@ -6,7 +6,7 @@ Définit ce qui rend un contrôle de qualité opposable à une fusion : la liste
 ## Requirements
 
 ### Requirement: Les checks exigés pour une fusion sont déclarés dans le dépôt
-Le dépôt SHALL déclarer, dans `.github/required-checks.json`, la liste des checks que chaque ruleset de branche doit exiger. Cette liste SHALL contenir au minimum `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks` et `IntelliJ plugin (gate)` pour le ruleset des branches `main` et `develop`.
+Le dépôt SHALL déclarer, dans `.github/required-checks.json`, la liste des checks que chaque ruleset de branche doit exiger. Cette liste SHALL contenir au minimum `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks` et `IntelliJ plugin (gate)` pour le ruleset de la branche `main`.
 
 #### Scenario: Liste complète
 - **WHEN** `python scripts/quality/check-ci-wiring.py` s'exécute sur le dépôt
@@ -81,7 +81,7 @@ Tout fichier `scripts/**/test_*.py` hors `history/`, et tout script qui déclare
 - **THEN** `python scripts/remediation/check-audit-remediation-v2.py` se termine avec le code 1
 
 ### Requirement: Le plugin IntelliJ rend un verdict sur toute pull request
-`intellij-plugin.yml` SHALL s'exécuter sur toute pull request vers `main` ou `develop`, sans filtre de chemins au niveau du workflow, et SHALL exposer un job `IntelliJ plugin (gate)` exécuté même si un job amont a échoué ou a été annulé. Ce job SHALL réussir seulement si le calcul de portée a réussi et que chaque job du plugin a réussi ou a été sauté parce que le plugin n'est pas dans la portée. Une erreur du calcul de portée SHALL lancer le plugin (fail-closed).
+`intellij-plugin.yml` SHALL s'exécuter sur toute pull request vers `main`, sans filtre de chemins au niveau du workflow, et SHALL exposer un job `IntelliJ plugin (gate)` exécuté même si un job amont a échoué ou a été annulé. Ce job SHALL réussir seulement si le calcul de portée a réussi et que chaque job du plugin a réussi ou a été sauté parce que le plugin n'est pas dans la portée. Une erreur du calcul de portée SHALL lancer le plugin (fail-closed).
 
 #### Scenario: Plugin hors portée
 - **WHEN** `python scripts/ci/test_plugin_gate.py` rejoue une PR qui ne modifie que `README.md`
