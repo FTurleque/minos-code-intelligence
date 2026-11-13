@@ -12,21 +12,21 @@ import java.util.HexFormat;
  */
 final class SessionToken {
 
-    private static final int BYTES = 32;
+    private static final int TOKEN_LENGTH_BYTES = 32;
     private static final String BEARER = "Bearer ";
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final String value;
-    private final byte[] bytes;
+    private final byte[] encoded;
 
     private SessionToken(String value) {
         this.value = value;
-        this.bytes = value.getBytes(StandardCharsets.UTF_8);
+        this.encoded = value.getBytes(StandardCharsets.UTF_8);
     }
 
     /** A new token from the platform's secure random source. */
     static SessionToken generate() {
-        byte[] random = new byte[BYTES];
+        byte[] random = new byte[TOKEN_LENGTH_BYTES];
         RANDOM.nextBytes(random);
         return new SessionToken(HexFormat.of().formatHex(random));
     }
@@ -44,7 +44,7 @@ final class SessionToken {
     boolean matches(String authorization) {
         if (authorization == null || !authorization.startsWith(BEARER)) return false;
         byte[] presented = authorization.substring(BEARER.length()).getBytes(StandardCharsets.UTF_8);
-        return MessageDigest.isEqual(bytes, presented);
+        return MessageDigest.isEqual(encoded, presented);
     }
 
     @Override
