@@ -565,6 +565,6 @@ Tag publié et immuable :
 v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
 ```
 
-La publication finale a publié 10 assets et revérifié les 5 paires payload/SHA-256. Les changements postérieurs sur `develop` ne déplacent jamais ce tag.
+La publication finale a publié 10 assets et revérifié les 5 paires payload/SHA-256. Les changements postérieurs ne déplacent jamais ce tag.
 
 Voir [`release-notes/1.0.1.md`](release-notes/1.0.1.md).

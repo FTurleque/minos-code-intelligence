@@ -36,7 +36,7 @@ Before changing the core Java/Maven baseline:
 4. exercise provider/sandbox qualification paths affected by the runtime change;
 5. validate Windows installer and Docker release workflows when their runtime is affected;
 6. update developer documentation, CI setup actions, Docker images, installer prerequisites, and runtime diagnostics that state the supported version;
-7. promote the new baseline through `develop` before `main`.
+7. land the new baseline on `main` through a pull request whose required checks are all green.
 
 Before changing the IntelliJ Java/Gradle/Platform baseline:
 
