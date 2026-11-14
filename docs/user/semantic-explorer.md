@@ -1,9 +1,10 @@
 # Explorer l'index sémantique dans un navigateur
 
 `minos explorer serve` ouvre, sur le poste, une page web **en lecture seule** qui liste les documents de l'index
-sémantique d'un projet, montre le contenu indexé de chacun à côté de sa source actuelle, lance une recherche et
-trouve les documents voisins d'un document. Rien n'est indexé, vectorisé ni modifié par cette page : l'index se
-construit toujours par `minos ide semantic-index-sync <projet>`.
+sémantique d'un projet, montre le contenu indexé de chacun à côté de sa source actuelle, lance une recherche,
+trouve les documents voisins d'un document et affiche une carte 2D des documents quand elle a été préparée. Rien
+n'est indexé, vectorisé, projeté ni modifié par cette page : l'index se construit toujours par
+`minos ide semantic-index-sync <projet>`, la carte par `minos semantic projection prepare <projet>`.
 
 La surface est optionnelle. Tant que la commande n'est pas lancée, MINOS n'écoute sur aucun port ; le serveur MCP
 reste en STDIO.
@@ -19,7 +20,10 @@ reste en STDIO.
 | Poste natif dont le backend MCP est Docker | Refusé par la commande, qui renvoie vers le service Docker |
 | Mode équipe (`MINOS_HOSTED_MODE=enabled`) | Refusé : la surface n'a pas d'autorisation par projet |
 | Accès depuis une autre machine, TLS, comptes utilisateurs | Non supporté, sans cible |
-| Carte 2D des embeddings | Non livrée (changement séparé) |
+| Carte 2D (PCA) — installation native, stockage local | Livrée, testée automatiquement sous Windows ; Linux par la CI ; **non qualifiée** : parcours des états dans un navigateur à valider par le propriétaire, seuils de performance non fixés |
+| Carte 2D — installation native, PostgreSQL externe | Lecture des vecteurs par lots testée contre PostgreSQL/pgvector par la CI ; préparation complète **non qualifiée** sur ce stockage |
+| Carte 2D — runtime Docker | **Non supportée** : dépend de la qualification du service `minos-explorer` |
+| UMAP, t-SNE, rendu WebGL, vue 3D | Non supportés, sans engagement |
 
 ## Démarrer
 
@@ -71,6 +75,61 @@ Codes de sortie : `0` arrêt demandé, `1` port indisponible, `2` erreur d'usage
 Un score est un signal de classement heuristique, pas un fait structurel : la proximité de deux documents n'est
 ni un appel ni une dépendance.
 
+## Carte 2D
+
+Le bouton « Carte 2D » affiche un point par document, placé par une **projection** de son vecteur sur deux axes
+(analyse en composantes principales, PCA). La page ne calcule jamais cette projection : elle lit celle qui a été
+préparée par une commande, et dit ce qu'elle montre.
+
+```bash
+minos semantic projection prepare <projet>
+minos semantic projection status <projet>
+```
+
+`prepare` exige un index `READY`. Il lit les vecteurs stockés par lots, sans appeler le provider d'embeddings ni
+la recherche, écrit sa progression sur la sortie d'erreur et publie la projection d'un seul coup : une
+préparation interrompue ne laisse aucune projection partielle, et la projection précédente reste lisible.
+
+| Option de `prepare` | Défaut | Effet |
+|---|---|---|
+| `--kinds CHUNK[,SYMBOL,FILE]` | `CHUNK` | natures de documents projetées ; `SYMBOL` et `CHUNK` décrivent le même symbole et se superposent |
+| `--max-points <n>` | 100 000 | plafond de points ; au-delà, un échantillon reproductible est tiré |
+| `--seed <n>` | 42 | graine de l'échantillon et du calcul : même index, mêmes options, même graine donnent le même fichier |
+| `--max-memory-mb <n>` | 256 | budget de mémoire de travail ; dépassé, la commande échoue sans rien publier |
+| `--format text\|json` | `text` | forme du rapport |
+
+Codes de sortie des deux commandes : `0` succès (quel que soit l'état lu par `status`), `1` échec (projet
+inconnu, index non `READY`, budget dépassé, index modifié pendant la préparation, autre préparation en cours),
+`2` erreur d'usage.
+
+| État rendu par `status` et par la page | Sens | Action |
+|---|---|---|
+| `ABSENTE` | aucune projection n'est préparée | `minos semantic projection prepare <projet>` |
+| `PRETE` | la projection décrit l'index courant | — |
+| `PERIMEE` | l'index a changé depuis la préparation ; la page n'affiche la carte que sur demande, marquée « périmée » | relancer `prepare` |
+| `ECHOUEE` | le fichier de projection est illisible (tronqué, altéré, autre format) | relancer `prepare` |
+
+Ce que dit la carte :
+
+- **Compteur** : « *x* points affichés sur *y* documents », et, s'il y a échantillonnage, « échantillon de *x*
+  sur *y* (graine *g*) ».
+- **Méthode** : PCA, sa version, la graine et la part de variance portée par chaque axe. Une part faible signifie
+  que deux axes résument mal les vecteurs : la carte est alors peu lisible, et le dit.
+- **Couleur** : par nature de document, avec la légende et l'effectif de chaque nature. Le filtre « Nature »
+  masque des points sans rien recalculer.
+- **Recherche** : les documents classés sont mis en évidence, les autres atténués ; la colonne « Carte » de la
+  table dit « hors carte » pour un résultat absent de la projection ou masqué.
+- **Interactions** : molette ou `+` et `−` pour le zoom, glisser ou flèches pour déplacer, clic pour ouvrir le
+  document, double-clic ou `0` pour recentrer. La table reste la voie d'accès complète au clavier.
+
+La position d'un point est une projection : deux points proches sur la carte ne sont pas nécessairement proches
+dans l'index, et le classement d'une recherche est toujours calculé sur les vecteurs d'origine. La carte ne trace
+aucun lien et ne nomme aucun groupe.
+
+Limites : la couleur par module ou par langage n'est pas proposée ; la page n'affiche pas une préparation en
+cours (la commande écrit sa progression, et une seconde préparation du même projet est refusée) ; la projection
+est un fichier dérivé sous `MINOS_HOME/semantic-projections/`, supprimable sans perte.
+
 Avec le provider `local-hash`, un badge permanent rappelle que l'index est une référence déterministe (hachage de
 tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL`).
 
@@ -83,6 +142,7 @@ tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_
 | Requête d'API venant d'un autre site (`Origin` étranger, ou `Sec-Fetch-Site` autre que `same-origin` et `none`) | `403`, corps vide, aucun en-tête CORS |
 | Page demandée sous un autre `Host`, avec un `Origin` étranger, ou autrement que par un `GET` depuis un autre site | `403` et un texte qui dit de coller l'adresse imprimée par la commande |
 | Méthode d'écriture (`PUT`, `PATCH`, `DELETE`) | `405` : aucune route n'écrit |
+| Toute méthode autre que `GET` sur la projection d'un projet | `405` : aucune requête ne prépare ni ne modifie une projection |
 | Curseur de liste émis pour un index remplacé depuis | `409` : la lecture reprend à la première page |
 | Plus de 4 requêtes d'API simultanées, ou requête de plus de 30 s | `503` |
 | Connexion depuis une autre machine | refusée : l'écoute est limitée à `127.0.0.1` et `::1` |
@@ -108,7 +168,8 @@ la surface refuse de démarrer si un autre processus tient déjà ce port sur `:
 Le fichier Compose du runtime connecté déclare un service optionnel `minos-explorer` (profil `explorer`) :
 image de requête, données montées en lecture seule, port publié sur `127.0.0.1` de l'hôte seulement. Voir
 [Runtime Docker](docker-runtime.md#service-optionnel-minos-explorer). Ce service n'est pas encore qualifié sur
-une installation réelle.
+une installation réelle. Il lit `MINOS_HOME` en lecture seule : une projection y serait préparée par le service
+d'administration `minos-admin`, seul à écrire les données ; ce parcours n'a pas été exercé.
 
 ## Dépannage
 
@@ -123,5 +184,10 @@ une installation réelle.
 | Bandeau « L'index a changé pendant la consultation » | l'index a été reconstruit pendant la lecture | la liste reprend d'elle-même à la première page |
 | Recherche en erreur, liste disponible | provider d'embeddings injoignable | vérifier le provider ; liste, détail et voisins restent disponibles |
 | Colonnes module et langage « non résolu » | index `STALE` : il ne décrit plus le snapshot actif | `minos ide semantic-index-sync <projet>` |
+| Carte : « Aucune projection n'est préparée » | état `ABSENTE` | `minos semantic projection prepare <projet>`, puis rouvrir la carte |
+| Carte : « La projection est périmée » | l'index a été resynchronisé depuis la préparation | relancer `minos semantic projection prepare <projet>` |
+| `error: semantic projection prepare failed: the semantic index of the project is …, not READY` | index absent, obsolète ou couche sémantique désactivée | `minos ide semantic-index-sync <projet>`, puis `prepare` |
+| `… needs more than its memory budget …` | plafond de points trop haut pour le budget | baisser `--max-points` ou monter `--max-memory-mb` |
+| `… another preparation of the projection of this project is running` | deux `prepare` simultanés sur le même projet | attendre la fin de la première |
 
 Contrat de l'API HTTP et construction : [surface d'exploration](../developer/semantic-explorer.md).

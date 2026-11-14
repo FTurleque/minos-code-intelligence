@@ -187,23 +187,11 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
             if (!projectId.equals(index.projectId())) throw unreadable(null);
             SemanticProjection.Method method = new SemanticProjection.Method(
                     readString(input), input.readInt(), readString(input), input.readLong());
-            int kindCount = input.readInt();
-            if (kindCount < 1 || kindCount > SemanticDocumentKind.values().length) throw unreadable(null);
-            Set<SemanticDocumentKind> kinds = EnumSet.noneOf(SemanticDocumentKind.class);
-            for (int position = 0; position < kindCount; position++) {
-                kinds.add(SemanticDocumentKind.valueOf(readString(input)));
-            }
-            SemanticProjection.Selection selection = new SemanticProjection.Selection(kinds, input.readInt());
+            SemanticProjection.Selection selection = readSelection(input);
             int documentCount = input.readInt();
             int candidateCount = input.readInt();
             List<Double> variance = List.of(input.readDouble(), input.readDouble());
-            int pointCount = input.readInt();
-            if (pointCount < 0 || pointCount > MAX_POINTS) throw unreadable(null);
-            List<SemanticProjection.Point> points = new ArrayList<>(Math.min(pointCount, 16_384));
-            for (int position = 0; position < pointCount; position++) {
-                points.add(new SemanticProjection.Point(readString(input),
-                        SemanticDocumentKind.valueOf(readString(input)), input.readFloat(), input.readFloat()));
-            }
+            List<SemanticProjection.Point> points = readPoints(input);
             digested.on(false);
             byte[] expected = digest.digest();
             byte[] stored = input.readNBytes(DIGEST_BYTES);
@@ -212,6 +200,27 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
         } catch (EOFException | IllegalArgumentException malformed) {
             throw unreadable(malformed);
         }
+    }
+
+    private static SemanticProjection.Selection readSelection(DataInputStream input) throws IOException {
+        int kindCount = input.readInt();
+        if (kindCount < 1 || kindCount > SemanticDocumentKind.values().length) throw unreadable(null);
+        Set<SemanticDocumentKind> kinds = EnumSet.noneOf(SemanticDocumentKind.class);
+        for (int position = 0; position < kindCount; position++) {
+            kinds.add(SemanticDocumentKind.valueOf(readString(input)));
+        }
+        return new SemanticProjection.Selection(kinds, input.readInt());
+    }
+
+    private static List<SemanticProjection.Point> readPoints(DataInputStream input) throws IOException {
+        int pointCount = input.readInt();
+        if (pointCount < 0 || pointCount > MAX_POINTS) throw unreadable(null);
+        List<SemanticProjection.Point> points = new ArrayList<>(Math.min(pointCount, 16_384));
+        for (int position = 0; position < pointCount; position++) {
+            points.add(new SemanticProjection.Point(readString(input),
+                    SemanticDocumentKind.valueOf(readString(input)), input.readFloat(), input.readFloat()));
+        }
+        return points;
     }
 
     private static UnreadableProjectionException unreadable(Exception cause) {

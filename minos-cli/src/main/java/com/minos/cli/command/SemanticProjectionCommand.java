@@ -174,7 +174,8 @@ public final class SemanticProjectionCommand {
                 error.append("projection: pass ").append(Integer.toString(pass)).append(" (").append(phase)
                         .append("), ").append(Long.toString(vectorsRead)).append(" vectors read\n");
             } catch (IOException unwritable) {
-                // Progress is a courtesy: a closed error stream does not stop the preparation.
+                // The error stream is where a failure would be reported: without it the preparation stops.
+                throw new java.io.UncheckedIOException(unwritable);
             }
             phase = null;
         }

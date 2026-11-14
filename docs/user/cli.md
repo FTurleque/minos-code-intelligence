@@ -347,6 +347,22 @@ $env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed'
 
 Voir `docs/developer/semantic-retrieval-2.md` pour les limitations et gates.
 
+### `semantic projection`
+
+```bash
+minos semantic projection prepare <projet> [--max-points <n>] [--seed <n>] [--kinds <CHUNK[,SYMBOL,FILE]>] [--max-memory-mb <n>] [--format <text|json>]
+minos semantic projection status <projet> [--format <text|json>]
+```
+
+`prepare` calcule la projection 2D (PCA) d'un index sémantique `READY` et la publie sous
+`MINOS_HOME/semantic-projections/` ; c'est la seule voie qui calcule une projection. Les vecteurs sont lus par
+lots, sans appel au provider d'embeddings ; la progression va sur la sortie d'erreur, le rapport (points,
+documents, échantillonnage, variance expliquée, durée) sur la sortie standard. Défauts : `--max-points 100000`,
+`--seed 42`, `--kinds CHUNK`, `--max-memory-mb 256`. `status` rend l'état de la projection publiée (`ABSENTE`,
+`PRETE`, `PERIMEE`, `ECHOUEE`) sans rien calculer. Codes de sortie : `0` succès, `1` échec (index non `READY`,
+budget dépassé, index modifié pendant la préparation, préparation déjà en cours), `2` erreur d'usage. Détail :
+[Explorer l'index sémantique](semantic-explorer.md#carte-2d).
+
 ### `explorer serve`
 
 ```bash

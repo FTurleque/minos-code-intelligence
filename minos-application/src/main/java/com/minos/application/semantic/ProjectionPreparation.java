@@ -12,7 +12,6 @@ import com.minos.semantic.SemanticVectorStore;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -171,21 +170,28 @@ final class ProjectionPreparation {
         }
     }
 
-    private record Sample(String[] keys, SemanticDocumentKind[] kinds, int candidateCount) {
-        @Override
-        public boolean equals(Object other) {
-            return other instanceof Sample sample && Arrays.equals(keys, sample.keys)
-                    && Arrays.equals(kinds, sample.kinds) && candidateCount == sample.candidateCount;
+    /** The selected documents, in stable-key order, out of the candidates of the selected kinds. */
+    private static final class Sample {
+        private final String[] keys;
+        private final SemanticDocumentKind[] kinds;
+        private final int candidateCount;
+
+        Sample(String[] keys, SemanticDocumentKind[] kinds, int candidateCount) {
+            this.keys = keys;
+            this.kinds = kinds;
+            this.candidateCount = candidateCount;
         }
 
-        @Override
-        public int hashCode() {
-            return 31 * Arrays.hashCode(keys) + candidateCount;
+        String[] keys() {
+            return keys;
         }
 
-        @Override
-        public String toString() {
-            return "Sample[" + keys.length + " of " + candidateCount + "]";
+        SemanticDocumentKind[] kinds() {
+            return kinds;
+        }
+
+        int candidateCount() {
+            return candidateCount;
         }
     }
 

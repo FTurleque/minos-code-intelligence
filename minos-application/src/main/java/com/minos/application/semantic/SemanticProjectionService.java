@@ -29,7 +29,7 @@ public final class SemanticProjectionService {
     public static final int MAX_POINTS_PAGE = 5_000;
     public static final String PREPARE_COMMAND = "minos semantic projection prepare";
     public static final String UNREADABLE = "PROJECTION_UNREADABLE";
-    static final String PARAMETERS = "components=2;maxIterations=" + MAX_ITERATIONS + ";tolerance=1e-12";
+    static final String PARAMETERS = "components=2;maxIterations=" + MAX_ITERATIONS + ";tolerance=" + PrincipalAxes.TOLERANCE;
 
     private final ProjectResolver projects;
     private final SemanticIndexService indexService;

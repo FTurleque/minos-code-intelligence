@@ -69,7 +69,7 @@ Repris de la conception commune (« Modèle de domaine et invariants ») : ident
 
 ## Traitements et interactions
 
-Séquence : conception commune, « Comment une projection est-elle préparée sans toucher au chemin de recherche ? ». PCA : moyenne en un passage ; deux composantes par itération de puissance avec déflation, chaque itération étant un passage par lots sur l'échantillon d'ajustement ; projection de tous les points retenus en un dernier passage. Mémoire : proportionnelle à la dimension et à la taille d'un lot, pas au corpus.
+Séquence : conception commune, « Comment une projection est-elle préparée sans toucher au chemin de recherche ? ». PCA : sélection en un passage ; moyenne en un passage ; deux composantes par itération de sous-espace (décision D5), chaque itération étant un passage par lots sur l'échantillon d'ajustement ; projection de tous les points retenus en un dernier passage. Mémoire : proportionnelle à la dimension et à la taille d'un lot, pas au corpus.
 
 ## États et transitions
 
@@ -132,11 +132,18 @@ Séquence de préparation, états et modèle d'identités : conception commune. 
 ### D4 — Rendu Canvas 2D
 [Proposition] Écarté à ce stade : WebGL (dépendance embarquée à justifier par une mesure, tâche 7.1).
 
+### D5 — Ajustement par itération de sous-espace, 40 passes au plus
+[Proposition] Les deux composantes sont cherchées ensemble (une passe par itération) plutôt que l'une après l'autre avec déflation : deux fois moins de passes sur l'index pour le même résultat. La base finale est tournée sur ses deux axes principaux par le calcul exact d'une matrice 2 × 2. Le nombre de passes et la tolérance font partie des paramètres publiés avec la projection.
+
+### D6 — Points en JSON paginé, nature portée par chaque point
+[Proposition] Voir « Écarts ». La nature du document est écrite avec chaque point pour que la carte se colore et se filtre sans relire l'index.
+
 ## Qualification des capacités
 
 | Capacité | Qualification |
 |---|---|
-| Carte 2D, stockage local ou PostgreSQL, natif | non supportée tant que le groupe 6 n'est pas vert |
+| Carte 2D, stockage local, natif | **partielle** : tests automatisés verts sous Windows (poste), Linux par la CI ; parcours navigateur du propriétaire (6.7) et seuils (6.8) non faits |
+| Carte 2D, PostgreSQL externe, natif | **partielle** : lecture par lots prouvée par le contrat commun, exécuté contre PostgreSQL par la CI seulement ; préparation complète non exercée sur ce stockage |
 | Carte 2D, runtime Docker | non supportée ; dépend de la qualification du service `minos-explorer` |
 | UMAP, WebGL, 3D | non supportées, sans engagement |
 
@@ -150,6 +157,10 @@ Séquence de préparation, états et modèle d'identités : conception commune. 
 
 Tests de reproductibilité, de budget, d'atomicité et de péremption ; test de contrat de la lecture par lots sur les deux adaptateurs ; test « aucun appel au provider ni à la recherche » ; gates cités dans la proposition. Manuel : rendu de la carte dans un navigateur.
 
+Rouge constaté avant correction (2026-11-14) : `SemanticProjectionServiceTest`, 16 tests sur 17 en échec sur un service dont les trois opérations levaient `UnsupportedOperationException` (tâches 6.1, 6.3 et 6.5, relevés en une exécution) ; `ExplorerProjectionRoutesTest`, 5 tests sur 6 en échec avec `404` au lieu de `200`, `400` ou `405` avant l'ajout des routes (6.5). Les tests des adaptateurs de stockage et du cache fichier ont été écrits après leur code : leur rouge n'a pas été observé.
+
+Commandes exécutées réellement sur un `MINOS_HOME` jetable (`target/projection-demo/home`, index `local-hash` de la fixture `fixtures/typescript/typescript-modules`, 42 documents) : `minos semantic projection status` (`ABSENTE`, puis `PRETE`, `PERIMEE` après réimport sous `--snapshot demo-2`, `ECHOUEE` après troncature du fichier), `minos semantic projection prepare` (publication, échantillon de 10 sur 42, deux exécutions au fichier identique, refus sur index `DISABLED` avec code 1, erreur d'usage avec code 2).
+
 ## Documentation durable à mettre à jour
 
 `docs/architecture/diagrams/capacites/exploration-semantique.md`, `docs/user/` (explorateur, CLI), `docs/developer/`, `STATUS.md`, `ROADMAP.md`.
@@ -158,17 +169,25 @@ Tests de reproductibilité, de budget, d'atomicité et de péremption ; test de 
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration › préparation explicite et bornée | Préparation reproductible | Traitements | 6.1–6.2 | à écrire |
-| idem | Budget dépassé | Erreurs | 6.1–6.2 | à écrire |
-| exploration › publication atomique | Index resynchronisé | États | 6.3–6.4 | à écrire |
-| idem | Préparation interrompue | Transactions | 6.3–6.4 | à écrire |
-| exploration › points annoncés | Corpus échantillonné | Contrats | 6.5–6.6 | à écrire |
-| exploration › lecture sans calcul | Projection absente | Contrats | 6.5–6.6 | à écrire |
-| idem | Préparation demandée par HTTP | Contrats | 6.5–6.6 | à écrire |
+| exploration › préparation explicite et bornée | Préparation reproductible | Traitements | 6.1–6.2 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#twoPreparationsOfTheSameIndexWithTheSameSeedGiveTheSameCoordinates` ; fichier identique octet pour octet par la commande réelle : `minos-cli/src/test/java/com/minos/cli/SemanticProjectionCommandLineTest.java#thePreparationPublishesTheSameFileTwiceAndTheStatusReadsItBack` |
+| idem | Budget dépassé | Erreurs | 6.1–6.2 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aPreparationThatExceedsItsMemoryBudgetFailsAndLeavesThePublishedProjectionIntact` (refus et projection précédente intacte, sur le service) ; code de sortie non nul d'un refus prouvé sur un autre refus : `minos-cli/src/test/java/com/minos/cli/SemanticProjectionCommandLineTest.java#anIndexThatIsNotReadyOrAnUnknownProjectIsAnExecutionErrorThatSaysWhatToDo` |
+| idem | (exigence) lecture par lots bornés, commande seule | Traitements | 6.1–6.2 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aPreparationReadsTheVectorsByBoundedPagesAndNeverLoadsTheWholeIndex`, `#aPreparationCallsNeitherTheProviderNorTheSearch` ; adaptateur local sans `load()` : `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreStreamedReadsTest.java#vectorPagesAndChecksumsAreReadWithoutLoadingTheIndex` ; contrat des deux adaptateurs : `minos-engine/src/test/java/com/minos/testsupport/SemanticDocumentReadsContract.java#aFullWalkOfTheVectorsReturnsEachVectorOnceInStableKeyOrderWithItsKind` (PostgreSQL : sauté sur le poste, exécuté par la CI) |
+| exploration › publication atomique | Index resynchronisé | États | 6.3–6.4 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aProjectionWhoseIndexChangedIsStale` ; par HTTP : `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#aProjectionWhoseIndexWasReplacedIsStaleAndAnAlteredOneIsFailed` |
+| idem | Préparation interrompue | Transactions | 6.3–6.4 | partielle : `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticProjectionStoreTest.java#aPreparationThatEndsWithoutPublishingLeavesThePublishedProjectionAndNoPartialFile`, `#aPreparationInterruptedBeforeItsFirstPublicationLeavesNoReadableProjection`, `#anAlteredCutOrForeignFileIsRefusedWithoutNamingItsLocation` ; l'arrêt brutal d'un processus pendant l'écriture n'est pas exercé |
+| exploration › points annoncés | Corpus échantillonné | Contrats | 6.5–6.6 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aSampleOfTwoHundredPointsOutOfAThousandDocumentsIsAnnouncedWithItsSeed` (200 sur 1 000) ; par HTTP : `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#aSampledProjectionAnnouncesItsMethodItsSeedAndItsCountsWithItsPoints` |
+| exploration › lecture sans calcul | Projection absente | Contrats | 6.5–6.6 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aProjectWithoutProjectionIsAbsentNamesTheCommandAndReadsNoVector` ; par HTTP : `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#aProjectWithoutProjectionIsAbsentAndTheAnswerNamesTheCommandThatPreparesIt` |
+| idem | Préparation demandée par HTTP | Contrats | 6.5–6.6 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#anyMethodButGetOnAProjectionRouteIsRefusedAndNoProjectionIsCreatedOrChanged` |
+
+Preuves exécutées le 2026-11-14 sur le poste Windows (tests Maven ciblés par module) ; Linux et PostgreSQL sont
+couverts par la CI de la PR. Preuves manquantes : parcours des états dans un navigateur par le propriétaire
+(`parcours-navigateur-6.7.md`, tâche 6.7) ; seuils de performance et paliers non mesurés (`mesures-6.8.md`, tâche
+6.8) ; arrêt brutal d'un processus pendant la publication ; dépassement de budget observé par la commande elle-même
+(le plus petit budget acceptable, 1 Mio, suffit aux corpus de test).
 
 ## Questions ouvertes
 
 | # | Question | Recommandation |
 |---|---|---|
-| 1 | Plafond de points par défaut | 100 000, à confirmer par la mesure |
-| 2 | Seuils de performance | à fixer après la tâche 6.8 |
+| 1 | Plafond de points par défaut | 100 000 gardé à titre provisoire ; proposition motivée dans `mesures-6.8.md` |
+| 2 | Seuils de performance | propositions dans `mesures-6.8.md` ; aucune n'est appliquée |
+| 3 | Options UMAP, WebGL, 3D (tâche 7.1) | décision du propriétaire sur le relevé ; aucune n'est implémentée |

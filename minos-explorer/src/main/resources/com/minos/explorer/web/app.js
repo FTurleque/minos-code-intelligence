@@ -204,7 +204,7 @@ function row(document, cells) {
   line.dataset.key = document.stableKey;
   if (document.stableKey === selectedKey) line.className = "selected";
   for (const cell of cells) {
-    const cellNode = el("td", cell.text, cell.number ? "number" : "");
+    const cellNode = el("td", cell.text, cell.number ? "number" : cell.className || "");
     cellNode.title = String(cell.text);
     line.appendChild(cellNode);
   }
@@ -282,6 +282,7 @@ async function loadDocuments(first) {
       ? "Module et langage ne sont pas résolus : l'index n'est pas aligné sur le snapshot actif. Un filtre sur ces champs ne retient aucun document."
       : "";
     renderLimitations(page.limitations);
+    markRowsOnMap();
     if (body.children.length === 0) {
       showEmpty(page.index === null ? "Aucun index sémantique à lister pour ce projet."
         : page.totalDocuments === 0 ? "L'index existe et ne contient aucun document. Vérifiez l'indexation du projet."
@@ -318,7 +319,7 @@ async function search() {
     const request = Object.assign({ query: query, mode: $("mode").value, limit: 50, minimumScore: hybrid ? 0 : -1 }, filters());
     const result = await api(projectPath() + "/search", request);
     if (number !== requestNumber) return;
-    renderColumns(["Rang", hybrid ? "Score hybride (0 à 1)" : "Similarité cosinus (−1 à 1)", "Signaux", "Fichier", "Symbole", "Nature", "Lignes"]);
+    renderColumns(["Rang", hybrid ? "Score hybride (0 à 1)" : "Similarité cosinus (−1 à 1)", "Signaux", "Fichier", "Symbole", "Nature", "Lignes", "Carte"]);
     const body = $("tbody");
     clear(body);
     for (const hit of result.hits) {
@@ -330,9 +331,11 @@ async function search() {
         { text: hit.document.fileId || "—" },
         { text: symbolName(hit.document) },
         { text: hit.document.kind },
-        { text: lines(hit.document) }
+        { text: lines(hit.document) },
+        { text: "—", className: "onmap" }
       ]));
     }
+    markRowsOnMap();
     $("more").hidden = true;
     $("tableTitle").textContent = result.hits.length + " résultats affichés sur " + result.rankedCount + " classés.";
     $("scoreNote").textContent = hybrid
@@ -358,6 +361,7 @@ async function showDetail(stableKey) {
   const number = ++requestNumber;
   selectedKey = stableKey;
   for (const line of $("tbody").children) line.className = line.dataset.key === stableKey ? "selected" : "";
+  drawMap();
   const panel = $("detail");
   try {
     const detail = await api(projectPath() + "/documents/" + encodeURIComponent(stableKey));
@@ -451,16 +455,319 @@ async function showNeighbors(stableKey, panel) {
   }
 }
 
+// ---- 2D map. The page draws the points of a projection that was prepared by a command; it never asks for a
+// projection to be computed, and a filter only hides points.
+
+const MAP_PAGE = 5000;
+const KIND_COLOR = { CHUNK: "#5fb0ff", SYMBOL: "#f2b45a", FILE: "#7fd49b" };
+const PROJECTION_HELP = {
+  ABSENTE: "Aucune projection n'est préparée pour cet index. Lancez « minos semantic projection prepare <projet> », puis rouvrez la carte. La liste, la recherche et le détail restent disponibles.",
+  ECHOUEE: "La projection enregistrée est illisible. Relancez « minos semantic projection prepare <projet> ».",
+  PERIMEE: "La projection est périmée : l'index a changé depuis sa préparation. Relancez « minos semantic projection prepare <projet> ». La carte périmée n'est pas affichée par défaut."
+};
+
+const map = {
+  open: false, request: 0, status: null, points: [], showStale: false, highlights: new Set(),
+  scale: 1, offsetX: 0, offsetY: 0, hover: null, drag: null, frame: 0
+};
+
+function mapMessage(text) {
+  $("mapMessage").textContent = text || "";
+  $("mapMessage").hidden = !text;
+}
+
+function percent(share) {
+  return (share * 100).toFixed(1).replace(".", ",") + " %";
+}
+
+function visiblePoints() {
+  const kind = $("kind").value;
+  return kind ? map.points.filter(point => point.kind === kind) : map.points;
+}
+
+function renderMapTexts() {
+  const described = map.status && map.status.projection;
+  const shown = map.points.length > 0;
+  $("mapCanvas").hidden = !shown;
+  clear($("mapLegend"));
+  $("mapHover").textContent = "";
+  if (!described || !shown) {
+    $("mapCounter").textContent = "";
+    $("mapMethod").textContent = "";
+    return;
+  }
+  const visible = visiblePoints();
+  const filtered = visible.length !== map.points.length;
+  let counter = visible.length + " points affichés sur " + described.documentCount + " documents";
+  if (filtered) counter += " (filtré)";
+  if (described.sampled) {
+    counter += " — échantillon de " + described.pointCount + " sur " + described.candidateCount
+      + " documents de nature " + described.kinds.join(", ") + " (graine " + described.seed + ")";
+  } else {
+    counter += " — natures projetées : " + described.kinds.join(", ");
+  }
+  if (map.status.state === "PERIMEE") counter += " — CARTE PÉRIMÉE";
+  $("mapCounter").textContent = counter + ".";
+  $("mapMethod").textContent = "Méthode : " + described.method.toUpperCase() + " (version " + described.methodVersion
+    + ") · graine " + described.seed + " · variance expliquée : axe 1 " + percent(described.explainedVariance[0])
+    + ", axe 2 " + percent(described.explainedVariance[1]) + ".";
+  const counts = {};
+  for (const point of visible) counts[point.kind] = (counts[point.kind] || 0) + 1;
+  for (const kind of Object.keys(counts).sort()) {
+    $("mapLegend").appendChild(el("li", kind + " — " + counts[kind] + " points", "kind-" + kind));
+  }
+}
+
+async function loadMap() {
+  if (!map.open || !project) return;
+  const number = ++map.request;
+  map.status = null;
+  map.points = [];
+  map.hover = null;
+  $("mapShowStale").hidden = true;
+  mapMessage("");
+  renderMapTexts();
+  try {
+    const status = await api(projectPath() + "/projection");
+    if (number !== map.request) return;
+    map.status = status;
+    if (status.state !== "PRETE") mapMessage(PROJECTION_HELP[status.state] || status.state);
+    if (status.state === "PERIMEE" && !map.showStale) {
+      $("mapShowStale").hidden = false;
+      return;
+    }
+    if (status.state !== "PRETE" && status.state !== "PERIMEE") return;
+    const points = await readMapPoints(number, status.state);
+    if (points === null) return;
+    map.points = points;
+    resetMapView();
+    renderMapTexts();
+    markRowsOnMap();
+    drawMap();
+  } catch (error) {
+    report(error);
+  }
+}
+
+// Every point of the projection, page after page; null when another reading of the map started meanwhile.
+async function readMapPoints(number, state) {
+  const points = [];
+  let total = 1;
+  while (points.length < total) {
+    const page = await api(projectPath() + "/projection/points?offset=" + points.length + "&limit=" + MAP_PAGE);
+    if (number !== map.request) return null;
+    if (page.state !== state || page.points.length === 0) break;
+    total = page.total;
+    for (const point of page.points) points.push(point);
+  }
+  return points;
+}
+
+function resetMapView() {
+  map.scale = 1;
+  map.offsetX = 0;
+  map.offsetY = 0;
+}
+
+function mapGeometry() {
+  const canvas = $("mapCanvas");
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const half = Math.max(10, Math.min(width, height) / 2 - 12) * map.scale;
+  return { canvas: canvas, width: width, height: height, half: half,
+    originX: width / 2 + map.offsetX, originY: height / 2 + map.offsetY };
+}
+
+function drawMap() {
+  if (map.frame) return;
+  map.frame = window.requestAnimationFrame(() => {
+    map.frame = 0;
+    const geometry = mapGeometry();
+    const canvas = geometry.canvas;
+    if (canvas.hidden || geometry.width === 0) return;
+    const ratio = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(geometry.width * ratio) || canvas.height !== Math.round(geometry.height * ratio)) {
+      canvas.width = Math.round(geometry.width * ratio);
+      canvas.height = Math.round(geometry.height * ratio);
+    }
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, geometry.width, geometry.height);
+    const visible = visiblePoints();
+    drawPlainPoints(context, geometry, visible);
+    drawMarkedPoints(context, geometry, visible);
+  });
+}
+
+// The points no search ranked, one colour per kind; they are dimmed while a search highlights others.
+function drawPlainPoints(context, geometry, visible) {
+  const highlighted = map.highlights.size > 0;
+  const size = visible.length > 20000 ? 2 : 3;
+  context.globalAlpha = highlighted ? 0.18 : 0.8;
+  for (const kind of Object.keys(KIND_COLOR)) {
+    context.fillStyle = KIND_COLOR[kind];
+    for (const point of visible) {
+      if (point.kind !== kind || map.highlights.has(point.stableKey)) continue;
+      context.fillRect(geometry.originX + point.x * geometry.half - size / 2,
+        geometry.originY - point.y * geometry.half - size / 2, size, size);
+    }
+  }
+  context.globalAlpha = 1;
+}
+
+// The points a search ranked, larger, then a frame around the selected and the hovered ones.
+function drawMarkedPoints(context, geometry, visible) {
+  for (const point of visible) {
+    const marked = map.highlights.has(point.stableKey);
+    const chosen = point.stableKey === selectedKey || point === map.hover;
+    if (!marked && !chosen) continue;
+    const x = geometry.originX + point.x * geometry.half;
+    const y = geometry.originY - point.y * geometry.half;
+    if (marked) {
+      context.fillStyle = KIND_COLOR[point.kind] || "#e4e8ee";
+      context.fillRect(x - 3, y - 3, 6, 6);
+    }
+    if (chosen) {
+      context.strokeStyle = "#e4e8ee";
+      context.lineWidth = point.stableKey === selectedKey ? 2 : 1;
+      context.strokeRect(x - 6, y - 6, 12, 12);
+    }
+  }
+}
+
+function pointAt(event) {
+  const geometry = mapGeometry();
+  const bounds = geometry.canvas.getBoundingClientRect();
+  const x = event.clientX - bounds.left;
+  const y = event.clientY - bounds.top;
+  let best = null;
+  let bestDistance = 64;
+  for (const point of visiblePoints()) {
+    const dx = geometry.originX + point.x * geometry.half - x;
+    const dy = geometry.originY - point.y * geometry.half - y;
+    const distance = dx * dx + dy * dy;
+    if (distance < bestDistance) { best = point; bestDistance = distance; }
+  }
+  return best;
+}
+
+function zoomMap(factor, x, y) {
+  const geometry = mapGeometry();
+  const next = Math.min(200, Math.max(0.5, map.scale * factor));
+  const applied = next / map.scale;
+  map.offsetX = x - (x - geometry.originX) * applied - geometry.width / 2;
+  map.offsetY = y - (y - geometry.originY) * applied - geometry.height / 2;
+  map.scale = next;
+  drawMap();
+}
+
+// Which lines of the table are on the map: a search hit outside the sample or of a hidden kind says so.
+function markRowsOnMap() {
+  const shown = map.open && map.points.length > 0;
+  const onMap = new Set(shown ? visiblePoints().map(point => point.stableKey) : []);
+  map.highlights = new Set();
+  for (const line of $("tbody").children) {
+    const cell = line.querySelector("td.onmap");
+    if (!cell) continue;
+    const present = onMap.has(line.dataset.key);
+    cell.textContent = !shown ? "—" : present ? "sur la carte" : "hors carte";
+    if (present && view === "search") map.highlights.add(line.dataset.key);
+  }
+  drawMap();
+}
+
+function dragMap(event) {
+  const dx = event.clientX - map.drag.x;
+  const dy = event.clientY - map.drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 3) map.drag.moved = true;
+  map.offsetX += dx;
+  map.offsetY += dy;
+  map.drag.x = event.clientX;
+  map.drag.y = event.clientY;
+  drawMap();
+}
+
+function hoverMap(event) {
+  const point = pointAt(event);
+  if (point === map.hover) return;
+  map.hover = point;
+  const text = point ? point.kind + " · " + point.stableKey : "";
+  $("mapHover").textContent = text;
+  $("mapCanvas").title = text;
+  drawMap();
+}
+
+function zoomMapAtCentre(factor) {
+  const geometry = mapGeometry();
+  zoomMap(factor, geometry.width / 2, geometry.height / 2);
+}
+
+const MAP_KEY_STEP = 40;
+const MAP_KEYS = {
+  "+": () => zoomMapAtCentre(1.2),
+  "=": () => zoomMapAtCentre(1.2),
+  "-": () => zoomMapAtCentre(1 / 1.2),
+  "0": resetMapView,
+  ArrowLeft: () => { map.offsetX += MAP_KEY_STEP; },
+  ArrowRight: () => { map.offsetX -= MAP_KEY_STEP; },
+  ArrowUp: () => { map.offsetY += MAP_KEY_STEP; },
+  ArrowDown: () => { map.offsetY -= MAP_KEY_STEP; }
+};
+
+function toggleMap() {
+  map.open = !map.open;
+  $("map").hidden = !map.open;
+  $("mapToggle").setAttribute("aria-pressed", String(map.open));
+  if (map.open) loadMap(); else markRowsOnMap();
+}
+
+function startMap() {
+  const canvas = $("mapCanvas");
+  $("mapToggle").addEventListener("click", toggleMap);
+  $("mapShowStale").addEventListener("click", () => { map.showStale = true; loadMap(); });
+  $("kind").addEventListener("change", () => { renderMapTexts(); markRowsOnMap(); });
+  canvas.addEventListener("wheel", event => {
+    event.preventDefault();
+    const bounds = canvas.getBoundingClientRect();
+    zoomMap(event.deltaY < 0 ? 1.2 : 1 / 1.2, event.clientX - bounds.left, event.clientY - bounds.top);
+  }, { passive: false });
+  canvas.addEventListener("pointerdown", event => {
+    map.drag = { x: event.clientX, y: event.clientY, moved: false };
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener("pointermove", event => (map.drag ? dragMap(event) : hoverMap(event)));
+  canvas.addEventListener("pointerup", event => {
+    const moved = map.drag && map.drag.moved;
+    map.drag = null;
+    if (moved) return;
+    const point = pointAt(event);
+    if (point) { showDetail(point.stableKey); drawMap(); }
+  });
+  canvas.addEventListener("pointercancel", () => { map.drag = null; });
+  canvas.addEventListener("dblclick", () => { resetMapView(); drawMap(); });
+  canvas.addEventListener("keydown", event => {
+    const action = MAP_KEYS[event.key];
+    if (!action) return;
+    action();
+    drawMap();
+    event.preventDefault();
+  });
+  window.addEventListener("resize", drawMap);
+}
+
 function start() {
   readToken();
   if (!token) { refuse(); return; }
+  startMap();
   $("project").addEventListener("change", () => {
     project = projects.find(candidate => candidate.projectId === $("project").value) || null;
     selectedKey = null;
     clear($("detail"));
     renderHeader();
     banner(stateBanner());
+    map.showStale = false;
     loadDocuments(true);
+    loadMap();
   });
   $("apply").addEventListener("click", () => (view === "search" ? search() : loadDocuments(true)));
   $("reset").addEventListener("click", () => {

@@ -33,8 +33,8 @@ header h1 { font-size: 14px; margin: 0 8px 0 0; }
 .banner { padding: 6px 12px; background: #2a2413; border-bottom: 1px solid var(--line); color: #ffd98a; white-space: pre-line; }
 main { flex: 1; min-height: 0; }
 #explorer {
-  display: grid; grid-template-columns: 220px minmax(0, 1fr) 380px; grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "f s d" "f t d";
+  display: grid; grid-template-columns: 220px minmax(0, 1fr) 380px; grid-template-rows: auto auto minmax(140px, 1fr);
+  grid-template-areas: "f s d" "f m d" "f t d";
 }
 aside, section { border-right: 1px solid var(--line); min-width: 0; min-height: 0; }
 #filters { grid-area: f; padding: 10px; overflow: auto; background: var(--panel); }
@@ -43,6 +43,13 @@ aside, section { border-right: 1px solid var(--line); min-width: 0; min-height: 
 #search { grid-area: s; padding: 8px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 #search #query { flex: 1; min-width: 200px; }
 #search .note, #search .limits { flex-basis: 100%; margin: 0; }
+#map { grid-area: m; padding: 6px 10px; border-bottom: 1px solid var(--line); max-height: 60vh; overflow: auto; }
+#map p { margin: 3px 0; }
+#mapCanvas { display: block; width: 100%; height: min(340px, 34vh); background: #0b0e12; border: 1px solid var(--line); border-radius: 4px; cursor: crosshair; touch-action: none; }
+#mapLegend li.kind-CHUNK { border-left: 10px solid #5fb0ff; }
+#mapLegend li.kind-SYMBOL { border-left: 10px solid #f2b45a; }
+#mapLegend li.kind-FILE { border-left: 10px solid #7fd49b; }
+#mapToggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 #table { grid-area: t; overflow: auto; padding: 0 0 10px; }
 #table > p { margin: 6px 10px; }
 #detail { grid-area: d; padding: 10px; overflow: auto; background: var(--panel); border-right: 0; }
@@ -74,5 +81,5 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; margin: 4px 0
 dt { color: var(--muted); }
 dd { margin: 0; word-break: break-all; }
 @media (max-width: 1000px) {
-  #explorer { grid-template-columns: 1fr; grid-template-rows: auto auto minmax(240px, 1fr) auto; grid-template-areas: "s" "f" "t" "d"; }
+  #explorer { grid-template-columns: 1fr; grid-template-rows: auto auto auto minmax(240px, 1fr) auto; grid-template-areas: "s" "f" "m" "t" "d"; }
 }

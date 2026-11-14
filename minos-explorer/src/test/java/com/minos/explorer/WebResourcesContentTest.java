@@ -90,6 +90,36 @@ class WebResourcesContentTest {
         assertTrue(script.contains("fetch(API + path, options)"), "requests go to the API of the page's origin");
     }
 
+    @Test
+    void theMapOnlyReadsAProjectionAndNamesTheCommandThatPreparesOne() throws IOException {
+        Map<String, String> resources = resources();
+        String script = resources.get("/app.js");
+        String html = resources.get("/index.html");
+
+        assertTrue(script.contains("api(projectPath() + \"/projection\")"), "the state is read by a GET");
+        assertTrue(script.contains("api(projectPath() + \"/projection/points?offset=\""), "the points are read by a GET");
+        for (String line : script.lines().filter(line -> line.contains("api(") && line.contains("projection")).toList()) {
+            assertFalse(line.contains(", request") || line.contains(", {"), "a projection request carries no body: " + line);
+        }
+        assertEquals(1, script.split("method: body === undefined \\? \"GET\" : \"POST\"", -1).length - 1,
+                "a request is a POST only when it carries a body");
+        assertEquals(1, script.split("\"/search\", request\\)", -1).length - 1, "the search is the only request with a body");
+        for (String state : List.of("ABSENTE", "ECHOUEE", "PERIMEE")) {
+            assertTrue(script.contains(state + ": \""), "the page says what to do in the state " + state);
+        }
+        assertEquals(3, script.split("« minos semantic projection prepare <projet> »", -1).length - 1,
+                "each state without a current projection names the command that prepares one");
+        assertTrue(script.contains("échantillon de "), "a sample is announced");
+        assertTrue(script.contains("(graine "), "with its seed");
+        assertTrue(script.contains("variance expliquée"), "the method says what its axes carry");
+        assertTrue(script.contains("CARTE PÉRIMÉE"), "a stale map is marked as stale");
+        assertTrue(script.contains("hors carte"), "a hit that is not on the map says so");
+        assertTrue(html.contains("<canvas id=\"mapCanvas\""), "the map is drawn on a canvas of the page");
+        assertTrue(html.contains("La position est une projection. Le classement est calculé sur les vecteurs d'origine."));
+        assertTrue(html.contains("id=\"mapShowStale\" type=\"button\" hidden"), "a stale map is not shown by default");
+        assertFalse(script.contains("getContext(\"webgl"), "the map is a 2D canvas");
+    }
+
     private static String withoutComments(String name, String content) {
         // The only "//" allowed are line comments of the script: they are removed before the search.
         return name.endsWith(".js") ? content.replaceAll("(?m)^\\s*//.*$", "") : content;

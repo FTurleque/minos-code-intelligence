@@ -225,20 +225,71 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             return SemanticVectorStore.super.vectorPage(projectId, afterStableKey, limit);
         }
         FileStamp stamp = FileStamp.of(file);
-        ResumePoint resume = resumePoint(projectId, stamp, afterStableKey);
-        try (IndexReader reader = IndexReader.open(file, resume == null ? 0L : resume.offset())) {
+        Optional<ResumePoint> resume = resumePoint(projectId, stamp, afterStableKey);
+        try (IndexReader reader = IndexReader.open(file, resume.map(ResumePoint::offset).orElse(0L))) {
             if (!stamp.equals(FileStamp.of(file))) {
                 throw new IOException("semantic index was replaced while it was read; read it again");
             }
-            IndexHeader header = resume == null ? reader.header(projectId) : resume.header();
-            int consumed = resume == null ? 0 : resume.consumed();
-            String previous = resume == null ? null : resume.afterStableKey();
+            VectorWalk walk = resume.isPresent()
+                    ? new VectorWalk(reader, resume.orElseThrow().header(), resume.orElseThrow().consumed(),
+                            resume.orElseThrow().afterStableKey())
+                    : new VectorWalk(reader, reader.header(projectId), 0, null);
+            List<StoredVector> vectors = walk.read(afterStableKey, limit);
+            rememberResumePoint(projectId, walk.hasMore() && !vectors.isEmpty()
+                    ? Optional.of(new ResumePoint(stamp, vectors.getLast().stableKey(), reader.position(),
+                            walk.consumed, walk.header))
+                    : Optional.empty());
+            return Optional.of(new VectorPage(walk.header.metadata(), vectors, walk.hasMore()));
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("invalid semantic index entry: " + leafName(file), exception);
+        }
+    }
+
+    /** The place the previous page of this very file stopped at, when the page asked for follows it. */
+    private Optional<ResumePoint> resumePoint(String projectId, FileStamp stamp, String afterStableKey) {
+        synchronized (resumePoints) {
+            ResumePoint known = resumePoints.get(projectId);
+            boolean follows = known != null && known.stamp().equals(stamp)
+                    && known.afterStableKey().equals(afterStableKey);
+            return follows ? Optional.of(known) : Optional.empty();
+        }
+    }
+
+    private void rememberResumePoint(String projectId, Optional<ResumePoint> point) {
+        synchronized (resumePoints) {
+            if (point.isEmpty()) resumePoints.remove(projectId);
+            else resumePoints.put(projectId, point.orElseThrow());
+        }
+    }
+
+    /** The reading of the entries of an index file from one position, in stable-key order. */
+    private static final class VectorWalk {
+        private final IndexReader reader;
+        private final IndexHeader header;
+        private int consumed;
+        private String previous;
+
+        VectorWalk(IndexReader reader, IndexHeader header, int consumed, String previous) {
+            this.reader = reader;
+            this.header = header;
+            this.consumed = consumed;
+            this.previous = previous;
+        }
+
+        boolean hasMore() {
+            return consumed < header.count();
+        }
+
+        /** Up to {@code limit} vectors whose stable key follows {@code afterStableKey}; the others are skipped. */
+        List<StoredVector> read(String afterStableKey, int limit) throws IOException {
             List<StoredVector> vectors = new ArrayList<>(Math.min(limit, 1_024));
-            while (consumed < header.count() && vectors.size() < limit) {
+            while (hasMore() && vectors.size() < limit) {
                 reader.skipString();
                 String stableKey = reader.string();
                 if (previous != null && previous.compareTo(stableKey) >= 0) {
-                    throw new IOException("semantic index is not in stable-key order: " + leafName(file));
+                    throw new IOException("semantic index is not in stable-key order");
                 }
                 previous = stableKey;
                 SemanticDocumentKind kind = SemanticDocumentKind.valueOf(reader.string());
@@ -251,31 +302,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                     vectors.add(new StoredVector(kind, SemanticVector.fromArray(stableKey, reader.vector(header))));
                 }
             }
-            boolean hasMore = consumed < header.count();
-            rememberResumePoint(projectId, hasMore && !vectors.isEmpty()
-                    ? new ResumePoint(stamp, vectors.getLast().stableKey(), reader.position(), consumed, header)
-                    : null);
-            return Optional.of(new VectorPage(header.metadata(), vectors, hasMore));
-        } catch (EOFException exception) {
-            throw new IOException("truncated semantic index: " + leafName(file), exception);
-        } catch (IllegalArgumentException exception) {
-            throw new IOException("invalid semantic index entry: " + leafName(file), exception);
-        }
-    }
-
-    private ResumePoint resumePoint(String projectId, FileStamp stamp, String afterStableKey) {
-        if (afterStableKey == null) return null;
-        synchronized (resumePoints) {
-            ResumePoint known = resumePoints.get(projectId);
-            return known != null && known.stamp().equals(stamp) && known.afterStableKey().equals(afterStableKey)
-                    ? known : null;
-        }
-    }
-
-    private void rememberResumePoint(String projectId, ResumePoint point) {
-        synchronized (resumePoints) {
-            if (point == null) resumePoints.remove(projectId);
-            else resumePoints.put(projectId, point);
+            return vectors;
         }
     }
 

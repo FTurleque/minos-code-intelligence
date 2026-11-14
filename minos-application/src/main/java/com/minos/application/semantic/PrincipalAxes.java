@@ -16,7 +16,9 @@ import java.util.SplittableRandom;
 final class PrincipalAxes {
 
     /** Below this agreement between two successive bases, another pass is worth its cost. */
-    static final double TOLERANCE = 1e-12;
+    static final double TOLERANCE = 1e-9;
+    /** Below this share of its length, what is left of a vector once its part along another is removed is noise. */
+    private static final double DEGENERATE = 1e-12;
     private static final double NEGLIGIBLE_VARIANCE = 1e-18;
 
     private final int dimensions;
@@ -166,7 +168,7 @@ final class PrincipalAxes {
         double along = dot(b, a);
         for (int index = 0; index < b.length; index++) b[index] -= along * a[index];
         double rest = norm(b);
-        if (rest <= TOLERANCE * whole) java.util.Arrays.fill(b, 0.0);
+        if (rest <= DEGENERATE * whole) java.util.Arrays.fill(b, 0.0);
         else scale(b, rest);
     }
 
