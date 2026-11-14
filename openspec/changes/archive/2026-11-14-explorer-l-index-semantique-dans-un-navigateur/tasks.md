@@ -19,7 +19,7 @@ La numérotation des groupes est celle du plan commun : le groupe 1 (pgAdmin) es
 - [x] 3.5 Rouge : tests du détail — source modifiée (`DIFFERENTE`), supprimée (`SOURCE_INTROUVABLE`), nature `FILE` (`NON_COMPARABLE`), tentative de sortie de la racine refusée, aucune racine absolue dans le résultat (`exploration-semantique` › Le détail distingue le contenu indexé de la source actuelle).
 - [x] 3.6 Correction : `SemanticCorpusQueryService.detail` (contenu indexé, extrait par `LocalSourceReader`, divergence, symbole résolu par le port de lecture des snapshots, « non résolu » si l'index n'est pas aligné) ; vérifier 3.5.
 - [x] 3.7 Rouge puis correction : test de contrat `SemanticExplorationApi` (version `1`, DTO sans type interne, erreurs classées) sur le modèle de `minos-api/src/test/java/com/minos/api/SemanticCodeIntelligenceApiContractTest.java`, puis l'interface et son implémentation locale ; `SemanticCodeIntelligenceApi` inchangée (son test de contrat reste vert).
-- [ ] 3.8 Documentation : `docs/developer/` (contrats de lecture), `docs/user/java-api.md` ; créer `docs/architecture/diagrams/capacites/exploration-semantique.md` avec les vues du design ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.8 Documentation : `docs/developer/` (contrats de lecture), `docs/user/java-api.md` ; créer `docs/architecture/diagrams/capacites/exploration-semantique.md` avec les vues du design ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 
 ## 4. Lot 2 — Surface HTTP locale
 
@@ -48,7 +48,7 @@ La numérotation des groupes est celle du plan commun : le groupe 1 (pgAdmin) es
 ## 8. Clôture
 
 - [x] 8.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve
-- [ ] 8.2 Mettre à jour le dossier durable de la capacité `exploration-semantique` ; vérifier par `python scripts/docs/check-capability-dossiers.py`
+- [x] 8.2 Mettre à jour le dossier durable de la capacité `exploration-semantique` ; vérifier par `python scripts/docs/check-capability-dossiers.py`
 - [x] 8.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`
 - [x] 8.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, docs/user, docs/developer, arc42, ADR ARCH-0082 « Mise en œuvre ») ; vérifier que chacun est fait ou nommé comme reste
 
