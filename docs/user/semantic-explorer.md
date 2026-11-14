@@ -3,7 +3,7 @@
 `minos explorer serve` ouvre, sur le poste, une page web **en lecture seule** qui liste les documents de l'index
 sémantique d'un projet, montre le contenu indexé de chacun à côté de sa source actuelle, lance une recherche et
 trouve les documents voisins d'un document. Rien n'est indexé, vectorisé ni modifié par cette page : l'index se
-construit toujours par `minos semantic-index-sync <projet>`.
+construit toujours par `minos ide semantic-index-sync <projet>`.
 
 La surface est optionnelle. Tant que la commande n'est pas lancée, MINOS n'écoute sur aucun port ; le serveur MCP
 reste en STDIO.
@@ -54,11 +54,12 @@ Codes de sortie : `0` arrêt demandé, `1` port indisponible, `2` erreur d'usage
   score ni un rang. Module et langage viennent du snapshot actif : si l'index n'est pas aligné sur lui, ils
   sont « non résolus » et un filtre sur ces champs ne retient rien.
 - **Recherche** : mode sémantique (similarité cosinus, de −1 à 1) ou hybride (score de 0 à 1 : sémantique 50 %,
-  lexical 35 %, graphe 15 %). Le classement et les scores sont ceux de `semantic-search` et de la recherche
+  lexical 35 %, graphe 15 %). Le classement et les scores sont ceux de `minos ide semantic-search` et de la recherche
   hybride ; les limitations rendues par le service sont affichées telles quelles. La recherche exige un index
   `READY`.
 - **Détail** : le *contenu indexé* (le texte qui a été vectorisé) et, dans un bloc séparé, la *source actuelle*
-  relue sur le disque aux mêmes lignes. La page dit si elles sont identiques, si la source a changé depuis
+  relue sur le disque aux mêmes lignes. Un `CHUNK` porte les lignes de son symbole ; son contenu et la source
+  affichée comprennent en plus jusqu'à deux lignes de contexte avant et après. La page dit si elles sont identiques, si la source a changé depuis
   l'indexation, ou si le fichier est introuvable. Pour `SYMBOL` et `FILE`, le contenu indexé est une synthèse :
   il ne se compare pas à la source.
 - **Documents similaires** : les voisins d'un document, classés par similarité cosinus avec son vecteur
@@ -76,7 +77,7 @@ tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_
 |---|---|
 | Requête d'API sans le jeton de session | `401`, sans détail |
 | En-tête `Host` autre que `127.0.0.1:<port>`, `localhost:<port>` ou `[::1]:<port>` | `403` |
-| Requête venant d'une autre origine (`Origin` étranger) | `403`, aucun en-tête CORS |
+| Requête venant d'une autre origine (`Origin` étranger, ou `Sec-Fetch-Site` autre que `same-origin` et `none`) | `403`, corps vide, aucun en-tête CORS |
 | Méthode d'écriture (`PUT`, `PATCH`, `DELETE`) | `405` : aucune route n'écrit |
 | Curseur de liste émis pour un index remplacé depuis | `409` : la lecture reprend à la première page |
 | Plus de 4 requêtes d'API simultanées, ou requête de plus de 30 s | `503` |
@@ -110,12 +111,13 @@ une installation réelle.
 | Symptôme | Cause | Action |
 |---|---|---|
 | « Accès refusé » | adresse ouverte sans son fragment `#token=…`, ou commande relancée depuis | rouvrir l'adresse imprimée par la commande en cours |
+| Page d'erreur `403` du navigateur à l'ouverture de l'adresse | adresse ouverte par un lien d'une autre page ou par une extension : le navigateur annonce une navigation venue d'un autre site | saisir ou coller l'adresse dans la barre d'adresse |
 | `error: … the team mode is enabled` | `MINOS_HOSTED_MODE` ou `minos.hosted.mode` actif pour ce `MINOS_HOME` | la surface n'est pas disponible en mode équipe |
 | `error: this MINOS home runs on the Docker backend` | le lanceur de ce poste est basculé sur Docker | utiliser le service `minos-explorer`, ou repasser en backend natif |
 | `error: the exploration surface could not listen on the requested port` | port déjà pris | autre `--port`, ou aucun pour un port libre |
 | `error: MINOS_EXPLORER_CONTAINER_LISTEN is reserved to the MINOS Docker runtime` | variable interne du runtime Docker posée sur un poste | la retirer de l'environnement |
 | Bandeau « L'index a changé pendant la consultation » | l'index a été reconstruit pendant la lecture | la liste reprend d'elle-même à la première page |
 | Recherche en erreur, liste disponible | provider d'embeddings injoignable | vérifier le provider ; liste, détail et voisins restent disponibles |
-| Colonnes module et langage « non résolu » | index `STALE` : il ne décrit plus le snapshot actif | `minos semantic-index-sync <projet>` |
+| Colonnes module et langage « non résolu » | index `STALE` : il ne décrit plus le snapshot actif | `minos ide semantic-index-sync <projet>` |
 
 Contrat de l'API HTTP et construction : [surface d'exploration](../developer/semantic-explorer.md).

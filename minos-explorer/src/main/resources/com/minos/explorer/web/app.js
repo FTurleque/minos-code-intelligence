@@ -14,10 +14,10 @@ const clear = node => { while (node.firstChild) node.removeChild(node.firstChild
 const TOKEN_KEY = "minos-explorer-token";
 const API = "api/v1/";
 const STATE_HELP = {
-  DISABLED: "La couche sémantique est désactivée : aucun provider d'embeddings n'est configuré. Renseignez les clés minos.semantic.* puis lancez « minos semantic-index-sync <projet> ».",
-  MISSING: "Ce projet n'a pas d'index sémantique. Lancez « minos semantic-index-sync <projet> ».",
+  DISABLED: "La couche sémantique est désactivée : aucun provider d'embeddings n'est configuré. Renseignez les clés minos.semantic.* puis lancez « minos ide semantic-index-sync <projet> ».",
+  MISSING: "Ce projet n'a pas d'index sémantique. Lancez « minos ide semantic-index-sync <projet> ».",
   NO_ACTIVE_SNAPSHOT: "Ce projet n'a pas de snapshot actif. Indexez-le avec « minos index <projet> ».",
-  STALE: "L'index sémantique est obsolète : la liste, le détail et les voisins restent consultables, la recherche est refusée. Lancez « minos semantic-index-sync <projet> »."
+  STALE: "L'index sémantique est obsolète : la liste, le détail et les voisins restent consultables, la recherche est refusée. Lancez « minos ide semantic-index-sync <projet> »."
 };
 const STALE_CAUSES = {
   SEMANTIC_INDEX_SNAPSHOT_STALE: "le snapshot actif a changé depuis l'indexation sémantique",
