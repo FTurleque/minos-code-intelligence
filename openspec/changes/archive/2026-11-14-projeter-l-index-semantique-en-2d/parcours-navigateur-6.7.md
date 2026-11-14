@@ -45,7 +45,7 @@ minos semantic projection prepare typescript-modules --kinds CHUNK,SYMBOL,FILE
 
 ## Relevé
 
-Plateforme : ☑ Windows ☐ Linux · Navigateur et version : Chrome 157 · Date : 2026-11-14 · Commit : `5534da4f`
+Plateforme : ☑ Windows ☐ Linux · Navigateur et version : Chrome 157 · Date : 2026-11-14 · Commit : `5534da4f` (aucun fichier de code ne diffère entre ce commit et `e5ad8d72`, fusionné : `git diff --stat 5534da4f e5ad8d72` ne liste que des documents)
 
 Parcours fait par l'agent **à la demande du propriétaire**, dans son Chrome piloté par l'extension Claude in
 Chrome (clics, molette, glisser, clavier et saisie réels), sur un `MINOS_HOME` jetable `target/projection-walk/home`
