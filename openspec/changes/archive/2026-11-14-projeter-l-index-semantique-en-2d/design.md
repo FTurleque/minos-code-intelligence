@@ -219,6 +219,6 @@ manquantes : le même parcours sous Linux et dans un autre navigateur ; paliers 
 
 | # | Question | Recommandation |
 |---|---|---|
-| 1 | Plafond de points par défaut | [Décision — propriétaire, 2026-11-14] 100 000 ; rendu de 100 000 points relevé dans Chrome sous Windows (première image en 961 ms, `mesures-6.8.md`) |
-| 2 | Seuils de performance | [Décision — propriétaire, 2026-11-14] préparation ≤ 30 s pour 25 000 documents à 256 dimensions sur stockage local (mesuré : 7,0 s sous Windows) ; budget de mémoire par défaut 256 Mio ; 40 itérations au plus. Le seuil de durée n'est gardé par aucun test automatique. Mesuré depuis : 100 000 documents sur le magasin local (27,6 s) et rendu dans Chrome. Restent non mesurés : Linux, index réel, PostgreSQL, modèle appris |
-| 3 | Options UMAP, WebGL, 3D (tâche 7.1) | [Décision — propriétaire, 2026-11-14] aucun changement n'est ouvert ; aucune option n'est implémentée |
+| 1 | Plafond de points par défaut | [Décision — propriétaire, 2026-11-14, à titre provisoire] 100 000 ; rendu de 100 000 points relevé dans Chrome sous Windows (première image en 961 ms, `mesures-6.8.md`) |
+| 2 | Seuils de performance | [Décision — propriétaire, 2026-11-14, à titre provisoire] préparation ≤ 30 s pour 25 000 documents à 256 dimensions sur stockage local (mesuré : 7,0 s sous Windows) ; budget de mémoire par défaut 256 Mio ; 40 itérations au plus. Le seuil de durée n'est gardé par aucun test automatique. Mesuré depuis : 100 000 documents sur le magasin local (27,6 s) et rendu dans Chrome. Restent non mesurés : Linux, index réel, PostgreSQL, modèle appris |
+| 3 | Options UMAP, WebGL, 3D (tâche 7.1) | [Décision — propriétaire, 2026-11-14] aucun changement n'est ouvert ; aucune option n'est implémentée ; à rouvrir après une mesure sur un modèle d'embeddings appris (Ollama) |
