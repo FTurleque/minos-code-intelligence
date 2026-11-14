@@ -20,6 +20,7 @@ dans le dossier, sans que ses exigences proposées y soient présentées comme l
 | [controles-de-fusion.md](controles-de-fusion.md) | `controles-de-fusion` | Organigramme du jugement d'une pull request |
 | [decouverte-et-negociation.md](decouverte-et-negociation.md) | `decouverte-et-negociation` | Séquence capture, découverte, négociation, promotion ; états de disponibilité d'un projet |
 | [distribution-docker.md](distribution-docker.md) | `distribution-docker` | Séquence de démarrage du plan de requête ; composants images et services |
+| [exploration-semantique.md](exploration-semantique.md) | `exploration-semantique` | Séquence d'une requête et de ses refus ; organigramme du démarrage et de l'écoute ; composants ; conteneurs Docker |
 | [frontieres-de-modules.md](frontieres-de-modules.md) | `frontieres-de-modules` | Vue de composants des modules et de leurs dépendances autorisées |
 | [indexation-java-via-wsl.md](indexation-java-via-wsl.md) | `indexation-java-via-wsl` | Composants Windows et distribution ; séquence de `minos index --via-wsl` ; états d'un run |
 | [installation-des-providers.md](installation-des-providers.md) | `installation-des-providers` | Séquence d'installation vérifiée d'un outil ; états de scip-java |
