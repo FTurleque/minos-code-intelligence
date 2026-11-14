@@ -1,11 +1,11 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
-com.fasterxml.jackson.core:jackson-annotations:2.22=classpath
-com.fasterxml.jackson.core:jackson-core:2.22.4=classpath
-com.fasterxml.jackson.core:jackson-databind:2.22.4=classpath
-com.fasterxml.jackson.module:jackson-module-kotlin:2.22.4=classpath
-com.fasterxml.jackson:jackson-bom:2.22.4=classpath
+com.fasterxml.jackson.core:jackson-annotations:2.23=classpath
+com.fasterxml.jackson.core:jackson-core:2.23.0=classpath
+com.fasterxml.jackson.core:jackson-databind:2.23.0=classpath
+com.fasterxml.jackson.module:jackson-module-kotlin:2.23.0=classpath
+com.fasterxml.jackson:jackson-bom:2.23.0=classpath
 com.fasterxml.woodstox:woodstox-core:7.1.0=classpath
 com.github.ben-manes.caffeine:caffeine:3.2.4=classpath
 com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.13=classpath
@@ -55,8 +55,8 @@ org.jboss.xnio:xnio-api:3.8.16.Final=classpath
 org.jboss.xnio:xnio-nio:3.8.16.Final=classpath
 org.jdom:jdom2:2.0.6.1=classpath
 org.jetbrains.intellij.deps:trove4j:1.0.20200330=classpath
-org.jetbrains.intellij.platform:intellij-platform-gradle-plugin:2.20.0=classpath
-org.jetbrains.intellij.platform:org.jetbrains.intellij.platform.gradle.plugin:2.20.0=classpath
+org.jetbrains.intellij.platform:intellij-platform-gradle-plugin:2.20.1=classpath
+org.jetbrains.intellij.platform:org.jetbrains.intellij.platform.gradle.plugin:2.20.1=classpath
 org.jetbrains.intellij.plugins:structure-base:3.335=classpath
 org.jetbrains.intellij.plugins:structure-ide:3.335=classpath
 org.jetbrains.intellij.plugins:structure-intellij:3.335=classpath
