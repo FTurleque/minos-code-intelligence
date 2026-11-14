@@ -61,7 +61,7 @@ Ces valeurs sont des **propositions** ; aucune n'est appliquée comme seuil ni g
 
 | # | Décision à prendre | Proposition | Fondement |
 |---|---|---|---|
-| 1 | Plafond de points par défaut (`--max-points`) | garder 100 000 **à titre provisoire**, à confirmer par un rendu réel de 100 000 points dans un navigateur | 25 000 points mesurés : 3,2 Mo de JSON, lecture en 107 ms ; 100 000 points extrapolés à 12,6 Mo, non rendus |
+| 1 | Plafond de points par défaut (`--max-points`) | **décidé par le propriétaire le 2026-11-14 : 100 000**. Le rendu réel de 100 000 points dans un navigateur reste à relever | 25 000 points mesurés : 3,2 Mo de JSON, lecture en 107 ms ; 100 000 points extrapolés à 12,6 Mo, non rendus |
 | 2 | Durée de préparation acceptable | ≤ 30 s pour 25 000 documents à 256 dimensions sur stockage local | mesuré : 7,0 s ; la marge couvre un poste plus lent et 768 dimensions (non mesuré) |
 | 3 | Budget de mémoire par défaut (`--max-memory-mb`) | garder 256 | mémoire comptée mesurée : 15,3 Mo pour 25 000 points |
 | 4 | Charge des points | ne pas ouvrir de format binaire tant que le rendu de 100 000 points en JSON n'est pas mesuré insuffisant | tâche 7.1 |

@@ -54,4 +54,4 @@ Aucune : `exploration-semantique` est créée par le changement précédent.
 
 ## Questions ouvertes
 
-Non bloquantes : seuils de performance ; plafond de points par défaut (cible provisoire : 100 000).
+Non bloquante : seuils de performance. Tranchée par le propriétaire le 2026-11-14 : plafond de points par défaut à 100 000.

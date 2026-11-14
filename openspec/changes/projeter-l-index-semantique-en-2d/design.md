@@ -81,7 +81,7 @@ Routes `GET /api/v1/projects/{p}/projection` et `…/projection/points` : concep
 
 | Commande | Options | Sortie | Codes |
 |---|---|---|---|
-| `minos semantic projection prepare <projet>` | `--max-points N` (défaut provisoire 100 000, question 1), `--seed N` (défaut 42), `--kinds CHUNK[,SYMBOL,FILE]` (défaut `CHUNK`), `--max-memory-mb N` (défaut 256), `--format text\|json` | rapport : points, documents, variance expliquée, durée | 0 en cas de succès ; non nul sinon (usage, index non `READY`, index modifié pendant la préparation, erreur interne), valeurs à aligner sur la convention de `docs/user/cli.md` |
+| `minos semantic projection prepare <projet>` | `--max-points N` (défaut 100 000, question 1), `--seed N` (défaut 42), `--kinds CHUNK[,SYMBOL,FILE]` (défaut `CHUNK`), `--max-memory-mb N` (défaut 256), `--format text\|json` | rapport : points, documents, variance expliquée, durée | 0 en cas de succès ; non nul sinon (usage, index non `READY`, index modifié pendant la préparation, erreur interne), valeurs à aligner sur la convention de `docs/user/cli.md` |
 | `minos semantic projection status <projet>` | `--format text\|json` | état, identité, méthode, sélection | 0 ; non nul pour une erreur d'usage |
 
 La préparation exige un index `READY` : projeter un index `STALE` produirait une carte périmée dès sa publication.
@@ -219,6 +219,6 @@ couverts par la CI de la PR. Preuves manquantes : parcours des états dans un na
 
 | # | Question | Recommandation |
 |---|---|---|
-| 1 | Plafond de points par défaut | 100 000 gardé à titre provisoire ; proposition motivée dans `mesures-6.8.md` |
+| 1 | Plafond de points par défaut | [Décision — propriétaire, 2026-11-14] 100 000 ; le rendu de 100 000 points dans un navigateur reste à relever (tâche 6.7, ligne 15 du relevé) |
 | 2 | Seuils de performance | propositions dans `mesures-6.8.md` ; aucune n'est appliquée |
 | 3 | Options UMAP, WebGL, 3D (tâche 7.1) | décision du propriétaire sur le relevé ; aucune n'est implémentée |
