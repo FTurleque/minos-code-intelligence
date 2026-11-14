@@ -226,6 +226,16 @@ Selon les fonctionnalités utilisées :
 
 Le code de requête dépend uniquement du snapshot MINOS actif, jamais du fichier SCIP brut.
 
+### Rôle d'inspection PostgreSQL (pgAdmin)
+
+Le runtime Docker peut donner à pgAdmin un rôle PostgreSQL `minos_inspect` ([guide utilisateur](../user/inspecter-postgresql-avec-pgadmin.md)). `PostgresSchemaMigrator` ne crée ni rôle ni droit : le rôle est créé par l'action d'administration `EnablePgAdmin` de `docker/scripts/mcp-lifecycle.ps1`, qui envoie à `psql` le script `$InspectRoleSql` (retrait : `$InspectRoleRemovalSql`). Ces deux blocs sont la source unique ; `PostgresInspectionRoleTest` (`minos-storage`) les lit dans ce fichier et les exécute contre PostgreSQL.
+
+Le script accorde `SELECT` sur une **liste fermée** de tables et, pour `projects`, de colonnes ; il ne pose aucun `ALTER DEFAULT PRIVILEGES`. Conséquence pour toute montée de version du schéma :
+
+- une table nouvelle reste invisible à pgAdmin tant qu'elle n'est pas ajoutée à la liste ;
+- une colonne ajoutée à une table déjà accordée devient lisible aussitôt : **relire `$InspectRoleSql` à chaque migration** et passer la table en droits par colonne si la colonne ne doit pas être lue (chemin du poste, secret, contenu binaire) ;
+- le test affirme la liste exacte des tables lisibles : il échoue si le script et la liste attendue divergent.
+
 ## Mesurer un gros snapshot
 
 Deux `main` et un test des sources de `minos-storage`, hors `verify` (leur nom ne correspond à aucun motif Surefire), mesurent ce qu'un snapshot de plusieurs centaines de Mio coûte à lire et à mettre en cache. Un snapshot au-dessus du plafond de persistance (400 Mio, `SnapshotLimits`) ne se publie ni ne se lit : le mesurer demande un build dont le plafond (`SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES`) est relevé localement, jamais commité.

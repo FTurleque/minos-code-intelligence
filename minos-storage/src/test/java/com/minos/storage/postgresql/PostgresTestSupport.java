@@ -212,6 +212,20 @@ public abstract class PostgresTestSupport {
         }
     }
 
+    /**
+     * Opens a connection to the database of the class as {@code user}, with {@code schema} first in the search
+     * path, outside the pool under test. A test of the privileges of a role needs the session of that role, not
+     * the session of the user that owns the schema.
+     */
+    protected static Connection openAs(String user, String password, String schema) throws SQLException {
+        Properties properties = new Properties();
+        properties.setProperty("user", user);
+        properties.setProperty("password", password);
+        properties.setProperty("currentSchema", schema + ",public");
+        properties.setProperty("connectTimeout", Integer.toString(CONNECT_TIMEOUT_SECONDS));
+        return DriverManager.getConnection(server.urlForDatabase(classDatabase), properties);
+    }
+
     private static Connection openAdmin(PostgresTestServer target) throws SQLException {
         return DriverManager.getConnection(target.adminUrl(), credentials(target));
     }
