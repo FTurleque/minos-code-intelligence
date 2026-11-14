@@ -40,7 +40,8 @@ class ExplorerCitedCommandsTest {
 
     /** What the launcher answers when it does not know the command or the operation it is given. */
     private static final List<String> REFUSALS = List.of(
-            "unknown command", "unknown IDE intelligence operation", "Usage: minos <command> [arguments]");
+            "unknown command", "unknown IDE intelligence operation", "Usage: minos <command> [arguments]",
+            "prepare or status, then a project reference, are required");
 
     @Test
     void everyCommandCitedByTheExplorationPageAndItsGuideIsRecognizedByTheCli(@TempDir Path home) throws Exception {
@@ -65,7 +66,8 @@ class ExplorerCitedCommandsTest {
         }
 
         assertEquals(List.of(), refused, "commands the page or its guide cites and the CLI refuses as unknown");
-        for (String expected : List.of("explorer serve", "index", "project add", "ide semantic-index-sync")) {
+        for (String expected : List.of("explorer serve", "index", "project add", "ide semantic-index-sync",
+                "semantic projection prepare", "semantic projection status")) {
             assertTrue(cited.containsKey(expected), "the cited commands are read from the sources: " + cited.keySet());
         }
     }
@@ -76,6 +78,10 @@ class ExplorerCitedCommandsTest {
         assertTrue(REFUSALS.stream().anyMatch(answerOf(home, "ide no-such-operation")::contains));
         assertTrue(REFUSALS.stream().noneMatch(answerOf(home, "ide semantic-index-sync")::contains));
         assertTrue(REFUSALS.stream().noneMatch(answerOf(home, "index")::contains));
+        assertTrue(REFUSALS.stream().noneMatch(answerOf(home, "semantic projection prepare")::contains));
+        assertTrue(REFUSALS.stream().noneMatch(answerOf(home, "semantic projection status")::contains));
+        assertTrue(REFUSALS.stream().anyMatch(answerOf(home, "semantic projection compute")::contains));
+        assertTrue(REFUSALS.stream().anyMatch(answerOf(home, "projection prepare")::contains));
     }
 
     /** What the launcher writes when the command is run on an empty home, with a project that does not exist. */

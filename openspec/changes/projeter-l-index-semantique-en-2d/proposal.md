@@ -4,7 +4,7 @@
 
 Une liste et une recherche ne donnent pas de vue d'ensemble d'un index sémantique : répartition par module, zones denses, position des résultats d'une recherche. La demande du propriétaire (2026-11-12, recommandations acceptées le 2026-11-13) retient une carte 2D des embeddings, honnête sur ce qu'elle montre. Étude : `docs/project/research/explorateur-vectoriel-2026-11/README.md` § 5.
 
-Ce changement suit `explorer-l-index-semantique-dans-un-navigateur`, qui crée la capacité `exploration-semantique`, la surface HTTP et l'interface. **Il ne démarre qu'après son archivage.**
+Ce changement suit `explorer-l-index-semantique-dans-un-navigateur`, qui crée la capacité `exploration-semantique`, la surface HTTP et l'interface. **Il ne démarre qu'après son archivage**, fait le 2026-11-14 (`openspec/changes/archive/2026-11-14-explorer-l-index-semantique-dans-un-navigateur/`).
 
 ## What Changes
 
@@ -35,9 +35,9 @@ Aucune : `exploration-semantique` est créée par le changement précédent.
 
 | Affirmation | Statut | Source ou preuve |
 |---|---|---|
-| Les vecteurs ne se lisent que par chargement complet de l'index | [Existant vérifié] | `minos-storage/src/main/java/com/minos/storage/postgresql/semantic/PostgresSemanticReadQueries.java:121-147` |
+| Les vecteurs ne se lisent que par chargement complet de l'index | [Existant vérifié] | `minos-storage/src/main/java/com/minos/storage/postgresql/semantic/PostgresSemanticReadQueries.java:202-229` |
 | Le magasin local plafonne à 192 Mio de vecteurs décodés | [Existant vérifié] | `minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java:56` |
-| Le plan de requête Docker monte les données en lecture seule ; `minos-admin` écrit | [Existant vérifié] | `docker/compose-mcp.connected.yaml:63-67`, `:103-132` |
+| Le plan de requête Docker monte les données en lecture seule ; `minos-admin` écrit | [Existant vérifié] | `docker/compose-mcp.connected.yaml:68-72` (`minos-mcp`), `:136-140` (`minos-explorer`), `:187-190` (`minos-admin`) |
 | Aucune construction déclenchée en silence | [Décision] | BE-0029 |
 | PCA en Java, cache en fichier, préparation par commande | [Décision] | propriétaire, 2026-11-13 |
 | Lisibilité d'une carte PCA sur des embeddings de code | [Question] | à mesurer, tâche 6.8 |
@@ -54,4 +54,4 @@ Aucune : `exploration-semantique` est créée par le changement précédent.
 
 ## Questions ouvertes
 
-Non bloquantes : seuils de performance ; plafond de points par défaut (cible provisoire : 100 000).
+Tranchées par le propriétaire le 2026-11-14 : plafond de points par défaut à 100 000 ; préparation en 30 s au plus pour 25 000 documents à 256 dimensions sur stockage local ; budget de mémoire de 256 Mio ; 40 itérations au plus.

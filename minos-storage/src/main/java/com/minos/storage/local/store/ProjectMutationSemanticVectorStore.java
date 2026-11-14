@@ -57,6 +57,11 @@ public final class ProjectMutationSemanticVectorStore implements SemanticVectorS
     }
 
     @Override
+    public Optional<VectorPage> vectorPage(String projectId, String afterStableKey, int limit) throws IOException {
+        return delegate.vectorPage(projectId, afterStableKey, limit);
+    }
+
+    @Override
     public String searchEngine() {
         return delegate.searchEngine();
     }

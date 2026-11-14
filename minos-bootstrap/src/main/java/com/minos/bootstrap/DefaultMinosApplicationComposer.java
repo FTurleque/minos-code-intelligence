@@ -31,6 +31,7 @@ import com.minos.runtime.local.wsl.WslLinuxWorker;
 import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.WorkerSandboxProbe;
+import com.minos.semantic.SemanticProjectionStore;
 import com.minos.storage.local.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
@@ -38,6 +39,7 @@ import com.minos.storage.MinosRuntimeSettings;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.storage.local.store.EnvironmentHostedTenantKeyProvider;
 import com.minos.storage.local.store.FileHostedControlPlaneStore;
+import com.minos.storage.local.store.FileSemanticProjectionStore;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
@@ -55,6 +57,9 @@ import java.util.Optional;
  * no side effect: discovery may instantiate it without opening anything.</p>
  */
 public final class DefaultMinosApplicationComposer implements MinosApplicationComposer {
+
+    /** Directory of MINOS_HOME that holds the derived projections; deleting it loses nothing but time. */
+    static final String SEMANTIC_PROJECTIONS_DIRECTORY = "semantic-projections";
 
     public DefaultMinosApplicationComposer() {
     }
@@ -155,6 +160,13 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     @Override
     public ResumableRunMarkers resumableRunMarkers(Path home) {
         return new RunDirectoryResumableRunMarkers(home);
+    }
+
+    /** The projection files of this MINOS_HOME; nothing is created until a projection is prepared. */
+    @Override
+    public SemanticProjectionStore semanticProjectionStore(Path home) {
+        return new FileSemanticProjectionStore(
+                Objects.requireNonNull(home, "home").resolve(SEMANTIC_PROJECTIONS_DIRECTORY));
     }
 
     /** The real host probe: no parameter, no substitution possible from production. */

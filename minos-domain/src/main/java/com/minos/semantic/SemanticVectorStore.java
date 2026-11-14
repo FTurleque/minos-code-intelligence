@@ -127,6 +127,49 @@ public interface SemanticVectorStore {
         return Optional.of(new StoredDocument(IndexMetadata.from(index), found));
     }
 
+    /** Largest number of vectors one {@linkplain #vectorPage page} may carry. */
+    int MAX_VECTOR_PAGE_SIZE = 1_000;
+
+    /**
+     * One page of the stored vectors of the index, in stable-key order, each with the kind of its document, and
+     * the metadata of the index the page was read from. {@code afterStableKey} is the last stable key of the
+     * previous page, or {@code null} for the first page. Two pages are pages of the same index only when their
+     * metadata are equal: a caller that walks the index compares them. The default derives the page from the
+     * full snapshot; a backend that can seek reads the vectors of the page only, and no document content.
+     *
+     * @throws IllegalArgumentException when {@code limit} is not between 1 and {@link #MAX_VECTOR_PAGE_SIZE}
+     *                                  or {@code afterStableKey} is blank
+     */
+    default Optional<VectorPage> vectorPage(String projectId, String afterStableKey, int limit) throws IOException {
+        requireVectorPageBounds(afterStableKey, limit);
+        Optional<IndexSnapshot> loaded = load(projectId);
+        if (loaded.isEmpty()) return Optional.empty();
+        IndexSnapshot index = loaded.orElseThrow();
+        List<IndexedDocument> ordered = new ArrayList<>(index.documents());
+        ordered.sort(Comparator.comparing(value -> value.document().stableKey()));
+        List<StoredVector> page = new ArrayList<>(Math.min(limit, ordered.size()));
+        boolean hasMore = false;
+        for (IndexedDocument value : ordered) {
+            if (afterStableKey != null && value.document().stableKey().compareTo(afterStableKey) <= 0) continue;
+            if (page.size() == limit) {
+                hasMore = true;
+                break;
+            }
+            page.add(new StoredVector(value.document().kind(), value.vector()));
+        }
+        return Optional.of(new VectorPage(IndexMetadata.from(index), page, hasMore));
+    }
+
+    /** Refuses a vector page request out of bounds; shared by every implementation of {@link #vectorPage}. */
+    static void requireVectorPageBounds(String afterStableKey, int limit) {
+        if (limit < 1 || limit > MAX_VECTOR_PAGE_SIZE) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_VECTOR_PAGE_SIZE);
+        }
+        if (afterStableKey != null && afterStableKey.isBlank()) {
+            throw new IllegalArgumentException("afterStableKey must be null or non-blank");
+        }
+    }
+
     /** Refuses a page request out of bounds; shared by every implementation of {@link #documentPage}. */
     static void requireDocumentPageBounds(String afterStableKey, int limit) {
         if (limit < 1 || limit > MAX_DOCUMENT_PAGE_SIZE) {
@@ -269,6 +312,34 @@ public interface SemanticVectorStore {
                 if (value.reusesStoredVector()) {
                     throw new IllegalArgumentException("a stored document carries its vector");
                 }
+                if (value.vector().dimensions() != metadata.dimensions()) {
+                    throw new IllegalArgumentException("stored vector dimensions differ from the index dimensions");
+                }
+            }
+        }
+    }
+
+    /** The stored vector of one document and the kind of that document; the stable key is the one of the vector. */
+    record StoredVector(SemanticDocumentKind kind, SemanticVector vector) {
+        public StoredVector {
+            Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(vector, "vector");
+        }
+
+        public String stableKey() {
+            return vector.stableKey();
+        }
+    }
+
+    /**
+     * One page of the stored vectors of one index, in stable-key order, and the metadata of that same index.
+     * {@code hasMore} tells that the index holds at least one vector after the last one of the page.
+     */
+    record VectorPage(IndexMetadata metadata, List<StoredVector> vectors, boolean hasMore) {
+        public VectorPage {
+            Objects.requireNonNull(metadata, "metadata");
+            vectors = List.copyOf(Objects.requireNonNull(vectors, "vectors"));
+            for (StoredVector value : vectors) {
                 if (value.vector().dimensions() != metadata.dimensions()) {
                     throw new IllegalArgumentException("stored vector dimensions differ from the index dimensions");
                 }

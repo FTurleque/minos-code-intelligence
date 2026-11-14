@@ -79,6 +79,18 @@ public final class PostgresSemanticVectorStore implements SemanticVectorStore {
     }
 
     @Override
+    public Optional<VectorPage> vectorPage(String projectId, String afterStableKey, int limit) throws IOException {
+        SemanticVectorStore.requireVectorPageBounds(afterStableKey, limit);
+        UUID id = uuid(projectId);
+        try {
+            return connections.withConnection(connection ->
+                    PostgresSemanticReadQueries.vectorPage(connection, projectId, id, afterStableKey, limit));
+        } catch (SQLException exception) {
+            throw new IOException("unable to load pgvector semantic vector page", exception);
+        }
+    }
+
+    @Override
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         UUID id = uuid(projectId);
         try {

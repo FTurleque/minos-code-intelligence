@@ -115,6 +115,13 @@ Changement OpenSpec `explorer-l-index-semantique-dans-un-navigateur`.
   `ModuleArchitectureTest` (seule la route de l'assemblage atteint la surface ; aucun autre module n'ouvre
   d'écoute réseau ; la surface n'utilise aucun adaptateur de stockage), `WebResourcesContentTest` (contenu
   inséré comme texte, aucune ressource externe).
+- Projection 2D (changement OpenSpec `projeter-l-index-semantique-en-2d`) : la préparation est la commande
+  `minos semantic projection prepare`, hors de la surface ; la surface n'ajoute que deux routes `GET`
+  (`projects/{p}/projection` et `projects/{p}/projection/points`) qui lisent le cache
+  `semantic-projections/` par `SemanticProjectionService`. Tenu par `ExplorerProjectionRoutesTest` (toute autre
+  méthode rend `405`, `MINOS_HOME` inchangé après les requêtes, jeton, `Origin` et requêtes inter-sites
+  refusés comme pour toute route d'API) et `WebResourcesContentTest` (la page n'envoie aucun corps vers une
+  route de projection).
 - Aucune règle Archgate compagnon n'est écrite (`rules: false`) : les contraintes sont tenues par ces tests et
   par `scripts/architecture/check-module-boundaries.py`.
 

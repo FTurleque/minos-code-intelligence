@@ -59,8 +59,20 @@
     </select>
     <button id="go" type="button">Chercher</button>
     <button id="clear" type="button">Revenir à la liste</button>
+    <button id="mapToggle" type="button" aria-pressed="false" aria-controls="map">Carte 2D</button>
     <p class="note" id="scoreNote"></p>
     <ul class="limits" id="limits" aria-label="Limitations rendues par le service"></ul>
+  </section>
+
+  <section id="map" aria-label="Carte 2D des documents" hidden>
+    <p class="note" id="mapCounter"></p>
+    <p class="note" id="mapMethod"></p>
+    <p class="warnbox" id="mapMessage" hidden></p>
+    <p><button id="mapShowStale" type="button" hidden>Afficher la carte périmée</button></p>
+    <canvas id="mapCanvas" tabindex="0" aria-label="Carte 2D : un point par document. La table donne les mêmes documents au clavier." hidden></canvas>
+    <ul class="limits" id="mapLegend" aria-label="Légende : couleur par nature de document"></ul>
+    <p class="note" id="mapHover"></p>
+    <p class="note" id="mapHelp">La position est une projection. Le classement est calculé sur les vecteurs d'origine. Molette ou + et − : zoom · glisser ou flèches : déplacer · clic : ouvrir le document · double-clic ou 0 : recentrer.</p>
   </section>
 
   <section id="table" aria-label="Documents">

@@ -154,6 +154,116 @@ public interface SemanticDocumentReadsContract {
         assertEquals(1.0, hits.getFirst().score(), 1e-6);
     }
 
+    @Test
+    default void aFullWalkOfTheVectorsReturnsEachVectorOnceInStableKeyOrderWithItsKind() throws Exception {
+        SemanticVectorStore store = store();
+        String projectId = newProjectId();
+        List<SemanticVectorStore.IndexedDocument> documents = new ArrayList<>();
+        List<String> expected = new ArrayList<>();
+        for (int index = 119; index >= 0; index--) {
+            String stableKey = String.format(Locale.ROOT, "doc-%03d", index);
+            documents.add(indexed(projectId, "snap-1", stableKey, 1.0, index, -0.5));
+            expected.add(0, stableKey);
+        }
+        store.replace(snapshot(projectId, "snap-1", 5L, documents));
+
+        List<String> walked = new ArrayList<>();
+        String after = null;
+        int pages = 0;
+        while (true) {
+            SemanticVectorStore.VectorPage page = store.vectorPage(projectId, after, 50).orElseThrow();
+            pages++;
+            assertEquals(store.metadata(projectId).orElseThrow(), page.metadata());
+            for (SemanticVectorStore.StoredVector vector : page.vectors()) {
+                int number = Integer.parseInt(vector.stableKey().substring(4));
+                assertEquals(List.of(1.0, (double) number, -0.5), vector.vector().values());
+                assertEquals(SemanticDocumentKind.CHUNK, vector.kind());
+                walked.add(vector.stableKey());
+            }
+            if (!page.hasMore()) break;
+            after = page.vectors().getLast().stableKey();
+        }
+
+        assertEquals(expected, walked);
+        assertEquals(3, pages);
+    }
+
+    @Test
+    default void aVectorPageStartsAfterAnyKeyAndEndsWithoutFollower() throws Exception {
+        SemanticVectorStore store = store();
+        String projectId = newProjectId();
+        store.replace(snapshot(projectId, "snap-1", 5L, List.of(
+                indexed(projectId, "snap-1", "doc-a", 1.0, 0.0, 0.0),
+                indexed(projectId, "snap-1", "doc-b", 0.0, 1.0, 0.0),
+                indexed(projectId, "snap-1", "doc-c", 0.0, 0.0, 1.0))));
+
+        SemanticVectorStore.VectorPage middle = store.vectorPage(projectId, "doc-a", 1).orElseThrow();
+        SemanticVectorStore.VectorPage between = store.vectorPage(projectId, "doc-aa", 10).orElseThrow();
+        SemanticVectorStore.VectorPage exact = store.vectorPage(projectId, null, 3).orElseThrow();
+        SemanticVectorStore.VectorPage beyond = store.vectorPage(projectId, "doc-c", 10).orElseThrow();
+
+        assertEquals(List.of("doc-b"), middle.vectors().stream().map(SemanticVectorStore.StoredVector::stableKey).toList());
+        assertTrue(middle.hasMore());
+        assertEquals(List.of("doc-b", "doc-c"),
+                between.vectors().stream().map(SemanticVectorStore.StoredVector::stableKey).toList());
+        assertFalse(between.hasMore());
+        assertEquals(3, exact.vectors().size());
+        assertFalse(exact.hasMore());
+        assertEquals(List.of(), beyond.vectors());
+        assertFalse(beyond.hasMore());
+        assertEquals(3, beyond.metadata().documentCount());
+    }
+
+    @Test
+    default void aVectorPageReadAfterAReplacementNamesTheNewIndex() throws Exception {
+        SemanticVectorStore store = store();
+        String projectId = newProjectId();
+        store.replace(snapshot(projectId, "snap-1", 5L, List.of(
+                indexed(projectId, "snap-1", "doc-a", 1.0, 0.0, 0.0),
+                indexed(projectId, "snap-1", "doc-b", 0.0, 1.0, 0.0),
+                indexed(projectId, "snap-1", "doc-old", 0.0, 0.0, 1.0))));
+        SemanticVectorStore.VectorPage first = store.vectorPage(projectId, null, 1).orElseThrow();
+
+        store.replace(snapshot(projectId, "snap-2", 6L, List.of(
+                indexed(projectId, "snap-2", "doc-b", 0.0, 0.5, 0.0),
+                indexed(projectId, "snap-2", "doc-c", 0.0, 0.0, 1.0))));
+        SemanticVectorStore.VectorPage second = store.vectorPage(projectId, "doc-a", 10).orElseThrow();
+
+        assertEquals("snap-1", first.metadata().snapshotId());
+        assertEquals("snap-2", second.metadata().snapshotId());
+        assertEquals(2, second.metadata().documentCount());
+        assertEquals(List.of("doc-b", "doc-c"),
+                second.vectors().stream().map(SemanticVectorStore.StoredVector::stableKey).toList());
+        assertEquals(List.of(0.0, 0.5, 0.0), second.vectors().getFirst().vector().values());
+    }
+
+    @Test
+    default void aVectorPageOutOfBoundsIsRefusedAndAProjectWithoutIndexHasNone() throws Exception {
+        SemanticVectorStore store = store();
+        String projectId = newProjectId();
+
+        assertEquals(Optional.empty(), store.vectorPage(projectId, null, 10));
+        assertThrows(IllegalArgumentException.class, () -> store.vectorPage(projectId, null, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.vectorPage(projectId, null, SemanticVectorStore.MAX_VECTOR_PAGE_SIZE + 1));
+        assertThrows(IllegalArgumentException.class, () -> store.vectorPage(projectId, " ", 1));
+    }
+
+    @Test
+    default void theChecksumsOfAnIndexAreReadWithItsMetadata() throws Exception {
+        SemanticVectorStore store = store();
+        String projectId = newProjectId();
+        store.replace(snapshot(projectId, "snap-1", 5L, List.of(
+                indexed(projectId, "snap-1", "doc-a", 1.0, 0.0, 0.0),
+                indexed(projectId, "snap-1", "doc-b", 0.0, 1.0, 0.0))));
+
+        SemanticVectorStore.IndexChecksums checksums = store.checksums(projectId).orElseThrow();
+
+        assertEquals(java.util.Map.of("doc-a", "chk-doc-a", "doc-b", "chk-doc-b"), checksums.checksumsByStableKey());
+        assertEquals(store.metadata(projectId).orElseThrow(), checksums.metadata());
+        assertEquals(Optional.empty(), store.checksums(newProjectId()));
+    }
+
     static SemanticVectorStore.IndexSnapshot snapshot(String projectId, String snapshotId, long builtAt,
                                                       List<SemanticVectorStore.IndexedDocument> documents) {
         return new SemanticVectorStore.IndexSnapshot(

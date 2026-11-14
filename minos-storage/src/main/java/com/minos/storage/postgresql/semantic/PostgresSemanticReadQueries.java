@@ -10,7 +10,9 @@ import com.minos.semantic.SemanticVectorStore.IndexMetadata;
 import com.minos.semantic.SemanticVectorStore.IndexSnapshot;
 import com.minos.semantic.SemanticVectorStore.IndexedDocument;
 import com.minos.semantic.SemanticVectorStore.StoredDocument;
+import com.minos.semantic.SemanticVectorStore.StoredVector;
 import com.minos.semantic.SemanticVectorStore.VectorHit;
+import com.minos.semantic.SemanticVectorStore.VectorPage;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -195,6 +197,52 @@ final class PostgresSemanticReadQueries {
                 SemanticDocument document = document(projectId, result, 7);
                 SemanticVector vector = SemanticVector.fromArray(stableKey, parseVector(result.getString(17), dimensions));
                 return Optional.of(new StoredDocument(metadata, Optional.of(new IndexedDocument(document, vector))));
+            }
+        }
+    }
+
+    /**
+     * One page of the stored vectors of the index, with the kind of each document, the metadata of that index
+     * and its document count, in one statement that reads no document content. The page asks for one row more
+     * than {@code limit} to know whether a vector follows.
+     */
+    static Optional<VectorPage> vectorPage(Connection connection, String projectId, UUID id,
+                                           String afterStableKey, int limit) throws SQLException, IOException {
+        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
+                + "AND c.snapshot_id=m.snapshot_id),"
+                + "d.stable_key,d.kind,d.embedding FROM semantic_index_meta m "
+                + "LEFT JOIN LATERAL (SELECT p.stable_key,p.kind,p.embedding::text AS embedding "
+                + "FROM semantic_documents p WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
+                + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
+                + "WHERE m.project_id=? ORDER BY d.stable_key";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, afterStableKey);
+            statement.setString(2, afterStableKey);
+            statement.setInt(3, limit + 1);
+            statement.setObject(4, id);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                long count = result.getLong(6);
+                if (count > Integer.MAX_VALUE) {
+                    throw new IOException("semantic document count exceeds supported integer range");
+                }
+                int dimensions = result.getInt(4);
+                IndexMetadata metadata = new IndexMetadata(projectId, result.getString(1), result.getString(2),
+                        result.getString(3), dimensions, result.getLong(5), (int) count);
+                List<StoredVector> vectors = new ArrayList<>();
+                boolean hasMore = false;
+                do {
+                    String stableKey = result.getString(7);
+                    if (stableKey == null) continue;
+                    if (vectors.size() == limit) {
+                        hasMore = true;
+                        break;
+                    }
+                    vectors.add(new StoredVector(SemanticDocumentKind.valueOf(result.getString(8)),
+                            SemanticVector.fromArray(stableKey, parseVector(result.getString(9), dimensions))));
+                } while (result.next());
+                return Optional.of(new VectorPage(metadata, vectors, hasMore));
             }
         }
     }

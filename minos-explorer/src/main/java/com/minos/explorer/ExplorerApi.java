@@ -2,6 +2,7 @@ package com.minos.explorer;
 
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.SemanticCorpusQueryService;
+import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.json.DeterministicJson;
 
@@ -16,7 +17,8 @@ import java.util.Set;
 /**
  * The read-only API of the exploration surface, without any HTTP plumbing: a method, the decoded path segments
  * after the version prefix, the query parameters and the body give a status and a JSON document. Every route
- * delegates to {@link SemanticCorpusQueryService}; none writes, synchronizes an index or prepares anything.
+ * delegates to {@link SemanticCorpusQueryService} or reads a projection through {@link SemanticProjectionService};
+ * none writes, synchronizes an index or prepares anything.
  */
 final class ExplorerApi {
 
@@ -26,6 +28,8 @@ final class ExplorerApi {
         DOCUMENTS("GET", "projects/{project}/documents"),
         DOCUMENT("GET", "projects/{project}/documents/{stableKey}"),
         NEIGHBORS("GET", "projects/{project}/documents/{stableKey}/neighbors"),
+        PROJECTION("GET", "projects/{project}/projection"),
+        PROJECTION_POINTS("GET", "projects/{project}/projection/points"),
         SEARCH("POST", "projects/{project}/search");
 
         private final String method;
@@ -89,9 +93,11 @@ final class ExplorerApi {
     private static final int DEFAULT_SEARCH_LIMIT = 20;
 
     private final SemanticCorpusQueryService corpus;
+    private final SemanticProjectionService projection;
 
-    ExplorerApi(SemanticCorpusQueryService corpus) {
+    ExplorerApi(SemanticCorpusQueryService corpus, SemanticProjectionService projection) {
         this.corpus = Objects.requireNonNull(corpus, "corpus");
+        this.projection = Objects.requireNonNull(projection, "projection");
     }
 
     /**
@@ -113,6 +119,8 @@ final class ExplorerApi {
                 case DOCUMENTS -> documents(segments.get(1), parameters);
                 case DOCUMENT -> document(segments.get(1), segments.get(3), parameters);
                 case NEIGHBORS -> neighbors(segments.get(1), segments.get(3), parameters);
+                case PROJECTION -> projection(segments.get(1), parameters);
+                case PROJECTION_POINTS -> projectionPoints(segments.get(1), parameters);
                 case SEARCH -> search(segments.get(1), parameters, body);
             };
         } catch (SemanticCorpusQueryService.DocumentNotFoundException missing) {
@@ -237,6 +245,62 @@ final class ExplorerApi {
                 "hits", hits,
                 "limitations", result.limitations(),
                 "latencyMillis", result.latencyMillis()));
+    }
+
+    /** The state of the projection of a project. Read only: no route prepares a projection. */
+    private Answer projection(String project, Map<String, String> parameters) throws IOException {
+        requireOnly(parameters, Set.of());
+        return Answer.ok(projectionStatus(projection.status(project)));
+    }
+
+    /** One page of the points of the published projection, with the state they are shown under. */
+    private Answer projectionPoints(String project, Map<String, String> parameters) throws IOException {
+        requireOnly(parameters, Set.of("offset", "limit"));
+        SemanticProjectionService.Points page = projection.points(project,
+                integer(parameters.get("offset"), "offset", 0),
+                integer(parameters.get("limit"), "limit", SemanticProjectionService.MAX_POINTS_PAGE));
+        List<Object> points = new ArrayList<>(page.points().size());
+        for (com.minos.semantic.SemanticProjection.Point point : page.points()) {
+            points.add(DeterministicJson.object(
+                    "stableKey", point.stableKey(),
+                    "kind", point.kind().name(),
+                    "x", (double) point.x(),
+                    "y", (double) point.y()));
+        }
+        Map<String, Object> answer = projectionStatus(page.status());
+        answer.put("offset", page.offset());
+        answer.put("total", page.total());
+        answer.put("points", points);
+        return Answer.ok(answer);
+    }
+
+    private static Map<String, Object> projectionStatus(SemanticProjectionService.Status status) {
+        Map<String, Object> described = status.projection().map(value -> DeterministicJson.object(
+                "index", DeterministicJson.object(
+                        "snapshotId", value.index().snapshotId(),
+                        "providerId", value.index().providerId(),
+                        "modelId", value.index().modelId(),
+                        "dimensions", value.index().dimensions(),
+                        "documentsFingerprint", value.index().documentsFingerprint()),
+                "method", value.method(),
+                "methodVersion", value.methodVersion(),
+                "parameters", value.parameters(),
+                "seed", value.seed(),
+                "kinds", value.kinds(),
+                "maxPoints", value.maxPoints(),
+                "pointCount", value.pointCount(),
+                "candidateCount", value.candidateCount(),
+                "documentCount", value.documentCount(),
+                "sampled", value.sampled(),
+                "explainedVariance", value.explainedVariance())).orElse(null);
+        Map<String, Object> answer = new LinkedHashMap<>();
+        answer.put("projectId", status.projectId());
+        answer.put("state", status.state().name());
+        answer.put("cause", status.cause());
+        answer.put("prepareCommand", status.prepareCommand());
+        answer.put("indexDocumentCount", status.indexDocumentCount());
+        answer.put("projection", described);
+        return answer;
     }
 
     private static Map<String, Object> identity(SemanticCorpusQueryService.IndexIdentity identity) {
