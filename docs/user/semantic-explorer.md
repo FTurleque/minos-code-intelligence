@@ -12,7 +12,7 @@ reste en STDIO.
 
 | Usage | État |
 |---|---|
-| Liste, détail, voisins, recherche — installation native, stockage local | Livré, testé automatiquement sous Windows et Linux ; **parcours dans un navigateur à valider par le propriétaire** |
+| Liste, détail, voisins, recherche — installation native, stockage local | Livré, testé automatiquement sous Windows et Linux ; démarrage vérifié depuis la distribution Windows empaquetée ; **parcours dans un navigateur à valider par le propriétaire** |
 | Idem — installation native, PostgreSQL externe | Lectures testées contre PostgreSQL/pgvector ; parcours complet non qualifié |
 | Service `minos-explorer` du runtime Docker connecté | Démarrage, publication du port et contrôles d'accès relevés sur Docker Desktop (Windows) avec un `MINOS_HOME` vide ; **non qualifié avec des données réelles, PostgreSQL géré ni un hôte Linux** |
 | Runtime Docker hors ligne (`compose-mcp.prod.yaml`) | Non supporté : aucun service d'exploration |

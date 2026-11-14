@@ -1,13 +1,7 @@
-# Capacité `exploration-semantique` — dossier durable (préparé)
+# Capacité `exploration-semantique` — dossier durable
 
-> Ce fichier est le dossier durable de la capacité, préparé avec le changement. Sa place est
-> `docs/architecture/diagrams/capacites/exploration-semantique.md`, où `scripts/docs/check-capability-dossiers.py`
-> le refuse tant que `openspec/specs/exploration-semantique/spec.md` n'existe pas, c'est-à-dire jusqu'à
-> l'archivage. À l'archivage : le déplacer par `git mv`, retirer ce bandeau, ajouter le lien vers la spec de
-> référence et la ligne de l'index `docs/architecture/diagrams/capacites/README.md`, puis rejouer le gate. Les
-> chemins de preuve sont écrits depuis la racine du dépôt.
-
-Relevé au 2026-11-13, branche `feat/explorer-index-semantique`.
+Spec de référence : [openspec/specs/exploration-semantique/spec.md](../../../../openspec/specs/exploration-semantique/spec.md)
+· Relevé au 2026-11-13, changement `explorer-l-index-semantique-dans-un-navigateur`.
 
 ## Objet et périmètre
 
@@ -78,11 +72,80 @@ flowchart TD
 
 Aucune option de ligne de commande ne choisit l'adresse d'écoute.
 
+### Quels composants, et dans quel sens dépendent-ils ?
+
+Type : flowchart (vue de composants, non UML) · Portée : existant vérifié · Exigences : « La surface
+d'exploration ne modifie aucun état », « Les voisins d'un document sont classés depuis son vecteur stocké »
+
+```mermaid
+flowchart LR
+  subgraph ASM["minos-app (assemblage)"]
+    RP["ExplorerLaunchRouteProvider"]
+  end
+  subgraph SURF["surfaces"]
+    CLI["minos-cli : ExplorerCommandLine, ExplorerLaunchRoute"]
+    HTTP["minos-explorer : ExplorerSession, ExplorerServer, ExplorerApi"]
+    API["minos-api : SemanticExplorationApi"]
+  end
+  subgraph APP["minos-application"]
+    CQ["SemanticCorpusQueryService"]
+    SS["SemanticSearchService"]
+    HS["HybridSearchService"]
+    SR["LocalSourceReader"]
+  end
+  subgraph DOM["minos-domain"]
+    VS["SemanticVectorStore : documentPage, storedDocument"]
+  end
+  subgraph STO["minos-storage"]
+    L["magasin local"]
+    P["magasin PostgreSQL"]
+  end
+  CLI -. "ServiceLoader" .-> RP
+  RP --> HTTP
+  HTTP --> CQ
+  API --> CQ
+  CQ --> SS
+  CQ --> HS
+  CQ --> SR
+  CQ --> VS
+  L -. implémente .-> VS
+  P -. implémente .-> VS
+```
+
+`minos-cli` ne dépend pas de `minos-explorer` : il déclare une interface que l'assemblage fournit. Les surfaces ne
+voient que le service applicatif ; aucune ne nomme un adaptateur de stockage (`ModuleArchitectureTest`).
+
+### Comment le service optionnel du runtime Docker est-il exposé ?
+
+Type : flowchart (vue de conteneurs, non UML) · Portée : existant vérifié, non qualifié sur une installation
+réelle · Exigences : « La surface d'exploration est optionnelle et n'écoute que sur la boucle locale »
+
+```mermaid
+flowchart TB
+  H["Hôte : 127.0.0.1:port"]
+  subgraph ING["minos-explorer-ingress (non interne)"]
+    EX["minos-explorer (profil explorer, lecture seule)"]
+  end
+  subgraph RT["minos-runtime (interne)"]
+    PG[("minos-postgres")]
+    OL["minos-ollama"]
+    MCP["minos-mcp (STDIO)"]
+  end
+  H -- "port publié sur la boucle locale, jeton exigé" --> EX
+  EX --> PG
+  EX --> OL
+  MCP --> PG
+```
+
+Dans le conteneur, la surface écoute sur l'interface du conteneur : un port publié n'atteint pas sa boucle
+locale. Cette écoute n'est accordée que par la variable interne posée par le Compose, dans un conteneur. Le
+réseau d'entrée donne au conteneur une route sortante, acceptée en l'état (écart E3).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
 |---|---|---|---|---|
-| La surface d'exploration est optionnelle et n'écoute que sur la boucle locale | 3/3, le premier par preuve structurelle | V2 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#theSurfaceIsBoundToLoopbackAddressesOnlyAndItsUrlNamesTheIpv4Loopback`, `minos-explorer/src/test/java/com/minos/explorer/ExplorerSessionTest.java#theSurfaceRefusesToStartWhenTheTeamModeIsEnabledAndOpensNoPort`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#onlyTheExplorerRouteOfTheAssemblyStartsTheExplorationSurface` | partielle |
+| La surface d'exploration est optionnelle et n'écoute que sur la boucle locale | 3/3, le premier par preuve structurelle | V2, V4 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#theSurfaceIsBoundToLoopbackAddressesOnlyAndItsUrlNamesTheIpv4Loopback`, `minos-explorer/src/test/java/com/minos/explorer/ExplorerSessionTest.java#theSurfaceRefusesToStartWhenTheTeamModeIsEnabledAndOpensNoPort`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#onlyTheExplorerRouteOfTheAssemblyStartsTheExplorationSurface` | partielle |
 | Toute requête d'API exige le jeton de session et une origine locale | 3/3 | V1 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#anApiRequestWithoutTheTokenIsRefusedWithoutDetailAndReachesNoService`, `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#aRequestWhoseHostIsNotALoopbackNameOfThisPortIsRefusedEvenWithTheToken`, `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#aRequestFromAnotherOriginIsRefusedAndNoCorsHeaderIsEverSent` | couverte |
 | La surface d'exploration ne modifie aucun état | 1/1 hors statut et points de projection (non livrés) | V1 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#consultingEveryRouteLeavesTheHomeAndTheIndexByteForByteUnchanged` | partielle |
 | La liste des documents est paginée et lue sur un seul index | 3/3 | V1 | `minos-engine/src/test/java/com/minos/testsupport/SemanticDocumentReadsContract.java#aFullWalkReturnsEveryDocumentOnceInStableKeyOrder`, `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#aPageSizeOutOfBoundsIsAUsageErrorThatNamesTheBound`, `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#aCursorIssuedForAnIndexIsRefusedOnceThatIndexIsReplaced` | couverte |

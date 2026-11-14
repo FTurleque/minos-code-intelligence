@@ -31,7 +31,7 @@ La numérotation des groupes est celle du plan commun : le groupe 1 (pgAdmin) es
 - [x] 4.6 Correction : routes projets, documents, détail, voisins ; bornes, délai par requête, plafond de requêtes simultanées ; vérifier 4.5.
 - [x] 4.7 Rouge : tests « aucune racine absolue ni adresse de provider dans une réponse, une erreur ou un journal », « réponses JSON avec `nosniff` », « page servie avec une CSP sans `unsafe-inline` » (`exploration-semantique` › Aucune réponse de l'explorateur n'expose de chemin absolu ni de secret).
 - [x] 4.8 Correction : en-têtes de sécurité, erreurs opaques, ressources web servies depuis le jar ; vérifier 4.7 ; rejouer `scripts/quality/check-comment-language.py` et déclarer la langue du nouveau module dans `scripts/quality/comment-language.json`.
-- [ ] 4.9 Windows : construire la distribution et vérifier que le runtime embarqué contient `jdk.httpserver` (`scripts/release/build-windows-distribution.ps1`) ; **(manuelle)** si le build de distribution n'est pas disponible localement.
+- [x] 4.9 Windows : construire la distribution et vérifier que le runtime embarqué contient `jdk.httpserver` (`scripts/release/build-windows-distribution.ps1`) ; **(manuelle)** si le build de distribution n'est pas disponible localement.
 - [x] 4.10 Revue de sécurité par le skill `minos-security-checklist` et l'agent `minos-security-reviewer` ; consigner les constats et leur traitement dans le design.
 
 ## 5. Lot 2 — Recherche et interface (liste, recherche, détail)

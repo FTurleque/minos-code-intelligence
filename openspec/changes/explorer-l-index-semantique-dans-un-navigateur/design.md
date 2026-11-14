@@ -403,7 +403,7 @@ Les relations entre tables existantes sont logiques : aucune clé étrangère ne
 | pgAdmin — PostgreSQL géré | non supportée (lot 1) | — |
 | pgAdmin — PostgreSQL externe | non supportée, hors périmètre | — |
 
-Windows : `jdeps` sur le JAR ombré de la branche liste `jdk.httpserver`, et le script de distribution le tient explicite et vérifie le runtime empaqueté ; le build de la distribution elle-même n'a pas été exécuté (tâche 4.9, reste manuel). Linux : l'écoute de conteneur exige Linux et un marqueur de conteneur.
+Windows : distribution construite le 2026-11-14 sur le poste (`scripts/release/build-windows-distribution.ps1 -Version 1.3.0-SNAPSHOT -Variant lite -ReuseBuild`, code 0) ; `app\runtime\bin\java.exe --list-modules` liste `jdk.httpserver@21.0.12.1`, `RUNTIME-MODULES.txt` aussi, et `app\minos.exe explorer serve` démarre depuis le lanceur empaqueté (écoute sur `127.0.0.1` et `[::1]`, `401` sans jeton, `200` avec). Le script tient le module explicite et vérifie le runtime empaqueté. Non construit : la variante `full` et l'installeur. Linux : l'écoute de conteneur exige Linux et un marqueur de conteneur.
 
 ## Risques et compromis
 
@@ -465,7 +465,7 @@ Preuves exécutées le 2026-11-13 sur le poste Windows (tests Maven ciblés) ; L
 | idem | Contenu indexé contenant du HTML | Sécurité | 4.7–4.8 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#theDetailSeparatesTheIndexedContentFromTheSourceAndCarriesHtmlAsJsonText` ; `minos-explorer/src/test/java/com/minos/explorer/ExplorerServerTest.java#everyAnswerCarriesTheSecurityHeadersAndNoCookie` ; `minos-explorer/src/test/java/com/minos/explorer/WebResourcesContentTest.java#indexedContentCanOnlyBeInsertedAsText` |
 | exploration › local-hash | Index local-hash | Contrats | 5.3–5.4 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#theProjectListDescribesTheIndexAndNeverTheRootOfAProject`, `#aSearchRanksLikeTheSemanticServiceAndAFilterOnlyRemovesHits`, `#theNeighboursLeaveTheDocumentOutNameTheirScoreAndRefuseAnUnknownKey` ; `minos-api/src/test/java/com/minos/api/SemanticExplorationApiContractTest.java#theFiveReadingsDescribeOneIndexAndNeverItsRoot` |
 
-Preuves manquantes : parcours dans un navigateur par le propriétaire (tâche 5.6) ; build de la distribution Windows (tâche 4.9) ; service Docker sur une installation réelle ; observation directe « aucun port ouvert » pour les autres commandes et pour le serveur MCP (preuve structurelle seulement).
+Preuves manquantes : parcours dans un navigateur par le propriétaire (tâche 5.6, relevé à remplir dans `parcours-navigateur-5.6.md`) ; service Docker sur une installation réelle ; observation directe « aucun port ouvert » pour les autres commandes et pour le serveur MCP (preuve structurelle seulement). Le dossier durable de la capacité est prêt dans `dossier/` et ne peut être activé qu'à l'archivage (`dossier/ACTIVATION.md`) : les tâches 3.8, pour sa partie dossier, et 8.2 restent ouvertes jusque-là.
 
 ## Questions ouvertes
 
