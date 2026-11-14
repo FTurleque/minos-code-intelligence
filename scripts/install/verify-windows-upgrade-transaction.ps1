@@ -91,9 +91,11 @@ function Invoke-UpdaterInProcess {
         [string] $PackageRoot,
         [string] $InstallRoot,
         [int] $TestFailActivationAfterEntries = 0,
-        [switch] $TestFailPostCommitCleanup
+        [switch] $TestFailPostCommitCleanup,
+        [string] $LogPath = ''
     )
     $Params = @{ PackageRoot = $PackageRoot; InstallRoot = $InstallRoot; SkipProcessStop = $true }
+    if ($LogPath) { $Params['LogPath'] = $LogPath }
     if ($TestFailActivationAfterEntries -gt 0) { $Params['TestFailActivationAfterEntries'] = $TestFailActivationAfterEntries }
     if ($TestFailPostCommitCleanup) { $Params['TestFailPostCommitCleanup'] = $true }
     & $Updater @Params
@@ -217,6 +219,23 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-staging'))) 'Staging residue left after rollback.'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $MainRoot '.install-rollback'))) 'Rollback residue left after rollback.'
     Write-Host 'Scenario 6 (synchronous rollback on injected activation failure) PASS' -ForegroundColor Green
+
+    # --- Scenario 6a: the installer starts the updater without capturing its output streams, so a
+    # failure must reach the file named by -LogPath; a successful run writes nothing there ---
+    $FailureLog = Join-Path $Sandbox 'updater-failure.log'
+    $Threw6a = $false
+    try { Invoke-UpdaterInProcess -PackageRoot $PackageV3 -InstallRoot $MainRoot -TestFailActivationAfterEntries 3 -LogPath $FailureLog }
+    catch { $Threw6a = $true }
+    Assert-True $Threw6a 'Injected activation failure did not propagate when -LogPath is set.'
+    Assert-True (Test-Path -LiteralPath $FailureLog -PathType Leaf) 'A failed update did not write its cause to -LogPath.'
+    $FailureLogText = [System.IO.File]::ReadAllText($FailureLog, [System.Text.Encoding]::UTF8)
+    $ExpectedCause = '*MINOS_UPDATE_FAILED: MINOS_UPDATE_TEST_ACTIVATION_FAILURE:3*'
+    Assert-True ($FailureLogText -like $ExpectedCause) "Failure log does not carry the cause: $FailureLogText"
+    Assert-True ($FailureLogText -like '*update-installation.ps1*') 'Failure log does not locate the failing statement.'
+    $SuccessLog = Join-Path $Sandbox 'updater-success.log'
+    Invoke-UpdaterInProcess -PackageRoot $PackageV2 -InstallRoot $MainRoot -LogPath $SuccessLog
+    Assert-True (-not (Test-Path -LiteralPath $SuccessLog)) 'A successful update wrote a failure log.'
+    Write-Host 'Scenario 6a (failure cause written to -LogPath, nothing on success) PASS' -ForegroundColor Green
 
     # --- Scenario 6b: the tools directory is activated (entry 6 of the staged directories), then the
     # activation fails: rollback must put the previous tools payload back, not leave v3 tools beside v2 ---
