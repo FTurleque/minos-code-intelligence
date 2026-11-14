@@ -283,6 +283,15 @@ function Invoke-PayloadExpandScript([string] $ScriptPath, [string] $Zip, [string
     return $Process.ExitCode
 }
 
+# Without a PowerShell 7 installation the run below only proves the plain Windows PowerShell 5.1
+# path: say so, and refuse that weaker proof where the qualification is expected to be complete.
+if (-not (Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'PowerShell\7\Modules\Microsoft.PowerShell.Archive'))) {
+    if ($env:GITHUB_ACTIONS -eq 'true') {
+        throw 'PowerShell 7 Archive module not found: the inherited-PSModulePath case cannot be qualified on this runner.'
+    }
+    Write-Warning 'PowerShell 7 Archive module not found: the inherited-PSModulePath case is not exercised on this host.'
+}
+
 $ExpandSandbox = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-expand-verify-' + [Guid]::NewGuid().ToString('N') + " O'Brien tst")
 New-Item -ItemType Directory -Force -Path (Join-Path $ExpandSandbox 'source\app') | Out-Null
 try {
@@ -296,7 +305,9 @@ try {
 
     $ExpandTarget = Join-Path $ExpandSandbox 'minos-payload'
     $ExpandExit = Invoke-PayloadExpandScript $ExpandScript $ExpandZip $ExpandTarget $ExpandLog
-    if ($ExpandExit -ne 0) { throw "Payload extraction failed under Windows PowerShell 5.1 with an inherited PowerShell 7 module path (exit=$ExpandExit)." }
+    if ($ExpandExit -ne 0) {
+        throw "Payload extraction failed under Windows PowerShell 5.1 with an inherited PowerShell 7 module path (exit=$ExpandExit)."
+    }
     foreach ($Expected in @('app\minos.exe', 'VERSION')) {
         if (-not (Test-Path -LiteralPath (Join-Path $ExpandTarget $Expected) -PathType Leaf)) {
             throw "Payload extraction exited 0 without extracting $Expected."
@@ -308,7 +319,9 @@ try {
     'not a zip archive' | Set-Content -LiteralPath $BrokenZip -Encoding ascii
     $BrokenExit = Invoke-PayloadExpandScript $ExpandScript $BrokenZip (Join-Path $ExpandSandbox 'broken-out') $ExpandLog
     if ($BrokenExit -eq 0) { throw 'Payload extraction exited 0 for an archive it cannot read.' }
-    if (-not (Test-Path -LiteralPath $ExpandLog -PathType Leaf)) { throw 'A failed payload extraction did not write its cause to -LogPath.' }
+    if (-not (Test-Path -LiteralPath $ExpandLog -PathType Leaf)) {
+        throw 'A failed payload extraction did not write its cause to -LogPath.'
+    }
     $ExpandLogText = [System.IO.File]::ReadAllText($ExpandLog, [System.Text.Encoding]::UTF8)
     if ($ExpandLogText.IndexOf('MINOS_PAYLOAD_EXPAND_FAILED: ', [StringComparison]::Ordinal) -lt 0) {
         throw "Payload extraction failure log does not carry the cause: $ExpandLogText"
