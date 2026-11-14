@@ -1,8 +1,9 @@
 # Tâche 6.8 — mesures de la projection (relevé)
 
 Protocole : `design.md`, « Performance et mesure ». **Aucun seuil n'est fixé par ce relevé** : les seuils et le
-plafond de points par défaut sont des décisions du propriétaire (tâche 6.8, questions 1 et 2 du design). La
-tâche ne se coche qu'une fois ces décisions prises et les paliers manquants relevés ou écartés.
+plafond de points par défaut sont des décisions du propriétaire (tâche 6.8, questions 1 et 2 du design), prises
+le 2026-11-14. Le propriétaire a clos la tâche le même jour en écartant les paliers non mesurés, listés plus bas :
+ils restent des limites déclarées de la qualification, pas des mesures faites.
 
 ## Ce qui a été mesuré
 
