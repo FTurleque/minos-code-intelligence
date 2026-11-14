@@ -151,6 +151,8 @@ Require 'function PrepareToInstall(var NeedsRestart: Boolean): String;' 'Install
 Require "ExtractTemporaryFile('update-installation.ps1')" 'Installer does not extract the transactional updater before installing.'
 Require '-PackageRoot "' 'Installer does not point the transactional updater at the extracted payload.'
 Require 'minos-payload' 'Installer does not reference the extracted payload directory.'
+Require "'`" -LogPath `"' + UpdaterLog + '`"'" 'Installer does not give the transactional updater a file for the cause of a failure.'
+Require 'LogScriptOutput(UpdaterLog);' 'The cause of a transactional update failure does not reach the installer log.'
 Require 'UsePreviousAppDir=yes' 'Installer does not reuse the previous install directory on upgrade.'
 Require 'UninstallLogMode=overwrite' 'Installer does not keep the uninstall log consistent with updater-owned payload files.'
 Require 'procedure RemoveMinosProgramPayload;' 'Uninstaller is missing the managed-directory payload cleanup.'
