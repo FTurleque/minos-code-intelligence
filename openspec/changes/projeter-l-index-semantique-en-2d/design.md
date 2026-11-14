@@ -161,9 +161,40 @@ Rouge constaté avant correction (2026-11-14) : `SemanticProjectionServiceTest`,
 
 Commandes exécutées réellement sur un `MINOS_HOME` jetable (`target/projection-demo/home`, index `local-hash` de la fixture `fixtures/typescript/typescript-modules`, 42 documents) : `minos semantic projection status` (`ABSENTE`, puis `PRETE`, `PERIMEE` après réimport sous `--snapshot demo-2`, `ECHOUEE` après troncature du fichier), `minos semantic projection prepare` (publication, échantillon de 10 sur 42, deux exécutions au fichier identique, refus sur index `DISABLED` avec code 1, erreur d'usage avec code 2).
 
+### Revue de sécurité (2026-11-14)
+
+Agent `minos-security-reviewer` exécuté en lecture seule sur `git diff origin/main` (aucun test lancé par l'agent). Aucun constat critique ni élevé. Vérifié sans constat : contrôles `RequestGuard` avant toute route, `405` et corps jamais lu sur les routes de projection, aucune écriture ni verrou à la lecture, E/S par les primitives privées (`check-private-io.py` vert), bornes et empreinte du fichier de projection, reprise par offset gardée par la taille, la date et l'ordre strict, erreurs HTTP opaques, page sans `innerHTML` ni ressource tierce, requête SQL paramétrée.
+
+| # | Constat | Gravité | Traitement |
+|---|---|---|---|
+| 1 | L'échantillon était retrouvé par avance séquentielle dans l'ordre Java des clés ; un magasin qui trie par une collation linguistique (PostgreSQL hors collation `C`) faisait échouer toute préparation avec « index modifié » | moyenne | corrigé : chaque document de l'échantillon est retrouvé par sa clé, quel que soit l'ordre des pages ; rouge puis vert : `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aStoreThatSortsItsPagesByALinguisticCollationIsProjectedLikeAnyOther` (magasin de test à ordre insensible à la casse). **Non reproduit contre un PostgreSQL en collation linguistique** : aucun serveur sur le poste |
+| 2 | Le budget de mémoire ne couvre ni un index au format hérité `index-v1.bin` (lu par chargement complet), ni le texte des vecteurs d'une page PostgreSQL | faible | non corrigé ; limite écrite dans `docs/developer/semantic-explorer.md` |
+| 3 | À la lecture, le dossier du projet n'était pas contrôlé : un lien à sa place faisait lire un autre arbre | faible | corrigé : un lien ou un non-dossier est refusé (`FileSemanticProjectionStoreTest#aProjectEntryThatIsALinkToAnotherTreeIsNeverRead`) |
+| 4 | Tout échec du bail était rendu comme « autre préparation en cours » | faible | corrigé : seule l'expiration du délai l'est (`#aLeaseThatCannotBeTakenForAnotherReasonThanABusyOneIsNotReportedAsARunningPreparation`) |
+| 5 | La position de reprise avançait de la longueur ré-encodée d'une chaîne, pas de la longueur lue | faible | corrigé (`FileSemanticVectorStoreStreamedReadsTest#aWalkResumedAfterAKeyThatIsNotValidUtf8ReadsTheNextEntryWhereItStarts`) |
+| 6 | Bornes du lecteur de projection au-delà de ce que la préparation écrit ; décodages simultanés possibles à cache froid | faible | corrigé : 1 000 000 points, chaînes de 16 Kio, un décodage à la fois ; sans test dédié |
+| 7 | En format texte, `status` écrivait sans filtrage des valeurs lues du fichier | faible | corrigé : valeurs passées par `CliCommandSupport.publicDiagnostic` ; sans test dédié |
+| 8 | Une `IOException` de la commande sortait en « bootstrap failed » | information | corrigé : rendue avec le préfixe de la commande ; sans test dédié |
+| 9 | La ligne de la dernière passe était écrite après la publication | information | corrigé : la publication est annoncée avant d'avoir lieu (`minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#theLastPassIsReportedBeforeTheProjectionIsPublished`) ; la ligne finale « published in » reste écrite après |
+| 10 | Fichier temporaire laissé par un processus tué ; sous Windows, remplacement réessayé environ 1 s si un lecteur tient la cible | information | fichiers temporaires abandonnés supprimés par la préparation suivante (`FileSemanticProjectionStoreTest#whatAKilledPreparationLeftBehindIsRemovedByTheNextOne`) ; limite Windows non reproduite, laissée |
+| 11 | `checksums()` n'exigeait pas l'unicité des clés | information | corrigé : une clé en double est refusée ; sans test dédié |
+
+Décision laissée au propriétaire : un `MINOS_HOME` inscriptible par un tiers n'est pas dans le modèle de menace retenu pour ce cache dérivé ; les constats 3, 6 et 7 sont traités comme des durcissements.
+
 ## Documentation durable à mettre à jour
 
-`docs/architecture/diagrams/capacites/exploration-semantique.md`, `docs/user/` (explorateur, CLI), `docs/developer/`, `STATUS.md`, `ROADMAP.md`.
+État à la clôture de l'implémentation (tâche 8.4) :
+
+| Document | État |
+|---|---|
+| `docs/architecture/diagrams/capacites/exploration-semantique.md` | fait : vues V5 et V6, quatre lignes en « Exigences en attente d'archivage », écarts E6 à E9 |
+| `docs/user/semantic-explorer.md`, `docs/user/cli.md` | fait : section « Carte 2D », commandes, états, dépannage, matrice de support (carte livrée, non qualifiée) |
+| `docs/developer/semantic-explorer.md` | fait : section « Projection 2D », routes, tests, limites |
+| `docs/project/governance/STATUS.md`, `ROADMAP.md` | fait |
+| ADR ARCH-0082, « Mise en œuvre » | fait |
+| arc42 | aucun changement : la surface et son module y figurent déjà, la projection n'ajoute ni module ni dépendance |
+| `openspec/specs/exploration-semantique/spec.md`, « Purpose » | **reste, à l'archivage** : y citer la carte 2D ; déplacer alors les quatre lignes du dossier dans sa table de traçabilité |
+| `docs/user/docker-runtime.md` | **reste** : rien n'y est écrit sur la préparation par `minos-admin`, non exercée |
 
 ## Traçabilité
 

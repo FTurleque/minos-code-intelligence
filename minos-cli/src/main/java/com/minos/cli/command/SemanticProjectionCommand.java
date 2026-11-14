@@ -7,7 +7,6 @@ import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.cli.support.LazyApplication;
-import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.semantic.SemanticDocumentKind;
 
@@ -80,7 +79,7 @@ public final class SemanticProjectionCommand {
             return CliExitCodes.SUCCESS;
         } catch (LazyApplication.OpenFailure openFailure) {
             throw openFailure;
-        } catch (UnreadableRegistryException | RuntimeException failure) {
+        } catch (IOException | RuntimeException failure) {
             error.append("error: semantic projection ").append(invocation.prepare() ? PREPARE : STATUS)
                     .append(" failed: ").append(CliCommandSupport.failureMessage(failure)).append('\n');
             return CliExitCodes.EXECUTION_ERROR;
@@ -145,7 +144,8 @@ public final class SemanticProjectionCommand {
     private static String render(Map<String, Object> value, SymbolOutputFormat format) {
         if (format == SymbolOutputFormat.JSON) return CliJson.render(value);
         List<String> lines = new ArrayList<>();
-        value.forEach((key, item) -> lines.add(key + ": " + item));
+        // A value read back from a projection file is data: it is made printable before it reaches a terminal.
+        value.forEach((key, item) -> lines.add(key + ": " + CliCommandSupport.publicDiagnostic(String.valueOf(item))));
         return String.join("\n", lines);
     }
 
@@ -163,6 +163,7 @@ public final class SemanticProjectionCommand {
         @Override
         public void advanced(String currentPhase, int currentPass, long currentVectorsRead) {
             if (currentPass != pass) end();
+            if (SemanticProjectionService.PUBLISH_PHASE.equals(currentPhase)) return;
             phase = currentPhase;
             pass = currentPass;
             vectorsRead = currentVectorsRead;

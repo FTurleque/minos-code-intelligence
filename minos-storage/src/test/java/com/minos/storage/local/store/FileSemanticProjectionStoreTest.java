@@ -173,6 +173,52 @@ class FileSemanticProjectionStoreTest {
     }
 
     @Test
+    void whatAKilledPreparationLeftBehindIsRemovedByTheNextOne() throws Exception {
+        FileSemanticProjectionStore store = new FileSemanticProjectionStore(temp.resolve("projections"));
+        SemanticProjection published = projection(PROJECT, 30, 0.5f);
+        publish(store, published);
+        Path directory = temp.resolve("projections").resolve(PROJECT);
+        Files.write(directory.resolve("projection-v1-1234567890.tmp"), new byte[]{1, 2, 3});
+        Files.write(directory.resolve("notes.tmp"), new byte[]{4});
+
+        store.prepare(PROJECT).close();
+
+        assertEquals(Set.of(FileSemanticProjectionStore.FILE, FileSemanticProjectionStore.LOCK_FILE, "notes.tmp"),
+                entries());
+        assertEquals(Optional.of(published), store.read(PROJECT));
+    }
+
+    @Test
+    void aLeaseThatCannotBeTakenForAnotherReasonThanABusyOneIsNotReportedAsARunningPreparation() throws Exception {
+        FileSemanticProjectionStore store = new FileSemanticProjectionStore(temp.resolve("projections"));
+        Files.createDirectories(temp.resolve("projections").resolve(PROJECT)
+                .resolve(FileSemanticProjectionStore.LOCK_FILE));
+
+        IOException failure = assertThrows(IOException.class, () -> store.prepare(PROJECT));
+
+        assertFalse(failure instanceof SemanticProjectionStore.PreparationInProgressException,
+                "a lock file that is not a file is not a running preparation: " + failure);
+    }
+
+    @Test
+    void aProjectEntryThatIsALinkToAnotherTreeIsNeverRead() throws Exception {
+        FileSemanticProjectionStore elsewhere = new FileSemanticProjectionStore(temp.resolve("elsewhere"));
+        publish(elsewhere, projection(PROJECT, 5, 0.5f));
+        Path root = Files.createDirectories(temp.resolve("projections"));
+        boolean linked;
+        try {
+            Files.createSymbolicLink(root.resolve(PROJECT), temp.resolve("elsewhere").resolve(PROJECT));
+            linked = true;
+        } catch (IOException | UnsupportedOperationException | SecurityException refused) {
+            linked = false;
+        }
+        org.junit.jupiter.api.Assumptions.assumeTrue(linked, "this account cannot create a symbolic link");
+
+        assertThrows(SemanticProjectionStore.UnreadableProjectionException.class,
+                () -> new FileSemanticProjectionStore(root).read(PROJECT));
+    }
+
+    @Test
     void aProjectIdentifierThatIsNotAPlainNameNeverReachesTheFileSystem() {
         FileSemanticProjectionStore store = new FileSemanticProjectionStore(temp.resolve("projections"));
 

@@ -17,6 +17,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -51,8 +52,10 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
     private static final int MAGIC = 0x4D53504A; // MSPJ
     private static final int FORMAT_VERSION = 1;
     private static final int DIGEST_BYTES = 32;
-    private static final int MAX_POINTS = 2_000_000;
-    private static final int MAX_STRING_BYTES = 64 * 1024;
+    private static final int MAX_POINTS = 1_000_000;
+    private static final int MAX_STRING_BYTES = 16 * 1024;
+    private static final String TEMPORARY_PREFIX = "projection-v1-";
+    private static final String TEMPORARY_SUFFIX = ".tmp";
     private static final long MAX_FILE_BYTES = 512L * 1024L * 1024L;
     private static final Duration PREPARATION_LOCK_WAIT = Duration.ofMillis(200);
 
@@ -61,6 +64,7 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
 
     private final Path root;
     private final Object cacheLock = new Object();
+    private final Object decodeLock = new Object();
     private final Map<String, CachedProjection> cache = new HashMap<>();
 
     /** Nothing is created here: a reader works on a root it cannot write, or that does not exist yet. */
@@ -70,22 +74,30 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
 
     @Override
     public Optional<SemanticProjection> read(String projectId) throws IOException {
-        Path file = projectDirectory(projectId).resolve(FILE);
-        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+        Path directory = projectDirectory(projectId);
+        Path file = directory.resolve(FILE);
+        if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS) || !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
             forget(projectId);
             return Optional.empty();
         }
-        FileStamp stamp = FileStamp.of(file);
-        synchronized (cacheLock) {
-            CachedProjection known = cache.get(projectId);
-            if (known != null && known.stamp().equals(stamp)) return Optional.of(known.projection());
+        // The project entry is a plain directory of this root: a link in its place would read another tree.
+        if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            throw unreadable(null);
         }
-        SemanticProjection projection = decode(projectId, file, stamp.sizeBytes());
-        synchronized (cacheLock) {
-            cache.clear();
-            cache.put(projectId, new CachedProjection(stamp, projection));
+        // One decoding at a time: concurrent readers of a cold cache wait for the first one and reuse its result.
+        synchronized (decodeLock) {
+            FileStamp stamp = FileStamp.of(file);
+            synchronized (cacheLock) {
+                CachedProjection known = cache.get(projectId);
+                if (known != null && known.stamp().equals(stamp)) return Optional.of(known.projection());
+            }
+            SemanticProjection projection = decode(projectId, file, stamp.sizeBytes());
+            synchronized (cacheLock) {
+                cache.clear();
+                cache.put(projectId, new CachedProjection(stamp, projection));
+            }
+            return Optional.of(projection);
         }
-        return Optional.of(projection);
     }
 
     @Override
@@ -97,10 +109,29 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
         BoundedFileLease lease;
         try {
             lease = BoundedFileLease.acquire(lockFile, jvmLock, PREPARATION_LOCK_WAIT, "semantic projection lease");
-        } catch (IOException busy) {
-            throw new PreparationInProgressException(busy);
+        } catch (IOException failure) {
+            // Only a lease that could not be had in time means another preparation; anything else is its own failure.
+            String message = failure.getMessage();
+            if (message != null && message.startsWith("timed out waiting for")) {
+                throw new PreparationInProgressException(failure);
+            }
+            throw failure;
+        }
+        try {
+            removeAbandonedTemporaryFiles(directory);
+        } catch (IOException | RuntimeException failure) {
+            lease.close();
+            throw failure;
         }
         return new FilePreparation(projectId, directory, lease);
+    }
+
+    /** What a preparation that was killed while it wrote left behind; called under the lease of the project. */
+    private static void removeAbandonedTemporaryFiles(Path directory) throws IOException {
+        try (DirectoryStream<Path> entries =
+                     Files.newDirectoryStream(directory, TEMPORARY_PREFIX + "*" + TEMPORARY_SUFFIX)) {
+            for (Path abandoned : entries) Files.deleteIfExists(abandoned);
+        }
     }
 
     private final class FilePreparation implements Preparation {
@@ -121,7 +152,7 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
                 throw new IllegalArgumentException("projection belongs to another project");
             }
             if (projection.points().size() > MAX_POINTS) throw new IOException("projection exceeds point limit");
-            Path temporary = PrivateLocalStorage.createPrivateTempFile(directory, "projection-v1-", ".tmp");
+            Path temporary = PrivateLocalStorage.createPrivateTempFile(directory, TEMPORARY_PREFIX, TEMPORARY_SUFFIX);
             try {
                 encode(projection, temporary);
                 DurableAtomicFile.replace(temporary, directory.resolve(FILE), "semantic projection replacement");

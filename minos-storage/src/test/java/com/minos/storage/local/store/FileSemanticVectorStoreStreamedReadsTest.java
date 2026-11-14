@@ -121,6 +121,33 @@ class FileSemanticVectorStoreStreamedReadsTest {
     }
 
     @Test
+    void aWalkResumedAfterAKeyThatIsNotValidUtf8ReadsTheNextEntryWhereItStarts() throws Exception {
+        FileSemanticVectorStore store = storeOf(60);
+        Path file = store.root().resolve(PROJECT).resolve("index-v2.bin");
+        byte[] bytes = Files.readAllBytes(file);
+        byte[] key = {0, 0, 0, 7, 'd', 'o', 'c', '-', '0', '1', '9'};
+        int at = indexOf(bytes, key);
+        bytes[at + key.length - 1] = (byte) 0xFF;
+        Files.write(file, bytes);
+
+        SemanticVectorStore.VectorPage first = store.vectorPage(PROJECT, null, 20).orElseThrow();
+        SemanticVectorStore.VectorPage resumed =
+                store.vectorPage(PROJECT, first.vectors().getLast().stableKey(), 20).orElseThrow();
+
+        assertEquals("doc-01\uFFFD", first.vectors().getLast().stableKey());
+        assertEquals("doc-020", resumed.vectors().getFirst().stableKey());
+        assertEquals(20, resumed.vectors().size());
+        assertEquals(List.of(20.0, 1.0, -1.0), resumed.vectors().getFirst().vector().values());
+    }
+
+    private static int indexOf(byte[] bytes, byte[] pattern) {
+        for (int at = 0; at <= bytes.length - pattern.length; at++) {
+            if (Arrays.equals(bytes, at, at + pattern.length, pattern, 0, pattern.length)) return at;
+        }
+        throw new AssertionError("pattern not found");
+    }
+
+    @Test
     void anIndexInTheLegacyFormatIsStillReadByPagesAndItsChecksumsByWalkingTheFile() throws Exception {
         Path root = temp.resolve("legacy");
         Files.createDirectories(root.resolve(PROJECT));

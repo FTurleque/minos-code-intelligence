@@ -22,10 +22,10 @@ La numérotation des groupes est celle du plan commun : les groupes 2 à 5 sont 
 
 ## 8. Clôture
 
-- [ ] 8.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve
-- [ ] 8.2 Mettre à jour le dossier durable de la capacité `exploration-semantique` ; vérifier par `python scripts/docs/check-capability-dossiers.py`
-- [ ] 8.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`
-- [ ] 8.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, docs/user, docs/developer, arc42, ADR ARCH-0082 « Mise en œuvre ») ; vérifier que chacun est fait ou nommé comme reste
+- [x] 8.1 Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve
+- [x] 8.2 Mettre à jour le dossier durable de la capacité `exploration-semantique` ; vérifier par `python scripts/docs/check-capability-dossiers.py`
+- [x] 8.3 Valider les spécifications ; vérifier par `openspec validate --all --strict`
+- [x] 8.4 Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, docs/user, docs/developer, arc42, ADR ARCH-0082 « Mise en œuvre ») ; vérifier que chacun est fait ou nommé comme reste
 
 ## Workflow follow-up
 

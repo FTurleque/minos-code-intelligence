@@ -199,7 +199,9 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                 reader.skipDocumentTail();
                 String checksum = reader.string();
                 reader.skipVector(header);
-                checksums.put(stableKey, checksum);
+                if (checksums.put(stableKey, checksum) != null) {
+                    throw new IOException("semantic index holds a stable key twice: " + leafName(file));
+                }
             }
             reader.requireEnd();
             return Optional.of(new IndexChecksums(header.metadata(), checksums));
@@ -616,10 +618,15 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             return value;
         }
 
+        /** A string and its exact length in the file: the position never depends on how the bytes decode. */
         String string() throws IOException {
-            String value = readString(input, budget);
-            position += Integer.BYTES + (long) value.getBytes(StandardCharsets.UTF_8).length;
-            return value;
+            int length = integer();
+            if (length < 0 || length > MAX_STRING_BYTES) throw new IOException("invalid semantic index string length");
+            budget.accountString(length);
+            byte[] bytes = input.readNBytes(length);
+            if (bytes.length != length) throw new EOFException("truncated semantic index string");
+            position += length;
+            return new String(bytes, StandardCharsets.UTF_8);
         }
 
         void skipString() throws IOException {

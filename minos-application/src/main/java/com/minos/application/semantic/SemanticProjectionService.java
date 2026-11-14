@@ -29,6 +29,8 @@ public final class SemanticProjectionService {
     public static final int MAX_POINTS_PAGE = 5_000;
     public static final String PREPARE_COMMAND = "minos semantic projection prepare";
     public static final String UNREADABLE = "PROJECTION_UNREADABLE";
+    /** Phase reported once, when every pass is done and the projection is about to be published. */
+    public static final String PUBLISH_PHASE = "publish";
     static final String PARAMETERS = "components=2;maxIterations=" + MAX_ITERATIONS + ";tolerance=" + PrincipalAxes.TOLERANCE;
 
     private final ProjectResolver projects;
@@ -80,6 +82,7 @@ public final class SemanticProjectionService {
                     new SemanticProjection.Selection(request.kinds(), request.maxPoints()),
                     metadata.documentCount(), outcome.candidateCount(), outcome.explainedVariance(),
                     outcome.points());
+            progress.advanced(PUBLISH_PHASE, outcome.passes() + 1, 0L);
             preparation.publish(projection);
             return new PreparationReport(projectId, projection.points().size(), projection.candidateCount(),
                     projection.documentCount(), projection.sampled(), projection.explainedVariance(),

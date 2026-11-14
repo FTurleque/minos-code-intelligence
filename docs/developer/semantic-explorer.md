@@ -115,12 +115,20 @@ toute autre méthode rend `405`, et aucune lecture ne lit de vecteur ni ne calcu
 4. *project* : coordonnées des points retenus, rotation sur les deux axes principaux de la base, signe de chaque
    axe fixé (première valeur non nulle de sa direction positive), mise à l'échelle commune dans `[-1, 1]`.
 
-Les sommes sont faites dans l'ordre des clés stables et les fonctions trigonométriques par `StrictMath` : deux
+Les sommes sont faites dans l'ordre où le magasin rend ses pages et les fonctions trigonométriques par `StrictMath` : deux
 préparations identiques publient deux fichiers identiques octet pour octet (`SemanticProjectionCommandLineTest`).
 La mémoire de travail est comptée (`ProjectionPreparation.WorkingMemory`) : un lot de vecteurs, six tableaux de
 la taille d'un vecteur, et par point retenu sa clé, son rang et ses coordonnées ; au-delà du budget
 `--max-memory-mb`, la préparation échoue sans publier. L'index n'est jamais chargé entier. Non compté : la table
-des empreintes des documents, lue une fois au début et une fois avant publication pour l'identité de l'index.
+des empreintes des documents, lue une fois au début et une fois avant publication pour l'identité de l'index ;
+le texte des vecteurs d'une page PostgreSQL avant son décodage. Un index local au format hérité `index-v1.bin`
+échappe au budget : ses lots passent par le chargement complet ; une resynchronisation le réécrit au format
+courant.
+
+Un document de l'échantillon est retrouvé par sa clé stable, pas par son rang dans le parcours : l'ordre des
+pages est celui du magasin (PostgreSQL trie `stable_key` selon la collation de la base). Les points publiés sont
+toujours dans l'ordre Java des clés. Les sommes suivent l'ordre du magasin : deux préparations sur le même
+stockage sont identiques ; l'égalité entre un stockage local et PostgreSQL n'est ni garantie ni testée.
 
 **Identité et états.** La projection porte l'identité de son index (projet, snapshot, provider, modèle,
 dimensions, empreinte SHA-256 des clés stables et des empreintes de documents), la méthode, sa version, ses

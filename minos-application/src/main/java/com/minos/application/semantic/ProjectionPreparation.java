@@ -12,8 +12,11 @@ import com.minos.semantic.SemanticVectorStore;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
 
@@ -29,6 +32,8 @@ final class ProjectionPreparation {
     /** Estimated bytes of one selected document besides its stable key: rank, references and coordinates. */
     private static final long POINT_OVERHEAD_BYTES = 256L;
     private static final long VECTOR_OVERHEAD_BYTES = 160L;
+    /** Estimated bytes of one entry of the table that finds a selected document by its stable key. */
+    private static final long POSITION_ENTRY_BYTES = 64L;
 
     private final SemanticVectorStore vectors;
     private final SemanticVectorStore.IndexMetadata metadata;
@@ -112,23 +117,31 @@ final class ProjectionPreparation {
         ordered.sort(Comparator.comparing(Candidate::stableKey));
         String[] keys = new String[ordered.size()];
         SemanticDocumentKind[] kinds = new SemanticDocumentKind[ordered.size()];
+        memory.reserve(POSITION_ENTRY_BYTES * keys.length);
+        Map<String, Integer> positions = new HashMap<>(Math.max(16, keys.length * 2));
         for (int position = 0; position < keys.length; position++) {
             keys[position] = ordered.get(position).stableKey();
             kinds[position] = ordered.get(position).kind();
+            positions.put(keys[position], position);
         }
-        return new Sample(keys, kinds, candidates[0]);
+        return new Sample(keys, kinds, positions, candidates[0]);
     }
 
-    /** Walks the index and gives the visitor the vectors of the sample, each with its position in the sample. */
+    /**
+     * Walks the index and gives the visitor the vectors of the sample, each with its position in the sample. A
+     * document is found by its stable key, not by its rank in the walk: the order in which a store returns its
+     * pages is its own (a database sorts text by its collation), and need not be the order of the sample.
+     */
     private void walkSample(String phase, Sample sample, SampleVisitor visitor) throws IOException {
-        int[] next = {0};
+        BitSet visited = new BitSet(sample.keys().length);
         walk(phase, vector -> {
-            if (next[0] < sample.keys().length && sample.keys()[next[0]].equals(vector.stableKey())) {
-                visitor.visit(next[0], vector.vector());
-                next[0]++;
-            }
+            Integer position = sample.positions().get(vector.stableKey());
+            if (position == null) return;
+            if (visited.get(position)) throw indexChanged();
+            visited.set(position);
+            visitor.visit(position, vector.vector());
         });
-        if (next[0] != sample.keys().length) throw indexChanged();
+        if (visited.cardinality() != sample.keys().length) throw indexChanged();
     }
 
     /** One pass over the stored vectors, by pages, all of them read from the index the preparation started on. */
@@ -174,12 +187,18 @@ final class ProjectionPreparation {
     private static final class Sample {
         private final String[] keys;
         private final SemanticDocumentKind[] kinds;
+        private final Map<String, Integer> positions;
         private final int candidateCount;
 
-        Sample(String[] keys, SemanticDocumentKind[] kinds, int candidateCount) {
+        Sample(String[] keys, SemanticDocumentKind[] kinds, Map<String, Integer> positions, int candidateCount) {
             this.keys = keys;
             this.kinds = kinds;
+            this.positions = positions;
             this.candidateCount = candidateCount;
+        }
+
+        Map<String, Integer> positions() {
+            return positions;
         }
 
         String[] keys() {

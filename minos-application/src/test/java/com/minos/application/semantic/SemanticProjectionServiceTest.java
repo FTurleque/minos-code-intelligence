@@ -212,6 +212,44 @@ class SemanticProjectionServiceTest {
     }
 
     @Test
+    void aStoreThatSortsItsPagesByALinguisticCollationIsProjectedLikeAnyOther() throws Exception {
+        List<SemanticVectorStore.IndexedDocument> documents = new ArrayList<>();
+        for (int number = 0; number < 1_500; number++) {
+            String key = (number % 2 == 0 ? "Chunk:" : "chunk:") + (number % 3 == 0 ? "B_" : "a-") + number;
+            documents.add(fixture.document(ProjectionFixture.ACTIVE, SemanticDocumentKind.CHUNK, key, "c" + number));
+        }
+        fixture.replace(ProjectionFixture.ACTIVE, documents);
+        fixture.vectors.collation = String.CASE_INSENSITIVE_ORDER.thenComparing(java.util.Comparator.naturalOrder());
+
+        SemanticProjectionService.PreparationReport sampled = service.prepare(projectId,
+                ProjectionFixture.request(400, 3L), SemanticProjectionService.Progress.NONE);
+        SemanticProjection sample = fixture.projections.read(projectId).orElseThrow();
+        service.prepare(projectId, ProjectionFixture.request(1_500, 3L), SemanticProjectionService.Progress.NONE);
+        SemanticProjection whole = fixture.projections.read(projectId).orElseThrow();
+
+        assertEquals(400, sampled.pointCount());
+        assertEquals(keys(sample).stream().sorted().toList(), keys(sample), "published points are in stable-key order");
+        assertEquals(1_500, whole.points().size());
+        assertEquals(documents.stream().map(value -> value.document().stableKey()).sorted().toList(), keys(whole));
+        assertEquals(State.PRETE, service.status(projectId).state());
+    }
+
+    @Test
+    void theLastPassIsReportedBeforeTheProjectionIsPublished() throws Exception {
+        fixture.index(50);
+        List<String> events = new ArrayList<>();
+
+        service.prepare(projectId, ProjectionFixture.request(50, 42L), (phase, pass, vectorsRead) -> {
+            if (SemanticProjectionService.PUBLISH_PHASE.equals(phase)) {
+                events.add(phase + ":" + fixture.projections.publications);
+            }
+        });
+
+        assertEquals(List.of("publish:0"), events, "the publication is announced once, before it happens");
+        assertEquals(1, fixture.projections.publications);
+    }
+
+    @Test
     void aSecondPreparationOfTheSameProjectIsRefusedWhileOneIsRunning() {
         fixture.index(10);
         fixture.projections.busy = true;

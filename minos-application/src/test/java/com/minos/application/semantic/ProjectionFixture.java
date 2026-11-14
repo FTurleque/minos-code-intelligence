@@ -130,6 +130,8 @@ final class ProjectionFixture {
         int largestPage;
         boolean refuseFullLoad;
         Runnable afterVectorPage;
+        /** The order in which this store returns its pages and compares a page boundary: its own collation. */
+        java.util.Comparator<String> collation = java.util.Comparator.naturalOrder();
 
         @Override
         public Optional<IndexSnapshot> load(String projectId) {
@@ -164,11 +166,13 @@ final class ProjectionFixture {
             IndexSnapshot index = indexes.get(projectId);
             if (index == null) return Optional.empty();
             List<IndexedDocument> ordered = new ArrayList<>(index.documents());
-            ordered.sort(java.util.Comparator.comparing(value -> value.document().stableKey()));
+            ordered.sort(java.util.Comparator.comparing(value -> value.document().stableKey(), collation));
             List<StoredVector> page = new ArrayList<>();
             boolean hasMore = false;
             for (IndexedDocument value : ordered) {
-                if (afterStableKey != null && value.document().stableKey().compareTo(afterStableKey) <= 0) continue;
+                if (afterStableKey != null && collation.compare(value.document().stableKey(), afterStableKey) <= 0) {
+                    continue;
+                }
                 if (page.size() == limit) {
                     hasMore = true;
                     break;
