@@ -57,15 +57,18 @@ dimensions de la fixture `fixtures/typescript/typescript-modules`, 42 documents,
 
 ## Propositions soumises au propriétaire
 
-Ces valeurs sont des **propositions** ; aucune n'est appliquée comme seuil ni gardée par un test.
+Les lignes 1, 2, 3 et 5 ont été **décidées par le propriétaire le 2026-11-14**. Les valeurs 1, 3 et 5 sont celles
+du code (`SemanticProjectionService.DEFAULT_MAX_POINTS`, `DEFAULT_MAX_MEMORY_MEGABYTES`, `MAX_ITERATIONS`). Le
+seuil de durée (ligne 2) est une cible de qualification : il n'est gardé par aucun test automatique, une mesure
+de durée dépendant du poste ; il se vérifie en rejouant la commande de mesure ci-dessus.
 
 | # | Décision à prendre | Proposition | Fondement |
 |---|---|---|---|
 | 1 | Plafond de points par défaut (`--max-points`) | **décidé par le propriétaire le 2026-11-14 : 100 000**. Le rendu réel de 100 000 points dans un navigateur reste à relever | 25 000 points mesurés : 3,2 Mo de JSON, lecture en 107 ms ; 100 000 points extrapolés à 12,6 Mo, non rendus |
-| 2 | Durée de préparation acceptable | ≤ 30 s pour 25 000 documents à 256 dimensions sur stockage local | mesuré : 7,0 s ; la marge couvre un poste plus lent et 768 dimensions (non mesuré) |
-| 3 | Budget de mémoire par défaut (`--max-memory-mb`) | garder 256 | mémoire comptée mesurée : 15,3 Mo pour 25 000 points |
+| 2 | Durée de préparation acceptable | **décidé : ≤ 30 s** pour 25 000 documents à 256 dimensions sur stockage local | mesuré : 7,0 s ; la marge couvre un poste plus lent et 768 dimensions (non mesuré) |
+| 3 | Budget de mémoire par défaut (`--max-memory-mb`) | **décidé : 256** | mémoire comptée mesurée : 15,3 Mo pour 25 000 points |
 | 4 | Charge des points | ne pas ouvrir de format binaire tant que le rendu de 100 000 points en JSON n'est pas mesuré insuffisant | tâche 7.1 |
-| 5 | Nombre maximal d'itérations (40) | à garder ; une baisse (par exemple 20) diviserait la durée par deux mais change les coordonnées publiées, donc la version de la méthode | 40 itérations toutes consommées sur les trois paliers |
+| 5 | Nombre maximal d'itérations (40) | **décidé : 40**, à garder ; une baisse (par exemple 20) diviserait la durée par deux mais change les coordonnées publiées, donc la version de la méthode | 40 itérations toutes consommées sur les trois paliers |
 
 Éléments pour la décision 7.1 (aucune option n'est implémentée) : la variance expliquée faible plaide pour
 évaluer une méthode non linéaire **sur un modèle appris**, pas sur `local-hash` ; rien ne justifie WebGL ni la 3D

@@ -54,4 +54,4 @@ Aucune : `exploration-semantique` est créée par le changement précédent.
 
 ## Questions ouvertes
 
-Non bloquante : seuils de performance. Tranchée par le propriétaire le 2026-11-14 : plafond de points par défaut à 100 000.
+Tranchées par le propriétaire le 2026-11-14 : plafond de points par défaut à 100 000 ; préparation en 30 s au plus pour 25 000 documents à 256 dimensions sur stockage local ; budget de mémoire de 256 Mio ; 40 itérations au plus.
