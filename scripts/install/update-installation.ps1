@@ -8,6 +8,9 @@ param(
 
     [switch] $SkipProcessStop,
 
+    # File that receives the cause of a failed run. A successful run never creates it.
+    [string] $LogPath = '',
+
     # Qualification/test injection points. Production setup never sets these.
     [ValidateRange(0, [int]::MaxValue)]
     [int] $TestFailActivationAfterEntries = 0,
@@ -17,6 +20,23 @@ param(
 
     [switch] $TestFailPostCommitCleanup
 )
+
+# The installer starts this script without capturing its output streams: -LogPath is the only
+# channel through which the cause of a failure reaches the installer log. The report uses .NET
+# calls only, so it is still written when the session cannot load a cmdlet module.
+function Write-UpdateFailureLog([string] $Path, [System.Management.Automation.ErrorRecord] $Failure) {
+    if ([string]::IsNullOrWhiteSpace($Path)) { return }
+    $Text = 'MINOS_UPDATE_FAILED: ' + $Failure.Exception.Message + "`r`n"
+    if ($Failure.InvocationInfo) { $Text += $Failure.InvocationInfo.PositionMessage + "`r`n" }
+    if ($Failure.ScriptStackTrace) { $Text += $Failure.ScriptStackTrace + "`r`n" }
+    # A log that cannot be written must not replace the failure being reported.
+    try { [System.IO.File]::AppendAllText($Path, $Text, [System.Text.Encoding]::UTF8) } catch { }
+}
+
+trap {
+    Write-UpdateFailureLog -Path $LogPath -Failure $_
+    break
+}
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
