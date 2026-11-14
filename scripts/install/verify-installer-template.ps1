@@ -250,4 +250,73 @@ Require-Builder '@@PAYLOAD_ZIP@@' 'Installer builder does not substitute the pay
 # static or PS1-level check).
 Require-Builder "'minos-payload.zip'" 'Installer builder does not use the fixed payload zip filename PrepareToInstall expects.'
 
+# The payload extraction script exists only as Pascal string literals: rebuild the real script from
+# the template and run it under Windows PowerShell 5.1. A setup started from a PowerShell 7 terminal
+# hands PowerShell 7's PSModulePath down to that child, whose module lookup then resolves cmdlets of
+# script modules (Expand-Archive) to PowerShell 7 copies that Windows PowerShell 5.1 cannot run. The
+# extraction must succeed with that inherited path, and a payload it cannot extract must fail the
+# script and name the cause in -LogPath.
+function Get-PayloadExpandScriptText {
+    $Block = [regex]::Match($Text, '(?s)ExpandScriptText :=\n(.*?)\n\s*ExpandScriptPath :=')
+    if (-not $Block.Success) { throw 'Installer template: could not locate the payload extraction script.' }
+    $ScriptLines = New-Object System.Collections.Generic.List[string]
+    foreach ($Line in $Block.Groups[1].Value.Split("`n")) {
+        $Literal = [regex]::Match($Line, "^\s*'(.*)' \+ #13#10(?: \+|;)\s*$")
+        if (-not $Literal.Success) { throw "Installer template: unexpected line in the payload extraction script: $Line" }
+        $ScriptLines.Add($Literal.Groups[1].Value.Replace("''", "'"))
+    }
+    return ($ScriptLines -join "`r`n") + "`r`n"
+}
+
+function Invoke-PayloadExpandScript([string] $ScriptPath, [string] $Zip, [string] $Destination, [string] $LogPath) {
+    $StartInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $StartInfo.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $StartInfo.Arguments =
+        '-NoProfile -ExecutionPolicy Bypass -File "' + $ScriptPath +
+        '" -PayloadZip "' + $Zip + '" -PayloadDir "' + $Destination + '" -LogPath "' + $LogPath + '"'
+    $StartInfo.UseShellExecute = $false
+    $StartInfo.CreateNoWindow = $true
+    $PowerShell7Modules = Join-Path $env:ProgramFiles 'PowerShell\7\Modules'
+    $StartInfo.EnvironmentVariables['PSModulePath'] = $PowerShell7Modules + ';' + $env:PSModulePath
+    $Process = [System.Diagnostics.Process]::Start($StartInfo)
+    $Process.WaitForExit()
+    return $Process.ExitCode
+}
+
+$ExpandSandbox = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-expand-verify-' + [Guid]::NewGuid().ToString('N') + " O'Brien tst")
+New-Item -ItemType Directory -Force -Path (Join-Path $ExpandSandbox 'source\app') | Out-Null
+try {
+    $ExpandScript = Join-Path $ExpandSandbox 'expand-minos-payload.ps1'
+    [System.IO.File]::WriteAllText($ExpandScript, (Get-PayloadExpandScriptText), [System.Text.Encoding]::ASCII)
+    'payload' | Set-Content -LiteralPath (Join-Path $ExpandSandbox 'source\app\minos.exe') -Encoding ascii
+    'version' | Set-Content -LiteralPath (Join-Path $ExpandSandbox 'source\VERSION') -Encoding ascii
+    $ExpandZip = Join-Path $ExpandSandbox 'minos-payload.zip'
+    Compress-Archive -Path (Join-Path $ExpandSandbox 'source\*') -DestinationPath $ExpandZip
+    $ExpandLog = Join-Path $ExpandSandbox 'expand.log'
+
+    $ExpandTarget = Join-Path $ExpandSandbox 'minos-payload'
+    $ExpandExit = Invoke-PayloadExpandScript $ExpandScript $ExpandZip $ExpandTarget $ExpandLog
+    if ($ExpandExit -ne 0) { throw "Payload extraction failed under Windows PowerShell 5.1 with an inherited PowerShell 7 module path (exit=$ExpandExit)." }
+    foreach ($Expected in @('app\minos.exe', 'VERSION')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $ExpandTarget $Expected) -PathType Leaf)) {
+            throw "Payload extraction exited 0 without extracting $Expected."
+        }
+    }
+    if (Test-Path -LiteralPath $ExpandLog) { throw 'A successful payload extraction wrote a failure log.' }
+
+    $BrokenZip = Join-Path $ExpandSandbox 'broken.zip'
+    'not a zip archive' | Set-Content -LiteralPath $BrokenZip -Encoding ascii
+    $BrokenExit = Invoke-PayloadExpandScript $ExpandScript $BrokenZip (Join-Path $ExpandSandbox 'broken-out') $ExpandLog
+    if ($BrokenExit -eq 0) { throw 'Payload extraction exited 0 for an archive it cannot read.' }
+    if (-not (Test-Path -LiteralPath $ExpandLog -PathType Leaf)) { throw 'A failed payload extraction did not write its cause to -LogPath.' }
+    $ExpandLogText = [System.IO.File]::ReadAllText($ExpandLog, [System.Text.Encoding]::UTF8)
+    if ($ExpandLogText.IndexOf('MINOS_PAYLOAD_EXPAND_FAILED: ', [StringComparison]::Ordinal) -lt 0) {
+        throw "Payload extraction failure log does not carry the cause: $ExpandLogText"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $ExpandSandbox -Recurse -Force -ErrorAction SilentlyContinue
+}
+Require 'LogScriptOutput(ExpandLog);' 'The cause of a payload extraction failure does not reach the installer log.'
+
 Write-Host 'MINOS INSTALLER TEMPLATE VERIFICATION SUCCESS' -ForegroundColor Green

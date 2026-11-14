@@ -229,7 +229,8 @@ try {
     Assert-True $Threw6a 'Injected activation failure did not propagate when -LogPath is set.'
     Assert-True (Test-Path -LiteralPath $FailureLog -PathType Leaf) 'A failed update did not write its cause to -LogPath.'
     $FailureLogText = [System.IO.File]::ReadAllText($FailureLog, [System.Text.Encoding]::UTF8)
-    Assert-True ($FailureLogText -like '*MINOS_UPDATE_FAILED: MINOS_UPDATE_TEST_ACTIVATION_FAILURE:3*') "Failure log does not carry the cause: $FailureLogText"
+    $ExpectedCause = '*MINOS_UPDATE_FAILED: MINOS_UPDATE_TEST_ACTIVATION_FAILURE:3*'
+    Assert-True ($FailureLogText -like $ExpectedCause) "Failure log does not carry the cause: $FailureLogText"
     Assert-True ($FailureLogText -like '*update-installation.ps1*') 'Failure log does not locate the failing statement.'
     $SuccessLog = Join-Path $Sandbox 'updater-success.log'
     Invoke-UpdaterInProcess -PackageRoot $PackageV2 -InstallRoot $MainRoot -LogPath $SuccessLog

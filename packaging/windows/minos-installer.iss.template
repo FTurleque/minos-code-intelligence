@@ -1681,6 +1681,7 @@ var
   ResultCode: Integer;
   PayloadZip: String;
   PayloadDir: String;
+  ExpandLog: String;
   ExpandScriptPath: String;
   ExpandScriptText: String;
 begin
@@ -1697,9 +1698,18 @@ begin
   // rationale -- {tmp} resolves under the current user's profile, and a
   // Windows username can legitimately contain an apostrophe, which would
   // corrupt a hand-quoted -Command script text the same way it did there.
+  // The archive is read by the .NET Framework class, not by Expand-Archive: a
+  // setup started from a PowerShell 7 terminal inherits its PSModulePath, and
+  // Windows PowerShell 5.1 then resolves Expand-Archive to the PowerShell 7
+  // module, which fails here without a terminating error. Any failure stops
+  // the script and writes its cause to -LogPath.
   ExpandScriptText :=
-    'param([Parameter(Mandatory = $true)][string] $PayloadZip, [Parameter(Mandatory = $true)][string] $PayloadDir)' + #13#10 +
-    'Expand-Archive -LiteralPath $PayloadZip -DestinationPath $PayloadDir -Force' + #13#10;
+    'param([Parameter(Mandatory = $true)][string] $PayloadZip, [Parameter(Mandatory = $true)][string] $PayloadDir, [Parameter(Mandatory = $true)][string] $LogPath)' + #13#10 +
+    '$ErrorActionPreference = ''Stop''' + #13#10 +
+    'trap { try { [System.IO.File]::AppendAllText($LogPath, ''MINOS_PAYLOAD_EXPAND_FAILED: '' + $_.Exception.Message + "`r`n", [System.Text.Encoding]::UTF8) } catch { }; break }' + #13#10 +
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem' + #13#10 +
+    'if ([System.IO.Directory]::Exists($PayloadDir)) { [System.IO.Directory]::Delete($PayloadDir, $true) }' + #13#10 +
+    '[System.IO.Compression.ZipFile]::ExtractToDirectory($PayloadZip, $PayloadDir)' + #13#10;
   ExpandScriptPath := ExpandConstant('{tmp}\expand-minos-payload.ps1');
   if not SaveStringToFile(ExpandScriptPath, ExpandScriptText, False) then
   begin
@@ -1707,12 +1717,18 @@ begin
     exit;
   end;
 
+  ExpandLog := ExpandConstant('{tmp}\expand-minos-payload.log');
+  DeleteFile(ExpandLog);
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters :=
     '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandScriptPath +
-    '" -PayloadZip "' + PayloadZip + '" -PayloadDir "' + PayloadDir + '"';
+    '" -PayloadZip "' + PayloadZip + '" -PayloadDir "' + PayloadDir +
+    '" -LogPath "' + ExpandLog + '"';
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    LogScriptOutput(ExpandLog);
     Result := 'Le paquet MINOS n''a pas pu etre decompresse (code ' + IntToStr(ResultCode) + ').';
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
