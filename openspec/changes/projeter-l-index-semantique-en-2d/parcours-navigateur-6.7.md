@@ -1,7 +1,7 @@
 # Tâche 6.7 — parcours des états de projection dans un navigateur (relevé à remplir)
 
-Partie **manuelle** de la tâche 6.7, à faire par le propriétaire. La tâche ne se coche qu'une fois ce relevé
-rempli. Les états sont ceux de `docs/user/semantic-explorer.md`, « Carte 2D ».
+Partie **manuelle** de la tâche 6.7. Le propriétaire en a confié l'exécution à l'agent le 2026-11-14 (relevé
+ci-dessous, Windows et Chrome). Les états sont ceux de `docs/user/semantic-explorer.md`, « Carte 2D ».
 
 Un essai partiel a été fait par l'agent le 2026-11-14 dans le navigateur intégré de son poste (Windows, index
 `local-hash` de 42 documents de la fixture `fixtures/typescript/typescript-modules`) : ouverture de la carte en
@@ -45,24 +45,39 @@ minos semantic projection prepare typescript-modules --kinds CHUNK,SYMBOL,FILE
 
 ## Relevé
 
-Plateforme : ☐ Windows ☐ Linux · Navigateur et version : ………… · Date : ………… · Commit : …………
+Plateforme : ☑ Windows ☐ Linux · Navigateur et version : Chrome 157 · Date : 2026-11-14 · Commit : `5534da4f`
 
-| # | État | Comment l'obtenir | Attendu | Constaté | OK |
-|---|---|---|---|---|---|
-| 1 | Projection absente | avant tout `prepare`, cliquer « Carte 2D » | message « Aucune projection n'est préparée… » qui nomme `minos semantic projection prepare <projet>` ; aucune carte ; liste, recherche et détail utilisables | | ☐ |
-| 2 | Statut en ligne de commande | `minos semantic projection status typescript-modules` | `state: ABSENTE`, la commande de préparation, code de sortie 0 | | ☐ |
-| 3 | Préparation | `minos semantic projection prepare typescript-modules --kinds CHUNK,SYMBOL,FILE` | progression par passes sur la sortie d'erreur, rapport `state: PRETE`, 42 points, code 0 ; aucun chemin absolu | | ☐ |
-| 4 | Projection prête | refermer puis rouvrir « Carte 2D » | points colorés par nature, légende avec effectifs, compteur « 42 points affichés sur 42 documents », méthode PCA, graine 42, variance expliquée | | ☐ |
-| 5 | Zoom et déplacement | molette, glisser, `+`, `−`, flèches, double-clic | la carte suit ; double-clic ou `0` recentre | | ☐ |
-| 6 | Survol et sélection | survoler un point, puis le cliquer | nature et clé stable sous la carte ; le clic ouvre le détail du document et l'encadre sur la carte | | ☐ |
-| 7 | Filtre de nature | filtre « Nature » = `CHUNK` | seuls les points `CHUNK` restent, compteur « (filtré) », aucune requête de préparation | | ☐ |
-| 8 | Résultats de recherche | saisir une question, « Chercher » | les documents classés sont mis en évidence, les autres atténués ; colonne « Carte » : « sur la carte » ou « hors carte » | | ☐ |
-| 9 | Échantillonnage | `minos semantic projection prepare typescript-modules --kinds CHUNK,SYMBOL,FILE --max-points 10 --seed 7`, rouvrir la carte | « échantillon de 10 sur 42 … (graine 7) » ; une recherche montre des résultats « hors carte » | | ☐ |
-| 10 | Reproductibilité | relancer la même commande, comparer l'empreinte du fichier `target/projection-demo/home/semantic-projections/<id>/projection-v1.bin` avant et après | fichier identique octet pour octet | | ☐ |
-| 11 | Projection périmée | réimporter l'index sous un autre identifiant de snapshot (la commande `import-scip` ci-dessus avec `--snapshot demo-2`), puis `minos ide semantic-index-sync typescript-modules`, rouvrir la carte | message « La projection est périmée… », carte non affichée, bouton « Afficher la carte périmée » ; après clic, carte marquée « CARTE PÉRIMÉE » ; `status` rend `PERIMEE` | | ☐ |
-| 12 | Projection illisible | tronquer `projection-v1.bin` (par exemple n'en garder que les 10 premiers octets), rouvrir la carte | message « La projection enregistrée est illisible… » ; `status` rend `ECHOUEE`, cause `PROJECTION_UNREADABLE` ; un nouveau `prepare` rétablit `PRETE` | | ☐ |
-| 13 | Aucune préparation par HTTP | dans la console du navigateur ou par `curl -X POST` avec le jeton sur `/api/v1/projects/<id>/projection` | `405`, en-tête `Allow: GET`, fichier de projection inchangé | | ☐ |
-| 14 | Index non prêt | désactiver le provider (`MINOS_SEMANTIC_PROVIDER` non défini) et relancer `prepare` | échec, code 1, message qui nomme `minos ide semantic-index-sync` | | ☐ |
-| 15 | Premier rendu et fluidité (mesure de la tâche 6.8) | sur le plus grand index disponible | délai entre le clic sur « Carte 2D » et l'affichage : ………… ms ; zoom et déplacement fluides : ☐ oui ☐ non | | ☐ |
+Parcours fait par l'agent **à la demande du propriétaire**, dans son Chrome piloté par l'extension Claude in
+Chrome (clics, molette, glisser, clavier et saisie réels), sur un `MINOS_HOME` jetable `target/projection-walk/home`
+(fixture `typescript-modules`, 42 documents `local-hash` à 384 dimensions). L'état de la page est relevé par
+lecture de son DOM après chaque geste ; les commandes sont lancées dans un terminal. Linux et les autres
+navigateurs ne sont pas parcourus.
+
+| # | État | Constaté | OK |
+|---|---|---|---|
+| 1 | Projection absente | état `ABSENTE` ; message « Aucune projection n'est préparée pour cet index. Lancez « minos semantic projection prepare <projet> »… » ; canevas masqué ; table de 42 documents utilisable | ☑ |
+| 2 | Statut en ligne de commande | `state: ABSENTE`, `prepareCommand: minos semantic projection prepare <id>`, code 0 | ☑ |
+| 3 | Préparation | passes `select`, `center`, `fit`, `project` sur la sortie d'erreur (25 passes), « published in 331 ms », rapport `state: PRETE`, 42 points, code 0 ; aucun chemin absolu | ☑ |
+| 4 | Projection prête | « 42 points affichés sur 42 documents — natures projetées : CHUNK, FILE, SYMBOL. » ; « Méthode : PCA (version 1) · graine 42 · variance expliquée : axe 1 36,3 %, axe 2 14,2 %. » ; légende CHUNK 19, FILE 4, SYMBOL 19 ; la table reste visible sous la carte | ☑ |
+| 5 | Zoom et déplacement | molette : échelle 1 → 1,2 ; glisser : décalage (100, 36) ; touche `−` : échelle 1 ; flèche gauche : décalage ; double-clic : échelle 1, décalage (0, 0). Trois crans de molette n'ont produit qu'un pas de zoom | ☑ |
+| 6 | Survol et sélection | survol : « CHUNK · chunk:minos:structural:… » sous la carte et en infobulle ; clic : détail du document ouvert (`packages/api/src/greeting-contract.ts`, lignes 2–2), ligne de la table sélectionnée | ☑ |
+| 7 | Filtre de nature | nature `CHUNK` : « 19 points affichés sur 42 documents (filtré) », légende réduite à CHUNK, les 42 points restent chargés (aucune nouvelle lecture) | ☑ |
+| 8 | Résultats de recherche | recherche « greeting service » : 19 résultats (filtre `CHUNK` actif), colonne « Carte » : 19 « sur la carte », 19 points mis en évidence | ☑ |
+| 9 | Échantillonnage | « 10 points affichés sur 42 documents — échantillon de 10 sur 42 documents de nature CHUNK, FILE, SYMBOL (graine 7). » ; recherche sans filtre : 10 « sur la carte », 32 « hors carte » | ☑ |
+| 10 | Reproductibilité | SHA-256 du fichier identique avant et après une seconde préparation (`dbd306e4…a4e548`) | ☑ |
+| 11 | Projection périmée | après `import-scip … --snapshot demo-2` et `ide semantic-index-sync` : message « La projection est périmée… », canevas masqué, bouton « Afficher la carte périmée » ; après clic : carte affichée, compteur terminé par « — CARTE PÉRIMÉE. » ; `status` : `PERIMEE` | ☑ |
+| 12 | Projection illisible | fichier réduit à 10 octets : message « La projection enregistrée est illisible… », canevas masqué ; `status` : `ECHOUEE`, `PROJECTION_UNREADABLE`, code 0 ; un nouveau `prepare` rétablit `PRETE` (42 points), dans la page aussi | ☑ |
+| 13 | Aucune préparation par HTTP | depuis la page, avec le jeton : `POST`, `PUT`, `DELETE` sur `/projection` et `POST` sur `/projection/points` → `405`, `Allow: GET` ; fichier de projection inchangé (10 octets) | ☑ |
+| 14 | Index non prêt | sans `MINOS_SEMANTIC_PROVIDER` : « …the semantic index of the project is DISABLED, not READY; run minos ide semantic-index-sync … », code 1 | ☑ |
+| 15 | Premier rendu et fluidité | relevés sur 100 000 points dans `mesures-6.8.md` : première image en 961 ms, redessin médian 29 ms pendant un zoom | ☑ |
+
+Aucune erreur dans la console du navigateur à la fin du parcours. Écarts et limites relevés :
+
+- la carte ne se rafraîchit pas d'elle-même après une préparation : il faut refermer puis rouvrir « Carte 2D » ;
+- trois crans de molette envoyés par l'outil n'ont produit qu'un pas de zoom (un seul événement reçu) : la
+  sensibilité de la molette à la main n'est pas jugée ;
+- le déplacement est essayé par un seul glisser ; aucun essai tactile ;
+- non parcourus : Linux, Firefox, Safari, changement de projet dans la page, un index de plusieurs milliers de
+  documents (seulement mesuré, ligne 15).
 
 Après le parcours : `Ctrl+C` dans le terminal de `explorer serve`, puis supprimer `target/projection-demo/`.

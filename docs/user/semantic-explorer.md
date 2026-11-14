@@ -20,7 +20,7 @@ reste en STDIO.
 | Poste natif dont le backend MCP est Docker | Refusé par la commande, qui renvoie vers le service Docker |
 | Mode équipe (`MINOS_HOSTED_MODE=enabled`) | Refusé : la surface n'a pas d'autorisation par projet |
 | Accès depuis une autre machine, TLS, comptes utilisateurs | Non supporté, sans cible |
-| Carte 2D (PCA) — installation native, stockage local | Livrée, testée automatiquement sous Windows ; Linux par la CI ; **non qualifiée** : parcours des états dans un navigateur à valider par le propriétaire, seuils de performance non fixés |
+| Carte 2D (PCA) — installation native, stockage local | Livrée, testée automatiquement sous Windows et Linux ; états parcourus dans Chrome sous Windows ; **qualification partielle** : Linux et les autres navigateurs ne sont pas parcourus, les mesures portent sur des index `local-hash` synthétiques |
 | Carte 2D — installation native, PostgreSQL externe | Lecture des vecteurs par lots testée contre PostgreSQL/pgvector par la CI ; préparation complète **non qualifiée** sur ce stockage |
 | Carte 2D — runtime Docker | **Non supportée** : dépend de la qualification du service `minos-explorer` |
 | UMAP, t-SNE, rendu WebGL, vue 3D | Non supportés, sans engagement |

@@ -142,7 +142,7 @@ Séquence de préparation, états et modèle d'identités : conception commune. 
 
 | Capacité | Qualification |
 |---|---|
-| Carte 2D, stockage local, natif | **partielle** : tests automatisés verts sous Windows (poste), Linux par la CI ; parcours navigateur du propriétaire (6.7) et seuils (6.8) non faits |
+| Carte 2D, stockage local, natif | **partielle** : tests automatisés verts sous Windows et Linux (CI) ; parcours navigateur fait sous Windows dans Chrome (6.7, 15 lignes sur 15) ; seuils décidés ; Linux, autres navigateurs, index réel et modèle appris non parcourus ni mesurés |
 | Carte 2D, PostgreSQL externe, natif | **partielle** : lecture par lots prouvée par le contrat commun, exécuté contre PostgreSQL par la CI seulement ; préparation complète non exercée sur ce stockage |
 | Carte 2D, runtime Docker | non supportée ; dépend de la qualification du service `minos-explorer` |
 | UMAP, WebGL, 3D | non supportées, sans engagement |
@@ -210,8 +210,8 @@ Décision laissée au propriétaire : un `MINOS_HOME` inscriptible par un tiers 
 | idem | Préparation demandée par HTTP | Contrats | 6.5–6.6 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#anyMethodButGetOnAProjectionRouteIsRefusedAndNoProjectionIsCreatedOrChanged` |
 
 Preuves exécutées le 2026-11-14 sur le poste Windows (tests Maven ciblés par module) ; Linux et PostgreSQL sont
-couverts par la CI de la PR. Preuves manquantes : parcours des états dans un navigateur par le propriétaire
-(`parcours-navigateur-6.7.md`, tâche 6.7) ; seuils de performance et paliers non mesurés (`mesures-6.8.md`, tâche
+couverts par la CI de la PR. Parcours des états dans un navigateur : fait sous Windows dans Chrome (`parcours-navigateur-6.7.md`). Preuves
+manquantes : le même parcours sous Linux et dans un autre navigateur ; paliers non mesurés (`mesures-6.8.md`, tâche
 6.8) ; arrêt brutal d'un processus pendant la publication ; dépassement de budget observé par la commande elle-même
 (le plus petit budget acceptable, 1 Mio, suffit aux corpus de test).
 

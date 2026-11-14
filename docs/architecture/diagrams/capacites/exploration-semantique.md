@@ -242,7 +242,7 @@ une ligne dont l'exigence n'est pas encore dans la spec).
 | E6 | Une préparation en cours ou en échec n'est pas un état rendu par une lecture (la conception commune prévoyait `EN_PREPARATION` et `ECHOUEE` après échec) | `minos-application/src/main/java/com/minos/application/semantic/SemanticProjectionService.java` | Aucune : une lecture n'écrit rien et ne sonde aucun verrou ; l'échec est rendu par le code de sortie de la commande |
 | E7 | « Préparation interrompue » est prouvé par une préparation fermée sans publication et par la publication atomique, pas par l'arrêt brutal d'un processus pendant l'écriture | `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticProjectionStoreTest.java` | [Proposition] Test de processus fils tué pendant la publication |
 | E8 | Les points sont rendus en JSON paginé, pas en binaire ; la couleur par module ou langage et la date de préparation ne sont pas proposées | `minos-explorer/src/main/java/com/minos/explorer/ExplorerApi.java` | Décision mesurée (tâche 7.1 du changement de projection) |
-| E9 | La carte n'est qualifiée par aucun parcours dans un navigateur réel ; les mesures portent sur des corpus synthétiques `local-hash` sous Windows | `openspec/changes/projeter-l-index-semantique-en-2d/mesures-6.8.md` | Parcours et seuils du propriétaire (tâches 6.7 et 6.8) |
+| E9 | La carte n'est parcourue que dans Chrome sous Windows ; les mesures portent sur des corpus synthétiques `local-hash` sous Windows | `openspec/changes/projeter-l-index-semantique-en-2d/parcours-navigateur-6.7.md`, `openspec/changes/projeter-l-index-semantique-en-2d/mesures-6.8.md` | [Proposition] Parcours et mesures sous Linux, sur un index réel et sur PostgreSQL |
 
 ## Questions ouvertes
 
