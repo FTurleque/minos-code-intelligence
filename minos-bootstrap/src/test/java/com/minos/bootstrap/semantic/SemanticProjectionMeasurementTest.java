@@ -38,7 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * local store. It asserts no threshold: it writes what it measured to
  * {@code target/projection-measurements.md}. Run it on purpose:
  * {@code -Dtest=SemanticProjectionMeasurementTest -Dminos.projection.measure=true}, and
- * {@code -Dminos.projection.measure.sizes=1000,10000} to choose the corpus sizes.
+ * {@code -Dminos.projection.measure.sizes=1000,10000} to choose the corpus sizes;
+ * {@code -Dminos.projection.measure.keep=<directory>} keeps the homes it built, one per size.
  */
 @EnabledIfSystemProperty(named = "minos.projection.measure", matches = "true")
 class SemanticProjectionMeasurementTest {
@@ -55,8 +56,11 @@ class SemanticProjectionMeasurementTest {
         rows.add("| Documents | Dimensions | Preparation (ms) | Passes | Working memory (bytes) | Heap peak (bytes) "
                 + "| Cache file (bytes) | Points JSON (bytes) | Status and all points read (ms) | Explained variance |");
         rows.add("|---|---|---|---|---|---|---|---|---|---|");
+        // A kept directory lets the measured homes be served afterwards, to measure the map in a browser.
+        String kept = System.getProperty("minos.projection.measure.keep");
+        Path base = kept == null ? temp : Files.createDirectories(Path.of(kept).toAbsolutePath());
         for (String size : System.getProperty("minos.projection.measure.sizes", "1000,10000,25000").split(",")) {
-            rows.add(measure(temp.resolve("home-" + size.trim()), Integer.parseInt(size.trim())));
+            rows.add(measure(base.resolve("home-" + size.trim()), Integer.parseInt(size.trim())));
         }
         String report = "Platform: " + System.getProperty("os.name") + " " + System.getProperty("os.arch")
                 + ", Java " + Runtime.version() + ", max heap " + Runtime.getRuntime().maxMemory() + " bytes, "

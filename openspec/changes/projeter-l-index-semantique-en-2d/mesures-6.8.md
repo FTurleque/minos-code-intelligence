@@ -24,6 +24,37 @@ Relevé écrit par le test dans `target/projection-measurements.md` :
 | 1 000 | 256 | 655 | 43 | 4 708 956 | 118 886 616 | 67 505 | 126 264 | 29 | 0,0706 ; 0,0607 |
 | 10 000 | 256 | 3 066 | 43 | 8 677 276 | 263 726 264 | 672 585 | 1 264 237 | 64 | 0,0695 ; 0,0619 |
 | 25 000 | 256 | 7 017 | 43 | 15 290 556 | 285 496 840 | 1 680 905 | 3 160 867 | 107 | 0,0696 ; 0,0622 |
+| 100 000 | 256 | 27 554 | 43 | 54 758 276 | 366 947 488 | 6 722 835 | 12 645 867 | 430 | 0,0695 ; 0,0622 |
+
+Le palier de 100 000 documents a été mesuré le 2026-11-14 après les trois autres, par la même commande avec
+`-Dminos.projection.measure.sizes=100000` : à 256 dimensions, il tient dans le magasin local. Il confirme la
+croissance linéaire (27,6 s) et les tailles extrapolées (6,7 Mo de cache, 12,6 Mo de JSON).
+
+### Rendu de la carte dans un navigateur
+
+Même poste, Chrome 157, fenêtre de 1 920 × 873, `devicePixelRatio` 1, canevas de 1 297 × 295, surface servie par
+`minos explorer serve` sur le `MINOS_HOME` de 100 000 documents gardé par
+`-Dminos.projection.measure.keep=target/projection-measure`. Mesures prises par un script exécuté dans la page
+(`performance.now`, `requestAnimationFrame`), pilotée par l'extension Claude in Chrome.
+
+| Relevé | Valeur |
+|---|---|
+| Clic sur « Carte 2D » → points chargés (20 pages de 5 000), première ouverture | 942 ms |
+| Clic → première image dessinée, première ouverture | 961 ms |
+| Idem, deuxième et troisième ouvertures (projection en cache du serveur) | 395 ms et 354 ms |
+| Redessin après un zoom, jusqu'à l'image suivante, sur 30 zooms | médiane 29 ms, maximum 77 ms |
+| Recherche du point sous le curseur (survol), 100 000 points | médiane 1,3 ms |
+
+Lecture : la carte de 100 000 points s'affiche en moins d'une seconde et se redessine à environ 30 images par
+seconde pendant un zoom ; rien ne justifie WebGL sur ce relevé. Le nuage `local-hash` synthétique forme une tache
+sans structure, conforme à sa variance expliquée d'environ 13 %.
+
+Constat fait pendant ce relevé, **hors du périmètre de ce changement** : sur ce `MINOS_HOME`, la liste des
+documents répond `500`. L'index synthétique de 100 000 vecteurs à 256 dimensions pèse 204,8 Mio une fois décodé,
+au-delà du plafond de 192 Mio du chargement complet du magasin local
+(`FileSemanticVectorStore.java`, `MAX_DECODED_VECTOR_BYTES`), dont dérivent encore la liste, le détail, les
+voisins et la recherche. La projection, elle, lit par lots et fonctionne. Un index produit par
+`minos ide semantic-index-sync` est borné avant d'atteindre ce plafond ; le corpus de mesure ne l'est pas.
 
 Lecture du relevé :
 
@@ -49,9 +80,9 @@ dimensions de la fixture `fixtures/typescript/typescript-modules`, 42 documents,
 | Palier ou relevé du protocole | État | Raison |
 |---|---|---|
 | Index réel d'environ 25 000 documents (`docs/project/governance/STATUS.md:61`) | non mesuré | cet index a été produit sous Linux en conteneur ; le poste ne peut pas le reproduire. Le palier de 25 000 documents ci-dessus est synthétique |
-| 100 000 documents sur PostgreSQL | non mesuré | aucun PostgreSQL/pgvector disponible sur le poste ; la lecture par lots PostgreSQL n'est exercée que par la CI (`PostgresSemanticDocumentReadsContractTest`) |
+| 100 000 documents sur PostgreSQL | non mesuré sur PostgreSQL (mesuré sur le magasin local, voir ci-dessus) | aucun PostgreSQL/pgvector disponible sur le poste ; la lecture par lots PostgreSQL n'est exercée que par la CI (`PostgresSemanticDocumentReadsContractTest`) |
 | Linux | non mesuré | mesures faites sous Windows seulement |
-| Délai du premier rendu de la carte, fluidité du zoom et du déplacement | non mesuré | exige un navigateur réel ; à relever pendant le parcours de la tâche 6.7 |
+| Délai du premier rendu de la carte, fluidité du zoom | **mesuré** (ci-dessus) | Chrome sous Windows seulement ; déplacement à la souris et autres navigateurs non mesurés |
 | Préparation sous un tas JVM contraint | non mesuré | voir « pic de tas » |
 | Modèle d'embeddings appris (Ollama) | non mesuré | aucun provider appris sur le poste |
 
@@ -64,12 +95,13 @@ de durée dépendant du poste ; il se vérifie en rejouant la commande de mesure
 
 | # | Décision à prendre | Proposition | Fondement |
 |---|---|---|---|
-| 1 | Plafond de points par défaut (`--max-points`) | **décidé par le propriétaire le 2026-11-14 : 100 000**. Le rendu réel de 100 000 points dans un navigateur reste à relever | 25 000 points mesurés : 3,2 Mo de JSON, lecture en 107 ms ; 100 000 points extrapolés à 12,6 Mo, non rendus |
+| 1 | Plafond de points par défaut (`--max-points`) | **décidé par le propriétaire le 2026-11-14 : 100 000**. Rendu de 100 000 points relevé dans Chrome : première image en 961 ms | 25 000 points mesurés : 3,2 Mo de JSON, lecture en 107 ms ; 100 000 points extrapolés à 12,6 Mo, non rendus |
 | 2 | Durée de préparation acceptable | **décidé : ≤ 30 s** pour 25 000 documents à 256 dimensions sur stockage local | mesuré : 7,0 s ; la marge couvre un poste plus lent et 768 dimensions (non mesuré) |
 | 3 | Budget de mémoire par défaut (`--max-memory-mb`) | **décidé : 256** | mémoire comptée mesurée : 15,3 Mo pour 25 000 points |
 | 4 | Charge des points | ne pas ouvrir de format binaire tant que le rendu de 100 000 points en JSON n'est pas mesuré insuffisant | tâche 7.1 |
 | 5 | Nombre maximal d'itérations (40) | **décidé : 40**, à garder ; une baisse (par exemple 20) diviserait la durée par deux mais change les coordonnées publiées, donc la version de la méthode | 40 itérations toutes consommées sur les trois paliers |
 
-Éléments pour la décision 7.1 (aucune option n'est implémentée) : la variance expliquée faible plaide pour
+Décision 7.1 du propriétaire, 2026-11-14 : **aucun changement n'est ouvert pour UMAP, WebGL ni la 3D.**
+Éléments qui la précédaient (aucune option n'est implémentée) : la variance expliquée faible plaide pour
 évaluer une méthode non linéaire **sur un modèle appris**, pas sur `local-hash` ; rien ne justifie WebGL ni la 3D
 tant que le rendu Canvas n'est pas mesuré dans un navigateur.

@@ -173,7 +173,7 @@ arrivée entre-temps peut être coupée avec elles (`ExplorerServerTest`, test d
 abandonné après 30 s garde son jeton de concurrence tant que la lecture sous-jacente n'a pas rendu la main.
 Aucun seuil de performance n'est fixé. Mesure rejouable de la préparation et de la lecture d'une projection :
 `./mvnw -B -ntp -pl minos-bootstrap -am test "-Dtest=SemanticProjectionMeasurementTest" "-Dminos.projection.measure=true" "-Dsurefire.failIfNoSpecifiedTests=false"`
-(sautée sans la propriété ; relevé écrit dans `minos-bootstrap/target/projection-measurements.md`).
+(sautée sans la propriété ; relevé écrit dans `target/projection-measurements.md` à la racine du dépôt ; `-Dminos.projection.measure.keep=<dossier>` garde les `MINOS_HOME` mesurés pour les servir).
 
 ## Écoute
 
