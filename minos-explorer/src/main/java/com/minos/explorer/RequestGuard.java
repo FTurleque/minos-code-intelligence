@@ -10,9 +10,21 @@ import java.util.Set;
  * authentication: a page of another site opened in the same browser, another process of the machine or a
  * rebound DNS name can all reach the port. A request is served only when its {@code Host} is one of the names
  * the surface is served under, its {@code Origin}, when present, is the served origin, and, for the API, it
- * carries the session token.
+ * carries the session token. A request the browser announces as coming from another site is refused, except the
+ * read of the page and of its resources: a link followed from another page is such a request, and the page holds
+ * no data.
  */
 final class RequestGuard {
+
+    /** What a request asks for, which decides the checks it goes through. */
+    enum Target {
+        /** A route of the API: token required, no request from another site. */
+        API,
+        /** The {@code GET} of the page or of one of its resources: served to a navigation from another site. */
+        PAGE_READ,
+        /** Anything else outside the API: no token, no request from another site. */
+        OTHER
+    }
 
     /** Why a request is refused; the HTTP answer carries the status only, never the reason. */
     enum Refusal {
@@ -49,16 +61,17 @@ final class RequestGuard {
     }
 
     /**
-     * The refusal of a request, or empty when it may be served. {@code api} tells whether the request targets
-     * the API, which alone requires the token: the static page holds no data.
+     * The refusal of a request, or empty when it may be served. The API alone requires the token: the static
+     * page holds no data. {@code Host} and {@code Origin} are checked whatever the target.
      */
-    Optional<Refusal> check(boolean api, String host, String origin, String fetchSite, String authorization) {
+    Optional<Refusal> check(Target target, String host, String origin, String fetchSite, String authorization) {
         if (host == null || !hosts.contains(host.toLowerCase(Locale.ROOT))) return Optional.of(Refusal.HOST);
         if (origin != null && !origins.contains(origin.toLowerCase(Locale.ROOT))) return Optional.of(Refusal.ORIGIN);
-        if (fetchSite != null && !SAME_SITE_FETCHES.contains(fetchSite.toLowerCase(Locale.ROOT))) {
+        if (target != Target.PAGE_READ && fetchSite != null
+                && !SAME_SITE_FETCHES.contains(fetchSite.toLowerCase(Locale.ROOT))) {
             return Optional.of(Refusal.ORIGIN);
         }
-        if (api && !token.matches(authorization)) return Optional.of(Refusal.TOKEN);
+        if (target == Target.API && !token.matches(authorization)) return Optional.of(Refusal.TOKEN);
         return Optional.empty();
     }
 }

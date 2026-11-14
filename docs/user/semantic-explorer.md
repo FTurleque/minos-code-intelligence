@@ -40,6 +40,9 @@ http://127.0.0.1:51234/#token=…
   serveur et la page le retire de la barre d'adresse dès son chargement. Il vaut pour cette exécution seulement :
   relancer la commande en crée un autre.
 - Sans ce jeton, la page affiche « Accès refusé ». Rouvrez l'adresse imprimée par la commande.
+- L'adresse s'ouvre aussi par un lien cliqué dans une autre page ou une autre application : la page et ses deux
+  ressources (`app.css`, `app.js`) ne portent aucune donnée. Toute requête d'API venue d'un autre site reste
+  refusée.
 
 Codes de sortie : `0` arrêt demandé, `1` port indisponible, `2` erreur d'usage ou démarrage refusé.
 
@@ -77,7 +80,8 @@ tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_
 |---|---|
 | Requête d'API sans le jeton de session | `401`, sans détail |
 | En-tête `Host` autre que `127.0.0.1:<port>`, `localhost:<port>` ou `[::1]:<port>` | `403` |
-| Requête venant d'une autre origine (`Origin` étranger, ou `Sec-Fetch-Site` autre que `same-origin` et `none`) | `403`, corps vide, aucun en-tête CORS |
+| Requête d'API venant d'un autre site (`Origin` étranger, ou `Sec-Fetch-Site` autre que `same-origin` et `none`) | `403`, corps vide, aucun en-tête CORS |
+| Page demandée sous un autre `Host`, avec un `Origin` étranger, ou autrement que par un `GET` depuis un autre site | `403` et un texte qui dit de coller l'adresse imprimée par la commande |
 | Méthode d'écriture (`PUT`, `PATCH`, `DELETE`) | `405` : aucune route n'écrit |
 | Curseur de liste émis pour un index remplacé depuis | `409` : la lecture reprend à la première page |
 | Plus de 4 requêtes d'API simultanées, ou requête de plus de 30 s | `503` |
@@ -111,7 +115,7 @@ une installation réelle.
 | Symptôme | Cause | Action |
 |---|---|---|
 | « Accès refusé » | adresse ouverte sans son fragment `#token=…`, ou commande relancée depuis | rouvrir l'adresse imprimée par la commande en cours |
-| Page d'erreur `403` du navigateur à l'ouverture de l'adresse | adresse ouverte par un lien d'une autre page ou par une extension : le navigateur annonce une navigation venue d'un autre site | saisir ou coller l'adresse dans la barre d'adresse |
+| Texte « MINOS explorer : requête refusée. » | la page a été demandée sous un autre nom que `127.0.0.1`, `localhost` ou `[::1]`, ou par une autre page | coller l'adresse imprimée par la commande dans la barre d'adresse |
 | `error: … the team mode is enabled` | `MINOS_HOSTED_MODE` ou `minos.hosted.mode` actif pour ce `MINOS_HOME` | la surface n'est pas disponible en mode équipe |
 | `error: this MINOS home runs on the Docker backend` | le lanceur de ce poste est basculé sur Docker | utiliser le service `minos-explorer`, ou repasser en backend natif |
 | `error: the exploration surface could not listen on the requested port` | port déjà pris | autre `--port`, ou aucun pour un port libre |

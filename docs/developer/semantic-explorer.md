@@ -62,7 +62,13 @@ fonction que la construction de l'index utilise) : `IDENTIQUE` ou `DIFFERENTE`. 
 
 Préfixe `/api/v1/`. Toutes les réponses sont du JSON (`DeterministicJson`), avec `X-Content-Type-Options:
 nosniff`. Autorisation de chaque route : `Authorization: Bearer <jeton>`, `Host` local, `Origin` absent ou égal
-à l'origine servie.
+à l'origine servie, `Sec-Fetch-Site` absent, `same-origin` ou `none`.
+
+Hors de l'API, `RequestGuard` classe la requête : le `GET` de `/`, `/app.css` ou `/app.js` (`Target.PAGE_READ`)
+est servi quel que soit `Sec-Fetch-Site`, pour qu'un lien suivi depuis une autre page ouvre la surface ; `Host`
+et `Origin` y restent contrôlés. Toute autre requête hors API (`Target.OTHER`) garde le refus des requêtes
+venues d'un autre site. Un refus hors API répond par un texte fixe (`text/plain`), identique quel que soit le
+motif.
 
 | Route | Entrées | Sortie |
 |---|---|---|

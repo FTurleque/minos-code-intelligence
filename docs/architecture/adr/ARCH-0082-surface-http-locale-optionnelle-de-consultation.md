@@ -133,10 +133,12 @@ Changement OpenSpec `explorer-l-index-semantique-dans-un-navigateur`.
   sur Docker Desktop (relevé le 2026-11-13). L'écart est déclaré dans l'étiquette du service et dans
   `docs/user/docker-runtime.md` ; le propriétaire l'accepte en l'état (décision du 2026-11-13), le service restant optionnel et non qualifié.
 - **Contrôle d'origine (point 3).** En plus d'`Origin`, la surface refuse toute requête dont l'en-tête
-  `Sec-Fetch-Site` vaut autre chose que `same-origin` ou `none`, page d'accueil comprise
-  (`RequestGuard.check`). Un navigateur qui ouvre l'adresse depuis un lien d'une autre page reçoit donc `403`
-  avec un corps vide ; l'adresse saisie dans la barre d'adresse est servie. Le maintien, l'ouverture de la
-  seule page d'accueil ou un corps `403` lisible restent à décider par le propriétaire.
+  `Sec-Fetch-Site` vaut autre chose que `same-origin` ou `none`. Une seule lecture y échappe : le `GET` de la
+  page d'accueil et de ses deux ressources statiques (`/`, `/app.css`, `/app.js`), pour qu'un lien suivi depuis
+  une autre page ouvre la surface. Ces trois ressources ne portent aucune donnée et le jeton reste dans le
+  fragment de l'adresse ; `Host` et `Origin` y sont contrôlés comme ailleurs. Toute route `/api/` garde jeton,
+  `Host`, `Origin` et refus des requêtes venues d'un autre site (`RequestGuard.check`, `ExplorerServerTest`).
+  Un refus hors API répond par un texte fixe sans motif. Décision du propriétaire, 2026-11-14.
 - **`::1`.** La surface écoute sur `::1` quand la machine a cette adresse ; elle ne démarre pas si le port y
   est déjà pris, et n'y écoute pas sur une machine sans IPv6.
 - **Jeton et journaux (point 3).** L'adresse d'accès, jeton compris, est écrite une fois sur la sortie

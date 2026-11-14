@@ -45,21 +45,34 @@ class ExplorerUnitsTest {
         RequestGuard guard = RequestGuard.forPort(8765, token);
         String bearer = "Bearer " + token.value();
 
-        assertEquals(Optional.empty(), guard.check(true, "127.0.0.1:8765", null, null, bearer));
-        assertEquals(Optional.empty(), guard.check(true, "localhost:8765", "http://localhost:8765", "same-origin", bearer));
-        assertEquals(Optional.empty(), guard.check(true, "[::1]:8765", "http://[::1]:8765", "none", bearer));
-        assertEquals(Optional.empty(), guard.check(false, "127.0.0.1:8765", null, null, null));
-        assertEquals(Optional.of(RequestGuard.Refusal.HOST), guard.check(true, null, null, null, bearer));
-        assertEquals(Optional.of(RequestGuard.Refusal.HOST), guard.check(false, "example.org", null, null, null));
+        assertEquals(Optional.empty(), guard.check(RequestGuard.Target.API, "127.0.0.1:8765", null, null, bearer));
+        assertEquals(Optional.empty(), guard.check(RequestGuard.Target.API, "localhost:8765",
+                "http://localhost:8765", "same-origin", bearer));
+        assertEquals(Optional.empty(), guard.check(RequestGuard.Target.API, "[::1]:8765", "http://[::1]:8765", "none", bearer));
+        assertEquals(Optional.empty(), guard.check(RequestGuard.Target.OTHER, "127.0.0.1:8765", null, null, null));
+        assertEquals(Optional.of(RequestGuard.Refusal.HOST), guard.check(RequestGuard.Target.API, null, null, null, bearer));
+        assertEquals(Optional.of(RequestGuard.Refusal.HOST), guard.check(RequestGuard.Target.OTHER, "example.org", null, null, null));
         assertEquals(Optional.of(RequestGuard.Refusal.HOST),
-                guard.check(true, "example.org:8765", "https://autre.example", null, null));
+                guard.check(RequestGuard.Target.API, "example.org:8765", "https://autre.example", null, null));
         assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN),
-                guard.check(true, "127.0.0.1:8765", "https://autre.example", null, null));
+                guard.check(RequestGuard.Target.API, "127.0.0.1:8765", "https://autre.example", null, null));
         assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN),
-                guard.check(false, "127.0.0.1:8765", "http://127.0.0.1:9000", null, null));
+                guard.check(RequestGuard.Target.OTHER, "127.0.0.1:8765", "http://127.0.0.1:9000", null, null));
         assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN),
-                guard.check(true, "127.0.0.1:8765", null, "same-site", bearer));
-        assertEquals(Optional.of(RequestGuard.Refusal.TOKEN), guard.check(true, "127.0.0.1:8765", null, null, null));
+                guard.check(RequestGuard.Target.API, "127.0.0.1:8765", null, "same-site", bearer));
+        assertEquals(Optional.of(RequestGuard.Refusal.TOKEN), guard.check(RequestGuard.Target.API, "127.0.0.1:8765", null, null, null));
+        for (String site : java.util.List.of("cross-site", "same-site", "Cross-Site")) {
+            assertEquals(Optional.empty(),
+                    guard.check(RequestGuard.Target.PAGE_READ, "127.0.0.1:8765", null, site, null), site);
+            assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN),
+                    guard.check(RequestGuard.Target.OTHER, "127.0.0.1:8765", null, site, null), site);
+            assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN),
+                    guard.check(RequestGuard.Target.API, "127.0.0.1:8765", null, site, bearer), site);
+        }
+        assertEquals(Optional.of(RequestGuard.Refusal.HOST),
+                guard.check(RequestGuard.Target.PAGE_READ, "example.org:8765", null, "cross-site", null));
+        assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN), guard.check(RequestGuard.Target.PAGE_READ,
+                "127.0.0.1:8765", "https://autre.example", "cross-site", null));
         assertEquals(403, RequestGuard.Refusal.HOST.status());
         assertEquals(403, RequestGuard.Refusal.ORIGIN.status());
         assertEquals(401, RequestGuard.Refusal.TOKEN.status());

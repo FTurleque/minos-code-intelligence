@@ -121,6 +121,81 @@ class ExplorerServerTest {
     }
 
     @Test
+    void thePageAndItsTwoResourcesAreServedToANavigationComingFromALinkOfAnotherSite() throws Exception {
+        for (String site : List.of("cross-site", "same-site", "CROSS-SITE")) {
+            RawHttp.Response page = RawHttp.get(port, "/", Map.of("Sec-Fetch-Site", site));
+
+            assertEquals(200, page.status(), site);
+            assertTrue(page.body().startsWith("<!DOCTYPE html>"), site);
+            assertFalse(page.body().contains(token), "the page never holds the token");
+            for (String resource : List.of("/app.css", "/app.js")) {
+                assertEquals(200, RawHttp.get(port, resource, Map.of("Sec-Fetch-Site", site)).status(), resource);
+            }
+        }
+        RawHttp.Response linked = RawHttp.get(port, "/?x=1", Map.of("Sec-Fetch-Site", "cross-site"));
+        assertEquals(200, linked.status(), "the query string is not part of the path");
+        assertNull(linked.header("Access-Control-Allow-Origin"));
+        assertEquals("same-origin", linked.header("Cross-Origin-Resource-Policy"));
+        assertEquals("same-origin", linked.header("Cross-Origin-Opener-Policy"));
+        assertEquals("DENY", linked.header("X-Frame-Options"));
+        assertEquals("nosniff", linked.header("X-Content-Type-Options"));
+        assertEquals("no-referrer", linked.header("Referrer-Policy"));
+        assertEquals(ExplorerServer.PAGE_CONTENT_SECURITY_POLICY, linked.header("Content-Security-Policy"));
+        assertEquals(0, calls.get());
+    }
+
+    @Test
+    void nothingButTheReadOfThePageIsOpenedToARequestComingFromAnotherSite() throws Exception {
+        Map<String, String> crossSite = Map.of("Sec-Fetch-Site", "cross-site");
+        Map<String, String> crossSiteWithToken = new java.util.LinkedHashMap<>(bearer());
+        crossSiteWithToken.put("Sec-Fetch-Site", "cross-site");
+        Map<String, String> sameSiteWithToken = new java.util.LinkedHashMap<>(bearer());
+        sameSiteWithToken.put("Sec-Fetch-Site", "same-site");
+
+        assertEquals(403, RawHttp.get(port, "/api/v1/projects", crossSiteWithToken).status());
+        assertEquals(403, RawHttp.get(port, "/api/v1/projects", sameSiteWithToken).status());
+        assertEquals(403, RawHttp.get(port, "/api/v1/projects", crossSite).status());
+        assertEquals(403, RawHttp.send(port, "POST", "/", crossSite, "").status(), "a navigation is a GET");
+        assertEquals(403, RawHttp.send(port, "HEAD", "/", crossSite, null).status());
+        assertEquals(403, RawHttp.get(port, "/absent.js", crossSite).status(), "only the three resources");
+        assertEquals(403, RawHttp.get(port, "/index.html", crossSite).status(), "only the three resources");
+        assertEquals(200, RawHttp.get(port, "/index.html", Map.of()).status());
+        assertEquals(403, RawHttp.send(port, "get", "/", crossSite, null).status(), "the method is GET, exactly");
+        for (String almostApi : List.of("/api", "/API/v1/projects", "/app.js/", "/./", "/app.js;x")) {
+            assertEquals(403, RawHttp.get(port, almostApi, crossSiteWithToken).status(), almostApi);
+        }
+        RawHttp.Response refusedApi = RawHttp.get(port, "/api/v1/projects", crossSiteWithToken);
+        assertEquals("", refusedApi.body(), "an API refusal has no body");
+        assertNull(refusedApi.header("Content-Type"));
+        assertEquals("", RawHttp.send(port, "HEAD", "/", crossSite, null).body());
+        Map<String, String> foreignHost = new java.util.LinkedHashMap<>(crossSite);
+        foreignHost.put("Host", "attaquant.example:" + port);
+        assertEquals(403, RawHttp.get(port, "/", foreignHost).status(), "Host is checked on the page too");
+        Map<String, String> foreignOrigin = new java.util.LinkedHashMap<>(crossSite);
+        foreignOrigin.put("Origin", "https://autre.example");
+        assertEquals(403, RawHttp.get(port, "/", foreignOrigin).status(), "Origin is checked on the page too");
+        assertEquals(0, calls.get(), "no service call on a refused request");
+    }
+
+    @Test
+    void aRefusedPageRequestSaysHowToOpenTheSurfaceAndNothingAboutTheRefusal() throws Exception {
+        RawHttp.Response refused = RawHttp.get(port, "/", Map.of("Host", "attaquant.example:" + port));
+        RawHttp.Response refusedPost = RawHttp.send(port, "POST", "/", Map.of("Sec-Fetch-Site", "cross-site"), "");
+
+        for (RawHttp.Response answer : List.of(refused, refusedPost)) {
+            assertEquals(403, answer.status());
+            assertEquals("text/plain; charset=utf-8", answer.header("Content-Type"));
+            assertTrue(answer.body().contains("minos explorer serve"), answer.body());
+            for (String leak : List.of("host", "origin", "sec-fetch", "attaquant", token, ":\\", "Exception")) {
+                assertFalse(answer.body().toLowerCase(java.util.Locale.ROOT)
+                        .contains(leak.toLowerCase(java.util.Locale.ROOT)), leak);
+            }
+            assertNull(answer.header("Access-Control-Allow-Origin"));
+        }
+        assertEquals(refused.body(), refusedPost.body(), "one text, whatever the refusal");
+    }
+
+    @Test
     void aRequestFromAnotherOriginIsRefusedAndNoCorsHeaderIsEverSent() throws Exception {
         for (String origin : List.of("https://autre.example", "http://127.0.0.1:" + (port + 1), "null",
                 "http://127.0.0.1." + port + ".autre.example", "https://127.0.0.1:" + port)) {

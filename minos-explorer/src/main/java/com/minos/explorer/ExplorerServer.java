@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -51,6 +52,11 @@ final class ExplorerServer implements AutoCloseable {
     static final String DATA_CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'";
 
     private static final String API_ROOT = "/api/";
+    /** The page and its two resources: the only reads served to a navigation coming from another site. */
+    private static final Set<String> LINK_OPENED_PATHS = Set.of("/", "/app.css", "/app.js");
+    private static final String REFUSED_PAGE_TEXT = "MINOS explorer : requête refusée.\n"
+            + "Ouvrez l'adresse imprimée par « minos explorer serve » en la collant dans la barre d'adresse "
+            + "d'un navigateur de cette machine.\n";
     private static final String JSON = "application/json; charset=utf-8";
     private static final int CONNECTION_THREADS = 8;
     private static final int CONNECTION_QUEUE = 64;
@@ -181,11 +187,11 @@ final class ExplorerServer implements AutoCloseable {
             String path = exchange.getRequestURI().getRawPath();
             boolean apiRequest = path.startsWith(API_ROOT);
             Headers request = exchange.getRequestHeaders();
-            Optional<RequestGuard.Refusal> refusal = guard.check(apiRequest, request.getFirst("Host"),
+            Optional<RequestGuard.Refusal> refusal = guard.check(targetOf(exchange, path), request.getFirst("Host"),
                     request.getFirst("Origin"), request.getFirst("Sec-Fetch-Site"), request.getFirst("Authorization"));
             if (refusal.isPresent()) {
                 log.accept("refused request: " + refusal.orElseThrow().name().toLowerCase(Locale.ROOT));
-                send(exchange, refusal.orElseThrow().status(), null, new byte[0], DATA_CONTENT_SECURITY_POLICY, null);
+                refuse(exchange, refusal.orElseThrow().status(), apiRequest);
             } else if (apiRequest) {
                 answer(exchange, path);
             } else {
@@ -194,6 +200,25 @@ final class ExplorerServer implements AutoCloseable {
         } catch (IOException | RuntimeException failure) {
             // The exchange is closed by the try-with-resources; nothing of the failure reaches the client.
             log.accept("request failed: " + failure.getClass().getSimpleName());
+        }
+    }
+
+    private static RequestGuard.Target targetOf(HttpExchange exchange, String path) {
+        if (path.startsWith(API_ROOT)) return RequestGuard.Target.API;
+        boolean pageRead = "GET".equals(exchange.getRequestMethod()) && LINK_OPENED_PATHS.contains(path);
+        return pageRead ? RequestGuard.Target.PAGE_READ : RequestGuard.Target.OTHER;
+    }
+
+    /**
+     * Answers a refused request. Outside the API the answer is read by a person in a browser: it carries one
+     * fixed text that says how to open the surface, the same for every refusal. An API refusal has no body.
+     */
+    private static void refuse(HttpExchange exchange, int status, boolean apiRequest) throws IOException {
+        if (apiRequest) {
+            send(exchange, status, null, new byte[0], DATA_CONTENT_SECURITY_POLICY, null);
+        } else {
+            send(exchange, status, "text/plain; charset=utf-8", REFUSED_PAGE_TEXT.getBytes(StandardCharsets.UTF_8),
+                    DATA_CONTENT_SECURITY_POLICY, null);
         }
     }
 
@@ -316,6 +341,7 @@ final class ExplorerServer implements AutoCloseable {
         headers.set("Referrer-Policy", "no-referrer");
         headers.set("X-Frame-Options", "DENY");
         headers.set("Cross-Origin-Resource-Policy", "same-origin");
+        headers.set("Cross-Origin-Opener-Policy", "same-origin");
         if (mediaType != null) headers.set("Content-Type", mediaType);
         if (allow != null) headers.set("Allow", allow);
         boolean head = "HEAD".equals(exchange.getRequestMethod());
