@@ -127,8 +127,15 @@ dans l'index, et le classement d'une recherche est toujours calculé sur les vec
 aucun lien et ne nomme aucun groupe.
 
 Limites : la couleur par module ou par langage n'est pas proposée ; la page n'affiche pas une préparation en
-cours (la commande écrit sa progression, et une seconde préparation du même projet est refusée) ; la projection
-est un fichier dérivé sous `MINOS_HOME/semantic-projections/`, supprimable sans perte.
+cours (la commande écrit sa progression, et une seconde préparation du même projet est refusée) ; la carte ne se
+rafraîchit pas d'elle-même après une préparation : refermez puis rouvrez « Carte 2D » ; la projection est un
+fichier dérivé sous `MINOS_HOME/semantic-projections/`, supprimable sans perte.
+
+Les valeurs par défaut de `prepare` (100 000 points, 256 Mio, 40 itérations au plus) et le repère de durée (30 s
+pour 25 000 documents à 256 dimensions sur stockage local) sont **provisoires** : ils reposent sur des mesures
+faites sous Windows sur des index `local-hash` synthétiques. Aucune mesure n'existe sur un index réel, sur
+PostgreSQL à 100 000 documents, sous Linux ni avec un modèle d'embeddings appris. La carte a été parcourue sous
+Windows dans Chrome seulement.
 
 Avec le provider `local-hash`, un badge permanent rappelle que l'index est une référence déterministe (hachage de
 tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL`).

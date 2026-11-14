@@ -89,7 +89,9 @@ dimensions de la fixture `fixtures/typescript/typescript-modules`, 42 documents,
 
 ## Propositions soumises au propriétaire
 
-Les lignes 1, 2, 3 et 5 ont été **décidées par le propriétaire le 2026-11-14**. Les valeurs 1, 3 et 5 sont celles
+Les lignes 1, 2, 3 et 5 ont été **acceptées par le propriétaire le 2026-11-14, à titre provisoire** : elles
+tiennent tant que l'index réel, PostgreSQL à 100 000 documents et Linux ne sont pas mesurés, et aucune n'est
+gardée par un test. Les valeurs 1, 3 et 5 sont celles
 du code (`SemanticProjectionService.DEFAULT_MAX_POINTS`, `DEFAULT_MAX_MEMORY_MEGABYTES`, `MAX_ITERATIONS`). Le
 seuil de durée (ligne 2) est une cible de qualification : il n'est gardé par aucun test automatique, une mesure
 de durée dépendant du poste ; il se vérifie en rejouant la commande de mesure ci-dessus.
@@ -102,7 +104,8 @@ de durée dépendant du poste ; il se vérifie en rejouant la commande de mesure
 | 4 | Charge des points | ne pas ouvrir de format binaire tant que le rendu de 100 000 points en JSON n'est pas mesuré insuffisant | tâche 7.1 |
 | 5 | Nombre maximal d'itérations (40) | **décidé : 40**, à garder ; une baisse (par exemple 20) diviserait la durée par deux mais change les coordonnées publiées, donc la version de la méthode | 40 itérations toutes consommées sur les trois paliers |
 
-Décision 7.1 du propriétaire, 2026-11-14 : **aucun changement n'est ouvert pour UMAP, WebGL ni la 3D.**
+Décision 7.1 du propriétaire, 2026-11-14 : **aucun changement n'est ouvert pour UMAP, WebGL ni la 3D** ; à
+rouvrir après une mesure sur un modèle d'embeddings appris (Ollama).
 Éléments qui la précédaient (aucune option n'est implémentée) : la variance expliquée faible plaide pour
 évaluer une méthode non linéaire **sur un modèle appris**, pas sur `local-hash` ; rien ne justifie WebGL ni la 3D
 tant que le rendu Canvas n'est pas mesuré dans un navigateur.
