@@ -38,7 +38,8 @@ class M29DockerQueryImageContractTest {
     /** Services dont l'image est une image tierce épinglée dans le compose, pas une image MINOS. */
     private static final Map<String, String> MANAGED_SERVICE_IMAGES = Map.of(
             "minos-postgres", "MINOS_POSTGRES_IMAGE",
-            "minos-ollama", "MINOS_OLLAMA_IMAGE");
+            "minos-ollama", "MINOS_OLLAMA_IMAGE",
+            "minos-pgadmin", "MINOS_PGADMIN_IMAGE");
 
     /** Commandes que la qualification doit chercher, et ne pas trouver, dans l'image de requête (D3). */
     private static final List<String> ABSENT_COMMANDS = List.of(

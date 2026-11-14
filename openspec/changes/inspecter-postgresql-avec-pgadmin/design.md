@@ -18,11 +18,47 @@ Commit `63e0c4ac5288ebd6d52b3462e40e7067d06b36ce` (`develop`). Lectures de sourc
 | Tables et colonnes du schéma | `minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresSchemaMigrator.java:78-137` |
 | Support de test PostgreSQL existant | `minos-storage/src/test/java/com/minos/storage/postgresql/PostgresTestSupport.java` |
 
-Non mesuré : publication de port depuis un réseau interne ; empreinte mémoire de pgAdmin ; durée de premier démarrage.
+Les lignes citées sont identiques sur `main` au commit `ed17df21` (relues le 2026-11-13).
+
+### Publication de port et réseau interne (tâche 1.1)
+
+Relevé manuel du 2026-11-13 sur le poste du propriétaire : Docker client et serveur 29.9.3 (Docker Desktop, moteur `linux/amd64`). Deux conteneurs jetables de l'image PostgreSQL épinglée, chacun lancé avec `-p 127.0.0.1:<port>:5432` ; le port est sondé par une requête `SSLRequest` PostgreSQL, pas par une simple connexion TCP.
+
+| Cas | Réseaux du conteneur | `docker port` | `127.0.0.1:<port>` |
+|---|---|---|---|
+| A | un réseau `--internal` seul | vide (`{"5432/tcp":[]}`) | connexion refusée |
+| B | le même réseau interne et un réseau non interne | `5432/tcp -> 127.0.0.1:<port>` | PostgreSQL répond |
+
+Docker accepte `-p` sans erreur dans le cas A et ne publie rien. Un service attaché au seul `minos-runtime` ne peut donc pas être joint depuis l'hôte : D2 (réseau d'entrée dédié) est nécessaire. Limite : résultat propre à Docker 29.9.3 sous Docker Desktop ; non relevé sur un moteur Linux natif.
+
+Non mesuré : empreinte mémoire de pgAdmin ; durée de premier démarrage.
+
+### Relevés de mise en œuvre (2026-11-13, Docker 29.9.3, Compose 5.7.0, Docker Desktop)
+
+| Fait | Preuve |
+|---|---|
+| Compose interpole les services des profils inactifs : une variable requise (`${VAR:?}`) d'un service hors profil fait échouer toute commande, `config`, `ps` et `stop` compris | `docker compose config` sur un fichier d'essai, avec et sans le profil |
+| Compose refuse un projet où un service actif dépend d'un service d'un profil inactif, même pour l'arrêter (`depends on undefined service`) | `StopPgAdmin` avec le seul profil `pgadmin`, sur un runtime jetable |
+| pgAdmin 9.19.0 démarre sans aucune capacité et écoute alors sur 8080 ; racine en lecture seule possible avec trois `tmpfs` ; son point d'entrée ne peut plus écrire `config_distro.py` | conteneur réel : `CapEff` et `CapBnd` nuls, `NoNewPrivs: 1`, journal du conteneur |
+| `UPGRADE_CHECK_ENABLED` vaut `False` par `/etc/pgadmin/config_system.py` | `import config` dans le conteneur |
+| libpq n'utilise un fichier de mots de passe que s'il appartient au processus avec le mode `0600` : le fichier monté est copié dans le dossier de stockage du compte pgAdmin | connexion `minos_inspect` par `psql -w` depuis le conteneur pgAdmin |
+| pgAdmin au repos : 235 Mio, 5 processus | `docker stats` |
+| `com.docker.network.bridge.enable_ip_masquerade: "false"` sur le réseau d'entrée ne coupe pas l'accès sortant : le port local reste joignable, et pgAdmin atteint toujours Internet, par nom comme par adresse | `wget` depuis le conteneur, avant et après, réseau recréé avec l'option (lue par `docker network inspect`) |
+| `information_schema.tables` ne liste que les tables sur lesquelles le rôle détient un droit ; `projects` y figure avec `SELECT` faux (droits par colonne) | requête de vérification exécutée avec le rôle |
+
+### Relevé dans le navigateur (tâche 1.9)
+
+Relevé manuel du propriétaire, 2026-11-13, sur le runtime jetable activé par `EnablePgAdmin` (données synthétiques : trois projets, cinq documents). Connexion au compte pgAdmin par le mot de passe du fichier privé ; le serveur « MINOS (read-only) » s'ouvre sans demander de mot de passe. Dans l'outil de requête, avec le rôle `minos_inspect` : la vérification des droits (six lignes, aucune écriture), le `DELETE` et `SELECT root_value` refusés par « permission denied », puis les sept requêtes de diagnostic de la page utilisateur rendent les résultats attendus, identiques à ceux obtenus par `psql` avec le même rôle. Limite : données synthétiques, pas un index produit par MINOS.
 
 ## Écarts
 
-Aucun.
+| Id | Écart | Suite |
+|---|---|---|
+| E1 | Le scénario « Secret absent » ne peut pas être tenu par une variable Compose requise (premier relevé ci-dessus) | D5 : chemin sentinelle dans le Compose et garde dans le script. Exigence et scénario inchangés |
+| E2 | Invariant « aucun droit de création » : le rôle garde ce que PostgreSQL accorde à `PUBLIC` (`TEMPORARY`, création de grands objets) ; le retirer modifierait `PUBLIC` pour toute la base | Limite déclarée dans la page utilisateur ; `CREATE` sur le schéma et sur la base sont refusés et testés ; le rôle est borné à 8 connexions et 256 Mo de fichiers temporaires. [Question] ci-dessous |
+| E3 | `pgpass` et le mot de passe du compte sont écrits dans `secrets/` du dossier de données Docker, pas dans le dossier d'exécution : `Install` copie le dossier d'exécution dans ses sauvegardes | `servers.json`, sans secret, reste dans le dossier d'exécution |
+| E4 | L'activation est refusée hors Windows : les fichiers privés sont restreints par ACL Windows, et un fichier `0600` d'un hôte Linux serait illisible par l'uid 5050 du conteneur | Même limite que le configurateur du PostgreSQL géré. Arrêt et retrait sont portables |
+| E5 | Le script SQL du rôle est un bloc du script de cycle de vie, pas un fichier séparé : un fichier livré de plus toucherait les listes de la distribution Windows et sa mise à jour transactionnelle | Source unique, lue telle quelle par le test PostgreSQL |
 
 ## Exigences couvertes
 
@@ -69,7 +105,11 @@ Actions du script de cycle de vie (additives) :
 | `StopPgAdmin` | service arrêté, configuration conservée | — |
 | `RemovePgAdmin` | conteneur, volume `minos-pgadmin-data`, fichiers privés et rôle supprimés | — |
 
-Variables : `MINOS_PGADMIN_PORT`, `MINOS_PGADMIN_EMAIL`, `MINOS_PGADMIN_PASSWORD_FILE`, limites `MINOS_PGADMIN_MEM_LIMIT`, `MINOS_PGADMIN_PIDS_LIMIT`, `MINOS_PGADMIN_CPUS`.
+Variables : `MINOS_PGADMIN_PORT`, `MINOS_PGADMIN_EMAIL`, `MINOS_PGADMIN_PASSWORD_FILE`, `MINOS_PGADMIN_PGPASS_FILE`, `MINOS_PGADMIN_SERVERS_FILE` (les trois fichiers montés), `MINOS_PGADMIN_IMAGE` (surcharge de l'image épinglée, comme pour PostgreSQL), limites `MINOS_PGADMIN_MEM_LIMIT`, `MINOS_PGADMIN_PIDS_LIMIT`, `MINOS_PGADMIN_CPUS`. `Install` reporte les cinq premières et les limites dans le `.env` régénéré.
+
+Erreurs complémentaires : `EnablePgAdmin` refuse aussi un runtime sans service `minos-pgadmin`, un hôte non Windows, une variable `MINOS_PGADMIN_*` dans l'environnement du processus (Compose la préférerait au `.env`), un PostgreSQL géré arrêté, un schéma sans tables MINOS et un rôle `minos_inspect` membre d'un autre rôle ou propriétaire d'un objet ; `RemovePgAdmin` refuse un PostgreSQL géré arrêté avant de rien retirer. `Uninstall` retire le conteneur, le volume et les deux fichiers privés de pgAdmin ; le rôle reste dans la base conservée.
+
+Rotation : un mot de passe n'est généré que si son fichier est absent ; `EnablePgAdmin` retire alors le conteneur et le volume de pgAdmin avant de démarrer le service, parce que pgAdmin ne lit le mot de passe de son compte qu'à la création de sa configuration.
 
 ## Persistance et intégrité
 
@@ -113,7 +153,7 @@ Vue de conteneurs : `openspec/changes/explorer-l-index-semantique-dans-un-naviga
 [Décision — propriétaire, 2026-11-13] Écarté : fichier Compose séparé (les gates de limites et d'images lisent les fichiers livrés ; un seul cycle de vie).
 
 ### D2 — Réseau d'entrée dédié
-[Proposition] Conditionnée par la tâche 1.1. Écarté : rendre `minos-runtime` non interne.
+[Décision] Confirmée par le relevé de la tâche 1.1 (« État vérifié au HEAD ») : un service attaché au seul réseau interne ne publie aucun port. Écarté : rendre `minos-runtime` non interne.
 
 ### D3 — Rôle `minos_inspect`, liste fermée, droits par colonne
 [Décision — propriétaire, 2026-11-13] Écarté : rôle prédéfini de lecture globale (il lirait `knowledge_snapshots` et `root_value`).
@@ -121,11 +161,18 @@ Vue de conteneurs : `openspec/changes/explorer-l-index-semantique-dans-un-naviga
 ### D4 — Rôle créé par une action d'administration
 [Décision — propriétaire, 2026-11-13] Écarté : création par `PostgresSchemaMigrator` (exigerait le droit de créer des rôles pour toute installation).
 
+### D5 — Secret absent : chemin sentinelle et garde du script
+[Décision — propriétaire, 2026-11-13] Chaque fichier monté a pour source `${VAR:-/VAR-is-required}` avec `create_host_path: false` : sans la variable, Docker refuse le montage en nommant le chemin, donc la variable. `EnablePgAdmin` rejoue le contrôle (`Assert-PgAdminSecretsConfigured`) avant de démarrer le service. Écarté : variable requise `${VAR:?}` (casse les installations sans pgAdmin, E1) ; valeur factice écrite par chaque script ; fichier Compose séparé (D1).
+
+### D6 — Image et durcissement
+[Décision] `dpage/pgadmin4:9.19.0`, épinglée par digest, dernière version publiée le 2026-10-29. `cap_drop: [ALL]`, `no-new-privileges`, racine en lecture seule, port d'écoute 8080, vérification de mises à jour désactivée par un fichier de configuration système écrit sur `tmpfs`. Chaque appel Compose qui nomme le service active les profils `postgresql` et `pgadmin`.
+
 ## Qualification des capacités
 
 | Capacité | Qualification |
 |---|---|
-| pgAdmin — PostgreSQL géré, runtime Docker | non supportée tant que les tâches 1.2 à 1.9 ne sont pas vertes |
+| pgAdmin — PostgreSQL géré, runtime Docker, hôte Windows | qualifiée sur un runtime jetable (Docker Desktop 29.9.3) : tâches 1.2 à 1.9 vertes, relevé dans le navigateur compris. Non rejouée sur une installation faite par l'installateur, ni sur un index produit par MINOS |
+| pgAdmin — hôte Linux | non supportée : activation refusée (E4) |
 | pgAdmin — PostgreSQL externe | non supportée, hors périmètre |
 
 ## Risques et compromis
@@ -146,13 +193,18 @@ Auto-tests des scripts Docker (service, port, secret, retrait) ; test PostgreSQL
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| distribution-docker › pgAdmin optionnel, boucle locale | Installation sans pgAdmin | D1 | 1.2–1.3 | à écrire |
-| idem | pgAdmin activé | D1, D2 | 1.2–1.3 | à écrire |
-| idem | Secret absent | Sécurité | 1.2–1.3 | à écrire |
-| distribution-docker › rôle limité à la lecture | Écriture refusée | D3 | 1.4–1.5 | à écrire |
-| idem | Racine des projets non lisible | D3 | 1.4–1.5 | à écrire |
-| distribution-docker › retrait sans perte | Retrait | D4 | 1.6–1.7 | à écrire |
+| distribution-docker › pgAdmin optionnel, boucle locale | Installation sans pgAdmin | D1 | 1.2–1.3 | `scripts/install/test_mcp_lifecycle_pgadmin.py` : `test_compose_resolves_no_pgadmin_and_no_port_without_the_profile`, `test_without_the_profile_no_service_publishes_a_port`, `test_the_base_runtime_has_no_pgadmin_and_publishes_no_port` |
+| idem | pgAdmin activé | D1, D2, D6 | 1.2–1.3 | même fichier : `test_compose_resolves_one_loopback_port_with_the_profile`, `test_postgresql_stays_unpublished_on_the_internal_network` ; relevé du runtime jetable (seul port : `127.0.0.1` vers pgAdmin) |
+| idem | Secret absent | D5 | 1.2–1.3 | même fichier : `test_a_missing_password_file_variable_is_refused_by_name`, `test_a_variable_that_names_a_missing_file_is_refused_by_name`, `test_secrets_come_from_read_only_files_and_never_from_the_environment` ; relevé : `docker compose up` sans la variable échoue sur `/MINOS_PGADMIN_PASSWORD_FILE-is-required` |
+| distribution-docker › rôle limité à la lecture | Écriture refusée | D3 | 1.4–1.5 | `minos-storage/src/test/java/com/minos/storage/postgresql/PostgresInspectionRoleTest.java` : `writesAreRefusedByThePrivilegesOnceTheSessionIsNoLongerReadOnly`, `onlyTheClosedListOfTablesIsReadable`, `applyingTheScriptAgainRestoresTheClosedList` |
+| idem | Racine des projets non lisible | D3 | 1.4–1.5 | même classe : `theRootOfAProjectIsNotReadableWhileItsOtherColumnsAre` |
+| distribution-docker › retrait sans perte | Retrait | D4 | 1.6–1.7 | `test_mcp_lifecycle_pgadmin.py` : `test_removal_takes_pgadmin_and_the_role_and_nothing_else` ; `PostgresInspectionRoleTest#removingTheRoleLeavesTheDataUntouched` ; relevé du runtime jetable (conteneur, volume, réseau d'entrée et rôle absents, 5 lignes inchangées) |
+
+Preuves manquantes : aucun test automatique ne démarre pgAdmin (le démarrage réel est un relevé manuel, daté) ; le volume PostgreSQL « inchangé » est prouvé par l'absence de toute commande qui le nomme et par le relevé, pas par une empreinte du volume ; les actions n'ont pas été rejouées sur une installation faite par l'installateur Windows.
 
 ## Questions ouvertes
 
-Aucune décision du propriétaire en attente. Reste technique : résultat de la tâche 1.1.
+- [Décision — propriétaire, 2026-11-13] E2 : les droits que PostgreSQL accorde à `PUBLIC` (`TEMPORARY`, création de grands objets) ne sont pas retirés dans la base gérée ; la limite est déclarée dans la page utilisateur.
+- [Décision — propriétaire, 2026-11-13] Un fichier privé existant dont la liste d'accès était plus large est restreint de nouveau, vérifié, puis utilisé : même règle que le mot de passe PostgreSQL.
+- [Décision — propriétaire, 2026-11-13] Couper l'accès sortant de pgAdmin : demandé, essayé, sans effet sous Docker Desktop (relevé ci-dessus). L'option n'est pas posée ; le risque reste celui déclaré (service hors profil par défaut, vérification de mises à jour désactivée). [Question] Reste à trouver un moyen qui tienne sous Docker Desktop sans donner de capacité au conteneur.
+- [Question] Les limites de pgAdmin (1 Gio, 256 PID) reposent sur une mesure au repos : à revoir après un relevé en session de requêtes.

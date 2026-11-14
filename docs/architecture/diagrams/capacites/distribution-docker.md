@@ -51,10 +51,10 @@ sequenceDiagram
   end
 ```
 
-Le premier refus (`Assert-QueryImageConfigured`, `docker/scripts/mcp-lifecycle.ps1:700`) précède tout appel à
-Docker ; le second (`Assert-QueryImagePlane`, `docker/scripts/mcp-lifecycle.ps1:963`) lit le label de l'image
+Le premier refus (`Assert-QueryImageConfigured`, `docker/scripts/mcp-lifecycle.ps1:702`) précède tout appel à
+Docker ; le second (`Assert-QueryImagePlane`, `docker/scripts/mcp-lifecycle.ps1:1290`) lit le label de l'image
 par `docker image inspect` et refuse sans démarrer de conteneur. Un runtime installé par une version à une seule
-image démarre avec un avertissement (`docker/scripts/mcp-lifecycle.ps1:964-966`). Les actions Start, Validate,
+image démarre avec un avertissement (`docker/scripts/mcp-lifecycle.ps1:1291-1293`). Les actions Start, Validate,
 Admin, AddProject et RemoveProject passent par la première garde ; Stop et Uninstall non, pour qu'un runtime non
 migré puisse encore être arrêté.
 
@@ -111,6 +111,39 @@ Docker Desktop réel le 2026-11-05 : après la mise à jour d'une installation �
 `minos-admin` listent seulement `alpha` et `team`, le dossier voisin est absent et l'écriture dans un montage est
 refusée.
 
+### Comment pgAdmin atteint-il PostgreSQL sans l'exposer ?
+
+Type : flowchart (vue de déploiement, non UML) · Portée : existant vérifié · Exigences : « pgAdmin est un service
+optionnel publié sur la seule boucle locale », « pgAdmin se connecte par un rôle PostgreSQL limité à la lecture »,
+« Retirer pgAdmin ne supprime aucune donnée MINOS »
+
+```mermaid
+flowchart LR
+  subgraph hote["Hôte Windows"]
+    nav["navigateur"]
+    sec["fichiers privés : secrets/pgadmin.password, secrets/pgadmin.pgpass"]
+    srv["pgadmin-servers.json (sans secret)"]
+  end
+  pga["minos-pgadmin (profil pgadmin, aucune capacité, racine en lecture seule)"]
+  subgraph run["réseau minos-runtime (interne)"]
+    pg["minos-postgres : aucun port publié"]
+    mcp["minos-mcp"]
+  end
+  nav -->|"127.0.0.1:MINOS_PGADMIN_PORT par minos-inspect-ingress"| pga
+  sec -. "montés en lecture seule" .-> pga
+  srv -. "monté en lecture seule" .-> pga
+  pga -->|"rôle minos_inspect : SELECT, liste fermée"| pg
+  mcp -->|"rôle applicatif"| pg
+  pga --- vol["volume minos-pgadmin-data (configuration de pgAdmin)"]
+  pg --- pgvol["volume minos-postgres-data (externe, jamais nommé par le retrait)"]
+```
+
+Un conteneur attaché au seul réseau interne ne publie aucun port (relevé du 2026-11-13, Docker 29.9.3) : pgAdmin
+entre par le réseau `minos-inspect-ingress` et atteint PostgreSQL par `minos-runtime`. `EnablePgAdmin` applique le
+script du rôle avant de démarrer le service ; `RemovePgAdmin` retire le conteneur, le volume `minos-pgadmin-data`,
+les fichiers privés et le rôle (`docker/scripts/mcp-lifecycle.ps1`, actions `EnablePgAdmin` et `RemovePgAdmin`).
+Limite : hôte Windows et PostgreSQL géré seulement.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -130,12 +163,24 @@ refusée.
 | La qualification interroge le plan de requête sur des données en lecture seule | 2/3 (pas de cas fautif) | — | `scripts/ci/qualify-docker-release.sh:333` (montage `readonly`), `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#qualificationQueriesTheMcpServerWithTheDataRootMountedReadOnly` | partielle |
 | Le plan de requête Docker fixe le tas de sa JVM en proportion de sa limite mémoire | contrat des fichiers livrés testé ; tas effectif mesuré à la main sur l'image locale sous `--memory 3g` (1 076 Mio), sans test automatique | — | `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#theQueryPlaneSetsOneMaxRamPercentageEverywhereAndOnlyThere`, `minos-app/src/test/java/com/minos/packaging/M29DockerQueryImageContractTest.java#theDefaultQueryHeapGivesAViewBudgetThatHoldsTheHeaviestPersistableView` | partielle |
 
+## Exigences en attente d'archivage
+
+Changement `inspecter-postgresql-avec-pgadmin`. Ces trois exigences entrent dans la spec de référence à l'archivage
+du changement ; leurs lignes rejoignent alors la table de traçabilité (le contrôle des dossiers refuse une ligne
+dont l'exigence n'est pas encore dans la spec).
+
+| Exigence | Scénarios couverts | Vue | Preuves | Statut |
+|---|---|---|---|---|
+| pgAdmin est un service optionnel publié sur la seule boucle locale | 3/3 | V4 | `scripts/install/test_mcp_lifecycle_pgadmin.py#test_compose_resolves_no_pgadmin_and_no_port_without_the_profile`, `scripts/install/test_mcp_lifecycle_pgadmin.py#test_compose_resolves_one_loopback_port_with_the_profile`, `scripts/install/test_mcp_lifecycle_pgadmin.py#test_a_missing_password_file_variable_is_refused_by_name`, `scripts/install/test_mcp_lifecycle_pgadmin.py#test_secrets_come_from_read_only_files_and_never_from_the_environment`, relevé Docker Desktop du 2026-11-13 (seul port publié : `127.0.0.1` vers pgAdmin) | couverte |
+| pgAdmin se connecte par un rôle PostgreSQL limité à la lecture | 2/2 | V4 | `minos-storage/src/test/java/com/minos/storage/postgresql/PostgresInspectionRoleTest.java#writesAreRefusedByThePrivilegesOnceTheSessionIsNoLongerReadOnly`, `minos-storage/src/test/java/com/minos/storage/postgresql/PostgresInspectionRoleTest.java#theRootOfAProjectIsNotReadableWhileItsOtherColumnsAre`, `minos-storage/src/test/java/com/minos/storage/postgresql/PostgresInspectionRoleTest.java#onlyTheClosedListOfTablesIsReadable` | couverte |
+| Retirer pgAdmin ne supprime aucune donnée MINOS | 1/1 | V4 | `scripts/install/test_mcp_lifecycle_pgadmin.py#test_removal_takes_pgadmin_and_the_role_and_nothing_else`, `minos-storage/src/test/java/com/minos/storage/postgresql/PostgresInspectionRoleTest.java#removingTheRoleLeavesTheDataUntouched`, relevé Docker Desktop du 2026-11-13 (après `RemovePgAdmin` : conteneur, volume et rôle absents, 5 lignes de `semantic_documents` inchangées) | couverte |
+
 ## Écarts
 
 | Id | Écart | Preuve | Suite proposée |
 |---|---|---|---|
 | E5 | La garde contrôle 10 commandes (`cc`, `rustc`, `npm` en plus des 7 de la spec) | `scripts/ci/qualify-docker-release.sh:274` | Aucun : sur-ensemble conforme |
-| E6 | L'exigence dit « avant tout appel à Docker » ; le refus « image qui n'en est pas une » vient après `docker image inspect` (le scénario dit seulement « sans démarrer de conteneur ») | `docker/scripts/mcp-lifecycle.ps1:724` | [Question] Énoncé de l'exigence plus strict que son scénario ; à préciser |
+| E6 | L'exigence dit « avant tout appel à Docker » ; le refus « image qui n'en est pas une » vient après `docker image inspect` (le scénario dit seulement « sans démarrer de conteneur ») | `docker/scripts/mcp-lifecycle.ps1:726` | [Question] Énoncé de l'exigence plus strict que son scénario ; à préciser |
 
 ## Questions ouvertes
 

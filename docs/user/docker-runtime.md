@@ -325,6 +325,10 @@ READY_WITH_SEMANTIC
 
 En `READY_WITH_SEMANTIC`, la limitation `SEMANTIC_SIGNAL_IS_HEURISTIC_NOT_STRUCTURAL_FACT` reste explicitement exposée.
 
+## Inspection de PostgreSQL par pgAdmin
+
+Le PostgreSQL géré ne publie aucun port. Pour lire le contenu d'un index sémantique, le runtime peut démarrer pgAdmin, service optionnel (profil Compose `pgadmin`) publié sur `127.0.0.1` seulement et connecté par le rôle `minos_inspect`, limité à la lecture d'une liste fermée de tables. Actions `EnablePgAdmin`, `StopPgAdmin` et `RemovePgAdmin`, droits du rôle et requêtes de diagnostic : [Inspecter PostgreSQL avec pgAdmin](inspecter-postgresql-avec-pgadmin.md).
+
 ## Installation / administration
 
 Workflow :
@@ -408,6 +412,7 @@ Chaque service des deux fichiers compose a un plafond **mémoire** et **PID**, d
 | tâches ponctuelles | `minos-bootstrap`, `minos-data-bootstrap`, `minos-tools-bootstrap`, `minos-provider-probe`, `minos-ollama-bootstrap` | `MINOS_JOB_MEM_LIMIT` = `512m` | `MINOS_JOB_PIDS_LIMIT` = `128` | `MINOS_JOB_CPUS` = `0` |
 | PostgreSQL géré | `minos-postgres` | `MINOS_POSTGRES_MEM_LIMIT` = `1g` | `MINOS_POSTGRES_PIDS_LIMIT` = `128` | `MINOS_POSTGRES_CPUS` = `0` |
 | Ollama géré | `minos-ollama` | `MINOS_OLLAMA_MEM_LIMIT` = `2g` | `MINOS_OLLAMA_PIDS_LIMIT` = `256` | `MINOS_OLLAMA_CPUS` = `0` |
+| pgAdmin (optionnel) | `minos-pgadmin` | `MINOS_PGADMIN_MEM_LIMIT` = `1g` | `MINOS_PGADMIN_PIDS_LIMIT` = `256` | `MINOS_PGADMIN_CPUS` = `0` |
 
 **Aucun plafond CPU par défaut** (`0` = pas de plafond, la forme que Docker et Compose acceptent : une valeur vide fait échouer l'interpolation). Un plafond dur par défaut au-dessus du nombre de CPU de l'hôte fait refuser la création du conteneur par le démon (`range of CPUs is from 0.01 to N`) : un Docker Desktop ou une VM à 2 CPU ne démarrerait plus, avec une erreur du démon sans lien apparent avec MINOS. Un plafond de 1 CPU démarre partout, mais ralentirait le démarrage des JVM ; il reste donc au choix de l'opérateur (`MINOS_<RÔLE>_CPUS=2` dans le `.env`), qui connaît son hôte. La protection par défaut est la mémoire et les PID.
 
@@ -432,6 +437,8 @@ Mesurées le 2026-10-02 sur un hôte à 16 CPU, Docker Desktop (cgroup v2 : `mem
 **Ollama, 2 Gio : dimensionné pour le modèle d'embedding par défaut** (`nomic-embed-text`, 274 Mo). Le modèle est configurable (`MINOS_SEMANTIC_MODEL`) : un modèle plus gros demande un plafond plus haut (`MINOS_OLLAMA_MEM_LIMIT`).
 
 **PostgreSQL, 1 Gio, et pgvector.** Réglages effectifs de l'image pgvector épinglée dans le compose (`SHOW`, conteneur réel, aucun réglage posé par MINOS) : `shared_buffers` = 160 Mo, `work_mem` = 4 Mo, `maintenance_work_mem` = 64 Mo, `max_connections` = 100, `max_parallel_maintenance_workers` = 2. Ils tiennent largement sous 1 Gio. MINOS ne crée pas d'index ANN (le classement pgvector est exact) ; une construction HNSW réelle sur 30 000 vecteurs de 768 dimensions, **sous le plafond de 1 Gio**, a donc été mesurée à titre de précaution : 92 Mo d'index, 9 s, pic 602 Mio sans OOM avec `maintenance_work_mem` = 64 Mo (pgvector signale qu'il manque de mémoire et termine sur disque) ; 839 Mio avec 512 Mo et 876 Mio avec 1 Go (toujours sans OOM, le cache de pages étant récupérable). Un index plus gros ou un `maintenance_work_mem` plus haut se règlent dans `MINOS_POSTGRES_MEM_LIMIT`.
+
+**pgAdmin, 1 Gio / 256 PID.** Relevé le 2026-11-13 sur Docker Desktop (`docker stats`, pgAdmin 9.19.0 démarré, aucune session ouverte) : 235 Mio et 5 processus, soit une marge de ×4 en mémoire. La charge d'une session de requêtes n'a pas été mesurée : le plafond est une précaution, à relever par `MINOS_PGADMIN_MEM_LIMIT` si pgAdmin est tué.
 
 ## Dépannage des plafonds
 

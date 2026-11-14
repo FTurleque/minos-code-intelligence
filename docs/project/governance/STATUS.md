@@ -248,6 +248,8 @@ Les replays M15/M28 historiques sont isolés dans `.github/workflows/historical-
 
 ### Docker
 
+Le runtime Docker peut démarrer **pgAdmin** pour inspecter son PostgreSQL géré ([guide](../../user/inspecter-postgresql-avec-pgadmin.md)) : service optionnel (profil `pgadmin`) publié sur `127.0.0.1` seulement, rôle `minos_inspect` limité à `SELECT` sur une liste fermée de tables et de colonnes, actions `EnablePgAdmin`, `StopPgAdmin`, `RemovePgAdmin`. Qualifié le 2026-11-13 sur Docker Desktop (Windows, Docker 29.9.3, pgAdmin 9.19.0) : activation, arrêt et retrait rejoués sur un runtime jetable, droits du rôle testés contre PostgreSQL réel (`PostgresInspectionRoleTest`). Limites : hôte Windows et PostgreSQL géré seulement ; les actions n'ont pas été rejouées sur une installation faite par l'installateur.
+
 `.github/workflows/docker-release-validation.yml` qualifie à chaque candidat l'image provider-complete Linux/amd64 exacte.
 
 La qualification réelle **Docker MCP A → B** tourne sur un runner **GitHub-hosted `ubuntu-24.04`** standard — aucun runner auto-hébergé, aucune machine personnelle, aucun repository d'infrastructure privé (le dépôt est public). `scripts/ci/qualify-docker-upgrade.ps1` (pwsh, portable) construit deux commits/JAR distincts, chacun avec son propre Dockerfile/Compose, pilote le cœur portable `docker/scripts/mcp-lifecycle.ps1` (extrait de `prod-mcp-release.ps1`, qui reste l'interface produit Windows inchangée pour les utilisateurs), les providers/Compose réels, indexe un projet fixture, exécute le handshake MCP avant/après upgrade, vérifie la persistance du `MINOS_HOME` et s'assure qu'un candidat suivant invalide ne remplace pas le candidat B qualifié.

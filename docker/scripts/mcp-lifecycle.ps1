@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall', 'AddProject', 'RemoveProject')]
+    [ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall', 'AddProject', 'RemoveProject',
+        'EnablePgAdmin', 'StopPgAdmin', 'RemovePgAdmin')]
     [string] $Action,
 
     [string] $Jar = '',
@@ -460,6 +461,7 @@ function Get-CeilingVariablePrefix([string] $Service) {
         'minos-admin' { 'MINOS_ADMIN' }
         'minos-postgres' { 'MINOS_POSTGRES' }
         'minos-ollama' { 'MINOS_OLLAMA' }
+        'minos-pgadmin' { 'MINOS_PGADMIN' }
         default { 'MINOS_JOB' }
     }
 }
@@ -540,7 +542,7 @@ function Test-CeilingOverride([string] $Name, [string] $Value) {
 
 function Get-PreservedCeilingOverrides([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
-    $Lines = @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_(MCP|ADMIN|JOB|POSTGRES|OLLAMA)_(CPUS|MEM_LIMIT|PIDS_LIMIT)=' })
+    $Lines = @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_(MCP|ADMIN|JOB|POSTGRES|OLLAMA|PGADMIN)_(CPUS|MEM_LIMIT|PIDS_LIMIT)=' })
     foreach ($Line in $Lines) {
         $Name, $Value = $Line.Split('=', 2)
         if (-not (Test-CeilingOverride -Name $Name -Value $Value)) {
@@ -772,6 +774,332 @@ function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $E
     return $null -ne $PreparedLabel -and [string]$PreparedLabel.Value -eq 'true'
 }
 
+# ---------------------------------------------------------------------------------------------------------------
+# Optional pgAdmin inspection of the managed PostgreSQL (service minos-pgadmin, profile `pgadmin`).
+#
+# Two identities: the pgAdmin account opens the web interface, the PostgreSQL role minos_inspect runs the queries.
+# The role only reads a closed list of tables and columns; that guarantee comes from its privileges, never from a
+# session setting. The two passwords are generated here into private files of the MINOS Docker data folder and reach
+# PostgreSQL on standard input: none is an argument, a variable of the runtime .env or a console line.
+# ---------------------------------------------------------------------------------------------------------------
+$PgAdminService = 'minos-pgadmin'
+# Every Compose call that names the pgAdmin service activates both profiles: the service depends on minos-postgres, and
+# Compose refuses a project where an active service depends on a service of an inactive profile, even to stop it.
+$PgAdminProfiles = @('--profile', 'postgresql', '--profile', 'pgadmin')
+$SecretsRoot = Join-Path $DataRoot 'secrets'
+$PgAdminPasswordFile = Join-Path $SecretsRoot 'pgadmin.password'
+$PgAdminPgpassFile = Join-Path $SecretsRoot 'pgadmin.pgpass'
+$PgAdminServersFile = Join-Path $RuntimeRoot 'pgadmin-servers.json'
+
+# Creates or upgrades the role in the current database, for the MINOS schema that is first in the search path.
+# Replayable: every privilege of the role on that schema is revoked before the closed list is granted again, so a
+# privilege added by hand on a MINOS table does not survive. What the script cannot take back is refused instead: a
+# role that is a member of another role (pg_read_all_data would read everything) or that owns an object stops the
+# script, and RemovePgAdmin removes such a role. No ALTER DEFAULT PRIVILEGES: a table created by a later schema
+# version stays invisible until it is granted here. The role is limited to eight connections and to 256 MB of
+# temporary files, two settings it cannot change. `projects` is granted by column, without root_value (a folder of the
+# host). default_transaction_read_only and statement_timeout are session defaults the role can change: bounds, not
+# protections. The password is not part of this script.
+$InspectRoleSql = @'
+DO $minos$
+DECLARE
+    target_schema text := current_schema();
+    readable text;
+BEGIN
+    IF target_schema IS NULL OR to_regclass(format('%I.schema_version', target_schema)) IS NULL THEN
+        RAISE EXCEPTION 'the configured schema holds no MINOS tables: nothing was granted';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'minos_inspect') THEN
+        CREATE ROLE minos_inspect;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = 'minos_inspect') THEN
+        RAISE EXCEPTION 'the role minos_inspect is a member of another role: remove it with RemovePgAdmin, then enable pgAdmin again';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_roles r ON r.oid = c.relowner WHERE r.rolname = 'minos_inspect') THEN
+        RAISE EXCEPTION 'the role minos_inspect owns an object of this database: remove it with RemovePgAdmin, then enable pgAdmin again';
+    END IF;
+    ALTER ROLE minos_inspect LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 8;
+
+    EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA %I FROM minos_inspect', target_schema);
+    EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA %I FROM minos_inspect', target_schema);
+    EXECUTE format('REVOKE ALL ON SCHEMA %I FROM minos_inspect', target_schema);
+    EXECUTE format('REVOKE ALL ON DATABASE %I FROM minos_inspect', current_database());
+
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO minos_inspect', current_database());
+    EXECUTE format('GRANT USAGE ON SCHEMA %I TO minos_inspect', target_schema);
+    FOREACH readable IN ARRAY ARRAY['semantic_documents', 'semantic_index_meta', 'knowledge_active',
+                                    'project_index_state', 'schema_version'] LOOP
+        EXECUTE format('GRANT SELECT ON %I.%I TO minos_inspect', target_schema, readable);
+    END LOOP;
+    EXECUTE format('GRANT SELECT (id, display_name, workspace_id, created_at, updated_at) ON %I.projects TO minos_inspect',
+                   target_schema);
+
+    ALTER ROLE minos_inspect SET default_transaction_read_only = on;
+    ALTER ROLE minos_inspect SET statement_timeout = '30s';
+    ALTER ROLE minos_inspect SET temp_file_limit = '256MB';
+    EXECUTE format('ALTER ROLE minos_inspect IN DATABASE %I SET search_path = %I, public', current_database(), target_schema);
+END
+$minos$;
+'@
+
+# Removes the role and every privilege it holds in the current database. It touches no table: the role owns nothing.
+$InspectRoleRemovalSql = @'
+DO $minos$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'minos_inspect') THEN
+        DROP OWNED BY minos_inspect;
+        DROP ROLE minos_inspect;
+    END IF;
+END
+$minos$;
+'@
+
+# Whether a compose file defines a service (a two-space key of its `services:` section).
+function Test-ComposeDefinesService([string] $Path, [string] $Service) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    $Pattern = '^  ' + [regex]::Escape($Service) + ':\s*$'
+    foreach ($Line in @(Get-Content -LiteralPath $Path)) {
+        if ($Line -match $Pattern) { return $true }
+    }
+    return $false
+}
+
+# The value of a key of config/minos.properties in the MINOS data root, '' when the key is absent.
+function Get-DataRootSetting([string] $Name) {
+    $Value = ''
+    $Pattern = '^\s*' + [regex]::Escape($Name) + '\s*[=:]\s*(.*)$'
+    # Read-DataRootSettings returns one array: wrapping the call in @() would nest it, and -match on the nested
+    # array filters instead of setting $Matches.
+    $Lines = Read-DataRootSettings
+    foreach ($Line in $Lines) {
+        if ([string] $Line -match $Pattern) { $Value = $Matches[1].Trim() }
+    }
+    return $Value
+}
+
+# Whether this runtime stores its data in the PostgreSQL it manages itself (service minos-postgres). pgAdmin is
+# offered for that one only: MINOS creates no role in an instance it does not manage.
+function Test-ManagedPostgresql {
+    if ([string]::IsNullOrWhiteSpace((Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_POSTGRES_PASSWORD_FILE'))) { return $false }
+    if ((Get-DataRootSetting 'minos.postgres.managed') -ne 'true') { return $false }
+    return (Test-PostgresqlStorage)
+}
+
+# A PostgreSQL identifier that is safe between double quotes, or a refusal that names the setting.
+function Assert-PostgresIdentifier([string] $Value, [string] $Setting) {
+    if ($Value -cnotmatch '^[A-Za-z_][A-Za-z0-9_]{0,62}$') {
+        throw "The value of $Setting is not a plain PostgreSQL identifier (a letter or an underscore, then letters, digits and underscores). Nothing was changed."
+    }
+}
+
+# The identifier of the running container of a service, '' when it is not running. Same handling of
+# MINOS_QUERY_IMAGE as the Compose function.
+function Get-RunningServiceContainer([string] $Service, [string] $Profile) {
+    $AmbientQueryImage = $env:MINOS_QUERY_IMAGE
+    try {
+        if ($script:QueryImagePlaceholder -ne '') { $env:MINOS_QUERY_IMAGE = $script:QueryImagePlaceholder }
+        else { Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue }
+        $ComposeFiles = @(Get-ComposeFileArguments)
+        $Output = ($null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile @ComposeFiles --profile $Profile ps -q --status running $Service | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "docker compose failed (exit $LASTEXITCODE): ps $Service" }
+    }
+    finally {
+        if ($null -eq $AmbientQueryImage) { Remove-Item -LiteralPath Env:MINOS_QUERY_IMAGE -ErrorAction SilentlyContinue }
+        else { $env:MINOS_QUERY_IMAGE = $AmbientQueryImage }
+    }
+    return $Output.Trim()
+}
+
+# Runs SQL in the managed PostgreSQL, in one transaction, through the trust-authenticated local socket of its
+# container. The SQL is piped on standard input, so that a password it carries is never an argument. On a failure
+# only the ERROR lines of psql are reported, with $Redact removed: psql quotes the failing statement.
+function Invoke-ManagedPostgresSql([string] $Container, [string] $User, [string] $Database, [string] $Sql,
+    [string] $Failure, [string] $Redact = '') {
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        # Read record by record: Out-String would wrap a line at the console width before it is filtered.
+        $Records = @($Sql | & $DockerCommand.Source exec -i $Container psql -v ON_ERROR_STOP=1 -q --single-transaction `
+            -U $User -d $Database -f - 2>&1 | ForEach-Object { "$_" })
+        $ExitCode = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $Previous }
+    if ($ExitCode -eq 0) { return }
+    $Reasons = @($Records | ForEach-Object { $_ -split "`r?`n" } | Where-Object { $_ -match '^psql:.*ERROR:' } |
+        ForEach-Object { ($_ -replace '^.*?ERROR:\s*', '').Trim() } | Select-Object -Unique)
+    $Reason = ($Reasons -join '; ')
+    if ($Redact -ne '') { $Reason = $Reason.Replace($Redact, '<redacted>') }
+    if ($Reason -ne '') { throw "$Failure PostgreSQL answered: $Reason" }
+    throw $Failure
+}
+
+# 48 characters of the URL-safe base64 alphabet from the system generator: a libpq password file separates its
+# fields with ':' and escapes with '\', and neither character can appear.
+function New-RandomSecret {
+    $Bytes = New-Object byte[] 36
+    # RandomNumberGenerator.Create() + GetBytes: Fill does not exist in Windows PowerShell 5.1.
+    $Generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $Generator.GetBytes($Bytes) } finally { $Generator.Dispose() }
+    return [Convert]::ToBase64String($Bytes).Replace('+', '-').Replace('/', '_')
+}
+
+# Private secret files, restricted to the current user before anything is written to them. The four functions
+# below are copies of the ones of configure-m30-docker-services.ps1 (a shipped script cannot import a library);
+# scripts/quality/check-twin-script-functions.py keeps the copies identical.
+function Restrict-FileToCurrentUser([string] $Path) {
+    $Identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $Sid = $Identity.User.Value
+    & icacls.exe $Path /inheritance:r /grant:r "*${Sid}:F" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to restrict file ACL: $Path" }
+}
+
+function Get-FileAccessSecurity([string] $Path) {
+    # FileInfo.GetAccessControl is an instance method under Windows PowerShell 5.1 (.NET Framework) and an
+    # extension method under pwsh (.NET); both return the same FileSecurity. Get-Acl is not used: it depends
+    # on a module that a foreign PSModulePath can hide.
+    $Info = New-Object System.IO.FileInfo $Path
+    $Sections = [System.Security.AccessControl.AccessControlSections]::Access
+    if ($Info | Get-Member -Name GetAccessControl -MemberType Method) {
+        return $Info.GetAccessControl($Sections)
+    }
+    return [System.IO.FileSystemAclExtensions]::GetAccessControl($Info, $Sections)
+}
+
+function Assert-FileRestrictedToCurrentUser([string] $Path) {
+    # Inheritance cut and exactly one rule: full control allowed to the current user. icacls.exe reporting
+    # success is not the proof; the ACL that is really on the file is. The rules are compared as security
+    # identifiers, not as SDDL text: SDDL abbreviates some accounts (the built-in administrator is "LA").
+    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $Security = Get-FileAccessSecurity $Path
+    $Rules = @($Security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+    $Restricted = $Security.AreAccessRulesProtected -and $Rules.Count -eq 1
+    if ($Restricted) {
+        $Rule = $Rules[0]
+        $Restricted = (-not $Rule.IsInherited) -and
+            $Rule.IdentityReference -eq $Sid -and
+            $Rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+            $Rule.FileSystemRights -eq [System.Security.AccessControl.FileSystemRights]::FullControl
+    }
+    if (-not $Restricted) {
+        # The access list found is named in the message (security identifiers, no secret): it tells an operator
+        # who else could read the file.
+        $Found = $Security.GetSecurityDescriptorSddlForm([System.Security.AccessControl.AccessControlSections]::Access)
+        throw "File ACL is not restricted to the current user: $Path (found $Found)"
+    }
+}
+
+function Write-PrivateSecretFile([string] $Path, [string] $Content) {
+    # The secret never exists on disk with an inherited ACL: the file is created empty, restricted, verified,
+    # and only then written. An existing file is removed first: its ACL is unknown. Any failure removes the file.
+    if (Test-Path -LiteralPath $Path) { Remove-Item -LiteralPath $Path -Force }
+    New-Item -ItemType File -Path $Path | Out-Null
+    try {
+        Restrict-FileToCurrentUser $Path
+        Assert-FileRestrictedToCurrentUser $Path
+        [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
+# The content of a private file of the secrets folder, trimmed. A missing file is created by $Create (a script
+# block that returns the content); an existing one is restricted again and verified before it is read, and is
+# never regenerated here. $Label names the file relative to the MINOS Docker data folder in every message.
+function Get-PrivateSecret([string] $Path, [string] $Label, [scriptblock] $Create) {
+    try {
+        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
+            Write-PrivateSecretFile $Path ((& $Create) + "`n")
+        }
+        else {
+            Restrict-FileToCurrentUser $Path
+            Assert-FileRestrictedToCurrentUser $Path
+        }
+        if ((Get-Item -LiteralPath $Path).Length -gt 4096) { throw 'unexpected size' }
+        $Content = [System.IO.File]::ReadAllText($Path).Trim()
+    }
+    catch {
+        # The cause is kept for the operator, with the path replaced by the label: the helpers name the file they
+        # could not restrict and the access list they found (security identifiers, no secret).
+        $Cause = ([string] $_.Exception.Message).Replace($Path, $Label).Replace((Split-Path -Parent $Path), 'secrets')
+        throw "The private file $Label of the MINOS Docker data folder could not be created, restricted to the current user or read ($Cause). pgAdmin was not started. If the file existed with a wider access list, remove it and run -Action EnablePgAdmin again: its password is then generated anew."
+    }
+    if ([string]::IsNullOrWhiteSpace($Content)) {
+        throw "The private file $Label of the MINOS Docker data folder is empty. pgAdmin was not started. Remove the file and run -Action EnablePgAdmin again."
+    }
+    return $Content
+}
+
+# Sets ($Values[name] is a string) or removes ($Values[name] is $null) variables of the runtime .env. Every other
+# line keeps its place; a file that would not change is not rewritten.
+function Set-EnvironmentValues([string] $Path, [System.Collections.IDictionary] $Values) {
+    $Lines = @(Get-Content -LiteralPath $Path)
+    $Kept = @()
+    foreach ($Line in $Lines) {
+        $Replaced = $false
+        foreach ($Name in $Values.Keys) {
+            if ($Line -match ('^\s*' + [regex]::Escape([string] $Name) + '\s*=')) { $Replaced = $true }
+        }
+        if (-not $Replaced) { $Kept += $Line }
+    }
+    foreach ($Name in $Values.Keys) {
+        if ($null -ne $Values[$Name]) { $Kept += "$Name=$($Values[$Name])" }
+    }
+    if (($Kept -join "`n") -ceq ($Lines -join "`n")) { return }
+    # Written beside the file, then moved over it: an interruption never leaves a truncated .env, which would stop
+    # every action of the runtime.
+    $Pending = "$Path.pending"
+    [System.IO.File]::WriteAllLines($Pending, [string[]] $Kept, (New-Object System.Text.UTF8Encoding $false))
+    Move-Item -LiteralPath $Pending -Destination $Path -Force
+}
+
+# The pgAdmin settings of a runtime .env (port, account, private files), carried over an Install like the ceiling
+# overrides: the .env is regenerated, and pgAdmin would otherwise lose its files at the next start.
+function Get-PreservedPgAdminSettings([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return , @() }
+    return , @(Get-Content -LiteralPath $Path | Where-Object { $_ -match '^MINOS_PGADMIN_(PORT|EMAIL|PASSWORD_FILE|PGPASS_FILE|SERVERS_FILE)=' })
+}
+
+# Fail-closed guard of the start of pgAdmin. It reads the runtime .env and calls nothing: each of the three files
+# the service mounts must be named there and exist. The message names the variable and carries no path.
+function Assert-PgAdminSecretsConfigured {
+    foreach ($Variable in @('MINOS_PGADMIN_PASSWORD_FILE', 'MINOS_PGADMIN_PGPASS_FILE', 'MINOS_PGADMIN_SERVERS_FILE')) {
+        $File = Read-EnvironmentValue -Path $EnvironmentFile -Name $Variable
+        $Present = (-not [string]::IsNullOrWhiteSpace($File)) -and (Test-Path -LiteralPath $File -PathType Leaf)
+        if ($Present) { $Present = (Get-Item -LiteralPath $File).Length -gt 0 }
+        if (-not $Present) {
+            throw ("pgAdmin cannot be started: $Variable is missing or empty in the runtime .env, or the file it names is " +
+                'missing or empty. No container was started. Repair: run -Action EnablePgAdmin, which writes the private ' +
+                'files and sets this variable.')
+        }
+    }
+}
+
+function Assert-PgAdminAvailable {
+    if (Test-ComposeDefinesService $ComposeFile $PgAdminService) { return }
+    throw ('pgAdmin is not available in this MINOS Docker runtime: it inspects the managed PostgreSQL, and this runtime ' +
+        'does not run one, or was configured by a release that had no pgAdmin. Nothing was changed. Remedy: select the ' +
+        'PostgreSQL storage in the MINOS installer (or run configure-m30-docker-services.ps1 -StorageBackend postgresql) ' +
+        'with this release, then retry.')
+}
+
+# Removes the container of pgAdmin, its configuration volume and the ingress network it leaves without a container.
+# The volume holds the pgAdmin account and a copy of the role password file; `compose rm --volumes` only removes
+# anonymous volumes, so this one is removed by name. No command here names the PostgreSQL volume, which is external
+# to the Compose project.
+function Remove-PgAdminContainerAndVolume {
+    Compose (@($PgAdminProfiles) + @('rm', '--stop', '--force', '--volumes', $PgAdminService))
+    $Project = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_COMPOSE_PROJECT'
+    $PgAdminVolume = "${Project}_minos-pgadmin-data"
+    if ((Invoke-DockerAllowFailure -Arguments @('volume', 'inspect', $PgAdminVolume)).ExitCode -eq 0) {
+        $Removal = Invoke-DockerAllowFailure -Arguments @('volume', 'rm', $PgAdminVolume)
+        if ($Removal.ExitCode -ne 0) { throw "The pgAdmin configuration volume could not be removed: $($Removal.Output)" }
+    }
+    # Absent when pgAdmin was never started.
+    $null = Invoke-DockerAllowFailure -Arguments @('network', 'rm', "${Project}_minos-inspect-ingress")
+}
+
 Move-LegacyRuntimeCompose
 
 # The recipe this action runs: the one about to be installed, or the installed runtime copy.
@@ -790,7 +1118,7 @@ if ($RecipeMountsProjectsRoot -and $Action -in @('AddProject', 'RemoveProject'))
 
 # Before any call to Docker (see Assert-QueryImageConfigured). Stop, Status, Attach and Uninstall are not
 # guarded: they start nothing, and a runtime that is not migrated must remain stoppable and removable.
-if ($Action -in @('Start', 'Validate', 'Admin', 'AddProject', 'RemoveProject')) { Assert-QueryImageConfigured }
+if ($Action -in @('Start', 'Validate', 'Admin', 'AddProject', 'RemoveProject', 'EnablePgAdmin')) { Assert-QueryImageConfigured }
 
 $DockerCommand = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $DockerCommand) { throw 'Docker is required.' }
@@ -885,6 +1213,7 @@ switch ($Action) {
         Copy-Item -LiteralPath (Resolve-ComposeSource $SourceRoot) -Destination $ComposeFile -Force
         Remove-Item -LiteralPath $LegacyComposeFile -Force -ErrorAction SilentlyContinue
         $PreservedOverrides = @(Get-PreservedCeilingOverrides -Path $EnvironmentFile)
+        $PreservedPgAdmin = Get-PreservedPgAdminSettings -Path $EnvironmentFile
         @"
 MINOS_COMPOSE_PROJECT=$ComposeProject
 MINOS_CONTAINER_NAME=$ContainerName
@@ -903,6 +1232,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
                 "MINOS_HOST_PROJECTS_ROOT=`"$(ConvertTo-DockerPath $ProjectsRoot)`"")
         }
         if ($PreservedOverrides.Count -gt 0) { Add-Content -LiteralPath $EnvironmentFile -Value $PreservedOverrides -Encoding ascii }
+        if ($PreservedPgAdmin.Count -gt 0) { Add-Content -LiteralPath $EnvironmentFile -Value $PreservedPgAdmin -Encoding ascii }
 
         # No project is mounted until the table is read below: a previous override is replaced by an empty one.
         Write-ProjectMountsOverride -Mounts @()
@@ -1061,6 +1391,143 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Compose @('stop', '--timeout', '10', 'minos-mcp')
         Write-Host 'MINOS Docker MCP query plane stopped.' -ForegroundColor Green
     }
+    'EnablePgAdmin' {
+        Require-Installed
+        # Every refusal below comes before the first write: an interrupted or refused action leaves nothing to undo.
+        Assert-PgAdminAvailable
+        if ($env:OS -ne 'Windows_NT') {
+            throw ('EnablePgAdmin targets Windows hosts, like the managed PostgreSQL it inspects: the private files of ' +
+                'pgAdmin are restricted with Windows access control lists. Nothing was changed.')
+        }
+        if (-not (Test-ManagedPostgresql)) {
+            throw ('pgAdmin inspects the managed PostgreSQL of the MINOS Docker runtime, and this runtime does not store its ' +
+                'data there (minos.storage.backend, minos.postgres.managed, MINOS_POSTGRES_PASSWORD_FILE). An external ' +
+                'PostgreSQL is not supported. Nothing was changed.')
+        }
+        # For Compose the process environment wins over --env-file: an ambient MINOS_PGADMIN_* variable (an image,
+        # an account, a file) would replace the value that is validated below. It is refused, not hidden.
+        $Ambient = @(Get-ChildItem Env: | Where-Object { $_.Name -like 'MINOS_PGADMIN_*' } | ForEach-Object { $_.Name })
+        if ($Ambient.Count -gt 0) {
+            throw "The environment of this session defines $($Ambient -join ', '): Docker Compose would prefer it to the runtime .env. Nothing was changed. Remove it from the environment (the settings of pgAdmin live in the runtime .env), then retry."
+        }
+        if ("$PgAdminPasswordFile$PgAdminPgpassFile$PgAdminServersFile".Contains('$')) {
+            throw 'The MINOS Docker folders contain a dollar sign in their path, which Docker Compose would interpret in the runtime .env: pgAdmin cannot mount its private files. Nothing was changed.'
+        }
+        $PostgresUser = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_POSTGRES_USER'
+        if ($PostgresUser -eq '') { $PostgresUser = 'minos' }
+        $PostgresDatabase = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_POSTGRES_DATABASE'
+        if ($PostgresDatabase -eq '') { $PostgresDatabase = 'minos' }
+        $PostgresSchema = Get-DataRootSetting 'minos.postgres.schema'
+        if ($PostgresSchema -eq '') { $PostgresSchema = 'minos' }
+        Assert-PostgresIdentifier $PostgresUser 'MINOS_POSTGRES_USER'
+        Assert-PostgresIdentifier $PostgresDatabase 'MINOS_POSTGRES_DATABASE'
+        Assert-PostgresIdentifier $PostgresSchema 'minos.postgres.schema'
+        $PgAdminPort = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_PGADMIN_PORT'
+        if ($PgAdminPort -eq '') { $PgAdminPort = '5050' }
+        if ($PgAdminPort -cnotmatch '^[0-9]{4,5}$' -or [int] $PgAdminPort -lt 1024 -or [int] $PgAdminPort -gt 65535) {
+            throw 'The value of MINOS_PGADMIN_PORT in the runtime .env is not a port between 1024 and 65535. Nothing was changed.'
+        }
+        $PgAdminEmail = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_PGADMIN_EMAIL'
+        if ($PgAdminEmail -eq '') { $PgAdminEmail = 'inspect@minos.example' }
+        if ($PgAdminEmail -cnotmatch '^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})+$') {
+            throw 'The value of MINOS_PGADMIN_EMAIL in the runtime .env is not an account name of the form name@domain.tld. Nothing was changed.'
+        }
+        $PostgresContainer = Get-RunningServiceContainer -Service 'minos-postgres' -Profile 'postgresql'
+        if ($PostgresContainer -eq '') {
+            throw ('The managed PostgreSQL of this MINOS Docker runtime is not running: the role minos_inspect cannot be ' +
+                'created. Nothing was changed. Start it by configuring the PostgreSQL storage again, then retry.')
+        }
+
+        # pgAdmin reads its account password when it first creates its configuration, and its entrypoint copies the
+        # role password file into the same volume. A password generated now must therefore never meet a volume made
+        # with the previous one: the old password would keep opening pgAdmin. The volume is removed below.
+        $NewSecret = (-not (Test-Path -LiteralPath $PgAdminPasswordFile -PathType Leaf)) -or
+            (-not (Test-Path -LiteralPath $PgAdminPgpassFile -PathType Leaf))
+        $null = Get-PrivateSecret -Path $PgAdminPasswordFile -Label 'secrets/pgadmin.password' -Create { New-RandomSecret }
+        $Pgpass = Get-PrivateSecret -Path $PgAdminPgpassFile -Label 'secrets/pgadmin.pgpass' `
+            -Create { 'minos-postgres:5432:*:minos_inspect:' + (New-RandomSecret) }
+        if ($Pgpass -cnotmatch '^minos-postgres:5432:\*:minos_inspect:([A-Za-z0-9_-]{32,})$') {
+            throw ('The private file secrets/pgadmin.pgpass of the MINOS Docker data folder is not the one EnablePgAdmin ' +
+                'writes. pgAdmin was not started. Remove the file and run -Action EnablePgAdmin again.')
+        }
+        $RolePassword = $Matches[1]
+
+        $RoleSql = "SET search_path TO `"$PostgresSchema`";`n" + $InspectRoleSql + "`n" +
+            "ALTER ROLE minos_inspect WITH LOGIN PASSWORD '$RolePassword';`n"
+        Invoke-ManagedPostgresSql -Container $PostgresContainer -User $PostgresUser -Database $PostgresDatabase -Sql $RoleSql `
+            -Redact $RolePassword -Failure 'The role minos_inspect could not be created in the managed PostgreSQL. pgAdmin was not started.'
+
+        # The registered server names the role and its password file, never the password. pgAdmin reads this file
+        # when it first creates its own configuration database.
+        $Servers = [ordered]@{ Servers = [ordered]@{ '1' = [ordered]@{
+                    Name = 'MINOS (read-only)'; Group = 'MINOS'; Host = 'minos-postgres'; Port = 5432
+                    MaintenanceDB = $PostgresDatabase; Username = 'minos_inspect'; SSLMode = 'prefer'; PassFile = '/pgpass'
+                } } }
+        [System.IO.File]::WriteAllText($PgAdminServersFile, ($Servers | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding $false))
+        Set-EnvironmentValues -Path $EnvironmentFile -Values ([ordered]@{
+                MINOS_PGADMIN_PORT = $PgAdminPort
+                MINOS_PGADMIN_EMAIL = $PgAdminEmail
+                MINOS_PGADMIN_PASSWORD_FILE = '"' + (ConvertTo-DockerPath $PgAdminPasswordFile) + '"'
+                MINOS_PGADMIN_PGPASS_FILE = '"' + (ConvertTo-DockerPath $PgAdminPgpassFile) + '"'
+                MINOS_PGADMIN_SERVERS_FILE = '"' + (ConvertTo-DockerPath $PgAdminServersFile) + '"'
+            })
+        Assert-PgAdminSecretsConfigured
+        if ($NewSecret) { Remove-PgAdminContainerAndVolume }
+        Compose (@($PgAdminProfiles) + @('up', '-d', '--wait', $PgAdminService))
+
+        Write-Host 'MINOS pgAdmin inspection enabled.' -ForegroundColor Green
+        Write-Host "Address   : http://127.0.0.1:$PgAdminPort (this machine only)"
+        Write-Host "Account   : $PgAdminEmail"
+        Write-Host 'Password  : first line of secrets/pgadmin.password in the MINOS Docker data folder'
+        Write-Host 'Database  : registered server "MINOS (read-only)", PostgreSQL role minos_inspect (SELECT on a closed list of tables)'
+        Write-Host 'Stop      : -Action StopPgAdmin (configuration kept); remove: -Action RemovePgAdmin'
+    }
+    'StopPgAdmin' {
+        Require-Installed
+        Assert-PgAdminAvailable
+        Set-QueryImagePlaceholder
+        Compose (@($PgAdminProfiles) + @('stop', '--timeout', '10', $PgAdminService))
+        Write-Host 'MINOS pgAdmin stopped; its configuration, its private files and the role minos_inspect are kept.' -ForegroundColor Green
+    }
+    'RemovePgAdmin' {
+        Require-Installed
+        Assert-PgAdminAvailable
+        Set-QueryImagePlaceholder
+        # The role lives in the managed PostgreSQL: it is removed there, and only there. When this runtime still stores
+        # its data in it, a stopped PostgreSQL refuses the removal before anything is removed.
+        $ManagedPostgresql = Test-ManagedPostgresql
+        $PostgresContainer = ''
+        if ($ManagedPostgresql) {
+            $PostgresUser = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_POSTGRES_USER'
+            if ($PostgresUser -eq '') { $PostgresUser = 'minos' }
+            $PostgresDatabase = Read-EnvironmentValue -Path $EnvironmentFile -Name 'MINOS_POSTGRES_DATABASE'
+            if ($PostgresDatabase -eq '') { $PostgresDatabase = 'minos' }
+            Assert-PostgresIdentifier $PostgresUser 'MINOS_POSTGRES_USER'
+            Assert-PostgresIdentifier $PostgresDatabase 'MINOS_POSTGRES_DATABASE'
+            $PostgresContainer = Get-RunningServiceContainer -Service 'minos-postgres' -Profile 'postgresql'
+            if ($PostgresContainer -eq '') {
+                throw ('The managed PostgreSQL of this MINOS Docker runtime is not running: the role minos_inspect cannot be ' +
+                    'removed. Nothing was removed. Start it by configuring the PostgreSQL storage again, then retry.')
+            }
+        }
+        Compose (@($PgAdminProfiles) + @('stop', '--timeout', '10', $PgAdminService))
+        if ($ManagedPostgresql) {
+            Invoke-ManagedPostgresSql -Container $PostgresContainer -User $PostgresUser -Database $PostgresDatabase `
+                -Sql ($InspectRoleRemovalSql + "`n") -Failure 'The role minos_inspect could not be removed from the managed PostgreSQL. pgAdmin is stopped; its volume and its private files are kept.'
+        }
+        else {
+            Write-Warning 'This MINOS Docker runtime no longer stores its data in the managed PostgreSQL: no role was removed there.'
+        }
+        Remove-PgAdminContainerAndVolume
+        foreach ($File in @($PgAdminPasswordFile, $PgAdminPgpassFile, $PgAdminServersFile)) {
+            if (Test-Path -LiteralPath $File -PathType Leaf) { Remove-Item -LiteralPath $File -Force }
+        }
+        Set-EnvironmentValues -Path $EnvironmentFile -Values ([ordered]@{
+                MINOS_PGADMIN_PASSWORD_FILE = $null; MINOS_PGADMIN_PGPASS_FILE = $null; MINOS_PGADMIN_SERVERS_FILE = $null
+            })
+        Write-Host 'MINOS pgAdmin removed: container, configuration volume, private files and role minos_inspect.' -ForegroundColor Green
+        Write-Host 'MINOS data untouched: the PostgreSQL volume and its tables were not modified.'
+    }
     'Uninstall' {
         Require-Installed
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
@@ -1068,6 +1535,16 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         $QueryImageProperty = $Metadata.PSObject.Properties['queryImage']
         if ($null -ne $QueryImageProperty) { $ManagedImages += [string] $QueryImageProperty.Value }
         Set-QueryImagePlaceholder
+        # pgAdmin first, when this runtime defines it: its container holds the networks the `down` below removes, and
+        # its configuration volume (the pgAdmin account, a copy of the role password file) holds no MINOS data. The
+        # two private files go with it. The role minos_inspect stays in the preserved database, with a password
+        # that is then stored nowhere: -Action RemovePgAdmin, before the uninstallation, removes the role too.
+        if (Test-ComposeDefinesService $ComposeFile $PgAdminService) {
+            Remove-PgAdminContainerAndVolume
+            foreach ($File in @($PgAdminPasswordFile, $PgAdminPgpassFile)) {
+                if (Test-Path -LiteralPath $File -PathType Leaf) { Remove-Item -LiteralPath $File -Force }
+            }
+        }
         # Compose only acts on the services of the active profiles: without these two, the PostgreSQL and
         # Ollama services of the connected profile keep running and their network cannot be removed. Their
         # data volumes are external, so --volumes never removes them.

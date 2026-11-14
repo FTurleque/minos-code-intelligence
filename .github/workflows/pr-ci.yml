@@ -114,6 +114,9 @@ jobs:
       - name: Docker lifecycle query-image tests (pwsh here, Windows PowerShell 5.1 and pwsh in the verify job)
         run: python scripts/install/test_mcp_lifecycle_query_image.py -v
 
+      - name: Docker lifecycle pgAdmin tests (compose shape and refusals here, the enabling flow on Windows in the verify job)
+        run: python scripts/install/test_mcp_lifecycle_pgadmin.py -v
+
       - name: MCP client backup tests (static count check here, backups executed on Windows in the verify job)
         run: python scripts/install/test_mcp_client_backups.py -v
 
@@ -440,6 +443,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # AUD-DEP-15: the Docker lifecycle script is started by the installer under Windows PowerShell 5.1.
           python scripts/install/test_mcp_lifecycle_query_image.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The optional pgAdmin service: private secret files, role applied before the service starts, removal.
+          python scripts/install/test_mcp_lifecycle_pgadmin.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Back-to-back backups of MCP client configurations each keep their own file.
           python scripts/install/test_mcp_client_backups.py -v
