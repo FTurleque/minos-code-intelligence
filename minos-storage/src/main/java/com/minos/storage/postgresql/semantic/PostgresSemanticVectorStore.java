@@ -54,6 +54,31 @@ public final class PostgresSemanticVectorStore implements SemanticVectorStore {
     }
 
     @Override
+    public Optional<DocumentPage> documentPage(String projectId, String afterStableKey, int limit)
+            throws IOException {
+        SemanticVectorStore.requireDocumentPageBounds(afterStableKey, limit);
+        UUID id = uuid(projectId);
+        try {
+            return connections.withConnection(connection ->
+                    PostgresSemanticReadQueries.documentPage(connection, projectId, id, afterStableKey, limit));
+        } catch (SQLException exception) {
+            throw new IOException("unable to load pgvector semantic document page", exception);
+        }
+    }
+
+    @Override
+    public Optional<StoredDocument> storedDocument(String projectId, String stableKey) throws IOException {
+        if (stableKey == null || stableKey.isBlank()) throw new IllegalArgumentException("stableKey must not be blank");
+        UUID id = uuid(projectId);
+        try {
+            return connections.withConnection(connection ->
+                    PostgresSemanticReadQueries.storedDocument(connection, projectId, id, stableKey));
+        } catch (SQLException exception) {
+            throw new IOException("unable to load pgvector semantic document", exception);
+        }
+    }
+
+    @Override
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         UUID id = uuid(projectId);
         try {

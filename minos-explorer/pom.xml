@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.minos</groupId>
+        <artifactId>minos-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>minos-explorer</artifactId>
+    <name>MINOS Explorer</name>
+    <description>Local, optional, read-only HTTP surface that explores the semantic index (ADR 0082).</description>
+
+    <dependencies>
+        <!-- ADR 0058: used directly (SemanticDocumentKind, PublicErrorMessages), so declared. -->
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-application</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <!-- A2 / ADR 0042: composition root discovered by ServiceLoader behind MinosApplication.open; runtime only, never compile -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-bootstrap</artifactId>
+            <version>${project.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <!-- Test fixtures only (DerivedTenantKeys of com.minos.testsupport, registry and snapshot ports used to build an indexed home). -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

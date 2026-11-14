@@ -119,6 +119,7 @@ flowchart TB
 21. [Configuration des assistants IA](ai-configuration.md)
 22. [Archgate : règles rattachées aux ADR](archgate.md)
 23. [Spécifier avec OpenSpec : le schéma detailed-uml](openspec-detailed-uml.md)
+24. [Surface d'exploration sémantique](semantic-explorer.md)
 
 ## Build développeur
 

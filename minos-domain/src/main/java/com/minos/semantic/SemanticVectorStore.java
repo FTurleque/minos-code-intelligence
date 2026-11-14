@@ -70,6 +70,73 @@ public interface SemanticVectorStore {
         return load(projectId).map(IndexChecksums::from);
     }
 
+    /** Largest number of documents one {@linkplain #documentPage page} may carry. */
+    int MAX_DOCUMENT_PAGE_SIZE = 1_000;
+
+    /**
+     * One page of the documents of the index, without their vectors, in stable-key order, with the metadata
+     * of the index the page was read from. {@code afterStableKey} is the last stable key of the previous page,
+     * or {@code null} for the first page. Two pages are pages of the same index only when their metadata are
+     * equal: a caller that walks the index compares them. The default derives the page from
+     * {@link #documents(String)}; a backend that can seek reads the page only.
+     *
+     * @throws IllegalArgumentException when {@code limit} is not between 1 and {@link #MAX_DOCUMENT_PAGE_SIZE}
+     *                                  or {@code afterStableKey} is blank
+     */
+    default Optional<DocumentPage> documentPage(String projectId, String afterStableKey, int limit)
+            throws IOException {
+        requireDocumentPageBounds(afterStableKey, limit);
+        Optional<IndexDocuments> loaded = documents(projectId);
+        if (loaded.isEmpty()) return Optional.empty();
+        IndexDocuments index = loaded.orElseThrow();
+        List<SemanticDocument> ordered = new ArrayList<>(index.documents());
+        ordered.sort(Comparator.comparing(SemanticDocument::stableKey));
+        List<SemanticDocument> page = new ArrayList<>(Math.min(limit, ordered.size()));
+        boolean hasMore = false;
+        for (SemanticDocument document : ordered) {
+            if (afterStableKey != null && document.stableKey().compareTo(afterStableKey) <= 0) continue;
+            if (page.size() == limit) {
+                hasMore = true;
+                break;
+            }
+            page.add(document);
+        }
+        return Optional.of(new DocumentPage(index.metadata(), page, hasMore));
+    }
+
+    /**
+     * One document of the index and its stored vector, with the metadata of the index they were read from.
+     * Empty when the project has no index; a {@link StoredDocument} without document when the index holds
+     * none under {@code stableKey}. The default derives it from the full snapshot; a backend that can seek
+     * reads one row.
+     *
+     * @throws IllegalArgumentException when {@code stableKey} is blank
+     */
+    default Optional<StoredDocument> storedDocument(String projectId, String stableKey) throws IOException {
+        requireText(stableKey, "stableKey");
+        Optional<IndexSnapshot> loaded = load(projectId);
+        if (loaded.isEmpty()) return Optional.empty();
+        IndexSnapshot index = loaded.orElseThrow();
+        Optional<IndexedDocument> found = Optional.empty();
+        for (IndexedDocument value : index.documents()) {
+            if (stableKey.equals(value.document().stableKey())) {
+                found = Optional.of(value);
+                break;
+            }
+        }
+        return Optional.of(new StoredDocument(IndexMetadata.from(index), found));
+    }
+
+    /** Refuses a page request out of bounds; shared by every implementation of {@link #documentPage}. */
+    static void requireDocumentPageBounds(String afterStableKey, int limit) {
+        if (limit < 1 || limit > MAX_DOCUMENT_PAGE_SIZE) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_DOCUMENT_PAGE_SIZE);
+        }
+        if (afterStableKey != null && afterStableKey.isBlank()) {
+            throw new IllegalArgumentException("afterStableKey must be null or non-blank");
+        }
+    }
+
     /** Stable diagnostic identifier for the vector ranking engine. */
     default String searchEngine() { return "exact-linear"; }
 
@@ -175,6 +242,37 @@ public interface SemanticVectorStore {
                 checksums.put(value.document().stableKey(), value.document().checksum());
             }
             return new IndexChecksums(IndexMetadata.from(snapshot), checksums);
+        }
+    }
+
+    /**
+     * One page of the documents of one index, in stable-key order, and the metadata of that same index.
+     * {@code hasMore} tells that the index holds at least one document after the last one of the page.
+     */
+    record DocumentPage(IndexMetadata metadata, List<SemanticDocument> documents, boolean hasMore) {
+        public DocumentPage {
+            Objects.requireNonNull(metadata, "metadata");
+            documents = List.copyOf(Objects.requireNonNull(documents, "documents"));
+        }
+    }
+
+    /**
+     * One document of an index with its stored vector, absent when the index holds no such document, and the
+     * metadata of that index.
+     */
+    record StoredDocument(IndexMetadata metadata, Optional<IndexedDocument> document) {
+        public StoredDocument {
+            Objects.requireNonNull(metadata, "metadata");
+            Objects.requireNonNull(document, "document");
+            if (document.isPresent()) {
+                IndexedDocument value = document.orElseThrow();
+                if (value.reusesStoredVector()) {
+                    throw new IllegalArgumentException("a stored document carries its vector");
+                }
+                if (value.vector().dimensions() != metadata.dimensions()) {
+                    throw new IllegalArgumentException("stored vector dimensions differ from the index dimensions");
+                }
+            }
         }
     }
 

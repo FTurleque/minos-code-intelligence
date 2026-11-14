@@ -87,6 +87,7 @@ public final class MinosCli {
               ide handshake      Negotiate the versioned external IDE protocol
               git-activity       Show factual Git file/zone activity for a project
               nexus-export       Export the active normalized snapshot as NEXUS contract JSON
+              explorer serve     Serve the local read-only explorer of the semantic index (loopback only)
 
             Team / hosted (opt-in):
               team               Manage tenant-scoped shared workspaces and governance

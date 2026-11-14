@@ -12,6 +12,7 @@ flowchart TB
         mcp["minos-mcp"]
         api["minos-api"]
         nexus["minos-nexus"]
+        explorer["minos-explorer"]
     end
     subgraph composition["Racine de composition"]
         bootstrap["minos-bootstrap"]
@@ -63,7 +64,7 @@ flowchart TB
 
 ## Sources
 
-- `pom.xml` — liste des 13 modules du reactor
+- `pom.xml` — liste des 14 modules du reactor
 - `minos-*/pom.xml` — dépendances `com.minos` et leur portée
 - `minos-intellij/src/main/java/com/minos/intellij/protocol/MinosCliClient.java` — client CLI du plugin
 - `AGENTS.md`, ADR 0022, 0042, 0044 — direction des couches et racine de composition

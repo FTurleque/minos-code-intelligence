@@ -7,6 +7,7 @@
 /docker/ @FTurleque
 /minos-mcp/ @FTurleque
 /minos-api/ @FTurleque
+/minos-explorer/ @FTurleque
 /minos-runtime-local/ @FTurleque
 /minos-storage/ @FTurleque
 /minos-integration-git/ @FTurleque

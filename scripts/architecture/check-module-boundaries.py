@@ -29,6 +29,7 @@ MODULES = (
     "minos-cli",
     "minos-api",
     "minos-mcp",
+    "minos-explorer",
     "minos-app",
 )
 
@@ -47,7 +48,7 @@ ADAPTER_MODULES = frozenset({
 APPLICATION_MODULE = "minos-application"
 BOOTSTRAP_MODULE = "minos-bootstrap"
 ASSEMBLY_MODULE = "minos-app"
-SURFACE_MODULES = frozenset({"minos-cli", "minos-api", "minos-mcp", "minos-nexus"})
+SURFACE_MODULES = frozenset({"minos-cli", "minos-api", "minos-mcp", "minos-nexus", "minos-explorer"})
 # Surfaces may see the composition root at runtime or in tests, never at compile time.
 SURFACE_TO_BOOTSTRAP_SCOPES = frozenset({"runtime", "test"})
 # Couples (module, dependency) allowed in test scope only: the SCIP provider receives its snapshot stores through
@@ -77,10 +78,14 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-cli": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap"}),
     "minos-api": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-mcp": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
+    # ADR 0082: the local HTTP exploration surface. It is started through the ExplorerLaunchRoute service that
+    # minos-app provides, so no other surface depends on it.
+    "minos-explorer": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-app": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
         "minos-provider-scip", "minos-integration-git",
-        "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp"
+        "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp",
+        "minos-explorer"
     }),
 }
 
@@ -104,6 +109,7 @@ ARTIFACT_TO_MODULE = {
     "minos-cli": "minos-cli",
     "minos-api": "minos-api",
     "minos-mcp": "minos-mcp",
+    "minos-explorer": "minos-explorer",
     "minos-code-intelligence": "minos-app",
 }
 
@@ -581,6 +587,8 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
     # The NEXUS export goes through KnowledgeExportUseCase (minos-application); minos-nexus does not depend on the
     # engine (AUD-ARC-01, lot 5).
     "minos-nexus": {},
+    # The exploration surface reads through the application services only.
+    "minos-explorer": {},
 }
 
 # A11 / AUD-ARC-01, ADR 0057 point 6 — the public instance accessors of MinosApplication whose return type names a
@@ -685,6 +693,7 @@ PACKAGE_ROOTS_BY_MODULE: dict[str, frozenset[str]] = {
     "minos-cli": frozenset({"cli"}),
     "minos-api": frozenset({"api"}),
     "minos-mcp": frozenset({"mcp"}),
+    "minos-explorer": frozenset({"explorer"}),
     "minos-app": frozenset({"app", "integration"}),
 }
 
@@ -1196,6 +1205,8 @@ UNREFERENCED_PRODUCTION_TYPES: dict[str, str] = {
     "minos-api/com.minos.api.LocalProviderPlatformApi":
         "public Java API entry point (docs/user/java-api.md, ADR 0042): its callers are outside the reactor",
     "minos-api/com.minos.api.LocalSemanticCodeIntelligenceApi":
+        "public Java API entry point (docs/user/java-api.md): its callers are outside the reactor",
+    "minos-api/com.minos.api.LocalSemanticExplorationApi":
         "public Java API entry point (docs/user/java-api.md): its callers are outside the reactor",
     "minos-application/com.minos.application.StorageBackends":
         "public storage facade kept by ADR 0042 and ADR 0068 (signature unchanged for external callers)",

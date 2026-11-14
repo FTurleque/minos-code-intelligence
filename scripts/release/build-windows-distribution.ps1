@@ -92,6 +92,12 @@ function Resolve-JdkModules {
     if ($Modules -notcontains 'jdk.compiler') {
         $Modules += 'jdk.compiler'
     }
+    # minos explorer serve listens through the HTTP server of the JDK (ADR 0082). Keep
+    # jdk.httpserver explicit: the packaged runtime is checked for every module listed here,
+    # so a runtime without it fails the build instead of the command on the user's machine.
+    if ($Modules -notcontains 'jdk.httpserver') {
+        $Modules += 'jdk.httpserver'
+    }
     return @($Modules | Sort-Object -Unique)
 }
 

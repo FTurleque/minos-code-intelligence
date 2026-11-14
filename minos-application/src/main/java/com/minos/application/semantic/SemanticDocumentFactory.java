@@ -97,11 +97,7 @@ public final class SemanticDocumentFactory {
             for (Symbol symbol : ordered) {
                 SymbolLocation location = symbol.location();
                 String symbolContent = bounded(symbolText(symbol), SYMBOL_MAX_TOKENS);
-                String chunkText = source
-                        .flatMap(file -> file.excerpt(location, 2, CHUNK_MAX_TOKENS))
-                        .map(SourceExcerpt::content)
-                        .filter(value -> !value.isBlank())
-                        .orElse(symbolContent);
+                String chunkText = source.flatMap(file -> chunkContent(file, location)).orElse(symbolContent);
                 String chunkStableKey = "chunk:" + symbol.symbolKey() + ":" + location.startLine() + ":" + location.endLine();
                 add(documents, tracker, document(projectId, snapshot.snapshotId(), SemanticDocumentKind.CHUNK,
                         chunkStableKey, symbol.id(), location.fileId(), location.startLine(), location.endLine(),
@@ -121,6 +117,18 @@ public final class SemanticDocumentFactory {
             previous = document.stableKey();
         }
         return List.copyOf(documents);
+    }
+
+    /**
+     * The content a CHUNK document takes from {@code source} for {@code location}: the excerpt with its context
+     * lines, within the token budget. Empty when the source no longer holds these lines or holds blank text
+     * there. The build and the comparison of an indexed chunk with its source both go through here.
+     */
+    static Optional<String> chunkContent(LocalSourceReader.SourceFile source, SymbolLocation location) {
+        return source.excerpt(location, 2, CHUNK_MAX_TOKENS)
+                .map(SourceExcerpt::content)
+                .filter(value -> !value.isBlank())
+                .map(value -> bounded(value, CHUNK_MAX_TOKENS));
     }
 
     private static void add(

@@ -154,7 +154,7 @@ Les quatre phases du chantier (AUD-ARC-01, -05, -08, -12) sont **fusionnées dan
 - **A11** : 9 types de `minos-engine` nommés par les surfaces (CLI 5, API 3, MCP 1, NEXUS 0), chacun depuis un nombre de fichiers listé, aussi vérifié sur le bytecode.
 - **A12** : vide ; `minos-domain`, `minos-engine` et `minos-application` ne lancent aucun processus, l'ACL Windows passe par le port `PlatformAccessControl` de `minos-runtime-local`.
 - **A13** : un seul couple, `minos-provider-scip` → `minos-runtime-local` (9 types, 28 fichiers), justifié par écrit ; le provider SCIP ne nomme plus le stockage.
-- **Stockage** : un seul module `minos-storage` (reactor à 13 modules), codec commun dans `com.minos.storage.codec`, backends isolés par des règles de packages.
+- **Stockage** : un seul module `minos-storage` (reactor à 14 modules), codec commun dans `com.minos.storage.codec`, backends isolés par des règles de packages.
 
 Reste au plan du chantier hexagonal : SH-12. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
@@ -170,6 +170,7 @@ Reste au plan du chantier hexagonal : SH-12. Détail et preuves : [`docs/project
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
 - **Audit du 10 octobre 2026, sprints 1 à 9** : constats corrigés et intégrés dans `develop` (voir les sections dédiées ci-dessus).
 - Ligne de développement : **1.3.0-SNAPSHOT**.
+- **Exploration de l'index sémantique** (ARCH-0082, changement `explorer-l-index-semantique-dans-un-navigateur`) : module `minos-explorer`, commande `minos explorer serve` (page locale en lecture seule, boucle locale, jeton de session), `SemanticExplorationApi` v1, lectures paginées du port vectoriel sur les deux stockages. Testé automatiquement sous Windows et Linux ; **parcours dans un navigateur par le propriétaire non fait**. Service Compose `minos-explorer` déclaré et **non qualifié** (relevé sur Docker Desktop avec un `MINOS_HOME` vide seulement ; sortie réseau du conteneur non coupée). Carte 2D : non livrée. Voir [`docs/user/semantic-explorer.md`](../../user/semantic-explorer.md).
 
 ## Release 1.0.1
 

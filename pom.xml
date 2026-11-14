@@ -33,6 +33,7 @@
         <module>minos-cli</module>
         <module>minos-api</module>
         <module>minos-mcp</module>
+        <module>minos-explorer</module>
         <module>minos-app</module>
     </modules>
 

@@ -152,7 +152,8 @@ public final class MinosCliRunner {
     }
 
     private static boolean isKnownCommand(String name) {
-        return STATELESS_HELP_CLI.hasCommand(name) || isRetrievalCommand(name) || MCP_COMMAND.equals(name);
+        return STATELESS_HELP_CLI.hasCommand(name) || isRetrievalCommand(name) || MCP_COMMAND.equals(name)
+                || ExplorerCommandLine.NAME.equals(name);
     }
 
     static int runStatelessHelp(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -169,6 +170,10 @@ public final class MinosCliRunner {
         }
         if (MCP_COMMAND.equals(command)) {
             output.append(MCP_USAGE).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
+        if (ExplorerCommandLine.NAME.equals(command)) {
+            output.append(ExplorerCommandLine.USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
         // project add|list|inspect --help keeps its own usage; any other form shows the command's usage.

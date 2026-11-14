@@ -104,11 +104,18 @@ class ComposeShapeTests(unittest.TestCase):
         self.assertIn(SERVICE, self.connected, "compose-mcp.connected.yaml has no minos-pgadmin service")
         self.assertEqual("[pgadmin]", scalar(self.connected[SERVICE], "profiles"))
 
-    def test_without_the_profile_no_service_publishes_a_port(self):
+    def test_without_an_optional_profile_no_service_publishes_a_port(self):
+        # Two services publish a port, each behind its own profile and on the loopback interface only:
+        # pgAdmin and the semantic explorer. Started without a profile, the runtime publishes nothing.
         self.assertIn(SERVICE, self.connected)
+        publishing = {}
         for name, block in self.connected.items():
-            if name != SERVICE:
-                self.assertIsNone(scalar(block, "ports"), f"{name} publishes a port")
+            if scalar(block, "ports") is None:
+                continue
+            publishing[name] = scalar(block, "profiles")
+            for port in items(block, "ports"):
+                self.assertTrue(port.startswith("127.0.0.1:"), f"{name} publishes {port} beyond the loopback")
+        self.assertEqual({SERVICE: "[pgadmin]", "minos-explorer": "[explorer]"}, publishing)
 
     def test_pgadmin_publishes_one_port_on_the_loopback_interface(self):
         self.assertIn(SERVICE, self.connected)
