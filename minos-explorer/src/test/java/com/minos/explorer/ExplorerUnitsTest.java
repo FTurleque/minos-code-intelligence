@@ -61,6 +61,17 @@ class ExplorerUnitsTest {
         assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN),
                 guard.check(RequestGuard.Target.API, "127.0.0.1:8765", null, "same-site", bearer));
         assertEquals(Optional.of(RequestGuard.Refusal.TOKEN), guard.check(RequestGuard.Target.API, "127.0.0.1:8765", null, null, null));
+        assertEquals(403, RequestGuard.Refusal.HOST.status());
+        assertEquals(403, RequestGuard.Refusal.ORIGIN.status());
+        assertEquals(401, RequestGuard.Refusal.TOKEN.status());
+    }
+
+    @Test
+    void theGuardOpensOnlyTheReadOfThePageToARequestComingFromAnotherSite() {
+        SessionToken token = SessionToken.generate();
+        RequestGuard guard = RequestGuard.forPort(8765, token);
+        String bearer = "Bearer " + token.value();
+
         for (String site : java.util.List.of("cross-site", "same-site", "Cross-Site")) {
             assertEquals(Optional.empty(),
                     guard.check(RequestGuard.Target.PAGE_READ, "127.0.0.1:8765", null, site, null), site);
@@ -73,9 +84,6 @@ class ExplorerUnitsTest {
                 guard.check(RequestGuard.Target.PAGE_READ, "example.org:8765", null, "cross-site", null));
         assertEquals(Optional.of(RequestGuard.Refusal.ORIGIN), guard.check(RequestGuard.Target.PAGE_READ,
                 "127.0.0.1:8765", "https://autre.example", "cross-site", null));
-        assertEquals(403, RequestGuard.Refusal.HOST.status());
-        assertEquals(403, RequestGuard.Refusal.ORIGIN.status());
-        assertEquals(401, RequestGuard.Refusal.TOKEN.status());
     }
 
     @Test
