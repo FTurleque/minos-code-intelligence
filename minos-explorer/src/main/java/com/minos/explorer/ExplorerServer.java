@@ -1,6 +1,7 @@
 package com.minos.explorer;
 
 import com.minos.application.semantic.SemanticCorpusQueryService;
+import com.minos.application.semantic.SemanticProjectionService;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -103,10 +104,10 @@ final class ExplorerServer implements AutoCloseable {
      * Binds and starts the surface. {@code requestedPort} is 0 for a free port chosen by the system. The first
      * address of the scope must bind; the IPv6 loopback, when the machine has none, is skipped and said so.
      */
-    static ExplorerServer start(SemanticCorpusQueryService corpus, int requestedPort, ListeningPolicy.Scope scope,
-                                Duration requestTimeout, Consumer<String> log) throws IOException {
-        return start(new ExplorerApi(Objects.requireNonNull(corpus, "corpus"))::answer, requestedPort, scope,
-                requestTimeout, log);
+    static ExplorerServer start(SemanticCorpusQueryService corpus, SemanticProjectionService projection,
+                                int requestedPort, ListeningPolicy.Scope scope, Duration requestTimeout,
+                                Consumer<String> log) throws IOException {
+        return start(new ExplorerApi(corpus, projection)::answer, requestedPort, scope, requestTimeout, log);
     }
 
     static ExplorerServer start(Calls api, int requestedPort, ListeningPolicy.Scope scope,

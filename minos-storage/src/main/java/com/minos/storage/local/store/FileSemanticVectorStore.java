@@ -13,10 +13,13 @@ import com.minos.store.cache.WeightedLruCache;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -63,6 +66,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private long cacheHits;
     private long cacheMisses;
     private long invalidationEvictions;
+    private final Map<String, ResumePoint> resumePoints = new HashMap<>();
 
     public FileSemanticVectorStore(Path root) throws IOException {
         this(root, DEFAULT_MAX_CACHE_WEIGHT_BYTES);
@@ -172,6 +176,106 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             return Optional.of(new IndexMetadata(storedProject, snapshotId, providerId, modelId, dimensions, builtAt, count));
         } catch (EOFException exception) {
             throw new IOException("truncated semantic index metadata: " + leafName(file), exception);
+        }
+    }
+
+    /**
+     * Stable key and checksum of every document, read by walking the file: contents and vectors are skipped,
+     * neither decoded nor kept, and the index cache is not used.
+     */
+    @Override
+    public Optional<IndexChecksums> checksums(String projectId) throws IOException {
+        requireText(projectId, "projectId");
+        Path file = readableIndexFile(projectId);
+        if (file == null) return Optional.empty();
+        requireIndexFileSize(file);
+        try (IndexReader reader = IndexReader.open(file, 0L)) {
+            IndexHeader header = reader.header(projectId);
+            Map<String, String> checksums = new HashMap<>();
+            for (int index = 0; index < header.count(); index++) {
+                reader.skipString();
+                String stableKey = reader.string();
+                reader.skipString();
+                reader.skipDocumentTail();
+                String checksum = reader.string();
+                reader.skipVector(header);
+                checksums.put(stableKey, checksum);
+            }
+            reader.requireEnd();
+            return Optional.of(new IndexChecksums(header.metadata(), checksums));
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
+        }
+    }
+
+    /**
+     * One page of the stored vectors, read by walking the file from the place the previous page stopped at:
+     * only the vectors of the page are decoded, no content is, and the index cache is not used. The file
+     * holds its documents in stable-key order; a file that does not is refused. An index in the legacy
+     * format, whose order is not guaranteed, is read through the full load.
+     */
+    @Override
+    public Optional<VectorPage> vectorPage(String projectId, String afterStableKey, int limit) throws IOException {
+        SemanticVectorStore.requireVectorPageBounds(afterStableKey, limit);
+        requireText(projectId, "projectId");
+        Path file = readableIndexFile(projectId);
+        if (file == null) return Optional.empty();
+        requireIndexFileSize(file);
+        if (formatVersion(projectId) == LEGACY_FORMAT_VERSION) {
+            return SemanticVectorStore.super.vectorPage(projectId, afterStableKey, limit);
+        }
+        FileStamp stamp = FileStamp.of(file);
+        ResumePoint resume = resumePoint(projectId, stamp, afterStableKey);
+        try (IndexReader reader = IndexReader.open(file, resume == null ? 0L : resume.offset())) {
+            if (!stamp.equals(FileStamp.of(file))) {
+                throw new IOException("semantic index was replaced while it was read; read it again");
+            }
+            IndexHeader header = resume == null ? reader.header(projectId) : resume.header();
+            int consumed = resume == null ? 0 : resume.consumed();
+            String previous = resume == null ? null : resume.afterStableKey();
+            List<StoredVector> vectors = new ArrayList<>(Math.min(limit, 1_024));
+            while (consumed < header.count() && vectors.size() < limit) {
+                reader.skipString();
+                String stableKey = reader.string();
+                if (previous != null && previous.compareTo(stableKey) >= 0) {
+                    throw new IOException("semantic index is not in stable-key order: " + leafName(file));
+                }
+                previous = stableKey;
+                SemanticDocumentKind kind = SemanticDocumentKind.valueOf(reader.string());
+                reader.skipDocumentTail();
+                reader.skipString();
+                consumed++;
+                if (afterStableKey != null && stableKey.compareTo(afterStableKey) <= 0) {
+                    reader.skipVector(header);
+                } else {
+                    vectors.add(new StoredVector(kind, SemanticVector.fromArray(stableKey, reader.vector(header))));
+                }
+            }
+            boolean hasMore = consumed < header.count();
+            rememberResumePoint(projectId, hasMore && !vectors.isEmpty()
+                    ? new ResumePoint(stamp, vectors.getLast().stableKey(), reader.position(), consumed, header)
+                    : null);
+            return Optional.of(new VectorPage(header.metadata(), vectors, hasMore));
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("invalid semantic index entry: " + leafName(file), exception);
+        }
+    }
+
+    private ResumePoint resumePoint(String projectId, FileStamp stamp, String afterStableKey) {
+        if (afterStableKey == null) return null;
+        synchronized (resumePoints) {
+            ResumePoint known = resumePoints.get(projectId);
+            return known != null && known.stamp().equals(stamp) && known.afterStableKey().equals(afterStableKey)
+                    ? known : null;
+        }
+    }
+
+    private void rememberResumePoint(String projectId, ResumePoint point) {
+        synchronized (resumePoints) {
+            if (point == null) resumePoints.remove(projectId);
+            else resumePoints.put(projectId, point);
         }
     }
 
@@ -405,6 +509,137 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         long size = requireIndexFileAttributes(file).size();
         if (size < 1L || size > MAX_INDEX_FILE_BYTES) {
             throw new IOException("semantic index exceeds persisted byte limit: " + size + "/" + MAX_INDEX_FILE_BYTES);
+        }
+    }
+
+    /** The file a read was made on, told apart from its replacement by its size and its modification time. */
+    private record FileStamp(Path file, long sizeBytes, long lastModifiedMillis) {
+        static FileStamp of(Path file) throws IOException {
+            BasicFileAttributes attributes = requireIndexFileAttributes(file);
+            return new FileStamp(file, attributes.size(), attributes.lastModifiedTime().toMillis());
+        }
+    }
+
+    /** Where the walk of a file stopped: the next page of the same file starts there without reading again. */
+    private record ResumePoint(FileStamp stamp, String afterStableKey, long offset, int consumed, IndexHeader header) {
+    }
+
+    private record IndexHeader(int version, IndexMetadata metadata) {
+        int count() {
+            return metadata.documentCount();
+        }
+
+        long vectorBytes() {
+            return (long) metadata.dimensions() * (version == LEGACY_FORMAT_VERSION ? Double.BYTES : Float.BYTES);
+        }
+    }
+
+    /** Sequential reader of an index file that knows its position and skips what it is not asked for. */
+    private static final class IndexReader implements Closeable {
+        private final DataInputStream input;
+        private final DecodeBudget budget = new DecodeBudget();
+        private long position;
+
+        private IndexReader(DataInputStream input, long position) {
+            this.input = input;
+            this.position = position;
+        }
+
+        static IndexReader open(Path file, long offset) throws IOException {
+            SeekableByteChannel channel = ConfinedFileOpener.openRegularFileNoFollowChannel(file);
+            try {
+                channel.position(offset);
+            } catch (IOException | RuntimeException failure) {
+                channel.close();
+                throw failure;
+            }
+            return new IndexReader(new DataInputStream(new BufferedInputStream(Channels.newInputStream(channel))),
+                    offset);
+        }
+
+        long position() {
+            return position;
+        }
+
+        IndexHeader header(String projectId) throws IOException {
+            if (integer() != MAGIC) throw new IOException("invalid semantic index magic");
+            int version = integer();
+            if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
+                throw new IOException("unsupported semantic index version: " + version);
+            }
+            String storedProject = string();
+            String snapshotId = string();
+            String providerId = string();
+            String modelId = string();
+            int dimensions = integer();
+            long builtAt = input.readLong();
+            position += Long.BYTES;
+            int count = integer();
+            if (!projectId.equals(storedProject)) throw new IOException("semantic index project mismatch");
+            if (dimensions < 1 || dimensions > MAX_DIMENSIONS || count < 0 || count > MAX_DOCUMENTS) {
+                throw new IOException("invalid semantic index metadata");
+            }
+            return new IndexHeader(version,
+                    new IndexMetadata(storedProject, snapshotId, providerId, modelId, dimensions, builtAt, count));
+        }
+
+        int integer() throws IOException {
+            int value = input.readInt();
+            position += Integer.BYTES;
+            return value;
+        }
+
+        String string() throws IOException {
+            String value = readString(input, budget);
+            position += Integer.BYTES + (long) value.getBytes(StandardCharsets.UTF_8).length;
+            return value;
+        }
+
+        void skipString() throws IOException {
+            int length = integer();
+            if (length < 0 || length > MAX_STRING_BYTES) throw new IOException("invalid semantic index string length");
+            skip(length);
+        }
+
+        /** Source, file, lines and content of a document: what lies between its kind and its checksum. */
+        void skipDocumentTail() throws IOException {
+            skipString();
+            skipString();
+            skip(2L * Integer.BYTES);
+            skipString();
+        }
+
+        double[] vector(IndexHeader header) throws IOException {
+            requireVectorSize(header);
+            double[] values = new double[header.metadata().dimensions()];
+            for (int index = 0; index < values.length; index++) {
+                values[index] = header.version() == LEGACY_FORMAT_VERSION ? input.readDouble() : input.readFloat();
+            }
+            position += header.vectorBytes();
+            return values;
+        }
+
+        void skipVector(IndexHeader header) throws IOException {
+            requireVectorSize(header);
+            skip(header.vectorBytes());
+        }
+
+        private void requireVectorSize(IndexHeader header) throws IOException {
+            if (integer() != header.metadata().dimensions()) throw new IOException("semantic vector dimensions mismatch");
+        }
+
+        void requireEnd() throws IOException {
+            if (input.read() != -1) throw new IOException("unexpected trailing semantic index data");
+        }
+
+        private void skip(long bytes) throws IOException {
+            input.skipNBytes(bytes);
+            position += bytes;
+        }
+
+        @Override
+        public void close() throws IOException {
+            input.close();
         }
     }
 

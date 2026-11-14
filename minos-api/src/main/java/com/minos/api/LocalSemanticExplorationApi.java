@@ -2,6 +2,7 @@ package com.minos.api;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.semantic.SemanticCorpusQueryService;
+import com.minos.application.semantic.SemanticProjectionService;
 
 import java.util.List;
 import java.util.Objects;
@@ -82,6 +83,41 @@ public final class LocalSemanticExplorationApi implements SemanticExplorationApi
                             .toList(),
                     neighbors.limitations());
         });
+    }
+
+    @Override
+    public ProjectionDto getProjection(String projectIdentifier) throws MinosApi.MinosApiException {
+        return MinosApiSupport.execute(
+                () -> projection(application.semanticProjectionService().status(projectIdentifier)));
+    }
+
+    @Override
+    public ProjectionPointsDto getProjectionPoints(String projectIdentifier, int offset, int limit)
+            throws MinosApi.MinosApiException {
+        return MinosApiSupport.execute(() -> {
+            SemanticProjectionService.Points page =
+                    application.semanticProjectionService().points(projectIdentifier, offset, limit);
+            return new ProjectionPointsDto(projection(page.status()), page.offset(), page.total(),
+                    page.points().stream().map(point -> new ProjectionPointDto(point.stableKey(),
+                            point.kind().name(), point.x(), point.y())).toList());
+        });
+    }
+
+    private static ProjectionDto projection(SemanticProjectionService.Status status) {
+        if (status.projection().isEmpty()) {
+            return new ProjectionDto(status.projectId(), status.state().name(), status.cause(),
+                    status.prepareCommand(), status.indexDocumentCount(), null, null, 0, null, 0L, List.of(), 0, 0,
+                    0, 0, false, List.of());
+        }
+        SemanticProjectionService.Description value = status.projection().orElseThrow();
+        return new ProjectionDto(status.projectId(), status.state().name(), status.cause(),
+                status.prepareCommand(), status.indexDocumentCount(),
+                new IndexIdentityDto(value.index().projectId(), value.index().snapshotId(),
+                        value.index().providerId(), value.index().modelId(), value.index().dimensions(),
+                        value.index().documentsFingerprint()),
+                value.method(), value.methodVersion(), value.parameters(), value.seed(), value.kinds(),
+                value.maxPoints(), value.pointCount(), value.candidateCount(), value.documentCount(),
+                value.sampled(), value.explainedVariance());
     }
 
     private SemanticCorpusQueryService corpus() {

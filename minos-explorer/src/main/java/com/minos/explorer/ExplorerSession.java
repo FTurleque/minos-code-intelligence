@@ -79,7 +79,8 @@ public final class ExplorerSession {
             say(error, "error: " + refused.getMessage());
             return USAGE_ERROR;
         }
-        try (ExplorerServer server = ExplorerServer.start(application.semanticCorpusQueryService(), port, scope,
+        try (ExplorerServer server = ExplorerServer.start(application.semanticCorpusQueryService(),
+                application.semanticProjectionService(), port, scope,
                 ExplorerServer.DEFAULT_REQUEST_TIMEOUT, line -> say(error, "explorer: " + line))) {
             say(error, "MINOS explorer is listening on port " + server.port() + " ("
                     + (scope == ListeningPolicy.Scope.LOOPBACK ? "loopback only" : "container interface")

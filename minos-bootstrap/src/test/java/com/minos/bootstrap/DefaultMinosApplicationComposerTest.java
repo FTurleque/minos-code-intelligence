@@ -64,6 +64,21 @@ class DefaultMinosApplicationComposerTest {
         }
     }
 
+    /** The projection cache is the file store of the home, created by no reading. */
+    @Test
+    void theProjectionStoreIsTheFileStoreOfTheHomeAndAReadingCreatesNothing(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        com.minos.semantic.SemanticProjectionStore store =
+                new DefaultMinosApplicationComposer().semanticProjectionStore(home);
+
+        assertInstanceOf(com.minos.storage.local.store.FileSemanticProjectionStore.class, store);
+        assertEquals(java.util.Optional.empty(), store.read("0f0f0f0f-0000-4000-8000-000000000001"));
+        assertEquals(false, java.nio.file.Files.exists(home.resolve("semantic-projections")));
+        try (MinosApplication application = MinosApplication.open(home)) {
+            assertEquals(application.semanticProjectionService(), application.semanticProjectionService());
+        }
+    }
+
     /** The production probe queries the real host; the "decision" cause follows the enumeration. */
     @Test
     void productionWorkerSandboxProbeAndCommandLocatorAreTheRealHostOnes(@TempDir Path temp) {

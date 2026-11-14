@@ -46,7 +46,8 @@ class ExplorerRoutesTest {
     @BeforeEach
     void start(@TempDir Path temp) throws Exception {
         fixture = IndexedHome.create(temp);
-        server = ExplorerServer.start(fixture.application.semanticCorpusQueryService(), 0,
+        server = ExplorerServer.start(fixture.application.semanticCorpusQueryService(),
+                fixture.application.semanticProjectionService(), 0,
                 ListeningPolicy.Scope.LOOPBACK, Duration.ofSeconds(20), log::add);
         port = server.port();
         String url = server.accessUrl();
@@ -248,7 +249,8 @@ class ExplorerRoutesTest {
         assertEquals(404, unknownRoute.status());
         assertEquals(Map.of("GET", List.of("projects", "projects/{project}/documents",
                         "projects/{project}/documents/{stableKey}",
-                        "projects/{project}/documents/{stableKey}/neighbors"),
+                        "projects/{project}/documents/{stableKey}/neighbors",
+                        "projects/{project}/projection", "projects/{project}/projection/points"),
                 "POST", List.of("projects/{project}/search")), ExplorerApi.inventory());
         String chunk = encode(chunkKey("GreetingService"));
         List<String> paths = List.of("/api/v1/projects", documents, documents + "/" + chunk,
@@ -352,7 +354,7 @@ class ExplorerRoutesTest {
     }
 
     /** Every file under {@code root}, by relative path, with the SHA-256 of its content. */
-    private static Map<String, String> tree(Path root) throws Exception {
+    static Map<String, String> tree(Path root) throws Exception {
         Map<String, String> files = new TreeMap<>();
         try (Stream<Path> walk = Files.walk(root)) {
             for (Path path : walk.toList()) {

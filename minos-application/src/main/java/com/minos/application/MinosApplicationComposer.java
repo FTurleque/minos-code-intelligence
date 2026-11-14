@@ -19,6 +19,8 @@ import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
+import com.minos.semantic.SemanticProjectionStore;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -73,6 +75,9 @@ public interface MinosApplicationComposer {
 
     /** Resumable run markers (ADR 0039 section 5), kept in the run directory of this MINOS_HOME. */
     ResumableRunMarkers resumableRunMarkers(Path home);
+
+    /** Projection cache of the semantic indexes of this MINOS_HOME, the same for every storage backend. */
+    SemanticProjectionStore semanticProjectionStore(Path home);
 
     /** Worker sandbox probe of the real host (doctor, remote index). */
     WorkerSandboxProbe workerSandboxProbe();

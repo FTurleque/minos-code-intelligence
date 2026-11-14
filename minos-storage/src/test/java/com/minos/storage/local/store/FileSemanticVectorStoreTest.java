@@ -94,7 +94,7 @@ class FileSemanticVectorStoreTest {
         assertTrue(Files.isRegularFile(root.resolve("project-1/index-v2.bin")));
     }
 
-    private static void writeLegacyV1(Path file, SemanticVectorStore.IndexSnapshot snapshot) throws Exception {
+    static void writeLegacyV1(Path file, SemanticVectorStore.IndexSnapshot snapshot) throws Exception {
         SemanticVectorStore.IndexedDocument indexed = snapshot.documents().getFirst();
         SemanticDocument document = indexed.document();
         try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file)))) {

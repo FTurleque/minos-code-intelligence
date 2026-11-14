@@ -102,6 +102,43 @@ class SemanticVectorStorePagedReadsFallbackTest {
                 () -> new SemanticVectorStore.StoredDocument(metadata, withoutVector));
     }
 
+    @Test
+    void vectorPagesFollowEachOtherInStableKeyOrderWithTheKindOfEachDocument() throws Exception {
+        LoadOnlyStore store = new LoadOnlyStore(index(indexed("gamma"), indexed("alpha"), indexed("beta")));
+
+        SemanticVectorStore.VectorPage first = store.vectorPage(PROJECT, null, 2).orElseThrow();
+        SemanticVectorStore.VectorPage second = store.vectorPage(PROJECT, "beta", 2).orElseThrow();
+
+        assertEquals(List.of("alpha", "beta"),
+                first.vectors().stream().map(SemanticVectorStore.StoredVector::stableKey).toList());
+        assertTrue(first.hasMore());
+        assertEquals(List.of("gamma"),
+                second.vectors().stream().map(SemanticVectorStore.StoredVector::stableKey).toList());
+        assertFalse(second.hasMore());
+        assertEquals(SemanticDocumentKind.SYMBOL, first.vectors().getFirst().kind());
+        assertEquals(List.of(1.0, 0.0), first.vectors().getFirst().vector().values());
+        assertEquals(first.metadata(), second.metadata());
+        assertEquals(Optional.empty(), new LoadOnlyStore(null).vectorPage(PROJECT, null, 2));
+    }
+
+    @Test
+    void aVectorPageOutOfBoundsIsRefusedBeforeTheIndexIsReadAndAPageHoldsVectorsOfItsIndexOnly() {
+        LoadOnlyStore store = new LoadOnlyStore(index(indexed("alpha")));
+        SemanticVectorStore.IndexMetadata threeDimensions =
+                new SemanticVectorStore.IndexMetadata(PROJECT, SNAPSHOT, "provider", "model", 3, 1_000L, 1);
+        List<SemanticVectorStore.StoredVector> twoDimensions = List.of(
+                new SemanticVectorStore.StoredVector(SemanticDocumentKind.CHUNK, indexed("alpha").vector()));
+
+        assertThrows(IllegalArgumentException.class, () -> store.vectorPage(PROJECT, null, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.vectorPage(PROJECT, null, SemanticVectorStore.MAX_VECTOR_PAGE_SIZE + 1));
+        assertThrows(IllegalArgumentException.class, () -> store.vectorPage(PROJECT, " ", 1));
+        assertEquals(List.of(), store.loadedProjects);
+        assertThrows(IllegalArgumentException.class,
+                () -> new SemanticVectorStore.VectorPage(threeDimensions, twoDimensions, false));
+        assertThrows(NullPointerException.class, () -> new SemanticVectorStore.StoredVector(null, indexed("a").vector()));
+    }
+
     private static List<String> keys(SemanticVectorStore.DocumentPage page) {
         return page.documents().stream().map(SemanticDocument::stableKey).toList();
     }

@@ -352,7 +352,8 @@ public final class SemanticCorpusQueryService {
         return new SourceComparison(source, identical ? Divergence.IDENTIQUE : Divergence.DIFFERENTE);
     }
 
-    private IndexIdentity identityOf(SemanticVectorStore store, SemanticVectorStore.IndexMetadata metadata)
+    /** The identity of the index {@code metadata} describes; its fingerprint is kept while the metadata stand. */
+    IndexIdentity identityOf(SemanticVectorStore store, SemanticVectorStore.IndexMetadata metadata)
             throws IOException {
         synchronized (cacheLock) {
             FingerprintedIndex known = fingerprints.get(metadata.projectId());
@@ -360,14 +361,21 @@ public final class SemanticCorpusQueryService {
                 return IndexIdentity.of(metadata, known.fingerprint());
             }
         }
+        IndexIdentity read = readIdentity(store, metadata);
+        synchronized (cacheLock) {
+            fingerprints.put(metadata.projectId(),
+                    new FingerprintedIndex(metadata, read.documentsFingerprint()), 1L);
+        }
+        return read;
+    }
+
+    /** The identity of the index {@code metadata} describes, its fingerprint read from the store now. */
+    static IndexIdentity readIdentity(SemanticVectorStore store, SemanticVectorStore.IndexMetadata metadata)
+            throws IOException {
         SemanticVectorStore.IndexChecksums checksums = store.checksums(metadata.projectId())
                 .orElseThrow(IndexChangedException::new);
         if (!metadata.equals(checksums.metadata())) throw new IndexChangedException();
-        String fingerprint = fingerprint(checksums.checksumsByStableKey());
-        synchronized (cacheLock) {
-            fingerprints.put(metadata.projectId(), new FingerprintedIndex(metadata, fingerprint), 1L);
-        }
-        return IndexIdentity.of(metadata, fingerprint);
+        return IndexIdentity.of(metadata, fingerprint(checksums.checksumsByStableKey()));
     }
 
     /** The kind named by {@code value}, whatever its case, or {@code null} for no kind. */

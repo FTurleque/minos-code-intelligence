@@ -5,7 +5,7 @@ import java.util.Objects;
 
 /**
  * Additive read-only API over the semantic documents of a project: projects, paged documents, detail of one
- * document, search and neighbours. Nothing here writes, embeds a corpus or synchronizes an index; the semantic
+ * document, search, neighbours, and the state and points of the prepared 2D projection. Nothing here writes, embeds a corpus or synchronizes an index; the semantic
  * API {@link SemanticCodeIntelligenceApi} is unchanged.
  *
  * <p>Failures follow the published taxonomy: an unknown document, an invalid cursor or a bound out of range is
@@ -37,6 +37,30 @@ public interface SemanticExplorationApi {
 
     /** The nearest documents of one document, ranked from its stored vector without any provider call. */
     NeighborsDto getNeighbors(String projectIdentifier, String stableKey, int limit) throws MinosApi.MinosApiException;
+
+    /** Largest page of projection points one call returns. */
+    int MAX_PROJECTION_POINTS_PAGE = 5_000;
+
+    /**
+     * The state of the 2D projection of the index of a project. Nothing is computed and no vector is read: a
+     * projection is prepared by the command the answer names, never by this API. The default refuses, for an
+     * implementation that predates the projection.
+     */
+    default ProjectionDto getProjection(String projectIdentifier) throws MinosApi.MinosApiException {
+        throw new MinosApi.MinosApiException(MinosApi.ErrorCode.UNAVAILABLE,
+                "the projection is not provided by this implementation");
+    }
+
+    /**
+     * One page of the points of the published projection, from {@code offset}, in stable-key order, with the
+     * state they are shown under; no point without a readable projection. The default refuses, like
+     * {@link #getProjection}.
+     */
+    default ProjectionPointsDto getProjectionPoints(String projectIdentifier, int offset, int limit)
+            throws MinosApi.MinosApiException {
+        throw new MinosApi.MinosApiException(MinosApi.ErrorCode.UNAVAILABLE,
+                "the projection is not provided by this implementation");
+    }
 
     /**
      * A page request. {@code cursor} is the {@code nextCursor} of the previous page or {@code null}; {@code kind}
@@ -138,6 +162,35 @@ public interface SemanticExplorationApi {
         public NeighborsDto {
             neighbors = immutable(neighbors);
             limitations = immutable(limitations);
+        }
+    }
+
+    /**
+     * {@code state} is {@code ABSENTE}, {@code PRETE}, {@code PERIMEE} or {@code ECHOUEE}. The fields from
+     * {@code index} to {@code explainedVariance} describe the published projection and are {@code null}, zero or
+     * empty unless the state is {@code PRETE} or {@code PERIMEE}; {@code cause} is set for {@code ECHOUEE} only.
+     * {@code sampled} tells that the points are a sample, drawn with {@code seed}, of the
+     * {@code candidateCount} documents of the selected kinds.
+     */
+    record ProjectionDto(String projectId, String state, String cause, String prepareCommand,
+                         int indexDocumentCount, IndexIdentityDto index, String method, int methodVersion,
+                         String parameters, long seed, List<String> kinds, int maxPoints, int pointCount,
+                         int candidateCount, int documentCount, boolean sampled,
+                         List<Double> explainedVariance) {
+        public ProjectionDto {
+            kinds = immutable(kinds);
+            explainedVariance = immutable(explainedVariance);
+        }
+    }
+
+    /** One projected document; its coordinates are within -1 and 1. */
+    record ProjectionPointDto(String stableKey, String kind, float x, float y) {
+    }
+
+    /** One page of points, with the projection they belong to; {@code total} is its number of points. */
+    record ProjectionPointsDto(ProjectionDto projection, int offset, int total, List<ProjectionPointDto> points) {
+        public ProjectionPointsDto {
+            points = immutable(points);
         }
     }
 

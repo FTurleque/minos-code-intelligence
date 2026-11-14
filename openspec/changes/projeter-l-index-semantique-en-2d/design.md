@@ -2,26 +2,40 @@
 
 ## Contexte
 
-Motivation : `proposal.md`. Comparaison des méthodes, budgets et protocole de mesure : `docs/project/research/explorateur-vectoriel-2026-11/README.md` § 5. Conception commune du chantier : `openspec/changes/explorer-l-index-semantique-dans-un-navigateur/design.md` (ou son archive), dont ce design reprend le modèle, les états et les contrats de projection sans les recopier. Modules touchés : domaine, stockage, application, API, CLI, surface d'exploration.
+Motivation : `proposal.md`. Comparaison des méthodes, budgets et protocole de mesure : `docs/project/research/explorateur-vectoriel-2026-11/README.md` § 5. Conception commune du chantier : `openspec/changes/archive/2026-11-14-explorer-l-index-semantique-dans-un-navigateur/design.md`, dont ce design reprend le modèle, les états et les contrats de projection sans les recopier. Modules touchés : domaine, stockage, application, API, CLI, surface d'exploration.
 
 ## État vérifié au HEAD
 
-Commit `63e0c4ac5288ebd6d52b3462e40e7067d06b36ce` (`develop`). **À relire au HEAD du démarrage** : ce changement suit un autre changement qui modifie les mêmes ports.
+Commit `8d3f8fe1dcdfee8604e532ef6d1991ded888701a` (`main`, 2026-11-14), relu au démarrage de l'implémentation, après l'archivage de `explorer-l-index-semantique-dans-un-navigateur`.
 
 | Fait | Preuve |
 |---|---|
-| `load()` matérialise tout l'index, vecteurs compris, en texte puis en `double[]` | `minos-storage/src/main/java/com/minos/storage/postgresql/semantic/PostgresSemanticReadQueries.java:121-147`, `:199-213` |
+| `load()` matérialise tout l'index, vecteurs compris, en texte puis en `double[]` | `minos-storage/src/main/java/com/minos/storage/postgresql/semantic/PostgresSemanticReadQueries.java:202-229`, `:280-294` |
 | Les lectures additives du port ont un défaut dérivé de `load()` | `minos-domain/src/main/java/com/minos/semantic/SemanticVectorStore.java:51-71` |
-| Identité d'un document : `stable_key`, `checksum` | `minos-application/src/main/java/com/minos/application/semantic/SemanticDocumentFactory.java:146-147` |
+| Le port lit une page de documents sans vecteurs (`documentPage`, 1 000 au plus) et un document avec son vecteur (`storedDocument`) ; aucune lecture de vecteurs par lots | `minos-domain/src/main/java/com/minos/semantic/SemanticVectorStore.java:73-128` |
+| Le magasin local n'a pas de lecture propre des pages ni des empreintes : `documentPage`, `storedDocument` et `checksums` y dérivent de `load()` | `minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java:79-176` (seuls `load` et `metadata` sont redéfinis) |
+| Identité d'un document : `stable_key`, `checksum` | `minos-application/src/main/java/com/minos/application/semantic/SemanticDocumentFactory.java:154-155` |
+| Identité d'index et empreinte des documents déjà calculées par le service de corpus | `minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java:355-371`, `:383-390`, `:454-474` |
 | Format local `index-v2.bin`, vecteurs `float32`, plafond de 192 Mio décodés | `minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java:48-56` |
-| Remplacement conditionnel de l'index sous verrou de projet | `minos-storage/src/main/java/com/minos/storage/postgresql/semantic/PostgresSemanticVectorStore.java:82-110` |
+| Remplacement conditionnel de l'index sous verrou de projet | `minos-storage/src/main/java/com/minos/storage/postgresql/semantic/PostgresSemanticVectorStore.java:106-135` |
 | Index réel de 25 210 documents mesuré le 2026-10-15 | `docs/project/governance/STATUS.md:61` |
+| Une commande `minos semantic status <projet>` existe ; `semantic projection …` s'y ajoute | `minos-cli/src/main/java/com/minos/cli/MinosCliRunner.java:42`, `minos-cli/src/main/java/com/minos/cli/command/RetrievalStatusCommand.java:83-85` |
+| La surface HTTP ne rend que du JSON ; toute méthode autre que celle de la route rend `405` | `minos-explorer/src/main/java/com/minos/explorer/ExplorerApi.java:65-74`, `:106-109` |
+| `SemanticProjectionStore` et `SemanticProjectionService` n'existent pas | recherche dans le dépôt, aucun résultat |
 
 Non mesuré : tout ce qui concerne la PCA, le cache et le rendu.
 
 ## Écarts
 
-Aucun au HEAD. Écart à surveiller : si le changement précédent livre des noms de ports différents de ceux de la conception commune, ce design est corrigé avant la première tâche.
+Les noms de ports livrés par le changement précédent sont ceux de la conception commune : aucun écart de structure.
+
+| Écart | Source A | Source B | Suite |
+|---|---|---|---|
+| Points rendus en binaire, table des clés paginée à part | conception commune, « Contrats d'interface » | la surface ne rend que du JSON (`ExplorerApi.java:65-74`) et aucune mesure ne justifie un second format | une seule route `projection/points`, en JSON, paginée par `offset` et `limit` (5 000 points au plus par page) ; le format binaire relève de la décision mesurée 7.1 |
+| États `EN_PREPARATION` et `ECHOUEE` après une préparation en échec | conception commune, « États et transitions » | une lecture n'écrit rien et le plan de requête Docker monte les données en lecture seule : elle ne peut ni sonder un verrou ni lire un marqueur fiable après un arrêt brutal | une lecture rend `ABSENTE`, `PRETE`, `PERIMEE` ou `ECHOUEE` (fichier illisible) ; la préparation en cours n'est vue que par sa commande (progression sur `stderr`) et par le refus d'une seconde préparation ; un échec est rendu par le code de sortie, la projection précédente gardant son état |
+| Le magasin local dérive `checksums` de `load()` | exigence « La lecture d'une projection ne calcule rien » (aucun vecteur lu) | `FileSemanticVectorStore.java:79-176` | lecture propre des empreintes et des lots de vecteurs dans l'adaptateur local, par parcours du fichier sans décoder ce qui n'est pas demandé |
+| Budget de mémoire « configuré » sans option pour le configurer | delta, scénario « Budget dépassé » | table des commandes de ce design | option `--max-memory-mb N` de `prepare` (défaut 256) |
+| Le « Purpose » de la spec de référence ne cite plus la carte 2D | `openspec/specs/exploration-semantique/spec.md:3-4` (retirée à l'archivage, la carte n'étant pas livrée) | ce changement la livre | point de clôture : le « Purpose » est complété à l'archivage de ce changement, pas avant |
 
 ## Exigences couvertes
 
@@ -67,14 +81,14 @@ Routes `GET /api/v1/projects/{p}/projection` et `…/projection/points` : concep
 
 | Commande | Options | Sortie | Codes |
 |---|---|---|---|
-| `minos semantic projection prepare <projet>` | `--max-points N` (défaut à fixer), `--seed N` (défaut 42), `--kinds CHUNK[,SYMBOL,FILE]` (défaut `CHUNK`) | rapport : points, documents, variance expliquée, durée | 0 en cas de succès ; non nul sinon (usage, index non `READY`, index modifié pendant la préparation, erreur interne), valeurs à aligner sur la convention de `docs/user/cli.md` |
-| `minos semantic projection status <projet>` | — | état, identité, méthode, sélection | 0 ; non nul pour une erreur d'usage |
+| `minos semantic projection prepare <projet>` | `--max-points N` (défaut provisoire 100 000, question 1), `--seed N` (défaut 42), `--kinds CHUNK[,SYMBOL,FILE]` (défaut `CHUNK`), `--max-memory-mb N` (défaut 256), `--format text\|json` | rapport : points, documents, variance expliquée, durée | 0 en cas de succès ; non nul sinon (usage, index non `READY`, index modifié pendant la préparation, erreur interne), valeurs à aligner sur la convention de `docs/user/cli.md` |
+| `minos semantic projection status <projet>` | `--format text\|json` | état, identité, méthode, sélection | 0 ; non nul pour une erreur d'usage |
 
 La préparation exige un index `READY` : projeter un index `STALE` produirait une carte périmée dès sa publication.
 
 ## Persistance et intégrité
 
-Fichier `semantic-projections/<projet>/projection-v1.bin` sous `MINOS_HOME`, pour les deux backends : magie, version de format, identité complète, méthode et paramètres, sélection, variance expliquée, nombre de points, clés stables, coordonnées `float32`, empreinte SHA-256 finale vérifiée à la lecture. Une version de format inconnue est refusée.
+Fichier `semantic-projections/<projet>/projection-v1.bin` sous `MINOS_HOME`, pour les deux backends : magie, version de format, identité complète, méthode et paramètres, sélection, variance expliquée, nombre de points, puis par point sa clé stable, sa nature et ses coordonnées `float32`, empreinte SHA-256 finale vérifiée à la lecture. Une version de format inconnue est refusée.
 
 ## Transactions, concurrence et idempotence
 

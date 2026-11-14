@@ -138,6 +138,61 @@ class SemanticExplorationApiContractTest {
     }
 
     @Test
+    void theProjectionIsAbsentUntilItIsPreparedThenReadBackWithItsMethodAndItsPoints() throws Exception {
+        SemanticExplorationApi.ProjectionDto absent = api.getProjection("fixture");
+        SemanticExplorationApi.ProjectionPointsDto none = api.getProjectionPoints("fixture", 0, 10);
+
+        application.semanticProjectionService().prepare("fixture",
+                new com.minos.application.semantic.SemanticProjectionService.PreparationRequest(2, 9L,
+                        Set.of(com.minos.semantic.SemanticDocumentKind.values()), 64L * 1024L * 1024L),
+                com.minos.application.semantic.SemanticProjectionService.Progress.NONE);
+        SemanticExplorationApi.ProjectionDto ready = api.getProjection("fixture");
+        SemanticExplorationApi.ProjectionPointsDto points = api.getProjectionPoints("fixture", 1, 10);
+        SemanticExplorationApi.DocumentPageDto page =
+                api.listDocuments("fixture", SemanticExplorationApi.DocumentPageQuery.firstPage());
+
+        assertEquals("ABSENTE", absent.state());
+        assertTrue(absent.prepareCommand().startsWith("minos semantic projection prepare "));
+        assertNull(absent.index());
+        assertEquals(3, absent.indexDocumentCount());
+        assertEquals(List.of(), none.points());
+        assertEquals("ABSENTE", none.projection().state());
+        assertEquals("PRETE", ready.state());
+        assertEquals(page.identity(), ready.index());
+        assertEquals("pca", ready.method());
+        assertEquals(9L, ready.seed());
+        assertEquals(2, ready.pointCount());
+        assertEquals(3, ready.documentCount());
+        assertEquals(3, ready.candidateCount());
+        assertTrue(ready.sampled());
+        assertEquals(List.of("CHUNK", "FILE", "SYMBOL"), ready.kinds());
+        assertEquals(2, ready.explainedVariance().size());
+        assertEquals(2, points.total());
+        assertEquals(1, points.offset());
+        assertEquals(1, points.points().size());
+        assertTrue(Math.abs(points.points().getFirst().x()) <= 1.0f && Math.abs(points.points().getFirst().y()) <= 1.0f);
+        assertFalse(ready.toString().contains(projectRoot.toString()));
+        assertCode(MinosApi.ErrorCode.INVALID_REQUEST, () -> api.getProjectionPoints("fixture", 0, 0));
+        assertCode(MinosApi.ErrorCode.INVALID_REQUEST,
+                () -> api.getProjectionPoints("fixture", 0, SemanticExplorationApi.MAX_PROJECTION_POINTS_PAGE + 1));
+        assertCode(MinosApi.ErrorCode.INVALID_REQUEST, () -> api.getProjection("unknown-project"));
+    }
+
+    @Test
+    void anImplementationThatPredatesTheProjectionRefusesItInThePublishedTaxonomy() throws Exception {
+        SemanticExplorationApi older = new SemanticExplorationApi() {
+            @Override public List<ProjectDto> listProjects() { return List.of(); }
+            @Override public DocumentPageDto listDocuments(String project, DocumentPageQuery query) { return null; }
+            @Override public DocumentDetailDto getDocument(String project, String stableKey) { return null; }
+            @Override public SearchDto search(String project, SearchQuery query) { return null; }
+            @Override public NeighborsDto getNeighbors(String project, String stableKey, int limit) { return null; }
+        };
+
+        assertCode(MinosApi.ErrorCode.UNAVAILABLE, () -> older.getProjection("fixture"));
+        assertCode(MinosApi.ErrorCode.UNAVAILABLE, () -> older.getProjectionPoints("fixture", 0, 10));
+    }
+
+    @Test
     void aHybridSearchNamesItsScoreAndItsSignals() throws Exception {
         SemanticExplorationApi.SearchDto search = api.search("fixture",
                 new SemanticExplorationApi.SearchQuery("GreetingService", "HYBRID", 10, 0.0, "symbol", null, "java", null));

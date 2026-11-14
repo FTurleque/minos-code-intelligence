@@ -6,6 +6,7 @@ import com.minos.cli.command.IdeIntelligenceCommand;
 import com.minos.cli.command.NexusExportCommand;
 import com.minos.cli.command.ProjectCommand;
 import com.minos.cli.command.RetrievalStatusCommand;
+import com.minos.cli.command.SemanticProjectionCommand;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.cli.operations.LocalRemoteIndexOperations;
@@ -93,6 +94,10 @@ public final class MinosCliRunner {
         if (isIdeIntelligenceRequest(arguments)) {
             return new IdeIntelligenceCommand(application::get).run(slice(arguments, 1), output, error);
         }
+        if (isSemanticProjectionRequest(arguments)) {
+            return new SemanticProjectionCommand(() -> application.get().semanticProjectionService())
+                    .run(slice(arguments, 2), output, error);
+        }
         if (isRetrievalStatusRequest(arguments)) {
             return new RetrievalStatusCommand(retrievalMode(arguments[0]),
                     project -> application.get().semanticIndexService().status(project))
@@ -166,6 +171,7 @@ public final class MinosCliRunner {
         String command = arguments[0];
         if (isRetrievalCommand(command)) {
             output.append(RetrievalStatusCommand.usage(retrievalMode(command))).append('\n');
+            if (SEMANTIC_COMMAND.equals(command)) output.append(SemanticProjectionCommand.USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
         if (MCP_COMMAND.equals(command)) {
@@ -219,6 +225,12 @@ public final class MinosCliRunner {
 
     public static Path resolveHome(Map<String, String> environment, Properties properties) {
         return MinosHome.resolve(environment, properties);
+    }
+
+    /** {@code semantic projection ...}: the projection of the semantic index, not its retrieval status. */
+    static boolean isSemanticProjectionRequest(String[] arguments) {
+        return arguments.length >= 2 && SEMANTIC_COMMAND.equals(arguments[0])
+                && SemanticProjectionCommand.NAME.equals(arguments[1]);
     }
 
     private static boolean isRetrievalStatusRequest(String[] arguments) {

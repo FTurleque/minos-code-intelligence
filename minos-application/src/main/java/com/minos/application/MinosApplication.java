@@ -7,6 +7,7 @@ import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticCorpusQueryService;
 import com.minos.application.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.application.semantic.SemanticSearchService;
 import com.minos.application.team.TeamControlPlane;
 import com.minos.architecture.LocalProjectArchitectureQuery;
@@ -84,6 +85,7 @@ public final class MinosApplication implements AutoCloseable {
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
     private final Optional<TeamControlPlane> teamControlPlane;
     private final MinosApplicationComposer compositionRoot;
+    private SemanticProjectionService semanticProjectionService;
 
     /**
      * Stores resolved by the assembler (builder override or selected backend), grouped by domain (ADR 0045).
@@ -317,6 +319,19 @@ public final class MinosApplication implements AutoCloseable {
     public HybridSearchService hybridSearchService() { return semantic.hybridSearchService(); }
     public HybridContextBuilder hybridContextBuilder() { return semantic.hybridContextBuilder(); }
     public SemanticCorpusQueryService semanticCorpusQueryService() { return semantic.semanticCorpusQueryService(); }
+
+    /**
+     * Projection of the semantic indexes. Built on first use: its cache is an adapter the composition root
+     * provides for this home, and an application that never projects never asks for it.
+     */
+    public synchronized SemanticProjectionService semanticProjectionService() {
+        if (semanticProjectionService == null) {
+            semanticProjectionService = new SemanticProjectionService(new ProjectResolver(stores.projectRegistry()),
+                    semantic.semanticIndexService(), semantic.semanticCorpusQueryService(),
+                    compositionRoot.semanticProjectionStore(home));
+        }
+        return semanticProjectionService;
+    }
 
     // Hosted team control plane (opt-in).
     /** Engine service behind {@link #teamControlPlane()}; empty when the hosted mode is disabled. */
