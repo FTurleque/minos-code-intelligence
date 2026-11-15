@@ -174,6 +174,7 @@ abandonné après 30 s garde son jeton de concurrence tant que la lecture sous-j
 Aucun seuil de performance n'est fixé. Mesure rejouable de la préparation et de la lecture d'une projection :
 `./mvnw -B -ntp -pl minos-bootstrap -am test "-Dtest=SemanticProjectionMeasurementTest" "-Dminos.projection.measure=true" "-Dsurefire.failIfNoSpecifiedTests=false"`
 (sautée sans la propriété ; relevé écrit dans `target/projection-measurements.md` à la racine du dépôt ; `-Dminos.projection.measure.keep=<dossier>` garde les `MINOS_HOME` mesurés pour les servir).
+Elle ne couvre que la projection, en stockage local et à 256 dimensions. Le banc sémantique de `benchmarks/scalability/` (section « Banc sémantique » de `benchmarks/scalability/README.md`) mesure la préparation de la projection et chaque route de l'API servie en HTTP sur la boucle locale, en stockage local et sous PostgreSQL, sur des index synthétiques à 768 dimensions ; son harnais (`SemanticExplorerBenchmark`) est gardé par `SemanticExplorerBenchmarkSmokeTest`.
 
 ## Écoute
 

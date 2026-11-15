@@ -17,7 +17,8 @@ du dépôt (les scripts le vérifient).
 - Windows et PowerShell 7 (`pwsh`) : les deux scripts, le runner scip-java géré et `mvnw.cmd` sont
   propres à Windows ; `run-scalability-benchmark.ps1` lit aussi le processeur et la mémoire par
   `Get-CimInstance`. Aucun rejeu Linux n'est fourni.
-- JDK 24 dans le `PATH`, Git, et les outils scip-java gérés par MINOS pour préparer le corpus.
+- JDK 21 (baseline du dépôt, `docs/developer/TOOLCHAIN_POLICY.md`) dans le `PATH`, Git, et les outils
+  scip-java gérés par MINOS pour préparer le corpus.
 - Mémoire : `scalability.json` lance la JVM avec `-Xmx24g`. Mesuré sur ce dépôt : le corpus entier
   retient environ 300 Mo de tas (snapshot 163 Mo, index 82 Mo, corpus hybride 55 Mo), auxquels
   s'ajoutent les vues relues des tranches et les pics d'allocation (jusqu'à 1,3 Go par recherche
@@ -89,3 +90,94 @@ Le recensement des tailles parcourt le snapshot dans l'ordre des champs du codec
 est comparée à l'encodeur réel (`censusMatchesEncoder`) chaque fois que le snapshot tient sous le
 plafond. Durée d'une exécution complète : plus d'une heure sur la machine de référence, dominée par la
 construction des corpus hybrides (6 ms par document) et par la découverte du projet (36 s par appel).
+
+## 3. Banc sémantique (projection et explorateur)
+
+Mesures du constat AUD-PERF-13 de l'audit du 2026-11-15 : préparation de la projection 2D et routes de
+lecture de l'explorateur, en stockage local et sous PostgreSQL. Elles servent de référence aux corrections
+de performance du sprint 4 de cet audit ; la référence datée est consignée dans
+`docs/project/audits/2026-11-15/SUIVI.md`, jamais dans ce dossier.
+
+Le harnais est `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmark.java`, un `main`
+des sources de test de `minos-explorer` (le module de la surface, que `minos-bootstrap` ne voit pas) dont le
+nom ne correspond à aucun motif d'inclusion de Surefire : il ne tourne jamais dans `mvn verify`.
+`SemanticExplorerBenchmarkSmokeTest` l'exécute à chaque build sur un index local de quelques centaines de
+documents : il vérifie la liste exacte des mesures émises (65 lignes `METRIC` pour un jeu local mesuré en
+entier), que chaque route de `ExplorerApi` a un scénario mesuré, la forme des refus, et que deux exécutions de
+même graine donnent les mêmes documents, passes et vecteurs lus. Il n'affirme aucune durée.
+
+```powershell
+.\benchmarks\scalability\run-semantic-benchmark.ps1 -OutputDirectory <hors-dépôt>\semantic-run `
+    [-PostgresUrl jdbc:postgresql://127.0.0.1:55432/postgres -PostgresUser minos] `
+    [-Only local:25000,postgresql:25000] [-Warmup 1] [-Iterations 3]
+```
+
+Le script compile le harnais (`mvnw -pl minos-explorer -am test-compile`), lance la JVM avec les paramètres
+de `semantic.json` et produit dans le dossier de sortie `result.tsv`, `summary.json` (mesures, refus, durée
+totale et code de sortie), `environment.txt` (machine, JVM, commit, jeux, hôte PostgreSQL réduit à l'hôte et
+au port), `stderr.txt` et les `MINOS_HOME` jetables. Il refuse un dossier de sortie situé dans le dépôt, avant
+d'écrire quoi que ce soit, et un dossier qui contient déjà une exécution. Il est compatible Windows
+PowerShell 5.1 et PowerShell 7.
+
+### Jeux
+
+`semantic.json` déclare la dimension (768), la graine, l'échauffement, les itérations et les jeux par
+stockage : `local` 25 000 et 32 768 documents, `local` 100 000 documents à refus attendu sur la liste, le
+détail, les voisins et la recherche sémantique, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
+neuf ; son libellé porte le stockage, la taille et la dimension (`local-n25000-d768`).
+
+Tous les jeux sont **synthétiques** : textes tirés de la graine, vecteurs du provider déterministe
+`local-hash`, écrits directement par le port d'écriture du magasin sémantique
+(`semanticVectorStore().replace`), hors synchronisation. Un jeu que la synchronisation du produit refuserait
+de construire (budget `SemanticIndexBudget.DEFAULT`, relu au HEAD par le harnais : au plus 32 768 documents à
+768 dimensions) porte la mention `beyond-build-budget` dans son libellé : il caractérise le magasin et les
+lectures, pas un index que l'utilisateur peut obtenir. Le jeu local de 100 000 documents dépasse aussi le
+décodage complet du magasin local : la liste, le détail, les voisins et la recherche sémantique (classement
+exact par défaut du port `SemanticVectorStore.search`, qui charge l'index entier) y sont refusés, et le banc
+constate ce refus.
+
+### Mesures
+
+| Section | Mesures |
+|---|---|
+| `dataset` | `documents`, `dimensions`, `writeMillis` (écriture du jeu), `beyondBuildBudget` (0 ou 1) |
+| `projection` | `documents`, `durationMillis`, `passes` (parcours de l'index), `vectorPages` (pages de vecteurs lues), `vectorsRead`, `peakWorkingBytes`, `pointCount`, `candidateCount`, `sampled` |
+| `explorer` | pour `projects`, `list-first`, `list-deep` (page atteinte par curseur), `detail`, `neighbors` (limite 20), `projection-status`, `projection-points` (limite 5 000), `search` (sémantique) : `coldMicros`, `p50Micros`, `p95Micros`, `maxMicros`, `allocatedBytesPerRequest` (médiane des octets alloués par la JVM pendant la requête, client compris), `responseBytes` |
+| `heap` | tas occupé après trois collectes : avant le premier appel, après la liste, après les voisins, après la lecture de tous les points |
+
+Les routes sont servies par un vrai serveur de l'explorateur sur un port éphémère de la boucle locale et
+interrogées avec le jeton de session : la garde, l'encodage JSON et le magasin sont dans la mesure.
+
+Une mesure impossible est une ligne `REFUSED section jeu raison`, sans chemin absolu ni secret, et sans
+valeur ; les autres sections continuent. Pour une route, la raison donne le statut HTTP, le code d'erreur et
+le motif du produit ; la page profonde de la liste reprend la raison de la page refusée en chemin. Code de sortie : 0 si chaque refus était attendu et chaque refus attendu s'est produit ;
+1 sinon (un refus attendu qui ne se produit plus demande, sur `stderr.txt`, de retirer la déclaration de
+`semantic.json`) ; 2 pour une erreur d'usage.
+
+### PostgreSQL
+
+Démarrer le serveur de test par `scripts/dev/start-test-postgres.ps1` (voir `docs/developer/testing.md`),
+puis passer `-PostgresUrl` et `-PostgresUser`. Le mot de passe est lu dans `MINOS_TEST_POSTGRES_PASSWORD` et
+transmis à la JVM par son environnement, ou lu par le produit dans le fichier restreint passé par
+`-PostgresPasswordFile` ; il n'est écrit ni dans un argument ni dans `environment.txt`. Le harnais configure
+chaque `MINOS_HOME` jetable sur le backend PostgreSQL par la configuration du produit, dans un schéma propre
+à l'exécution et au jeu (`mb_<exécution>_n<documents>_d<dimension>`), et refuse un schéma qui contient déjà un
+projet. L'enregistrement du backend PostgreSQL est celui des tests de `minos-bootstrap`
+(`minos-bootstrap/src/test/postgresql-backend`), ajouté au classpath par le script : `minos-explorer` ne
+dépend pas de `minos-storage`. Sans URL, les jeux PostgreSQL sont refusés en nommant le paramètre manquant,
+et le code de sortie est non nul. Les schémas créés restent dans la base de test ; `start-test-postgres.ps1
+-Stop` supprime le conteneur.
+
+### Mesure de la projection seule
+
+`minos-bootstrap/src/test/java/com/minos/bootstrap/semantic/SemanticProjectionMeasurementTest.java` reste la
+mesure rapide de la préparation et de la lecture d'une projection, en stockage local, à 256 dimensions
+(`docs/developer/semantic-explorer.md`) : elle ne mesure ni PostgreSQL, ni les routes HTTP, ni la dimension
+d'un modèle réel, et peut garder ses `MINOS_HOME` pour les servir dans un navigateur.
+
+### Durée
+
+Les valeurs d'échauffement et d'itérations de `semantic.json` sont provisoires : la durée d'une exécution
+locale complète n'a pas encore été relevée sur la machine de référence (tâche 2.3 du changement OpenSpec
+`mesurer-la-projection-et-l-explorateur-au-banc`). Mémoire : `-Xmx8g` ; un jeu de 100 000 documents à 768
+dimensions tient environ 0,6 Go de vecteurs en tas pendant son écriture.
