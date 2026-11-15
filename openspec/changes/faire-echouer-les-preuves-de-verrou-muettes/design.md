@@ -73,6 +73,7 @@ Aucun délai fixe ne sert d'affirmation négative (`persistance-snapshots › L'
 
 - Rouge AUD-TST-05 : le test de D6 échoue au HEAD (le lanceur lève une hypothèse de saut au lieu d'une assertion).
 - Rouge AUD-TST-07 : preuve **manuelle**, hors des scénarios de la spécification parce qu'elle n'est pas une commande reproductible : sur une copie locale non commitée où `close()` libère avant de contrôler le propriétaire (`InMemoryIndexStateStore`, `ProjectIndexLease`, `SnapshotProjectLease`), les nouveaux tests échouent alors que ceux du HEAD y restent verts. Le résultat est consigné dans la PR.
+- Résultat de la copie mutée (poste Windows, consigné ici et à reporter dans la PR) : la mutation possible n'est pas « libérer avant le contrôle » (un `ReentrantLock` libéré par un autre fil lève `IllegalMonitorStateException`) mais « marquer fermé avant le contrôle » dans `InMemoryIndexStateStore`, `ProjectIndexLease` et `BoundedFileLease` (porteur de la fermeture de `SnapshotProjectLease`) : la fermeture du propriétaire devient sans effet. Les trois nouveaux tests visés échouent (concurrent jamais servi) ; parmi les tests du HEAD, celui du bail en mémoire reste vert, ceux des deux baux de fichier échouent aussi (réacquisition par le même fil à l'échéance).
 - `./mvnw -B -ntp -pl minos-storage -am test "-Dtest=FileSemanticSyncConsistencyTest,ProjectLeaseOwnershipTest,SnapshotProjectLeaseTest" "-Dsurefire.failIfNoSpecifiedTests=false"` rejoué 50 fois sur le poste (tests de concurrence), puis `./mvnw -B -ntp -pl minos-storage -am test`.
 - Scopes JaCoCo : `semantic-vector-store`, `storage-codec-and-state` (`FileIndexStateStore`), comparés en CI.
 - Linux : CI (`Verify (ubuntu-24.04)`) ou WSL ; le verrou de fichier inter-processus n'a pas la même sémantique sur les deux systèmes, les deux doivent passer.
@@ -82,10 +83,10 @@ Aucun délai fixe ne sert d'affirmation négative (`persistance-snapshots › L'
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
 | recherche-semantique › La preuve inter-processus du verrou de synchronisation échoue quand son détenteur ne démarre pas | Détenteur prêt | D1, D3 | 1.2, 1.3 | `FileSemanticSyncConsistencyTest.crossJvmFileLockBlocksConditionalReplaceUntilReleased` (existant, modifié) |
-| idem | Détenteur qui ne démarre pas | D1, D6 | 1.1, 1.2 | à écrire : test de garde du lanceur |
-| idem | Sortie d'erreur volumineuse | D2 | 1.2 | à écrire : cas du test de garde |
-| persistance-snapshots › Une fermeture refusée depuis un autre fil laisse le bail tenu | Concurrent refusé après la fermeture étrangère | D4 | 2.1, 2.2 | à écrire : `ProjectLeaseOwnershipTest`, `SnapshotProjectLeaseTest` |
-| idem | Concurrent en attente sur un bail sans échéance | D4 | 2.1, 2.2 | à écrire : `ProjectLeaseOwnershipTest` ; rouge par copie locale mutée, preuve manuelle (Vérification) |
+| idem | Détenteur qui ne démarre pas | D1, D6 | 1.1, 1.2 | `FileSemanticSyncConsistencyTest.lockHolderThatCannotStartFailsTheProofInsteadOfSkippingIt` (rouge au HEAD : `TestAbortedException` au lieu d'`AssertionFailedError`) |
+| idem | Sortie d'erreur volumineuse | D2 | 1.2 | `FileSemanticSyncConsistencyTest.lockHolderFailureKeepsOnlyTheBoundedTailOfALargeErrorOutput` (fils `NoisyFailingHolderProcess`) |
+| persistance-snapshots › Une fermeture refusée depuis un autre fil laisse le bail tenu | Concurrent refusé après la fermeture étrangère | D4 | 2.1, 2.2 | `ProjectLeaseOwnershipTest.physicalFileLeaseWrongThreadCloseKeepsLeaseHeldUntilOwnerCloses`, `SnapshotProjectLeaseTest.wrongThreadCloseKeepsLeaseHeldUntilOwnerCloses` ; rouge par copie locale mutée, preuve manuelle (Vérification) |
+| idem | Concurrent en attente sur un bail sans échéance | D4 | 2.1, 2.2 | `ProjectLeaseOwnershipTest.inMemoryWrongThreadCloseKeepsLeaseHeldUntilOwnerCloses`, `ProjectLeaseOwnershipTest.fileStoreWrongThreadCloseKeepsLeaseHeldUntilOwnerCloses` ; rouge par copie locale mutée pour le bail en mémoire, preuve manuelle (Vérification) ; aucune mutation du magasin fichier |
 | idem | Plus d'affirmation constante | D5 | 2.3 | commande `grep` du scénario |
 
 ## Questions ouvertes
