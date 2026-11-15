@@ -12,7 +12,7 @@ Ce changement est le **prérequis** de deux constats d'autres sprints : AUD-PERF
 - Des tests `node:test` chargent le **vrai** `app.js` dans un contexte `node:vm` muni d'un faux DOM minimal : fonctions pures (libellés, pourcentages, filtres, messages d'état), géométrie et sélection de la carte, pagination des points, traduction des états.
 - Un test de non-régression des puits DOM **par exécution** : le faux DOM refuse toute écriture de balisage et le contexte interdit la génération de code depuis une chaîne ; les rendus sont rejoués avec un contenu indexé hostile.
 - Le gate et son auto-test sont exécutés par le job `invariants` de `pr-ci.yml`.
-- `app.js` : le rejet de la promesse du presse-papiers (« Copier la référence ») est géré et signalé dans la page. C'est la seule modification du produit, de trois lignes (décision D6).
+- `app.js` : le rejet de la promesse du presse-papiers (« Copier la référence ») est géré et signalé dans la page. C'est la seule modification du produit, de deux lignes (décision D6).
 
 Aucune route, aucun champ du contrat v1, aucun comportement serveur ne change.
 

@@ -3,6 +3,8 @@ package com.minos.adapter.scip.runtime.install;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
@@ -58,10 +60,8 @@ class ManagedPolyglotScipRuntimeManagerTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void windowsReportsClangAsBlockedInsteadOfPretendingCrossPlatformSupport(@TempDir Path home) {
-        if (!System.getProperty("os.name", "").toLowerCase().contains("win")) {
-            return;
-        }
         ManagedPolyglotScipRuntimeManager manager = new ManagedPolyglotScipRuntimeManager(home);
         ProviderRuntimeStatus status = manager.inspect(ScipIndexerCatalog.SCIP_CLANG_ID);
         assertEquals(ProviderRuntimeStatus.State.BLOCKED, status.state());

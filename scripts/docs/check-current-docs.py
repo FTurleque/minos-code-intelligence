@@ -3,11 +3,16 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "quality"))
+import literal_gate  # noqa: E402 - after scripts/quality is added to the path
+
 ROOT = Path(__file__).resolve().parents[2]
+FAILURE_PREFIX = "MINOS CURRENT DOCUMENTATION CONSISTENCY FAILED"
 
 README = "README.md"
 STATUS = "docs/project/governance/STATUS.md"
@@ -36,10 +41,7 @@ TEMP_PUBLICATION_WORKFLOWS = (
 
 
 def read(relative: str) -> str:
-    path = ROOT / relative
-    if not path.is_file():
-        raise RuntimeError(f"missing required file: {relative}")
-    return path.read_text(encoding="utf-8")
+    return literal_gate.read(relative)
 
 
 def normalized(value: str) -> str:
@@ -50,8 +52,7 @@ def normalized(value: str) -> str:
 
 
 def require(relative: str, text: str, expected: str) -> None:
-    if normalized(expected) not in normalized(text):
-        raise RuntimeError(f"{relative}: missing current invariant: {expected}")
+    literal_gate.require(relative, text, expected, f"{relative}: missing current invariant: {expected}", normalized)
 
 
 def require_all(relative: str, text: str, tokens: tuple[str, ...]) -> None:
@@ -60,18 +61,18 @@ def require_all(relative: str, text: str, tokens: tuple[str, ...]) -> None:
 
 
 def forbid(relative: str, text: str, stale: str) -> None:
-    if normalized(stale) in normalized(text):
-        raise RuntimeError(f"{relative}: stale/unsafe current-state text is forbidden: {stale}")
+    literal_gate.forbid(relative, text, stale, f"{relative}: stale/unsafe current-state text is forbidden: {stale}",
+                        normalized)
 
 
 def require_regex(relative: str, text: str, pattern: str, label: str) -> None:
-    if not re.search(pattern, text, re.IGNORECASE | re.MULTILINE):
-        raise RuntimeError(f"{relative}: missing {label}")
+    literal_gate.require_pattern(relative, text, pattern, f"{relative}: missing {label}",
+                                 re.IGNORECASE | re.MULTILINE)
 
 
 def require_absent(relative: str) -> None:
-    if (ROOT / relative).exists():
-        raise RuntimeError(f"temporary publication artifact must be absent after release: {relative}")
+    literal_gate.forbid_file(relative, relative,
+                             f"temporary publication artifact must be absent after release: {relative}")
 
 
 def validate_current_state() -> None:
@@ -173,12 +174,32 @@ def maven_verify_lines(workflow: str) -> list[tuple[int, str]]:
 def require_sandbox_qualification_on_every_verify(workflow: str) -> None:
     """Each Maven verify of the PR workflow must make an unavailable OS confinement a failure, not a skip."""
     verifies = maven_verify_lines(workflow)
-    if len(verifies) < 2:
-        raise RuntimeError(f"{PR_WORKFLOW}: expected a Maven verify per operating system, found {len(verifies)}")
+    literal_gate.check("Maven verify per operating system", len(verifies) >= 2,
+                       f"{PR_WORKFLOW}: expected a Maven verify per operating system, found {len(verifies)}")
     missing = [number for number, line in verifies if SANDBOX_TESTS_REQUIRED not in line]
-    if missing:
-        raise RuntimeError(f"{PR_WORKFLOW}:{missing[0]}: Maven verify does not pass {SANDBOX_TESTS_REQUIRED}: "
-                           "an unavailable sandbox would be skipped instead of failing the job")
+    literal_gate.check("sandbox qualification on every Maven verify", not missing,
+                       f"{PR_WORKFLOW}:{missing[0] if missing else 0}: Maven verify does not pass "
+                       f"{SANDBOX_TESTS_REQUIRED}: an unavailable sandbox would be skipped instead of failing the job")
+
+
+def _edit_verify_lines(edit):
+    """A mutation of the PR workflow that applies ``edit(index, line)`` to each of its Maven verify lines."""
+    def mutate(workflow: str) -> str:
+        lines = workflow.split("\n")
+        for index, (number, line) in enumerate(maven_verify_lines(workflow)):
+            lines[number - 1] = edit(index, line)
+        return "\n".join(lines)
+    return mutate
+
+
+# Structured rules on the Maven verify lines of the PR workflow: the self-test removes the property from a single
+# command, and turns every verify but the first into another goal.
+STRUCTURED_MUTATIONS = {
+    "Maven verify per operating system": [(PR_WORKFLOW, _edit_verify_lines(
+        lambda index, line: line if index == 0 else re.sub(r"\bverify\b", "test", line)))],
+    "sandbox qualification on every Maven verify": [(PR_WORKFLOW, _edit_verify_lines(
+        lambda index, line: line.replace(SANDBOX_TESTS_REQUIRED, "") if index == 0 else line))],
+}
 
 
 def validate_ci_contracts() -> None:
@@ -248,7 +269,8 @@ def validate_intellij_launcher_path() -> None:
     require(INTELLIJ_DOC, doc, r"AppData\Local\Programs\MINOS\minos.cmd")
 
 
-def main() -> int:
+def evaluate() -> str:
+    """Assert the facts of the gate; return its success message. Reads no command line (see the M28 extension)."""
     validators = (
         validate_current_state,
         validate_release_documentation,
@@ -257,14 +279,18 @@ def main() -> int:
         validate_installer_contract,
         validate_intellij_launcher_path,
     )
-    try:
-        for validator in validators:
-            validator()
-        print("MINOS CURRENT DOCUMENTATION CONSISTENCY SUCCESS")
-        return 0
-    except Exception as exception:
-        print(f"MINOS CURRENT DOCUMENTATION CONSISTENCY FAILED: {exception}", file=sys.stderr)
-        return 1
+    for validator in validators:
+        validator()
+    return "MINOS CURRENT DOCUMENTATION CONSISTENCY SUCCESS"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser.add_argument("--self-test", action="store_true",
+                        help="refuse one in-memory mutation per asserted fact, then exit")
+    if parser.parse_args(argv).self_test:
+        return literal_gate.self_test(ROOT, evaluate, STRUCTURED_MUTATIONS)
+    return literal_gate.run(ROOT, evaluate, FAILURE_PREFIX)
 
 
 if __name__ == "__main__":

@@ -85,10 +85,8 @@ class CommandLocatorTest {
     }
 
     @Test
+    @EnabledOnOs(OS.LINUX)
     void linuxSecurityAuthorityCommandsUseRootOwnedSystemPathsInsteadOfPath() throws Exception {
-        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
-        if (!os.contains("linux")) return;
-
         Path shell = CommandLocator.findSystemExecutable("sh").orElseThrow();
 
         assertEquals(shell, CommandLocator.find("sh").orElseThrow(),
@@ -151,10 +149,8 @@ class CommandLocatorTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void realWindowsBatchInvocationUsesCanonicalSystem32Cmd() throws Exception {
-        if (!CommandLocator.isWindows()) {
-            return;
-        }
         List<String> command = CommandLocator.windowsBatchInvocation(Path.of("C:\\fixture.cmd"));
         Path processor = Path.of(command.getFirst());
         Path expected = Path.of(System.getenv("SystemRoot"), "System32", "cmd.exe").toRealPath();
@@ -175,10 +171,8 @@ class CommandLocatorTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void realWindowsCmdPreservesAdversarialQuotedArguments() throws Exception {
-        if (!CommandLocator.isWindows()) {
-            return;
-        }
         Path directory = Files.createTempDirectory("minos-cmd space & caret^ paren() bang! unicode-é-");
         Path script = directory.resolve("provider test.cmd");
         Path marker = directory.resolve("result marker.txt");

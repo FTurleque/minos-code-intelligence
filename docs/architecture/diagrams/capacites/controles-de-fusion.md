@@ -28,7 +28,7 @@ flowchart TD
   W --> VER["Jobs Verify Linux et Windows : mvnw clean verify, gate JaCoCo une fois par système"]
   W --> PLG["IntelliJ plugin (gate) : portée calculée, verdict toujours rendu"]
   W --> OTH["osv-scan, Gitleaks, SonarCloud"]
-  INV --> CW{"check-ci-wiring.py : chaque contexte exigé = un job ; chaque auto-test exécuté"}
+  INV --> CW{"check-ci-wiring.py : chaque contexte exigé = un job ; chaque auto-test exécuté ; chaque gate a un auto-test"}
   INV --> SE{"check-single-execution.py : chaque contrôle lourd une fois par système"}
   INV --> WP{"check-workflow-pins.py : SHA, timeout, jeton non conservé, runner épinglé"}
   CW -->|"non"| KO["check rouge : fusion bloquée"]
@@ -77,6 +77,23 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 `check-jacoco.py` porte son auto-test en option (`--self-test`), exécuté par le job `invariants` ; ses cas sont
 des étiquettes de la fonction `self_test`, d'où les preuves citées par ligne.
 
+`scripts/quality/check-test-platform-guards.py` (job `invariants`, auto-test `--self-test`) refuse un test qui
+passe à vide derrière un retour anticipé de plateforme, et n'en tolère que la liste fermée hors méthode de test
+(AUD-TST-04). Ses deux exigences entrent dans la spec de référence à l'archivage du changement
+`compter-comme-sautes-les-tests-propres-a-une-plateforme` ; leurs lignes de traçabilité s'ajoutent alors ici.
+
+Tout gate a un auto-test (`check-ci-wiring.py`, règle 7, liste fermée `GATES_WITHOUT_SELF_TEST`) ; les gates
+littéraux le tirent du pilote commun `scripts/quality/literal_gate.py`, qui refuse une mutation en mémoire par fait
+affirmé (`scripts/quality/test_literal_gate.py`). Les exigences correspondantes du changement
+`doter-chaque-gate-d-un-auto-test` entrent dans la table à son archivage.
+
+Fins de ligne des scripts POSIX (changement `epingler-les-fins-de-ligne-des-scripts-posix`, AUD-DEP-02, non
+archivé) : `.gitattributes` épingle `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties` en LF et `*.cmd` en
+CRLF ; `scripts/quality/check-posix-script-eol.py` et son `--self-test` (job `invariants`) refusent un script
+POSIX sans attribut `eol=lf` ou enregistré en CRLF, et échouent fermés sans `git`, hors dépôt ou sur zéro script.
+Ses deux exigences entrent dans la table ci-dessus à l'archivage du changement ; la remise à niveau d'un clone
+existant et l'exécution sous WSL2 restent des preuves manuelles.
+
 ## Écarts
 
 | Id | Écart | Preuve | Suite proposée |
@@ -87,6 +104,7 @@ des étiquettes de la fonction `self_test`, d'où les preuves citées par ligne.
 | E4 | Le refus « gate JaCoCo lancé dans les invariants » n'a aucun auto-test, contrairement à la règle des gates | `scripts/remediation/check-audit-remediation-v2.py:111` | [Proposition] Auto-test ou reprise par un gate testé |
 | E5 | Le contexte SonarCloud (`source: application`) est compté parmi les contextes « résolus » sans vérification | `scripts/quality/check-ci-wiring.py:250` | [Proposition] Compter à part les contextes d'application |
 | E6 | « Branche à jour » n'apparaît ni dans la spec, ni dans la liste déclarée, ni dans `verify-ruleset.py` | `scripts/quality/verify-ruleset.py:39` | [Question] À spécifier et à mesurer ? |
+| E7 | Les planchers de `explorer-surface`, `wsl-lane`, `semantic-projection` et de `QueryViewMemoryBudget` sortent du run `pr-ci.yml` 43650742311 (`main` 89be3fb4) ; leur évaluation sur les deux jobs `Verify` d'une PR n'est pas encore observée ; les trois exigences du changement `borner-la-couverture-des-zones-nouvelles` entrent dans la traçabilité à son archivage (preuves : `scripts/quality/check-jacoco.py:364` et les cas « table deprived of a zone scope is refused », « guard class under its floor in a passing scope », « guard class absent from the report » de `--self-test`) | `scripts/quality/check-jacoco.py:44` | [Proposition] Lire les lignes `JaCoCo <scope>: PASS` et `jacoco-gate.json` de l'artefact de la PR |
 
 ## Questions ouvertes
 

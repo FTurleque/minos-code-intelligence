@@ -21,6 +21,18 @@ java -version
 
 Le build doit tourner réellement sous Java 21.
 
+### Fins de ligne des scripts POSIX d'un clone Windows
+
+`.gitattributes` épingle en LF les `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties`, et en CRLF les `*.cmd` (AUD-DEP-02) : un script extrait en CRLF par un clone à `core.autocrlf=true` est refusé par bash (`set: pipefail\r: invalid option name`), en particulier depuis WSL2 sur la même copie de travail. L'attribut agit sur les extractions suivantes, pas sur les fichiers déjà présents. Un clone ou un worktree créé avant la règle se remet à niveau une fois, depuis sa racine, en Git Bash :
+
+```bash
+git ls-files -z -- '*.sh' mvnw .mvn/wrapper/maven-wrapper.properties | xargs -0 rm --
+git checkout -- '*.sh' mvnw .mvn/wrapper/maven-wrapper.properties
+git ls-files --eol -- '*.sh' mvnw   # chaque ligne : i/lf w/lf attr/text eol=lf
+```
+
+`python scripts/quality/check-posix-script-eol.py` garde la règle pour chaque nouveau script ; il lit l'index et les attributs, pas la copie de travail.
+
 ## Pipeline Maven
 
 Le build utilise notamment :
@@ -101,6 +113,10 @@ MinosMultiRepositoryApiContractTest
 
 Ils empêchent notamment une fuite de types fournisseur ou de packages internes vers les contrats publics.
 
+### Tests du front de l'explorateur (Node)
+
+Le script de la page de l'explorateur est exécuté par des tests `node:test` (`minos-explorer/src/test/js/`), lancés par `python scripts/quality/check-explorer-front.py`. Ce gate exige **Node 20 ou plus** dans le `PATH` : sans Node, il échoue (code 1), il ne saute pas. Aucun paquet npm n'est installé. Maven ne lance pas ces tests et ne les copie pas dans `target/classes` (ce ne sont pas des ressources). Détail : [semantic-explorer.md](semantic-explorer.md#page-embarquée) et [quality-gates.md](quality-gates.md).
+
 ### Variables d'environnement des tests
 
 Un test ne lit jamais l'environnement de l'hôte pour décider de son résultat. Un test de processus fils pose lui-même l'environnement de ce processus (modèle : `ChildJvm` de `minos-provider-scip`, qui vide l'environnement puis pose `PATH` et `JAVA_HOME`). Une moitié de test propre à un système s'écrit dans un test `@EnabledOnOs`, compté comme sauté ailleurs, jamais derrière un `if`. `minos-provider-scip` retire `JAVA_HOME` du JVM de ses tests (`excludedEnvironmentVariables` de surefire) : un test qui lirait le `JAVA_HOME` de l'hôte y échoue partout, CI comprise (AUD-TST-18).
@@ -122,7 +138,7 @@ Les tests de `minos-runtime-local` qui qualifient le confinement des providers d
 | Linux | bubblewrap + prlimit, racine cgroup v2 déléguée (`MINOS_SANDBOX_CGROUP_ROOT`, voir `scripts/ci/delegate-linux-cgroup.sh`), capacité de propriété de processus forte | `LinuxBubblewrapWorkerSandboxBackendTest`, `LinuxBubblewrapWorkerSandboxIsolationTest`, `LinuxCgroupJobContainmentTest`, `LinuxCgroupJobOwnershipIsolationTest`, `LinuxStrongProcessOwnershipContainmentTest`, `LinuxSandboxToolchainHomeTest` (JVM du JDK de `JAVA_HOME` lancée dans le bac à sable ; le cas du JDK de paquet est sauté par hypothèse nommée sans JDK Debian sous `/usr/lib/jvm`) |
 | Windows | AppContainer + Job Object | `WindowsAppContainerWorkerSandboxBackendTest`, `WindowsJobObjectContainmentTest`, `WindowsStrongProcessOwnershipContainmentTest`, `WindowsAppContainerRecoveryOwnershipTest`, `WindowsNonElevatedIndexingTest` |
 
-- Un test propre à une plateforme est restreint par `@EnabledOnOs` : il est **compté comme sauté** sur l'autre système (jamais un `return` anticipé qui le fait passer à vide).
+- Un test propre à une plateforme est restreint par `@EnabledOnOs` : il est **compté comme sauté** sur l'autre système (jamais un `return` anticipé qui le fait passer à vide). `python scripts/quality/check-test-platform-guards.py` (job `invariants`, voir [quality-gates.md](quality-gates.md)) refuse ce retour anticipé dans les sources de test de tous les modules, sur une ou plusieurs lignes.
 - Sur un poste, un mécanisme absent saute le test avec la raison de la découverte (comportement par défaut).
 - Avec `-Dminos.sandbox.tests.required=true`, un mécanisme absent **fait échouer** le test, avec les diagnostics de la découverte. `pr-ci.yml` passe cette propriété sur les deux commandes Maven (Ubuntu et Windows) ; `check-current-docs.py` garde sa présence. C'est le même contrat que `minos.postgresql.tests.required`. Sous PowerShell, citer l'argument (`"-Dminos.sandbox.tests.required=true"`) : un nom pointé non cité est découpé.
 - La décision est centralisée dans `SandboxTestSupport` (`requireBackend`, `requireDelegatedCgroupRoot`, `requireStrongCapability`). Ne pas écrire de `assumeTrue` direct pour exprimer la disponibilité d'un confinement.
