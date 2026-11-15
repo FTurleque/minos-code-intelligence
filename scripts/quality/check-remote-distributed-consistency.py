@@ -3,19 +3,20 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import literal_gate  # noqa: E402 - after the script directory is added to the path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "b17631de59871848351a4139b12be6e0354989bc"
 
 
 def read(relative: str) -> str:
-    path = ROOT / relative
-    if not path.is_file():
-        raise RuntimeError(f"missing required file: {relative}")
-    return path.read_text(encoding="utf-8")
+    return literal_gate.read(relative)
 
 
 def normalized(value: str) -> str:
@@ -23,22 +24,19 @@ def normalized(value: str) -> str:
 
 
 def require_facts(relative: str, text: str, *facts: str) -> None:
-    haystack = normalized(text)
-    missing = [fact for fact in facts if normalized(fact) not in haystack]
+    missing = [fact for fact in facts if not literal_gate.contains(relative, text, fact, normalized)]
     if missing:
-        raise RuntimeError(f"{relative}: missing semantic facts: {', '.join(missing)}")
+        raise literal_gate.GateFailure(f"{relative}: missing semantic facts: {', '.join(missing)}")
 
 
 def require_pattern(relative: str, text: str, pattern: str, label: str) -> None:
-    if not re.search(pattern, text, re.MULTILINE | re.DOTALL):
-        raise RuntimeError(f"{relative}: missing {label}")
+    literal_gate.require_pattern(relative, text, pattern, f"{relative}: missing {label}", re.MULTILINE | re.DOTALL)
 
 
 def forbid(relative: str, text: str, *values: str) -> None:
-    haystack = normalized(text)
-    present = [value for value in values if normalized(value) in haystack]
+    present = [value for value in values if not literal_gate.lacks(relative, text, value, normalized)]
     if present:
-        raise RuntimeError(f"{relative}: forbidden facts present: {', '.join(present)}")
+        raise literal_gate.GateFailure(f"{relative}: forbidden facts present: {', '.join(present)}")
 
 
 def check_remote_repository_sources() -> None:
@@ -241,19 +239,24 @@ def check_documents() -> None:
                   "QUALIFIED_WITH_CONSTRAINTS", "BLOCKED/NOT_RUN")
 
 
-def main() -> int:
-    try:
-        check_remote_repository_sources()
-        check_distributed_worker_sources()
-        check_remote_indexing_wiring()
-        check_tests()
-        check_documents()
+def evaluate() -> str:
+    """Assert the facts of the gate; return its success message."""
+    check_remote_repository_sources()
+    check_distributed_worker_sources()
+    check_remote_indexing_wiring()
+    check_tests()
+    check_documents()
 
-        print("M25 REMOTE DISTRIBUTED CONSISTENCY SUCCESS")
-        return 0
-    except Exception as exception:
-        print(f"M25 REMOTE DISTRIBUTED CONSISTENCY FAILED: {exception}", file=sys.stderr)
-        return 1
+    return "M25 REMOTE DISTRIBUTED CONSISTENCY SUCCESS"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser.add_argument("--self-test", action="store_true",
+                        help="refuse one in-memory mutation per asserted fact, then exit")
+    if parser.parse_args(argv).self_test:
+        return literal_gate.self_test(ROOT, evaluate, {})
+    return literal_gate.run(ROOT, evaluate, "M25 REMOTE DISTRIBUTED CONSISTENCY FAILED")
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ flowchart TD
   W --> VER["Jobs Verify Linux et Windows : mvnw clean verify, gate JaCoCo une fois par système"]
   W --> PLG["IntelliJ plugin (gate) : portée calculée, verdict toujours rendu"]
   W --> OTH["osv-scan, Gitleaks, SonarCloud"]
-  INV --> CW{"check-ci-wiring.py : chaque contexte exigé = un job ; chaque auto-test exécuté"}
+  INV --> CW{"check-ci-wiring.py : chaque contexte exigé = un job ; chaque auto-test exécuté ; chaque gate a un auto-test"}
   INV --> SE{"check-single-execution.py : chaque contrôle lourd une fois par système"}
   INV --> WP{"check-workflow-pins.py : SHA, timeout, jeton non conservé, runner épinglé"}
   CW -->|"non"| KO["check rouge : fusion bloquée"]
@@ -76,6 +76,11 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 
 `check-jacoco.py` porte son auto-test en option (`--self-test`), exécuté par le job `invariants` ; ses cas sont
 des étiquettes de la fonction `self_test`, d'où les preuves citées par ligne.
+
+Tout gate a un auto-test (`check-ci-wiring.py`, règle 7, liste fermée `GATES_WITHOUT_SELF_TEST`) ; les gates
+littéraux le tirent du pilote commun `scripts/quality/literal_gate.py`, qui refuse une mutation en mémoire par fait
+affirmé (`scripts/quality/test_literal_gate.py`). Les exigences correspondantes du changement
+`doter-chaque-gate-d-un-auto-test` entrent dans la table à son archivage.
 
 Fins de ligne des scripts POSIX (changement `epingler-les-fins-de-ligne-des-scripts-posix`, AUD-DEP-02, non
 archivé) : `.gitattributes` épingle `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties` en LF et `*.cmd` en
