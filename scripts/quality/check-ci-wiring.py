@@ -21,6 +21,10 @@ Four rules, all anchored on the structure of the workflows and never on a senten
    ``gh release create``) calls ``intellij-plugin-release.yml`` from one of its jobs (AUD-DEP-07): a release created
    with the workflow token triggers no ``release:`` event, so nothing else would attach the plugin. That workflow
    starts on ``workflow_call`` and has no ``release:`` trigger, which would publish the plugin a second time.
+7. Every gate (``scripts/**/check-*.py``, history excluded) has a self-test (AUD-TST-09): it declares ``--self-test``
+   or has a ``test_<name>.py`` twin in its directory. The gates that have none yet are listed, each with its reason,
+   in ``GATES_WITHOUT_SELF_TEST``: a closed list that only shrinks, where an entry whose script now has a self-test
+   or no longer exists is a failure.
 
 What this does not prove: that the ruleset configured on GitHub contains these checks (that is
 scripts/quality/verify-ruleset.py, run by hand), nor that a step runs on every event, nor that the scanner
@@ -63,6 +67,29 @@ LOCKFILE_ARGUMENT = re.compile(r"^\s*--lockfile=package-lock\.json:(?:\./)?(\S+)
 PLUGIN_RELEASE = "intellij-plugin-release.yml"
 # A step that creates the release: the publication script outside its validation-only mode, or the CLI itself.
 RELEASE_PUBLICATION = re.compile(r"publish-windows-release\.ps1(?!.*-ValidateOnly)|\bgh\s+release\s+create\b")
+_CLOSED_AUDIT_GATE = "remediation gate of a closed audit, to equip with a self-test or to retire (AUD-TST-09, D4)"
+_CONSTAT_GATE = "literal consistency gate of AUD-TST-09, waiting for its --self-test"
+# Gates tolerated without a self-test (rule 7): a closed list that only shrinks, one reason per entry.
+GATES_WITHOUT_SELF_TEST: dict[str, str] = {
+    "scripts/docs/check-current-docs.py": _CONSTAT_GATE,
+    "scripts/quality/check-advanced-provider-consistency.py": _CONSTAT_GATE,
+    "scripts/quality/check-current-docs-vertical-extension.py": _CONSTAT_GATE,
+    "scripts/quality/check-hosted-control-plane-consistency.py": _CONSTAT_GATE,
+    "scripts/quality/check-java-ast-provider-consistency.py": _CONSTAT_GATE,
+    "scripts/quality/check-polyglot-provider-consistency.py": _CONSTAT_GATE,
+    "scripts/quality/check-remote-distributed-consistency.py": _CONSTAT_GATE,
+    "scripts/quality/check-runtime-dynamic-consistency.py": _CONSTAT_GATE,
+    "scripts/quality/check-semantic-retrieval-consistency.py": _CONSTAT_GATE,
+    "scripts/quality/check-vertical-decomposition-consistency.py": _CONSTAT_GATE,
+    "scripts/release/check-supply-chain.py": "release gate without a self-test, to equip or to retire (AUD-TST-09, D4)",
+    "scripts/remediation/check-audit-remediation-v2.py": _CLOSED_AUDIT_GATE,
+    "scripts/remediation/check-minos-01.py": _CLOSED_AUDIT_GATE,
+    "scripts/remediation/check-mnd.py": _CLOSED_AUDIT_GATE,
+    "scripts/remediation/check-mne.py": _CLOSED_AUDIT_GATE,
+    "scripts/remediation/check-p0-p2.py": _CLOSED_AUDIT_GATE,
+    "scripts/remediation/check-post-mne.py": _CLOSED_AUDIT_GATE,
+    "scripts/remediation/check-post228-hardening.py": _CLOSED_AUDIT_GATE,
+}
 PLUGIN_RELEASE_CALL = re.compile(rf"^    uses:\s*['\"]?\./{re.escape(WORKFLOWS)}/{re.escape(PLUGIN_RELEASE)}['\"]?\s*$")
 
 
@@ -461,6 +488,43 @@ def check_called_workflows_get_their_permissions(root: Path) -> list[str]:
     return failures
 
 
+def twin_test_name(gate_name: str) -> str:
+    """The name of the ``test_*.py`` twin of a gate: ``check-foo-bar.py`` -> ``test_check_foo_bar.py``."""
+    return "test_" + Path(gate_name).stem.replace("-", "_") + ".py"
+
+
+def has_self_test(path: Path) -> bool:
+    return (path.with_name(twin_test_name(path.name)).is_file()
+            or bool(SELF_TEST_OPTION.search(path.read_text(encoding="utf-8"))))
+
+
+def check_every_gate_has_a_self_test(root: Path, waivers: dict[str, str] | None = None
+                                     ) -> tuple[list[str], int, int]:
+    """Rule 7: ``(failures, gates with a self-test, listed gates waiting for one)``."""
+    waivers = GATES_WITHOUT_SELF_TEST if waivers is None else waivers
+    gates: dict[str, Path] = {}
+    for path in gate_cli.repository_files(root, NOT_SHIPPED_DIRECTORIES):
+        relative = path.relative_to(root).as_posix()
+        if (path.name.startswith("check-") and path.suffix == ".py" and relative.startswith("scripts/")
+                and "/history/" not in relative):
+            gates[relative] = path
+    failures: list[str] = []
+    equipped = 0
+    for relative, path in gates.items():
+        if has_self_test(path):
+            equipped += 1
+        elif relative not in waivers:
+            failures.append(f"{relative}: gate without a self-test: declare --self-test or add "
+                            f"{twin_test_name(path.name)}, or list it in GATES_WITHOUT_SELF_TEST with its reason")
+    for relative in sorted(waivers):
+        if relative not in gates:
+            failures.append(f"GATES_WITHOUT_SELF_TEST: '{relative}' names no script of the repository, "
+                            f"remove the entry")
+        elif has_self_test(gates[relative]):
+            failures.append(f"GATES_WITHOUT_SELF_TEST: '{relative}' now has a self-test, remove the entry")
+    return failures, equipped, sum(1 for relative in waivers if relative in gates)
+
+
 def check(root: Path) -> tuple[list[str], int, int, int]:
     failures, resolved = check_required_checks(root)
     wiring_failures, wired = check_self_tests_are_wired(root)
@@ -470,15 +534,23 @@ def check(root: Path) -> tuple[list[str], int, int, int]:
     failures += lockfile_failures
     failures += check_releases_publish_the_plugin(root)
     failures += check_called_workflows_get_their_permissions(root)
+    failures += check_every_gate_has_a_self_test(root)[0]
     return failures, resolved, wired, lockfiles
+
+
+def check_and_count(root: Path) -> tuple[list[str], int, int, int, int, int]:
+    """``check`` plus the counts of rule 7, for the success message."""
+    _, equipped, waiting = check_every_gate_has_a_self_test(root)
+    return (*check(root), equipped, waiting)
 
 
 def main() -> int:
     return gate_cli.run(
-        __doc__, DEFAULT_ROOT, check, "CI WIRING GATE",
-        lambda resolved, wired, lockfiles: (
+        __doc__, DEFAULT_ROOT, check_and_count, "CI WIRING GATE",
+        lambda resolved, wired, lockfiles, equipped, waiting: (
             f"CI WIRING GATE SUCCESS (required checks resolved={resolved}, gate self-tests wired in "
-            f"'{INVARIANTS_JOB}'={wired}, shipped npm lockfiles passed to the vulnerability scan={lockfiles})"))
+            f"'{INVARIANTS_JOB}'={wired}, shipped npm lockfiles passed to the vulnerability scan={lockfiles}, "
+            f"gates with a self-test={equipped}, gates waiting in GATES_WITHOUT_SELF_TEST={waiting})"))
 
 
 if __name__ == "__main__":

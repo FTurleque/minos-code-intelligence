@@ -2,8 +2,8 @@
 
 ## 1. Règle « tout gate a un auto-test » (AUD-TST-09)
 
-- [ ] 1.1 AUD-TST-09 — Rouge : ajouter à `scripts/quality/test_check_ci_wiring.py` les cas « gate sans auto-test hors liste », « entrée de liste dont le script a un auto-test », « entrée de liste sans script », « gate avec `test_*.py` jumeau accepté », « `history/` exclu » ; vérifier que `python scripts/quality/test_check_ci_wiring.py` échoue (`controles-de-fusion` › Tout gate a un auto-test ; Les gates sans auto-test sont une liste fermée qui ne peut que diminuer)
-- [ ] 1.2 AUD-TST-09 — Correction : règle et table `GATES_WITHOUT_SELF_TEST` dans `scripts/quality/check-ci-wiring.py` (les huit gates de la décision D4 avec leur raison, plus provisoirement les dix du constat : dix-huit entrées) ; message de succès complété ; vérifier que 1.1 passe et que `python scripts/quality/check-ci-wiring.py` est vert
+- [x] 1.1 AUD-TST-09 — Rouge : ajouter à `scripts/quality/test_check_ci_wiring.py` les cas « gate sans auto-test hors liste », « entrée de liste dont le script a un auto-test », « entrée de liste sans script », « gate avec `test_*.py` jumeau accepté », « `history/` exclu » ; vérifier que `python scripts/quality/test_check_ci_wiring.py` échoue (`controles-de-fusion` › Tout gate a un auto-test ; Les gates sans auto-test sont une liste fermée qui ne peut que diminuer)
+- [x] 1.2 AUD-TST-09 — Correction : règle et table `GATES_WITHOUT_SELF_TEST` dans `scripts/quality/check-ci-wiring.py` (les huit gates de la décision D4 avec leur raison, plus provisoirement les dix du constat : dix-huit entrées) ; message de succès complété ; vérifier que 1.1 passe et que `python scripts/quality/check-ci-wiring.py` est vert
 
 ## 2. Module commun et auto-tests des dix gates (AUD-TST-09)
 
