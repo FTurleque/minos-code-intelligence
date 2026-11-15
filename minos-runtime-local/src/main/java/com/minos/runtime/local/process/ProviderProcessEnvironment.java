@@ -5,6 +5,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * Builds the environment exposed to an external provider process.
@@ -13,8 +15,8 @@ import java.util.Set;
  * hosted tokens, CI credentials or operator secrets, so provider processes must never inherit the
  * parent environment wholesale. Only the runtime/OS allowlists below are inherited implicitly;
  * provider-specific values must be declared explicitly by {@link IndexerProcessPlan#environment()}.
- * A declared variable whose name looks like a secret or a MINOS/CI credential is not forwarded either:
- * see {@link #isDeniedName(String)}.</p>
+ * A variable whose name looks like a secret or a MINOS/CI credential is not forwarded, inherited or
+ * declared: see {@link #isDeniedName(String)}.</p>
  */
 public final class ProviderProcessEnvironment {
 
@@ -128,7 +130,8 @@ public final class ProviderProcessEnvironment {
 
     /**
      * True for a name that looks like a secret or a MINOS/CI credential. The pattern wins over every list:
-     * the inherited allowlists never contain such a name, and a declared variable that matches is dropped.
+     * an inherited variable that matches is dropped even when an allowlist names it, and so is a declared
+     * variable that matches. The allowlists contain no such name either, which a test enforces.
      */
     static boolean isDeniedName(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
@@ -148,16 +151,36 @@ public final class ProviderProcessEnvironment {
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(declared, "declared");
         Map<String, String> environment = builder.environment();
+        Map<String, String> trusted = trustedLauncherEnvironment(
+                environment, declared, ProviderProcessEnvironment::isTrustedLauncherKey);
+        environment.clear();
+        environment.putAll(trusted);
+    }
+
+    /** The trusted-launcher environment built from {@code inherited}; {@code allowed} names the inherited keys kept. */
+    static Map<String, String> trustedLauncherEnvironment(
+            Map<String, String> inherited,
+            Map<String, String> declared,
+            Predicate<String> allowed
+    ) {
         LinkedHashMap<String, String> kept = new LinkedHashMap<>();
-        environment.forEach((key, value) -> {
-            if (key != null && value != null
-                    && TRUSTED_LAUNCHER_KEYS.stream().anyMatch(allowed -> allowed.equalsIgnoreCase(key))) {
+        inherited.forEach((key, value) -> {
+            if (key != null && value != null && allowed.test(key) && !isDeniedName(key)) {
                 kept.put(key, value);
             }
         });
-        environment.clear();
-        environment.putAll(kept);
-        putDeclared(environment, declared);
+        putDeclared(kept, declared);
+        return kept;
+    }
+
+    private static boolean isTrustedLauncherKey(String candidate) {
+        return TRUSTED_LAUNCHER_KEYS.stream().anyMatch(allowed -> allowed.equalsIgnoreCase(candidate));
+    }
+
+    /** Every name of the three inherited allowlists, for the test that keeps them free of secret-looking names. */
+    static Stream<String> inheritedAllowlistNames() {
+        return Stream.of(COMMON_SAFE_INHERITED_KEYS, WINDOWS_SAFE_INHERITED_KEYS, TRUSTED_LAUNCHER_KEYS)
+                .flatMap(Set::stream);
     }
 
     static void apply(ProcessBuilder builder, Map<String, String> declared) {
@@ -172,11 +195,20 @@ public final class ProviderProcessEnvironment {
             Map<String, String> inherited,
             Map<String, String> declared
     ) {
+        return sanitize(inherited, declared, ProviderProcessEnvironment::isSafeInheritedKey);
+    }
+
+    /** The provider environment built from {@code inherited}; {@code allowed} names the inherited keys kept. */
+    static Map<String, String> sanitize(
+            Map<String, String> inherited,
+            Map<String, String> declared,
+            Predicate<String> allowed
+    ) {
         Objects.requireNonNull(inherited, "inherited");
         Objects.requireNonNull(declared, "declared");
         LinkedHashMap<String, String> result = new LinkedHashMap<>();
         inherited.forEach((key, value) -> {
-            if (key != null && value != null && isSafeInheritedKey(key)) {
+            if (key != null && value != null && allowed.test(key) && !isDeniedName(key)) {
                 result.put(key, value);
             }
         });

@@ -61,7 +61,9 @@ sequenceDiagram
 enchaîne l'acquisition vérifiée de Coursier, la lecture du verrou du classpath, la résolution par `fetch` seule et
 la vérification jar par jar, puis la publication atomique (`DurableAtomicFile.moveDirectory`, sans repli par
 copie). L'environnement de chaque commande est construit par `InstallationProcessEnvironment`, dont le motif de
-refus est unique (`ProviderProcessEnvironment.isDeniedName`). L'entrée Coursier du catalogue suit la plateforme
+refus est unique (`ProviderProcessEnvironment.isDeniedName`) ; l'environnement d'un provider et celui d'un lanceur de
+confiance l'appliquent aussi aux variables héritées, même nommées par une liste d'autorisation
+(`ProviderProcessEnvironmentInheritedSecretsTest`). L'entrée Coursier du catalogue suit la plateforme
 (`windows-x64` ou `linux-x64`). Sous Linux, `CoursierLauncherInstallation` acquiert l'archive `gz` par
 `PinnedArtifactSource` (borne `MAX_COURSIER_ARCHIVE_BYTES`, empreinte vérifiée sur l'archive), la décompresse avec
 une borne de taille dans un fichier partiel créé privé, ne donne le droit d'exécution qu'au propriétaire, puis
