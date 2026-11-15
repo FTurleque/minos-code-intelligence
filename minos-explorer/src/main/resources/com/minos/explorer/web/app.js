@@ -409,7 +409,8 @@ async function showDetail(stableKey) {
     reference.type = "button";
     reference.disabled = !document.fileId || !navigator.clipboard;
     reference.addEventListener("click", () => {
-      navigator.clipboard.writeText(document.fileId + (lines(document) === "—" ? "" : ":" + document.startLine + "-" + document.endLine));
+      navigator.clipboard.writeText(document.fileId + (lines(document) === "—" ? "" : ":" + document.startLine + "-" + document.endLine))
+        .catch(() => banner("La copie de la référence a échoué : le navigateur a refusé l'accès au presse-papiers."));
     });
     panel.appendChild(reference);
     const neighbors = el("div");
