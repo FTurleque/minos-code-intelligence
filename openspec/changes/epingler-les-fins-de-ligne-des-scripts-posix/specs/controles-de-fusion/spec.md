@@ -41,6 +41,11 @@ Le gate des fins de ligne SHALL lire les attributs et le contenu enregistré par
 - **WHEN** l'auto-test évalue le gate sur ce dossier
 - **THEN** le cas constate le code 1 et un message qui nomme la cause sans afficher de chemin absolu
 
+#### Scenario: Git absent
+- **GIVEN** un dépôt temporaire conforme et un `PATH` qui ne nomme qu'un dossier vide
+- **WHEN** l'auto-test évalue le gate sur ce dépôt
+- **THEN** le cas constate le code 1 et un message qui dit que `git` est introuvable
+
 #### Scenario: Auto-test câblé
 - **GIVEN** un `pr-ci.yml` dont le job `invariants` ne lance pas `check-posix-script-eol.py --self-test`
 - **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté

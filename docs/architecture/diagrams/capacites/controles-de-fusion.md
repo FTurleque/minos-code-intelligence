@@ -82,6 +82,13 @@ passe à vide derrière un retour anticipé de plateforme, et n'en tolère que l
 (AUD-TST-04). Ses deux exigences entrent dans la spec de référence à l'archivage du changement
 `compter-comme-sautes-les-tests-propres-a-une-plateforme` ; leurs lignes de traçabilité s'ajoutent alors ici.
 
+Fins de ligne des scripts POSIX (changement `epingler-les-fins-de-ligne-des-scripts-posix`, AUD-DEP-02, non
+archivé) : `.gitattributes` épingle `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties` en LF et `*.cmd` en
+CRLF ; `scripts/quality/check-posix-script-eol.py` et son `--self-test` (job `invariants`) refusent un script
+POSIX sans attribut `eol=lf` ou enregistré en CRLF, et échouent fermés sans `git`, hors dépôt ou sur zéro script.
+Ses deux exigences entrent dans la table ci-dessus à l'archivage du changement ; la remise à niveau d'un clone
+existant et l'exécution sous WSL2 restent des preuves manuelles.
+
 ## Écarts
 
 | Id | Écart | Preuve | Suite proposée |
