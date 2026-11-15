@@ -24,14 +24,64 @@ SCOPES = {
     },
     # AUD-TST-02: the binary codec and the persisted state of the local store, measured identically on both systems
     # (pr-ci.yml runs 38719668720 (develop 83dd1fbb) and 38697957273 (develop ae7b02b0), 2026-10-15, aggregate report of each system): line 0.912, branch 0.758. Floor = measure minus 2 points.
+    # AUD-TST-01 (audit of 2026-11-15): QueryViewMemoryBudget joins the scope with a class floor. Scope measured with it
+    # on pr-ci.yml run 43650742311 (main 89be3fb4, 2026-11-14), aggregate report of each system: Linux line 0.924 /
+    # branch 0.797, Windows 0.924 / 0.798; the floor of the scope is kept. QueryViewMemoryBudget: 115/122 lines
+    # (0.943), 59/68 branches (0.868) on both systems; class floor = measure minus about 5 points.
     "storage-codec-and-state": {
         "prefixes": (
             "com/minos/storage/codec/SnapshotBinaryCodecSupport", "com/minos/storage/codec/SnapshotBinaryPrimitives",
             "com/minos/storage/local/orchestration/FileIndexStateStore",
             "com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore",
             "com/minos/storage/local/registry/LocalProjectRegistry",
+            "com/minos/storage/codec/QueryViewMemoryBudget",
         ),
         "line": 0.89, "branch": 0.73,
+        "prefixMinimums": {
+            "com/minos/storage/codec/QueryViewMemoryBudget": {"line": 0.89, "branch": 0.81},
+        },
+    },
+    # AUD-TST-01 (audit of 2026-11-15): the semantic explorer module and the corpus service behind its routes. Measured
+    # on pr-ci.yml run 43650742311 (main 89be3fb4, 2026-11-14), aggregate report of each system, identical on both:
+    # line 0.950 (958/1008), branch 0.882 (456/517). Floor = measure minus 2 points. The three classes that decide to
+    # serve a request are floored by class (measure minus about 5 points): RequestGuard 26/26 lines, 18/18 branches;
+    # SessionToken 13/13, 4/4; ListeningPolicy 23/28 (0.821), 24/24.
+    "explorer-surface": {
+        "prefixes": (
+            "com/minos/explorer/", "com/minos/explorer/RequestGuard", "com/minos/explorer/SessionToken",
+            "com/minos/explorer/ListeningPolicy", "com/minos/application/semantic/SemanticCorpusQueryService",
+            "com/minos/application/semantic/SemanticIndexBudget",
+        ),
+        "line": 0.93, "branch": 0.86,
+        "prefixMinimums": {
+            "com/minos/explorer/RequestGuard": {"line": 0.95, "branch": 0.95},
+            "com/minos/explorer/SessionToken": {"line": 0.95, "branch": 0.95},
+            "com/minos/explorer/ListeningPolicy": {"line": 0.77, "branch": 0.95},
+        },
+    },
+    # AUD-TST-01 (audit of 2026-11-15): the WSL2 indexing lane, whose tests are partly restricted to one system. Measured
+    # on pr-ci.yml run 43650742311 (main 89be3fb4, 2026-11-14), aggregate report of each system: Linux line 0.941
+    # (822/874) / branch 0.847 (365/431), Windows 0.922 (806/874) / 0.833 (359/431). Floor = measure minus 2 points,
+    # per system.
+    "wsl-lane": {
+        "prefixes": (
+            "com/minos/runtime/local/wsl/", "com/minos/bootstrap/LocalWsl", "com/minos/application/Wsl",
+            "com/minos/cli/WslWorkerLaunch",
+        ),
+        "line": {"linux": 0.92, "windows": 0.90},
+        "branch": {"linux": 0.82, "windows": 0.81},
+    },
+    # AUD-TST-01 (audit of 2026-11-15): the 2D projection of the semantic corpus, from computation to command. Measured
+    # on pr-ci.yml run 43650742311 (main 89be3fb4, 2026-11-14), aggregate report of each system, identical on both:
+    # line 0.979 (654/668), branch 0.887 (236/266). Floor = measure minus 2 points.
+    "semantic-projection": {
+        "prefixes": (
+            "com/minos/application/semantic/PrincipalAxes", "com/minos/application/semantic/ProjectionPreparation",
+            "com/minos/application/semantic/SemanticProjectionService",
+            "com/minos/storage/local/store/FileSemanticProjectionStore",
+            "com/minos/cli/command/SemanticProjectionCommand", "com/minos/semantic/SemanticProjection",
+        ),
+        "line": 0.95, "branch": 0.86,
     },
     # AUD-TST-02: the confined I/O primitives (42 classes with their inner ones in the minos-engine report of
     # 2026-10-29, Windows line 0.829 / branch 0.732). Measures that set the floor: Linux line 0.801 / branch 0.701,
@@ -299,6 +349,36 @@ SCOPES = {
 }
 
 
+# AUD-TST-01: zones created after the reference measure of 2026-10-15. Each must keep a named scope, and each class
+# listed here must be declared in that scope's prefixes (so its disappearance is a dead prefix) and floored by class.
+ZONE_SCOPES = {
+    "explorer-surface": (
+        "com/minos/explorer/RequestGuard", "com/minos/explorer/SessionToken", "com/minos/explorer/ListeningPolicy",
+    ),
+    "wsl-lane": (),
+    "semantic-projection": (),
+    "storage-codec-and-state": ("com/minos/storage/codec/QueryViewMemoryBudget",),
+}
+
+
+def missing_zone_declarations(scopes: dict) -> list[str]:
+    """What the given scope table lacks among the zone scopes and their class floors; empty when complete."""
+    problems: list[str] = []
+    for name, floored in ZONE_SCOPES.items():
+        config = scopes.get(name)
+        if config is None:
+            problems.append(f"{name}: scope not declared")
+            continue
+        prefixes = tuple(config.get("prefixes", ()))
+        minimums = config.get("prefixMinimums", {})
+        for clazz in floored:
+            if clazz not in prefixes:
+                problems.append(f"{name}: {clazz} not declared in prefixes")
+            if clazz not in minimums:
+                problems.append(f"{name}: {clazz} has no class floor")
+    return problems
+
+
 def ratio(covered: int, missed: int) -> float:
     total = covered + missed
     return 1.0 if total == 0 else covered / total
@@ -390,14 +470,14 @@ def self_test() -> int:
 """
     failures: list[str] = []
 
-    def run(scopes: dict, *, skip: list[str] | None = None) -> tuple[int, list[str]]:
+    def run(scopes: dict, *, skip: list[str] | None = None, xml: str | None = None) -> tuple[int, list[str]]:
         original = dict(SCOPES)
         SCOPES.clear()
         SCOPES.update(scopes)
         try:
             with tempfile.TemporaryDirectory() as directory:
                 report = Path(directory) / "jacoco.xml"
-                report.write_text(report_xml, encoding="utf-8")
+                report.write_text(xml if xml is not None else report_xml, encoding="utf-8")
                 output = Path(directory) / "gate.json"
                 argv = [sys.argv[0], str(report), "--output", str(output)]
                 for name in skip or []:
@@ -527,12 +607,47 @@ def self_test() -> int:
     expect("exclusion that matches no class: exit", code, 1)
     expect("exclusion that matches no class: failures", failed, ["excluding"])
 
+    # 17-18. the zones created after the reference measure keep a named scope and their class floors (AUD-TST-01):
+    #     the real table declares them, and a copy deprived of one scope is refused by name.
+    expect("real table declares the new zones and their class floors", missing_zone_declarations(SCOPES), [])
+    deprived = {name: config for name, config in SCOPES.items() if name != "semantic-projection"}
+    expect("table deprived of a zone scope is refused", missing_zone_declarations(deprived),
+           ["semantic-projection: scope not declared"])
+
+    # 19-20. a guard class of the local HTTP surface under its own floor fails although the scope passes, and a
+    #     guard class gone from the report fails as a dead prefix; the floor is the one of the real table.
+    guard = "com/minos/explorer/RequestGuard"
+    guard_floor = SCOPES.get("explorer-surface", {}).get("prefixMinimums", {}).get(guard, {"line": 0.0, "branch": 0.0})
+    explorer_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<report name="self-test-explorer">
+  <class name="com/minos/explorer/Strong">
+    <counter type="LINE" covered="990" missed="10"/>
+    <counter type="BRANCH" covered="990" missed="10"/>
+  </class>
+  <class name="com/minos/explorer/RequestGuard">
+    <counter type="LINE" covered="80" missed="20"/>
+    <counter type="BRANCH" covered="80" missed="20"/>
+  </class>
+</report>
+"""
+    code, failed = run({"guard-floor": {
+        "prefixes": ("com/minos/explorer/", guard), "line": 0.90, "branch": 0.90,
+        "prefixMinimums": {guard: guard_floor},
+    }}, xml=explorer_xml)
+    expect("guard class under its floor in a passing scope: exit", code, 1)
+    expect("guard class under its floor in a passing scope: failures", failed, ["guard-floor"])
+    code, failed = run({"guard-absent": {
+        "prefixes": ("com/minos/explorer/", "com/minos/explorer/SessionToken"), "line": 0.10, "branch": 0.10,
+    }}, xml=explorer_xml)
+    expect("guard class absent from the report: exit", code, 1)
+    expect("guard class absent from the report: failures", failed, ["guard-absent"])
+
     if failures:
         print("MINOS JACOCO GATE SELF-TEST FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
-    print("MINOS JACOCO GATE SELF-TEST SUCCESS (16 scenarios)")
+    print("MINOS JACOCO GATE SELF-TEST SUCCESS (20 scenarios)")
     return 0
 
 
