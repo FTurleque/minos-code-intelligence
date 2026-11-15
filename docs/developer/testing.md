@@ -21,6 +21,18 @@ java -version
 
 Le build doit tourner réellement sous Java 21.
 
+### Fins de ligne des scripts POSIX d'un clone Windows
+
+`.gitattributes` épingle en LF les `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties`, et en CRLF les `*.cmd` (AUD-DEP-02) : un script extrait en CRLF par un clone à `core.autocrlf=true` est refusé par bash (`set: pipefail\r: invalid option name`), en particulier depuis WSL2 sur la même copie de travail. L'attribut agit sur les extractions suivantes, pas sur les fichiers déjà présents. Un clone ou un worktree créé avant la règle se remet à niveau une fois, depuis sa racine, en Git Bash :
+
+```bash
+git ls-files -z -- '*.sh' mvnw .mvn/wrapper/maven-wrapper.properties | xargs -0 rm --
+git checkout -- '*.sh' mvnw .mvn/wrapper/maven-wrapper.properties
+git ls-files --eol -- '*.sh' mvnw   # chaque ligne : i/lf w/lf attr/text eol=lf
+```
+
+`python scripts/quality/check-posix-script-eol.py` garde la règle pour chaque nouveau script ; il lit l'index et les attributs, pas la copie de travail.
+
 ## Pipeline Maven
 
 Le build utilise notamment :

@@ -113,6 +113,8 @@ class WiringTestCase(unittest.TestCase):
             "scripts/quality/check-selftested.py": 'parser.add_argument("--self-test", action="store_true")\n',
             "scripts/history/m1/test_old.py": "print('archived')\n",
         }
+        # The gates of the closed list exist in every tree, so the list never names a missing script.
+        defaults.update({relative: "print('waiting')\n" for relative in gate.GATES_WITHOUT_SELF_TEST})
         defaults.update(scripts or {})
         for name, content in defaults.items():
             path = root / name
@@ -505,6 +507,66 @@ class CalledWorkflowPermissionsTest(WiringTestCase):
 
     def test_the_repository_grants_every_called_workflow_its_permissions(self):
         self.assertEqual([], gate.check_called_workflows_get_their_permissions(REPOSITORY))
+
+
+class EveryGateHasASelfTestTest(WiringTestCase):
+    """AUD-TST-09: a gate declares --self-test or has a test_*.py twin, or waits in a closed list that only shrinks."""
+
+    def coverage(self, root: Path, waivers: dict[str, str]) -> tuple[list[str], int, int]:
+        """Rule 7 on ``root`` with ``waivers`` added to the closed list, whose gates every tree holds."""
+        failures, equipped, waiting = gate.check_every_gate_has_a_self_test(
+            root, {**gate.GATES_WITHOUT_SELF_TEST, **waivers})
+        return failures, equipped, waiting - len(gate.GATES_WITHOUT_SELF_TEST)
+
+    def test_a_gate_without_a_self_test_outside_the_list_is_refused_by_name(self):
+        root = self.tree(scripts={"scripts/quality/check-exemple.py": "print('gate')\n"})
+        failures, _equipped, _waiting = self.coverage(root, {})
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("scripts/quality/check-exemple.py", failures[0])
+        self.assertIn("test_check_exemple.py", failures[0])
+        self.assertIn("scripts/quality/check-exemple.py", "\n".join(self.failures(root)))
+
+    def test_a_listed_gate_without_a_self_test_is_tolerated_and_counted(self):
+        root = self.tree(scripts={"scripts/quality/check-exemple.py": "print('gate')\n"})
+        failures, equipped, waiting = self.coverage(root, {"scripts/quality/check-exemple.py": "pending"})
+        self.assertEqual([], failures)
+        self.assertEqual((2, 1), (equipped, waiting))
+
+    def test_a_listed_gate_that_now_has_a_self_test_is_refused(self):
+        root = self.tree()
+        failures, _equipped, _waiting = self.coverage(root, {"scripts/quality/check-selftested.py": "pending"})
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("'scripts/quality/check-selftested.py'", failures[0])
+        self.assertIn("remove the entry", failures[0])
+
+    def test_a_listed_gate_with_a_twin_test_is_refused_too(self):
+        failures, _equipped, _waiting = self.coverage(self.tree(), {"scripts/quality/check-thing.py": "pending"})
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("remove the entry", failures[0])
+
+    def test_an_entry_without_a_script_is_refused(self):
+        failures, _equipped, _waiting = self.coverage(self.tree(), {"scripts/quality/check-gone.py": "pending"})
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("'scripts/quality/check-gone.py'", failures[0])
+        self.assertIn("names no script", failures[0])
+
+    def test_a_gate_with_a_twin_test_is_accepted(self):
+        root = self.tree(scripts={"scripts/docs/check-other.py": "print('gate')\n",
+                                  "scripts/docs/test_check_other.py": "print('test')\n"})
+        failures, equipped, _waiting = self.coverage(root, {})
+        self.assertEqual([], failures)
+        self.assertEqual(3, equipped)
+
+    def test_archived_gates_are_excluded(self):
+        root = self.tree(scripts={"scripts/history/m1/check-old.py": "print('archived')\n"})
+        self.assertEqual([], self.coverage(root, {})[0])
+
+    def test_the_repository_satisfies_the_rule_with_its_closed_list(self):
+        failures, equipped, waiting = gate.check_every_gate_has_a_self_test(REPOSITORY)
+        self.assertEqual([], failures)
+        self.assertEqual(len(gate.GATES_WITHOUT_SELF_TEST), waiting)
+        self.assertGreater(equipped, 0)
+        self.assertTrue(all(reason.strip() for reason in gate.GATES_WITHOUT_SELF_TEST.values()))
 
 
 if __name__ == "__main__":
