@@ -7,14 +7,21 @@ import com.minos.semantic.SemanticVectorStore;
 import com.minos.semantic.StaleSemanticSyncException;
 import com.minos.testsupport.ParkedThreads;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
+import org.opentest4j.AssertionFailedError;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -29,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Concurrency correctness tests for {@link FileSemanticVectorStore#replaceConditionally}.
@@ -226,6 +233,7 @@ class FileSemanticSyncConsistencyTest {
     // -------------------------------------------------------------------------
 
     @Test
+    @Timeout(120)
     void crossJvmFileLockBlocksConditionalReplaceUntilReleased(@TempDir Path temp) throws Exception {
         FileSemanticVectorStore store = new FileSemanticVectorStore(temp);
         String projectId = UUID.randomUUID().toString();
@@ -233,10 +241,9 @@ class FileSemanticSyncConsistencyTest {
         // Compute the expected lock file path (same formula as FileSemanticVectorStore)
         Path lockFile = temp.resolve(".sync-locks").resolve(projectId + ".lock");
 
-        Process subprocess = startLockHolder(lockFile);
-        try (BufferedReader out = new BufferedReader(new InputStreamReader(subprocess.getInputStream()))) {
-            String ready = out.readLine();
-            assumeTrue("READY".equals(ready), "subprocess did not signal READY (got: " + ready + ") — skipping cross-JVM test");
+        try (LockHolder holder = LockHolder.start(SemanticSyncLockHolderProcess.class.getName(), lockFile.toString())) {
+            // A holder that does not signal READY fails the proof; it is never skipped.
+            holder.awaitReady();
 
             // Our JVM tries replaceConditionally → channel.lock() must block on the subprocess's file lock
             AtomicBoolean commitSucceeded = new AtomicBoolean(false);
@@ -262,16 +269,38 @@ class FileSemanticSyncConsistencyTest {
                     "replaceConditionally must be blocked while subprocess holds the cross-JVM file lock");
 
             // Release the subprocess lock by closing its stdin
-            subprocess.getOutputStream().close();
-            boolean subExited = subprocess.waitFor(10, TimeUnit.SECONDS);
-            assertTrue(subExited, "subprocess must exit after stdin closes");
+            assertTrue(holder.release(), "subprocess must exit after stdin closes");
 
             // Now our sync thread should unblock and complete
             syncThread.join(10_000);
             assertTrue(commitSucceeded.get(),
                     "replaceConditionally must succeed after cross-JVM file lock is released: " + syncError.get());
-        } finally {
-            subprocess.destroyForcibly();
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    void lockHolderThatCannotStartFailsTheProofInsteadOfSkippingIt() throws Exception {
+        String missingMain = SemanticSyncLockHolderProcess.class.getName() + "Missing";
+        try (LockHolder holder = LockHolder.start(missingMain)) {
+            AssertionFailedError failure = assertThrows(AssertionFailedError.class, holder::awaitReady);
+            assertTrue(failure.getMessage().contains("exit code 1"), failure.getMessage());
+            assertTrue(failure.getMessage().contains(missingMain), failure.getMessage());
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    void lockHolderFailureKeepsOnlyTheBoundedTailOfALargeErrorOutput() throws Exception {
+        try (LockHolder holder = LockHolder.start(NoisyFailingHolderProcess.class.getName())) {
+            // Without a continuous drain, the child would block on its full stderr pipe and never exit.
+            AssertionFailedError failure = assertThrows(AssertionFailedError.class, holder::awaitReady);
+            String message = failure.getMessage();
+            assertTrue(message.contains("exit code " + NoisyFailingHolderProcess.EXIT_CODE), message);
+            assertTrue(message.contains(NoisyFailingHolderProcess.LAST_LINE), message);
+            assertFalse(message.contains(NoisyFailingHolderProcess.FIRST_LINE), message);
+            assertTrue(message.length() < LockHolder.STDERR_TAIL_BYTES + 512,
+                    () -> "failure message must stay bounded, got " + message.length() + " characters");
         }
     }
 
@@ -279,19 +308,102 @@ class FileSemanticSyncConsistencyTest {
     // Helpers
     // -------------------------------------------------------------------------
 
-    /** Starts a JVM that holds the file lock until its stdin closes; its stderr is discarded so it never blocks. */
-    private static Process startLockHolder(Path lockFile) throws IOException {
-        Optional<String> commandOpt = ProcessHandle.current().info().command();
-        assumeTrue(commandOpt.isPresent(), "JVM command path unavailable — skipping cross-JVM test");
+    /**
+     * A child JVM started by a cross-JVM test. Its environment is built from scratch (nothing is inherited),
+     * its stderr is drained continuously into a bounded tail so it never blocks on a full pipe, and a child
+     * that does not signal READY fails the test with its exit code and that tail.
+     */
+    private static final class LockHolder implements AutoCloseable {
 
-        String classpath = System.getProperty("java.class.path", "");
-        assumeTrue(!classpath.isBlank(), "java.class.path unavailable — skipping cross-JVM test");
+        static final int STDERR_TAIL_BYTES = 4096;
+        private static final Duration EXIT_TIMEOUT = Duration.ofSeconds(10);
+        private static final Charset CHILD_CHARSET =
+                Charset.forName(System.getProperty("native.encoding", "UTF-8"));
 
-        return new ProcessBuilder(
-                commandOpt.get(), "-cp", classpath,
-                SemanticSyncLockHolderProcess.class.getName(), lockFile.toString())
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .start();
+        private final Process process;
+        private final BufferedReader stdout;
+        private final Thread stderrDrain;
+        private final byte[] tail = new byte[STDERR_TAIL_BYTES];
+        private long written;
+
+        private LockHolder(Process process) {
+            this.process = process;
+            this.stdout = new BufferedReader(new InputStreamReader(process.getInputStream(), CHILD_CHARSET));
+            this.stderrDrain = daemon("lock-holder-stderr", this::drainStderr);
+            this.stderrDrain.start();
+        }
+
+        static LockHolder start(String mainClass, String... args) throws IOException {
+            Optional<String> javaCommand = ProcessHandle.current().info().command();
+            assertTrue(javaCommand.isPresent(), "JVM command path unavailable: the lock holder cannot be started");
+            String classpath = System.getProperty("java.class.path", "");
+            assertFalse(classpath.isBlank(), "java.class.path unavailable: the lock holder cannot be started");
+
+            List<String> command = new ArrayList<>(List.of(javaCommand.get(), "-cp", classpath, mainClass));
+            command.addAll(List.of(args));
+            ProcessBuilder builder = new ProcessBuilder(command);
+            Map<String, String> environment = builder.environment();
+            environment.clear();
+            if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
+                // The only variable a JVM needs to start on Windows.
+                String systemRoot = System.getenv("SystemRoot");
+                if (systemRoot != null) environment.put("SystemRoot", systemRoot);
+            }
+            return new LockHolder(builder.start());
+        }
+
+        /** Returns once the child signals READY; otherwise fails with its exit code and stderr tail. */
+        void awaitReady() throws IOException, InterruptedException {
+            String ready = stdout.readLine();
+            if ("READY".equals(ready)) return;
+            String exit;
+            if (process.waitFor(EXIT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
+                exit = "exit code " + process.exitValue();
+                stderrDrain.join(EXIT_TIMEOUT.toMillis());
+            } else {
+                exit = "still running after " + EXIT_TIMEOUT;
+            }
+            fail("lock holder did not signal READY (got: " + ready + ", " + exit + "); stderr tail:\n" + stderrTail());
+        }
+
+        /** Closes the child's stdin, which makes it release its lock and exit; reports whether it exited. */
+        boolean release() throws IOException, InterruptedException {
+            process.getOutputStream().close();
+            return process.waitFor(EXIT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public void close() throws IOException {
+            process.destroyForcibly();
+            stdout.close();
+        }
+
+        private void drainStderr() {
+            byte[] chunk = new byte[1024];
+            try (InputStream stderr = process.getErrorStream()) {
+                int read;
+                while ((read = stderr.read(chunk)) != -1) append(chunk, read);
+            } catch (IOException closed) {
+                // The stream is closed when the child is destroyed: the tail read so far is kept.
+            }
+        }
+
+        private synchronized void append(byte[] chunk, int length) {
+            for (int index = 0; index < length; index++) {
+                tail[(int) (written % tail.length)] = chunk[index];
+                written++;
+            }
+        }
+
+        private synchronized String stderrTail() {
+            int size = (int) Math.min(written, tail.length);
+            byte[] ordered = new byte[size];
+            long first = written - size;
+            for (int index = 0; index < size; index++) {
+                ordered[index] = tail[(int) ((first + index) % tail.length)];
+            }
+            return new String(ordered, CHILD_CHARSET);
+        }
     }
 
     /** A daemon thread, so a failed assertion never leaves the test JVM waiting for it. */
