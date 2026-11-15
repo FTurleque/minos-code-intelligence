@@ -550,37 +550,44 @@ function buildPointGrid(list) {
   return { side: side, starts: starts, items: items, list: list };
 }
 
-// The nearest point strictly inside the capture radius of the pixel (x, y), the lowest index on a tie, or null.
-// Only the cells that cover the disk of the radius are read; the distance is the one of a scan of every point.
-function searchPointGrid(grid, geometry, x, y) {
+// The cells that cover the disk of the capture radius around the pixel (x, y), or null for a position that is not
+// a number. The radius is widened by a rounding margin: the exact distance test decides.
+function captureCells(grid, geometry, x, y) {
   const half = geometry.half;
   const centreX = (x - geometry.originX) / half;
   const centreY = (geometry.originY - y) / half;
   if (!Number.isFinite(centreX) || !Number.isFinite(centreY)) return null;
   const reach = MAP_CAPTURE_PIXELS / half * (1 + 1e-9) + 1e-12;
-  const first = gridCell(centreX - reach, grid.side);
-  const last = gridCell(centreX + reach, grid.side);
-  const rowFirst = gridCell(centreY - reach, grid.side);
-  const rowLast = gridCell(centreY + reach, grid.side);
+  return {
+    first: gridCell(centreX - reach, grid.side), last: gridCell(centreX + reach, grid.side),
+    rowFirst: gridCell(centreY - reach, grid.side), rowLast: gridCell(centreY + reach, grid.side)
+  };
+}
+
+// The nearest point strictly inside the capture radius of the pixel (x, y), the lowest index on a tie, or null.
+// Only the cells that cover the disk of the radius are read; the distance is the one of a scan of every point.
+function searchPointGrid(grid, geometry, x, y) {
+  const cells = captureCells(grid, geometry, x, y);
+  if (cells === null) return null;
   const list = grid.list;
   let best = -1;
   let bestDistance = MAP_CAPTURE_PIXELS * MAP_CAPTURE_PIXELS;
   const consider = index => {
     const point = list[index];
-    const dx = geometry.originX + point.x * half - x;
-    const dy = geometry.originY - point.y * half - y;
-    const distance = dx * dx + dy * dy;
+    const deltaX = geometry.originX + point.x * geometry.half - x;
+    const deltaY = geometry.originY - point.y * geometry.half - y;
+    const distance = deltaX * deltaX + deltaY * deltaY;
     if (distance < bestDistance || (distance === bestDistance && best >= 0 && index < best)) {
       best = index;
       bestDistance = distance;
     }
   };
-  if ((last - first + 1) * (rowLast - rowFirst + 1) > list.length) {
+  if ((cells.last - cells.first + 1) * (cells.rowLast - cells.rowFirst + 1) > list.length) {
     for (let index = 0; index < list.length; index += 1) consider(index);
   } else {
-    for (let row = rowFirst; row <= rowLast; row += 1) {
-      const from = grid.starts[row * grid.side + first];
-      const to = grid.starts[row * grid.side + last + 1];
+    for (let row = cells.rowFirst; row <= cells.rowLast; row += 1) {
+      const from = grid.starts[row * grid.side + cells.first];
+      const to = grid.starts[row * grid.side + cells.last + 1];
       for (let slot = from; slot < to; slot += 1) consider(grid.items[slot]);
     }
   }
@@ -620,9 +627,7 @@ function renderMapTexts() {
   }
 }
 
-async function loadMap() {
-  if (!map.open || !project) return;
-  const number = ++map.request;
+function clearMap() {
   map.status = null;
   map.points = [];
   map.hover = null;
@@ -630,24 +635,38 @@ async function loadMap() {
   $("mapShowStale").hidden = true;
   mapMessage("");
   renderMapTexts();
+}
+
+// Whether the points of a projection in this state are read now; the page says why when they are not.
+function projectionReadable(status) {
+  if (status.state !== "PRETE") mapMessage(PROJECTION_HELP[status.state] || status.state);
+  if (status.state === "PERIMEE" && !map.showStale) {
+    $("mapShowStale").hidden = false;
+    return false;
+  }
+  return status.state === "PRETE" || status.state === "PERIMEE";
+}
+
+function showMapPoints(points) {
+  map.points = points;
+  mapGrid();
+  resetMapView();
+  renderMapTexts();
+  markRowsOnMap();
+  drawMap();
+}
+
+async function loadMap() {
+  if (!map.open || !project) return;
+  const number = ++map.request;
+  clearMap();
   try {
     const status = await api(projectPath() + "/projection");
     if (number !== map.request) return;
     map.status = status;
-    if (status.state !== "PRETE") mapMessage(PROJECTION_HELP[status.state] || status.state);
-    if (status.state === "PERIMEE" && !map.showStale) {
-      $("mapShowStale").hidden = false;
-      return;
-    }
-    if (status.state !== "PRETE" && status.state !== "PERIMEE") return;
+    if (!projectionReadable(status)) return;
     const points = await readMapPoints(number, status.state);
-    if (points === null) return;
-    map.points = points;
-    mapGrid();
-    resetMapView();
-    renderMapTexts();
-    markRowsOnMap();
-    drawMap();
+    if (points !== null) showMapPoints(points);
   } catch (error) {
     report(error);
   }

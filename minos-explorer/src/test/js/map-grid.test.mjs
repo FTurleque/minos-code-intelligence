@@ -17,9 +17,9 @@ function expectedPoint(points, clientX, clientY, scale, offsetX, offsetY) {
   let best = null;
   let bestDistance = RADIUS * RADIUS;
   for (const point of points) {
-    const dx = WIDTH / 2 + offsetX + point.x * half - clientX;
-    const dy = HEIGHT / 2 + offsetY - point.y * half - clientY;
-    const distance = dx * dx + dy * dy;
+    const deltaX = WIDTH / 2 + offsetX + point.x * half - clientX;
+    const deltaY = HEIGHT / 2 + offsetY - point.y * half - clientY;
+    const distance = deltaX * deltaX + deltaY * deltaY;
     if (distance < bestDistance) { best = point; bestDistance = distance; }
   }
   return best;
