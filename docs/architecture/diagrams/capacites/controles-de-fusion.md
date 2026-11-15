@@ -77,6 +77,11 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 `check-jacoco.py` porte son auto-test en option (`--self-test`), exécuté par le job `invariants` ; ses cas sont
 des étiquettes de la fonction `self_test`, d'où les preuves citées par ligne.
 
+`scripts/quality/check-test-platform-guards.py` (job `invariants`, auto-test `--self-test`) refuse un test qui
+passe à vide derrière un retour anticipé de plateforme, et n'en tolère que la liste fermée hors méthode de test
+(AUD-TST-04). Ses deux exigences entrent dans la spec de référence à l'archivage du changement
+`compter-comme-sautes-les-tests-propres-a-une-plateforme` ; leurs lignes de traçabilité s'ajoutent alors ici.
+
 ## Écarts
 
 | Id | Écart | Preuve | Suite proposée |
