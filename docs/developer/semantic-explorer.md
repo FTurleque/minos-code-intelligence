@@ -194,6 +194,28 @@ classes. La page est servie avec `Content-Security-Policy: default-src 'none'; s
 'self'; connect-src 'self'; …`. `WebResourcesContentTest` refuse `innerHTML` et ses équivalents, toute URL
 externe, tout script ou style en ligne.
 
+Le script de la page est exécuté par des tests `node:test` (`minos-explorer/src/test/js/`, hors des ressources
+livrées), sans paquet npm ni `package.json`. `harness.mjs` charge le vrai `app.js` dans un contexte `node:vm` muni
+d'un faux DOM qui refuse toute écriture de balisage (`innerHTML`, `outerHTML`, `insertAdjacentHTML`,
+`document.write`, `createContextualFragment`, `DOMParser`, `srcdoc`, un attribut `on*` ou `srcdoc` posé par
+`setAttribute`, y compris sous un nom calculé) et d'un contexte qui
+refuse la génération de code depuis une chaîne (`eval`, `new Function`). `app.js` n'exporte rien et n'est pas
+modifié pour les tests : ses fonctions sont des propriétés du contexte, son état se lit par une expression évaluée
+dans le même contexte.
+
+| Fichier | Ce qu'il fixe |
+|---|---|
+| `smoke.test.mjs` | refus sans jeton ; jeton retiré de l'adresse et envoyé par l'en-tête `Authorization` seulement |
+| `sinks.test.mjs` | liste, en-tête, détail, voisins, recherche, textes et survol de la carte, bandeau rendus en texte avec `<script>alert(1)</script>` |
+| `map.test.mjs` | point désigné (jeux à graine fixe, jusqu'à 100 000 points, égalités, rayon de 8 px), filtre de nature, bornes et point fixe du zoom, suite des requêtes de points, tracé sur le faux canevas, compteurs de rafale (table `CURRENT`) |
+| `labels.test.mjs` | table des constantes du contrat confrontée aux libellés, fonctions pures, affichage d'une erreur d'API |
+| `clipboard.test.mjs` | échec de « Copier la référence » signalé dans le bandeau, sans rejet non traité |
+
+Lancer : `python scripts/quality/check-explorer-front.py` (Node 20 ou plus dans le `PATH`), ou un fichier seul par
+`node --test minos-explorer/src/test/js/map.test.mjs`. Les compteurs de `map.test.mjs` sont des caractérisations
+du comportement actuel, pas des seuils : une optimisation de la carte change la table `CURRENT` dans le même commit.
+Ces tests ne prouvent rien d'un vrai navigateur (rendu, durées, événements réels).
+
 ## Tests
 
 | Sujet | Test |
@@ -206,6 +228,7 @@ externe, tout script ou style en ligne.
 | Préparation, statut, points | `minos-application/.../SemanticProjectionServiceTest` |
 | Commande et reproductibilité du fichier | `minos-cli/.../SemanticProjectionCommandLineTest`, `ExplorerCitedCommandsTest` |
 | Routes de projection, carte | `minos-explorer/.../ExplorerProjectionRoutesTest`, `WebResourcesContentTest` |
+| Script de la page exécuté sous Node | `minos-explorer/src/test/js/*.test.mjs`, par `scripts/quality/check-explorer-front.py` |
 | API Java | `minos-api/.../SemanticExplorationApiContractTest` |
 | Écoute, refus, en-têtes, bornes (sockets réels) | `minos-explorer/.../ExplorerServerTest` |
 | Routes sur un `MINOS_HOME` réel, absence d'écriture et de chemin absolu | `minos-explorer/.../ExplorerRoutesTest` |
