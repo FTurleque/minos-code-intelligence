@@ -1,0 +1,185 @@
+[
+  {
+    "numero": 1,
+    "titre": "Remettre la mesure à niveau sur les zones nouvelles",
+    "pourquoi": "Les corrections des sprints suivants touchent l'explorateur, la projection 2D et la voie WSL2, que seul le scope JaCoCo global voit, et un front qu'aucun test n'exécute. Ce sprint donne un filet à ces zones, un banc de mesure à l'explorateur et à la projection, et ferme les tests qui passent à vide, sans toucher au code applicatif.",
+    "sortie": "Chaque zone créée depuis le 10/10 (explorateur, projection 2D, voie WSL2, budget mémoire des vues) a un scope JaCoCo nominatif exigé ; app.js est exécuté par au moins un test et contrôlé en CI ; benchmarks/scalability produit une référence de durée et de latence pour la projection et les routes de l'explorateur ; aucun test ne passe à vide sur un OS ni ne se saute quand sa précondition échoue ; tout gate a un auto-test câblé ; un clone Windows avec core.autocrlf=true produit des *.sh en LF.",
+    "constats": [
+      "AUD-TST-01",
+      "AUD-TST-02",
+      "AUD-PERF-13",
+      "AUD-TST-04",
+      "AUD-TST-05",
+      "AUD-TST-07",
+      "AUD-TST-09",
+      "AUD-DEP-02"
+    ],
+    "charge_jours": [
+      4.25,
+      14
+    ],
+    "composition": {
+      "Moyenne": 2,
+      "Faible": 6
+    },
+    "ordre_interne": []
+  },
+  {
+    "numero": 2,
+    "titre": "Sécurité et chaîne d'intégration",
+    "pourquoi": "Défauts courts et indépendants : filtres Git hérités au clone d'un dépôt distant, invariant de secret tenu par le contenu des listes, garde Windows qui s'ouvre sur une variable illisible, jetons présents pendant le code de PR, et un pipeline à remettre d'équerre après l'abandon de develop.",
+    "sortie": "La décision sur les filtres Git au clone distant est écrite (ADR SEC-*), validateCheckout passe par l'ouverture de confiance et un test fixe le comportement retenu ; l'exclusion des noms de secrets s'applique à toute variable transmise à un processus ; la garde Windows refuse sur une entrée illisible ; SONAR_TOKEN n'est dans l'environnement d'aucune étape qui exécute ./mvnw sur le head de la PR, ou une entrée nominative de check-workflow-pins.py l'accepte avec sa raison ; aucune PR documentaire ne déclenche la qualification Docker A→B ; aucun workflow n'installe Temurin 25 ; aucun document courant ni risque ouvert du registre ne cite develop comme branche vivante ; les commentaires compose disent la même chose que SEC-0074.",
+    "constats": [
+      "AUD-SEC-01",
+      "AUD-SEC-05",
+      "AUD-QUA-05",
+      "AUD-DEP-05",
+      "AUD-DEP-03",
+      "AUD-DEP-04",
+      "AUD-DEP-06",
+      "AUD-DEP-01"
+    ],
+    "charge_jours": [
+      3.5,
+      12
+    ],
+    "composition": {
+      "Faible": 7,
+      "Moyenne": 1
+    },
+    "ordre_interne": []
+  },
+  {
+    "numero": 3,
+    "titre": "Diagnostic et robustesse des surfaces",
+    "pourquoi": "L'observabilité avant les corrections de fond : les sprints 4 à 8 changent des chemins chauds et des frontières ; un échec interne doit laisser une cause exploitable et ne plus se déguiser en erreur d'usage. L'explorateur (ExplorerServer, ExplorerApi) est traité d'un bloc, avec un seul critère de journalisation pour la trace (AUD-QUA-02) et la limitation des refus (AUD-SEC-02). Ordre recommandé : AUD-QUA-02 puis AUD-QUA-01.",
+    "sortie": "Tout échec interne d'une surface (CLI, API, MCP, explorateur, worker WSL) laisse une trace avec la cause racine dans un journal privé sans chemin absolu ni jeton ; une IllegalArgumentException non émise par la validation d'entrée est rendue comme erreur interne ; une requête de l'explorateur abandonnée libère son créneau ; les refus de l'explorateur sont journalisés avec limitation.",
+    "constats": [
+      "AUD-QUA-02",
+      "AUD-QUA-01",
+      "AUD-SEC-02",
+      "AUD-SEC-03",
+      "AUD-SEC-04"
+    ],
+    "charge_jours": [
+      2.75,
+      9
+    ],
+    "composition": {
+      "Moyenne": 2,
+      "Faible": 3
+    },
+    "ordre_interne": []
+  },
+  {
+    "numero": 4,
+    "titre": "Performance de l'explorateur et de la projection",
+    "pourquoi": "Les relectures complètes d'index et le recomptage par page se corrigent une fois le banc de mesure et le test du front en place (sprint 1).",
+    "sortie": "Mesuré sur le banc du sprint 1 : les passes d'ajustement de la projection ne relisent que l'échantillon ; aucune page de liste, détail ou voisinage ne décode l'index vectoriel entier en stockage local ; aucun COUNT(*) par page sous PostgreSQL ; le survol de la carte n'est pas linéaire en nombre de points ; chaque gain est mesuré avant/après sur un index réel.",
+    "constats": [
+      "AUD-PERF-01",
+      "AUD-PERF-02",
+      "AUD-PERF-03",
+      "AUD-PERF-10"
+    ],
+    "charge_jours": [
+      2.5,
+      8
+    ],
+    "composition": {
+      "Moyenne": 2,
+      "Faible": 2
+    },
+    "ordre_interne": []
+  },
+  {
+    "numero": 5,
+    "titre": "Budget mémoire et PostgreSQL",
+    "pourquoi": "Mêmes fichiers que le budget des vues (DATA-0081) : les deux constats laissés ouverts le 11/11 et les caches qui échappent au budget se traitent ensemble, après le sprint 4 qui touche les mêmes stores.",
+    "sortie": "Tout cache applicatif est soit compté dans le budget de mémoire des vues, soit plafonné par une fraction du tas écrite dans l'ADR ; la charge utile PostgreSQL est relue sur (project_id, snapshot_id, sha256) ; une vue hors cache reste comptée jusqu'à sa libération ; la zone de travail PostgreSQL du plan de requête est dimensionnée pour le nombre de JVM.",
+    "constats": [
+      "AUD-PERF-04",
+      "AUD-PERF-05",
+      "AUD-PERF-06",
+      "AUD-PERF-09"
+    ],
+    "charge_jours": [
+      1.75,
+      6
+    ],
+    "composition": {
+      "Moyenne": 1,
+      "Faible": 3
+    },
+    "ordre_interne": []
+  },
+  {
+    "numero": 6,
+    "titre": "Voie WSL2 et hygiène des tests",
+    "pourquoi": "Les hachages et lectures répétés de la voie WSL2 se corrigent une fois son scope nominatif en place ; les tests fragiles et les planchers bas se resserrent en dernier, quand les chemins qu'ils protègent sont stabilisés.",
+    "sortie": "La voie WSL2 hache l'arbre source au plus une fois par indexation et lit l'artefact SCIP au plus deux fois ; aucun test n'affirme une absence après un délai fixe ; les classes de la frontière de confiance des providers ont un plancher de branches d'au moins 0,5 ; les classes UI du plugin ont un test ; le document de mutation décrit les modules réels.",
+    "constats": [
+      "AUD-PERF-07",
+      "AUD-PERF-08",
+      "AUD-PERF-11",
+      "AUD-TST-06",
+      "AUD-TST-03",
+      "AUD-TST-08",
+      "AUD-TST-10"
+    ],
+    "charge_jours": [
+      2.5,
+      9
+    ],
+    "composition": {
+      "Faible": 7
+    },
+    "ordre_interne": []
+  },
+  {
+    "numero": 7,
+    "titre": "Application : sortir les adaptateurs et réduire la façade",
+    "pourquoi": "Chantier de fond, à précéder d'un ADR. Il vient après les sprints de diagnostic et de mesure, parce qu'il déplace du code sur les chemins que ces sprints instrumentent.",
+    "sortie": "minos-application n'instancie plus d'adaptateur d'infrastructure (Ollama, analyseur javac, sidecar, historique CLI) : ils sont câblés par minos-bootstrap derrière un port ; les cas d'usage reçoivent leurs collaborateurs, pas MinosApplication ; minos-app ne porte plus de politique de lancement ; les codes de sortie viennent d'un seul contrat.",
+    "constats": [
+      "AUD-ARC-02",
+      "AUD-ARC-01",
+      "AUD-ARC-03",
+      "AUD-ARC-05",
+      "AUD-ARC-06",
+      "AUD-QUA-04"
+    ],
+    "charge_jours": [
+      7.0,
+      20
+    ],
+    "composition": {
+      "Moyenne": 2,
+      "Faible": 4
+    },
+    "ordre_interne": []
+  },
+  {
+    "numero": 8,
+    "titre": "Garde de frontières, contrats et documentation",
+    "pourquoi": "Le garde se simplifie après le sprint 7, qui en change les tables ; la langue du contrat de l'explorateur demande une décision (ADR ou v2 du contrat), pas un renommage dans v1 ; la documentation d'architecture se réécrit en dernier, sur le découpage final.",
+    "sortie": "Les tables du garde de frontières ont une seule source lue par le garde et par ModuleArchitectureTest ; IndexingRunExecutor n'est plus une classe statique unique et SnapshotBinaryCodecSupport est découpé par section de format ; la langue du contrat de l'explorateur est tranchée par écrit et app.js suit ; minos-nexus est reclassé ou absorbé ; la prose d'architecture (ports du domaine, racines du moteur, explorateur) correspond au code.",
+    "constats": [
+      "AUD-ARC-08",
+      "AUD-ARC-04",
+      "AUD-ARC-09",
+      "AUD-QUA-03",
+      "AUD-ARC-07"
+    ],
+    "charge_jours": [
+      4.75,
+      14
+    ],
+    "composition": {
+      "Faible": 5
+    },
+    "ordre_interne": [
+      "AUD-ARC-08 avant AUD-ARC-07"
+    ]
+  }
+]
