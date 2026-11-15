@@ -182,8 +182,7 @@ class SemanticExplorerBenchmarkSmokeTest {
         };
     }
 
-    private static Run run(Path temp, UnaryOperator<ExplorerServer.Calls> calls, String... datasets)
-            throws Exception {
+    private static Run run(Path temp, UnaryOperator<ExplorerServer.Calls> calls, String... datasets) {
         List<String> arguments = new ArrayList<>(List.of("--work=" + temp.resolve("work"), "--dimensions=32",
                 "--seed=7", "--warmup=0", "--iterations=1", "--deep-page=3", "--run-id=smoke"));
         arguments.addAll(Arrays.asList(datasets));

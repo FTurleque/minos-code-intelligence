@@ -440,7 +440,6 @@ final class SemanticExplorerBenchmark {
 
         /** A cold call, the warm-up, then the measured iterations of one request. */
         private Outcome measure(Client client, ExplorerApi api, Request request) throws IOException {
-            long allocatedBefore = allocatedBytes();
             long started = System.nanoTime();
             Client.Response cold = client.send(request);
             long coldNanos = System.nanoTime() - started;
@@ -453,7 +452,7 @@ final class SemanticExplorerBenchmark {
             long[] allocated = new long[options.iterations()];
             Client.Response last = cold;
             for (int iteration = 0; iteration < options.iterations(); iteration++) {
-                allocatedBefore = allocatedBytes();
+                long allocatedBefore = allocatedBytes();
                 started = System.nanoTime();
                 last = client.send(request);
                 nanos[iteration] = System.nanoTime() - started;
