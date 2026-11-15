@@ -11,6 +11,8 @@ import com.minos.orchestration.ProviderConformanceKit;
 import com.minos.orchestration.ProviderPlatform;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
@@ -116,10 +118,8 @@ class M24PolyglotProviderTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     void windowsDoesNotPretendScipClangRuntimeIsReady(@TempDir Path home) throws Exception {
-        if (!System.getProperty("os.name", "").toLowerCase().contains("win")) {
-            return;
-        }
         MinosApplication application = MinosApplication.open(home);
         ProviderRuntimeStatus status = application.providerRuntimeManager().inspect(ScipIndexerCatalog.SCIP_CLANG_ID);
         assertEquals(ProviderRuntimeStatus.State.BLOCKED, status.state());
