@@ -15,7 +15,12 @@ What it does not prove: that the page behaves the same in a real browser (no bro
 
 Self-test: ``--self-test`` replays the gate on mutated temporary copies (broken syntax, empty test folder,
 ``PATH`` without Node, minimum above the installed version, markup sinks, event handler attribute, code
-generation, capture radius, contract constant without a label).
+generation, capture radius, contract constant without a label), then reads the failed test names from two TAP
+samples: tests at the top level, and tests nested under one test per file.
+
+Deviation from ``gate_cli.run``: this gate keeps its own ``main()`` because ``gate_cli.parse_root`` only knows
+``--root`` and this gate also takes ``--self-test`` (same choice as ``check-bounded-helpers.py``); it still
+reports through ``gate_cli.report_failures``.
 """
 from __future__ import annotations
 
@@ -47,8 +52,9 @@ LABEL = "Explorer front gate"
 
 VERSION = re.compile(r"^v(\d+)\.\d+\.\d+")
 TAP_COUNTER = re.compile(r"^# (tests|pass|fail|cancelled) (\d+)\s*$", re.MULTILINE)
-# A failed top-level test of the TAP reporter (subtests are indented).
-FAILED_TEST = re.compile(r"^not ok \d+ - (.+?)\s*$", re.MULTILINE)
+# A failed test of the TAP reporter at any depth: depending on the Node major, the tests of a file list are at the
+# top level or nested (indented) under one test per file, whose name is then the file path.
+FAILED_TEST = re.compile(r"^[ \t]*not ok \d+ - (.+?)\s*$", re.MULTILINE)
 
 
 def node_environment(path_value: str) -> dict[str, str]:
@@ -67,6 +73,11 @@ def run_node(node: str, arguments: list[str], root: Path, environment: dict[str,
 
 def tail(text: str, count: int = 40) -> str:
     return "\n".join(text.strip().splitlines()[-count:])
+
+
+def failed_tests(tap: str) -> list[str]:
+    """Names of the failed tests and of their enclosing tests, in TAP order, each name once."""
+    return list(dict.fromkeys(FAILED_TEST.findall(tap)))
 
 
 def check(root: Path, path_value: str | None = None,
@@ -111,7 +122,7 @@ def check(root: Path, path_value: str | None = None,
     ran = counters.get("tests", 0)
     failures: list[str] = []
     if result.returncode != 0 or counters.get("fail", 0) or counters.get("cancelled", 0):
-        failed = FAILED_TEST.findall(result.stdout)
+        failed = failed_tests(result.stdout)
         failures.append(f"node --test failed (exit code {result.returncode}, {counters.get('fail', 0)} failed, "
                         f"{counters.get('cancelled', 0)} cancelled, {ran} tests); failed tests: "
                         f"{'; '.join(failed) or 'none named'}\n{tail(result.stdout)}\n{tail(result.stderr)}")
@@ -198,8 +209,51 @@ def cases() -> list[Case]:
     ]
 
 
+# TAP samples of a failed run: tests at the top level, and tests nested under one test per file.
+TAP_FLAT = """TAP version 13
+# Subtest: renders as text
+not ok 1 - renders as text
+  ---
+  ...
+ok 2 - zooms
+1..2
+# tests 2
+# pass 1
+# fail 1
+"""
+TAP_NESTED = """TAP version 13
+# Subtest: minos-explorer/src/test/js/sinks.test.mjs
+    # Subtest: renders as text
+    not ok 1 - renders as text
+      ---
+      ...
+    ok 2 - zooms
+    1..2
+not ok 1 - minos-explorer/src/test/js/sinks.test.mjs
+  ---
+  ...
+1..1
+# tests 2
+# pass 1
+# fail 1
+"""
+
+
+def tap_errors() -> list[str]:
+    errors = []
+    for name, sample, expected in (
+            ("flat TAP", TAP_FLAT, ["renders as text"]),
+            ("nested TAP", TAP_NESTED, ["renders as text", "minos-explorer/src/test/js/sinks.test.mjs"])):
+        found = failed_tests(sample)
+        if found != expected:
+            errors.append(f"{name}: failed tests {found}, expected {expected}")
+        else:
+            print(f"ok - {name} names the failed test")
+    return errors
+
+
 def self_test(root: Path) -> int:
-    errors: list[str] = []
+    errors: list[str] = tap_errors()
     for name, mutate, options, expected, fragment in cases():
         with tempfile.TemporaryDirectory(prefix="minos-explorer-front-") as directory:
             target = Path(directory)
@@ -222,7 +276,7 @@ def self_test(root: Path) -> int:
                 print(f"ok - {name}")
     if gate_cli.report_failures(LABEL + " SELF-TEST", errors):
         return 1
-    print(f"{LABEL} self-test OK: {len(cases())} cases.")
+    print(f"{LABEL} self-test OK: {len(cases())} cases and 2 TAP samples.")
     return 0
 
 
