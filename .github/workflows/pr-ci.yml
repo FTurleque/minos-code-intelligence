@@ -515,6 +515,7 @@ jobs:
             **/target/failsafe-reports/**
             target/site/jacoco-aggregate/**
             target/m15-quality/**
+            target/m21-quality/**
 
   # CI-based SonarCloud analysis (Automatic Analysis is off in the SonarCloud project: the two modes are
   # mutually exclusive). It runs after both Verify jobs and imports the coverage of both operating systems;
