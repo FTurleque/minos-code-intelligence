@@ -28,9 +28,10 @@
 - [ ] 4.2 Mettre à jour `docs/architecture/diagrams/capacites/exploration-semantique.md` (trois exigences, écarts) ; vérifier par `python scripts/docs/check-capability-dossiers.py`
   - Partiel : écarts E10 et E11 ajoutés. Les trois lignes de traçabilité ne peuvent entrer qu'avec l'archivage : le gate exige une ligne par exigence de `openspec/specs/exploration-semantique/spec.md` et refuse une exigence que la spécification courante ne porte pas encore.
 - [x] 4.3 Valider les spécifications par `openspec validate --all --strict`
-- [ ] 4.4 Lister les documents à mettre à jour avant archivage (`benchmarks/scalability/README.md`, `docs/developer/semantic-explorer.md`, `SUIVI.md` de l'audit) ; vérifier que chacun est fait ou nommé comme reste
+- [x] 4.4 Lister les documents à mettre à jour avant archivage (`benchmarks/scalability/README.md`, `docs/developer/semantic-explorer.md`, `SUIVI.md` de l'audit) ; vérifier que chacun est fait ou nommé comme reste
   - Fait : `benchmarks/scalability/README.md` (section « Banc sémantique », JDK 21), `docs/developer/semantic-explorer.md` (renvoi au banc), écarts E10 et E11 de `docs/architecture/diagrams/capacites/exploration-semantique.md`.
   - Reste : la référence datée dans `docs/project/audits/2026-11-15/SUIVI.md` (3.2, après la mesure manuelle 3.1) ; les trois lignes de traçabilité du dossier de capacité, qui n'entrent qu'à l'archivage (4.2) ; la durée observée dans le README (2.3).
+  - Fait : documents faits (`benchmarks/scalability/README.md`, `docs/developer/semantic-explorer.md`, dossier `exploration-semantique`) ; restes nommés : référence complète (2.3, 3.1) et son extrait dans `SUIVI.md` (3.2).
 
 ## Workflow follow-up
 

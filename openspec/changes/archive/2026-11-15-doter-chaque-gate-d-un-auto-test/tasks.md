@@ -18,7 +18,8 @@
 
 - [x] 3.1 AUD-TST-09 — Retirer les dix gates de `GATES_WITHOUT_SELF_TEST` ; vérifier que `python scripts/quality/check-ci-wiring.py` échoue alors en nommant les onze auto-tests non câblés (dix gates et `test_literal_gate.py`)
 - [x] 3.2 AUD-TST-09 — Correction : étapes du job `invariants` de `.github/workflows/pr-ci.yml` pour les dix `--self-test` et `test_literal_gate.py` ; rejouer `python scripts/quality/check-ci-wiring.py`, `python scripts/quality/test_check_ci_wiring.py`, `python scripts/quality/check-single-execution.py`, `python scripts/quality/check-workflow-pins.py`
-- [ ] 3.3 AUD-TST-09 — Preuve : `python .claude/scripts/run_gates.py` vert, durée des dix auto-tests relevée, `git status --porcelain` inchangé après l'exécution ; sur la PR, durée du job `invariants` lue et comparée à son délai de 15 minutes
+- [x] 3.3 AUD-TST-09 — Preuve : `python .claude/scripts/run_gates.py` vert, durée des dix auto-tests relevée, `git status --porcelain` inchangé après l'exécution ; sur la PR, durée du job `invariants` lue et comparée à son délai de 15 minutes
+  - Fait : job `Static invariants (single run)` de la PR #738 (run 43726978252, tête 913c7e95) vert en 4 min 8 s, sous son délai de 15 minutes.
 - [x] 3.4 AUD-TST-09 — Documentation : `docs/developer/quality-gates.md` (règle, module commun, liste fermée et son sens), `.claude/rules/gates-python.md` si la règle des auto-tests y figure, `docs/architecture/diagrams/capacites/controles-de-fusion.md` ; vérifier par `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`
 
 ## 4. Clôture

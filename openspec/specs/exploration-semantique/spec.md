@@ -186,6 +186,153 @@ Le système SHALL rendre le statut et les points d'une projection sans lire de v
 - **THEN** la réponse est `405`
 - **AND** aucune projection n'est créée ni modifiée
 
+### Requirement: Le banc de scalabilité produit une référence pour la projection et les routes de l'explorateur
+Le banc `benchmarks/scalability/` SHALL mesurer, sur des index sémantiques de tailles et de dimension déclarées dans sa configuration, la préparation d'une projection et chaque route de lecture de l'explorateur servie en HTTP sur la boucle locale, pour le stockage local et pour PostgreSQL. Il SHALL écrire ses résultats hors du dépôt et SHALL NOT s'exécuter pendant `mvn verify`.
+
+#### Scenario: Mesure sur le stockage local
+- **GIVEN** la configuration sémantique du banc et un dossier de sortie hors du dépôt
+- **WHEN** le script de lancement du banc sémantique est exécuté
+- **THEN** `result.tsv` contient, pour chaque taille d'index, la durée, le nombre de parcours de l'index, les vecteurs lus et la mémoire de travail de pointe de la préparation, puis la latence p50 et p95, les octets alloués par requête et le tas retenu des routes liste, détail, voisins, état de projection, points et recherche
+- **AND** `git status --porcelain` du dépôt est inchangé
+
+#### Scenario: Deux exécutions comparables
+- **GIVEN** deux exécutions du banc avec la même configuration et la même graine
+- **WHEN** leurs résultats sont comparés
+- **THEN** le nombre de documents, le nombre de passes et le nombre de vecteurs lus sont identiques
+
+#### Scenario: Sortie dans le dépôt refusée
+- **GIVEN** un dossier de sortie situé dans le dépôt
+- **WHEN** le script de lancement est exécuté
+- **THEN** il se termine avec un code non nul avant toute mesure et n'écrit aucun fichier
+
+#### Scenario: Banc absent du build
+- **GIVEN** `./mvnw -B -ntp -pl minos-explorer -am test`
+- **WHEN** le rapport Surefire est lu
+- **THEN** la classe principale du banc n'y figure pas comme test
+
+### Requirement: Une mesure impossible est nommée dans le résultat
+Quand une section du banc sémantique ne peut pas être mesurée, le résultat SHALL contenir pour cette section et ce jeu une ligne qui en donne la raison, sans chemin absolu ni secret, et aucune valeur. Le banc SHALL poursuivre les autres sections. Il SHALL se terminer par un code non nul si un refus n'était pas déclaré attendu, ou si un refus attendu ne s'est pas produit.
+
+#### Scenario: PostgreSQL non configuré
+- **GIVEN** une configuration qui demande la section PostgreSQL et aucune URL de serveur passée au banc
+- **WHEN** le banc est exécuté
+- **THEN** `result.tsv` contient une ligne de refus pour la section PostgreSQL qui nomme le paramètre manquant, les sections locales sont mesurées et le code de sortie est non nul
+
+#### Scenario: Refus attendu au-delà du budget de décodage local
+- **GIVEN** un jeu du stockage local plus grand que ce que le magasin décode en entier, déclaré à refus attendu pour la liste, le détail, les voisins et la recherche sémantique
+- **WHEN** le banc interroge ces routes
+- **THEN** `result.tsv` contient une ligne de refus par route avec le motif rendu par le produit, aucune latence pour ces routes, et le code de sortie est nul
+
+#### Scenario: Refus attendu qui ne se produit plus
+- **GIVEN** le même jeu et un magasin qui sert désormais ces routes
+- **WHEN** le banc est exécuté
+- **THEN** les latences sont écrites et le code de sortie est non nul, avec un message qui demande de retirer la déclaration de refus attendu
+
+#### Scenario: Préparation refusée par le budget
+- **GIVEN** un index dont la préparation dépasse le budget de mémoire de travail demandé
+- **WHEN** le banc mesure la préparation
+- **THEN** la ligne de refus reprend le motif rendu par le service de projection et aucune durée de préparation n'est écrite pour ce jeu
+
+### Requirement: Le harnais du banc sémantique est gardé par un test du build
+Un test exécuté par `mvn verify` SHALL lancer le harnais du banc sémantique sur un index minuscule du stockage local et SHALL vérifier que chaque mesure attendue de la préparation et de chaque route est émise avec une valeur. Une route de l'explorateur ajoutée sans mesure correspondante SHALL faire échouer ce test.
+
+#### Scenario: Toutes les mesures sont émises
+- **GIVEN** un index local de quelques centaines de documents construit par le provider déterministe
+- **WHEN** `./mvnw -B -ntp -pl minos-explorer -am test` exécute le test de fumée du banc
+- **THEN** le test réussit et la liste des mesures émises égale la liste attendue
+
+#### Scenario: Route non mesurée
+- **GIVEN** une route de lecture de l'explorateur absente de la table des routes mesurées du harnais
+- **WHEN** le test de fumée s'exécute
+- **THEN** il échoue en nommant la route
+
+### Requirement: La page de l'explorateur est exécutée par des tests et contrôlée avant toute fusion
+Le script de la page de l'explorateur SHALL être analysé syntaxiquement et exécuté par des tests automatisés, sans dépendance téléchargée, par un gate du job des invariants. Le gate SHALL échouer quand le script ne s'analyse pas, quand un test échoue, quand aucun test n'est exécuté ou quand l'interpréteur JavaScript est absent ou plus ancien que la version minimale déclarée ; il SHALL NOT compter ces cas comme sautés.
+
+#### Scenario: État du dépôt
+- **GIVEN** le dépôt au commit candidat et Node installé
+- **WHEN** `python scripts/quality/check-explorer-front.py` est exécuté
+- **THEN** il se termine avec le code 0 et affiche le nombre de tests exécutés, supérieur à zéro
+
+#### Scenario: Erreur de syntaxe
+- **GIVEN** une copie de `app.js` où une accolade fermante est retirée
+- **WHEN** `python scripts/quality/check-explorer-front.py --self-test` l'évalue
+- **THEN** le cas constate le code 1 et un message qui nomme le fichier
+
+#### Scenario: Interpréteur absent
+- **GIVEN** un `PATH` sans Node
+- **WHEN** le gate est exécuté
+- **THEN** il se termine avec le code 1 et un message qui nomme Node et la version minimale, sans afficher de succès
+
+#### Scenario: Aucun test trouvé
+- **GIVEN** un dossier de tests du front vide
+- **WHEN** l'auto-test du gate l'évalue
+- **THEN** le cas constate le code 1
+
+#### Scenario: Gate non câblé
+- **GIVEN** un `pr-ci.yml` dont le job `invariants` ne lance pas `check-explorer-front.py --self-test`
+- **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté
+- **THEN** il se termine avec le code 1 et nomme le script
+
+### Requirement: Aucun contenu indexé n'atteint un puits de balisage, prouvé par exécution
+Les tests du front SHALL rejouer chaque rendu de la page (liste, détail, voisins, recherche, textes et survol de la carte, bandeaux) avec des valeurs indexées contenant du balisage, dans un environnement qui refuse toute écriture de balisage dans le document et toute génération de code depuis une chaîne. Un rendu qui emprunte un tel puits SHALL faire échouer le test, quel que soit le nom du puits.
+
+#### Scenario: Contenu hostile rendu en texte
+- **GIVEN** des réponses d'API simulées dont le nom de symbole, le chemin et le contenu valent `<script>alert(1)</script>`
+- **WHEN** les tests du front rendent la liste, le détail et les voisins
+- **THEN** chaque valeur est retrouvée telle quelle comme texte d'un nœud, et aucune écriture de balisage n'a été tentée
+
+#### Scenario: Puits introduit sous un nom non listé
+- **GIVEN** une copie de `app.js` où un rendu écrit par `insertAdjacentHTML` ou par un nom de propriété calculé
+- **WHEN** l'auto-test du gate exécute les tests sur cette copie
+- **THEN** le test de puits échoue
+
+#### Scenario: Génération de code depuis une chaîne
+- **GIVEN** une copie de `app.js` qui appelle `eval` ou `new Function` sur une valeur
+- **WHEN** les tests s'exécutent sur cette copie
+- **THEN** l'appel est refusé par l'environnement et le test échoue
+
+### Requirement: La carte et la traduction des états ont un comportement caractérisé par des tests
+Les tests du front SHALL fixer, sur des jeux de points déterministes, le point désigné par le pointeur, les points visibles sous un filtre de nature, les bornes et le point fixe du zoom, la suite des lectures de points et le nombre de recherches et de tracés par rafale de déplacements. Ils SHALL vérifier que le badge, le bandeau d'état, la carte et le détail affichent chaque état, divergence et cause de péremption du contrat par un libellé, jamais par sa constante brute.
+
+#### Scenario: Point désigné
+- **GIVEN** un jeu de points engendré par une graine fixe et une position du pointeur
+- **WHEN** le test interroge la sélection du point
+- **THEN** le point rendu est le plus proche dans le rayon de capture, et aucun point n'est rendu au-delà de ce rayon
+
+#### Scenario: Filtre de nature
+- **GIVEN** des points de deux natures et un filtre sur l'une
+- **WHEN** le test lit les points visibles
+- **THEN** seuls les points de cette nature sont rendus, dans l'ordre de réception
+
+#### Scenario: Lecture paginée des points
+- **GIVEN** une projection simulée de trois pages
+- **WHEN** la carte est chargée
+- **THEN** les requêtes portent les décalages successifs attendus et s'arrêtent quand le total est atteint ou quand l'état change
+
+#### Scenario: État sans libellé
+- **GIVEN** la table des constantes du contrat tenue par les tests, augmentée d'un état inconnu de la page
+- **WHEN** le test de traduction s'exécute
+- **THEN** il échoue en nommant la constante sans libellé
+
+#### Scenario: Badge d'en-tête traduit
+- **GIVEN** un projet dans chacun des états d'index du contrat, `READY` compris
+- **WHEN** le test rend l'en-tête de la page
+- **THEN** le badge affiche le libellé de l'état (`index : prêt` pour `READY`) et jamais la constante brute ; un état hors du contrat est affiché tel que reçu
+
+### Requirement: Un échec de copie de la référence est signalé dans la page
+Quand la copie de la référence d'un document dans le presse-papiers est refusée ou échoue, la page SHALL l'indiquer par un message et SHALL NOT laisser de promesse rejetée sans traitement. Une copie réussie SHALL rester sans message d'erreur.
+
+#### Scenario: Autorisation refusée
+- **GIVEN** un presse-papiers simulé dont l'écriture est rejetée
+- **WHEN** le test active « Copier la référence »
+- **THEN** le bandeau de la page affiche un message d'échec de copie et aucun rejet non géré n'est signalé par l'environnement de test
+
+#### Scenario: Copie réussie
+- **GIVEN** un presse-papiers simulé qui accepte l'écriture
+- **WHEN** le test active « Copier la référence »
+- **THEN** le texte copié est l'identifiant du fichier suivi de ses lignes, et le bandeau reste inchangé
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [exploration-semantique](../../../docs/architecture/diagrams/capacites/exploration-semantique.md)
