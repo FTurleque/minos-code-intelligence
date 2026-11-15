@@ -284,7 +284,9 @@ class FileSemanticSyncConsistencyTest {
         String missingMain = SemanticSyncLockHolderProcess.class.getName() + "Missing";
         try (LockHolder holder = LockHolder.start(missingMain)) {
             AssertionFailedError failure = assertThrows(AssertionFailedError.class, holder::awaitReady);
-            assertTrue(failure.getMessage().contains("exit code 1"), failure.getMessage());
+            // The launcher exits with 1 when the main class cannot be found.
+            assertEquals(1, holder.exitCode(), failure.getMessage());
+            assertTrue(failure.getMessage().contains("exit code 1)"), failure.getMessage());
             assertTrue(failure.getMessage().contains(missingMain), failure.getMessage());
         }
     }
@@ -296,7 +298,8 @@ class FileSemanticSyncConsistencyTest {
             // Without a continuous drain, the child would block on its full stderr pipe and never exit.
             AssertionFailedError failure = assertThrows(AssertionFailedError.class, holder::awaitReady);
             String message = failure.getMessage();
-            assertTrue(message.contains("exit code " + NoisyFailingHolderProcess.EXIT_CODE), message);
+            assertEquals(NoisyFailingHolderProcess.EXIT_CODE, holder.exitCode(), message);
+            assertTrue(message.contains("exit code " + NoisyFailingHolderProcess.EXIT_CODE + ")"), message);
             assertTrue(message.contains(NoisyFailingHolderProcess.LAST_LINE), message);
             assertFalse(message.contains(NoisyFailingHolderProcess.FIRST_LINE), message);
             assertTrue(message.length() < LockHolder.STDERR_TAIL_BYTES + 512,
@@ -364,6 +367,11 @@ class FileSemanticSyncConsistencyTest {
                 exit = "still running after " + EXIT_TIMEOUT;
             }
             fail("lock holder did not signal READY (got: " + ready + ", " + exit + "); stderr tail:\n" + stderrTail());
+        }
+
+        /** Returns the exit code of a child that has already exited. */
+        int exitCode() {
+            return process.exitValue();
         }
 
         /** Closes the child's stdin, which makes it release its lock and exit; reports whether it exited. */
