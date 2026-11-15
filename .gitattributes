@@ -25,3 +25,12 @@ minos-application/src/test/resources/impact/*.txt text eol=lf
 minos-intellij/gradlew text eol=lf
 minos-intellij/gradlew.bat text eol=crlf
 *.jar binary
+
+# POSIX shell scripts (AUD-DEP-02): a Windows clone with core.autocrlf=true would check them out with CRLF, and bash
+# then refuses them ("set: pipefail\r: invalid option name"), from Git for Windows and from WSL2 alike. Pin them to LF
+# like minos-intellij/gradlew above, together with the Maven wrapper script and the properties file it reads.
+# Windows batch files keep CRLF on every system. Guarded by scripts/quality/check-posix-script-eol.py.
+*.sh text eol=lf
+mvnw text eol=lf
+.mvn/wrapper/maven-wrapper.properties text eol=lf
+*.cmd text eol=crlf
