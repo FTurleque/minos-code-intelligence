@@ -29,7 +29,6 @@ Aucune.
 
 - Les corrections de performance de la carte (grille spatiale, cache du filtre, survol limité à une image) : AUD-PERF-10, sprint 4. Ce changement fixe le comportement à préserver et les compteurs à comparer, il n'optimise rien.
 - Le renommage des constantes du contrat v1 et le `code` stable des erreurs : AUD-QUA-03, sprint 8.
-- La traduction du badge d'en-tête, qui affiche l'état d'index brut (`index : READY`) : les tests le caractérisent tel quel, la traduction relève d'AUD-QUA-03.
 - Les neuf variables globales mutables de `app.js` et l'objet `map` global : relevés par le constat, non restructurés ici (une restructuration sans test serait le défaut que ce changement corrige).
 - Un test dans un vrai navigateur, un linter (ESLint) ou un outil de build JavaScript : ils introduiraient une dépendance npm et un verrou.
 - La couverture JaCoCo du module Java `minos-explorer` : changement `borner-la-couverture-des-zones-nouvelles`.

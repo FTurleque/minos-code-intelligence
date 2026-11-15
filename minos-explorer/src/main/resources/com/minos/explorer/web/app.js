@@ -19,6 +19,14 @@ const STATE_HELP = {
   NO_ACTIVE_SNAPSHOT: "Ce projet n'a pas de snapshot actif. Indexez-le avec « minos index <projet> ».",
   STALE: "L'index sémantique est obsolète : la liste, le détail et les voisins restent consultables, la recherche est refusée. Lancez « minos ide semantic-index-sync <projet> »."
 };
+// Short label of every index state for the header badge; a state outside the contract is shown as received.
+const STATE_BADGE = {
+  READY: "prêt",
+  DISABLED: "désactivé",
+  MISSING: "absent",
+  NO_ACTIVE_SNAPSHOT: "sans snapshot actif",
+  STALE: "obsolète"
+};
 const STALE_CAUSES = {
   SEMANTIC_INDEX_SNAPSHOT_STALE: "le snapshot actif a changé depuis l'indexation sémantique",
   SEMANTIC_INDEX_MODEL_STALE: "le modèle configuré n'est plus celui de l'index"
@@ -162,7 +170,7 @@ function renderHeader() {
   }
   select.disabled = projects.length === 0;
   const state = $("state");
-  state.textContent = project ? "index : " + project.indexState : "";
+  state.textContent = project ? "index : " + (STATE_BADGE[project.indexState] || project.indexState) : "";
   state.className = "badge " + (!project ? "" : project.indexState === "READY" ? "ok" : project.indexState === "STALE" ? "warn" : "bad");
   $("model").textContent = project && project.providerId
     ? project.providerId + " · " + project.modelId + " · " + project.dimensions + " dimensions" : "";

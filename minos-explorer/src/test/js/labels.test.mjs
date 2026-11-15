@@ -53,13 +53,23 @@ test("the state banner shows the label of each index state and stale cause, neve
   assert.equal(page.context.stateBanner(), "");
 });
 
-test("the header badge shows the raw index state (characterised: the contract language is decided later)", () => {
+test("the header badge shows the label of every index state, never the raw constant", () => {
   const page = createPage();
-  page.assign("project", project({ indexState: "READY" }));
-  page.assign("projects", [project()]);
+  const badges = page.evaluate("STATE_BADGE");
+  const allStates = [...SILENT.indexStates, ...CONTRACT.indexStates];
+  assert.deepEqual(Object.keys(badges).sort(), [...allStates].sort(), "STATE_BADGE covers exactly the index states");
+  const classes = { READY: "badge ok", STALE: "badge warn" };
+  for (const state of allStates) {
+    page.assign("project", project({ indexState: state }));
+    page.assign("projects", [project()]);
+    page.context.renderHeader();
+    assert.equal(page.$("state").textContent, "index : " + badges[state]);
+    assert.ok(!page.$("state").textContent.includes(state), state + " is shown raw");
+    assert.equal(page.$("state").className, classes[state] || "badge bad");
+  }
+  page.assign("project", project({ indexState: "UNKNOWN_STATE" }));
   page.context.renderHeader();
-  assert.equal(page.$("state").textContent, "index : READY");
-  assert.equal(page.$("state").className, "badge ok");
+  assert.equal(page.$("state").textContent, "index : UNKNOWN_STATE", "an unknown state is shown raw");
 });
 
 async function mapMessageFor(state) {

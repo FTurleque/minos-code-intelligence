@@ -47,7 +47,7 @@ Les tests du front SHALL rejouer chaque rendu de la page (liste, détail, voisin
 - **THEN** l'appel est refusé par l'environnement et le test échoue
 
 ### Requirement: La carte et la traduction des états ont un comportement caractérisé par des tests
-Les tests du front SHALL fixer, sur des jeux de points déterministes, le point désigné par le pointeur, les points visibles sous un filtre de nature, les bornes et le point fixe du zoom, la suite des lectures de points et le nombre de recherches de point et de tracés par rafale de déplacements. Ils SHALL vérifier que le bandeau d'état, le message de la carte et le détail affichent chaque état, divergence et cause de péremption du contrat par un libellé, jamais par sa constante brute.
+Les tests du front SHALL fixer, sur des jeux de points déterministes, le point désigné par le pointeur, les points visibles sous un filtre de nature, les bornes et le point fixe du zoom, la suite des lectures de points et le nombre de recherches et de tracés par rafale de déplacements. Ils SHALL vérifier que le badge, le bandeau d'état, la carte et le détail affichent chaque état, divergence et cause de péremption du contrat par un libellé, jamais par sa constante brute.
 
 #### Scenario: Point désigné
 - **GIVEN** un jeu de points engendré par une graine fixe et une position du pointeur
@@ -69,10 +69,10 @@ Les tests du front SHALL fixer, sur des jeux de points déterministes, le point 
 - **WHEN** le test de traduction s'exécute
 - **THEN** il échoue en nommant la constante sans libellé
 
-#### Scenario: Badge d'en-tête caractérisé
-- **GIVEN** un projet dont l'état d'index est `READY`
+#### Scenario: Badge d'en-tête traduit
+- **GIVEN** un projet dans chacun des états d'index du contrat, `READY` compris
 - **WHEN** le test rend l'en-tête de la page
-- **THEN** le badge affiche encore l'état brut, `index : READY`, hors du champ de l'exigence de libellé ; sa traduction relève du constat AUD-QUA-03 (changement `trancher-la-langue-du-contrat-de-l-explorateur`)
+- **THEN** le badge affiche le libellé de l'état (`index : prêt` pour `READY`) et jamais la constante brute ; un état hors du contrat est affiché tel que reçu
 
 ### Requirement: Un échec de copie de la référence est signalé dans la page
 Quand la copie de la référence d'un document dans le presse-papiers est refusée ou échoue, la page SHALL l'indiquer par un message et SHALL NOT laisser de promesse rejetée sans traitement. Une copie réussie SHALL rester sans message d'erreur.
