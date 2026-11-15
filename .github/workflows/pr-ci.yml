@@ -272,6 +272,16 @@ jobs:
       - name: Docker upgrade evidence checker unit tests
         run: python scripts/release/test_check_docker_upgrade_evidence.py -v
 
+      # AUD-TST-02: the explorer page is parsed and executed under the Node of the runner image (no npm package).
+      - name: Node version used by the explorer front gate
+        run: node --version
+
+      - name: Explorer front gate (app.js parses, node:test files run against the real script in a fake DOM)
+        run: python scripts/quality/check-explorer-front.py
+
+      - name: Explorer front gate self-test (mutated copies must fail)
+        run: python scripts/quality/check-explorer-front.py --self-test
+
   # The ONLY Maven build of a pull request, and so the only executor of the JaCoCo gate, the
   # Linux sandbox toolchain and the delegated cgroup. The path-filtered
   # M19 and M20 workflows used to repeat this exact job on a subset of paths (audit C2); they were
