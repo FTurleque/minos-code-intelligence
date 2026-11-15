@@ -286,6 +286,16 @@ jobs:
       - name: Test platform guards gate self-test
         run: python scripts/quality/check-test-platform-guards.py --self-test
 
+      # AUD-TST-02: the explorer page is parsed and executed under the Node of the runner image (no npm package).
+      - name: Node version used by the explorer front gate
+        run: node --version
+
+      - name: Explorer front gate (app.js parses, node:test files run against the real script in a fake DOM)
+        run: python scripts/quality/check-explorer-front.py
+
+      - name: Explorer front gate self-test (mutated copies must fail)
+        run: python scripts/quality/check-explorer-front.py --self-test
+
       # AUD-TST-09: each literal gate refuses one in-memory mutation per fact it asserts.
       - name: Literal gate self-tests (shared mutation driver and the gates built on it)
         run: |
