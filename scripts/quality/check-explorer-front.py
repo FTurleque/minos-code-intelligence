@@ -80,6 +80,66 @@ def failed_tests(tap: str) -> list[str]:
     return list(dict.fromkeys(FAILED_TEST.findall(tap)))
 
 
+def node_version(node: str, root: Path, environment: dict[str, str], minimum: int) -> tuple[list[str], str]:
+    """Returns ``(failures, Node version)``: Node must start, report a version and reach ``minimum``."""
+    try:
+        answer = run_node(node, ["--version"], root, environment)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return [f"Node.js could not be started ({type(error).__name__}): the gate needs Node >= {minimum}"], ""
+    version = answer.stdout.strip()
+    match = VERSION.match(version)
+    if answer.returncode != 0 or match is None:
+        return [f"Node.js did not report a version (exit code {answer.returncode}): the gate needs Node >= {minimum}"], ""
+    if int(match.group(1)) < minimum:
+        return [f"Node.js {version} is older than the minimum Node >= {minimum}"], version
+    return [], version
+
+
+def syntax_failures(node: str, root: Path, environment: dict[str, str]) -> list[str]:
+    """The page script must exist and parse under ``node --check``."""
+    if not (root / APP_JS).is_file():
+        return [f"{APP_JS} not found"]
+    try:
+        syntax = run_node(node, ["--check", APP_JS], root, environment)
+    except subprocess.TimeoutExpired:
+        return [f"node --check {APP_JS} did not finish within {TIMEOUT_SECONDS} s"]
+    if syntax.returncode != 0:
+        return [f"{APP_JS} does not parse (node --check, exit code {syntax.returncode}):\n{tail(syntax.stderr)}"]
+    return []
+
+
+def front_test_files(root: Path) -> list[str]:
+    """Repository-relative paths of the front test files, sorted."""
+    directory = root / TESTS
+    if not directory.is_dir():
+        return []
+    return [path.relative_to(root).as_posix() for path in sorted(directory.glob(f"*{TEST_SUFFIX}")) if path.is_file()]
+
+
+def result_failures(result: subprocess.CompletedProcess, counters: dict[str, int], file_count: int) -> list[str]:
+    """A failed, cancelled or incomplete ``node --test`` run is a failure."""
+    ran = counters.get("tests", 0)
+    if result.returncode != 0 or counters.get("fail", 0) or counters.get("cancelled", 0):
+        failed = failed_tests(result.stdout)
+        return [f"node --test failed (exit code {result.returncode}, {counters.get('fail', 0)} failed, "
+                f"{counters.get('cancelled', 0)} cancelled, {ran} tests); failed tests: "
+                f"{'; '.join(failed) or 'none named'}\n{tail(result.stdout)}\n{tail(result.stderr)}"]
+    if ran <= 0 or counters.get("pass", 0) != ran:
+        return [f"node --test reported {ran} tests and {counters.get('pass', 0)} passes in {file_count} files: "
+                "no test result can be trusted"]
+    return []
+
+
+def run_tests(node: str, root: Path, environment: dict[str, str], relative: list[str]) -> tuple[list[str], int]:
+    """Returns ``(failures, tests run)`` of ``node --test`` on ``relative``."""
+    try:
+        result = run_node(node, ["--test", "--test-reporter=tap", *relative], root, environment)
+    except subprocess.TimeoutExpired:
+        return [f"node --test did not finish within {TIMEOUT_SECONDS} s"], 0
+    counters = {name: int(value) for name, value in TAP_COUNTER.findall(result.stdout)}
+    return result_failures(result, counters, len(relative)), counters.get("tests", 0)
+
+
 def check(root: Path, path_value: str | None = None,
           minimum: int = MINIMUM_NODE_MAJOR) -> tuple[list[str], int, str]:
     """Returns ``(failures, tests run, Node version)``; any failure means the gate fails."""
@@ -88,47 +148,15 @@ def check(root: Path, path_value: str | None = None,
     if node is None:
         return [f"Node.js not found in PATH: the explorer front tests need Node >= {minimum}"], 0, ""
     environment = node_environment(path_value)
-    try:
-        answer = run_node(node, ["--version"], root, environment)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return [f"Node.js could not be started ({type(error).__name__}): the gate needs Node >= {minimum}"], 0, ""
-    version = answer.stdout.strip()
-    match = VERSION.match(version)
-    if answer.returncode != 0 or match is None:
-        return [f"Node.js did not report a version (exit code {answer.returncode}): the gate needs Node >= {minimum}"], 0, ""
-    if int(match.group(1)) < minimum:
-        return [f"Node.js {version} is older than the minimum Node >= {minimum}"], 0, version
-
-    app = root / APP_JS
-    if not app.is_file():
-        return [f"{APP_JS} not found"], 0, version
-    try:
-        syntax = run_node(node, ["--check", APP_JS], root, environment)
-    except subprocess.TimeoutExpired:
-        return [f"node --check {APP_JS} did not finish within {TIMEOUT_SECONDS} s"], 0, version
-    if syntax.returncode != 0:
-        return [f"{APP_JS} does not parse (node --check, exit code {syntax.returncode}):\n{tail(syntax.stderr)}"], 0, version
-
-    directory = root / TESTS
-    tests = sorted(path for path in directory.glob(f"*{TEST_SUFFIX}") if path.is_file()) if directory.is_dir() else []
-    if not tests:
+    failures, version = node_version(node, root, environment, minimum)
+    if not failures:
+        failures = syntax_failures(node, root, environment)
+    if failures:
+        return failures, 0, version
+    relative = front_test_files(root)
+    if not relative:
         return [f"no test file {TESTS}/*{TEST_SUFFIX}: zero tests is a failure, not a skip"], 0, version
-    relative = [path.relative_to(root).as_posix() for path in tests]
-    try:
-        result = run_node(node, ["--test", "--test-reporter=tap", *relative], root, environment)
-    except subprocess.TimeoutExpired:
-        return [f"node --test did not finish within {TIMEOUT_SECONDS} s"], 0, version
-    counters = {name: int(value) for name, value in TAP_COUNTER.findall(result.stdout)}
-    ran = counters.get("tests", 0)
-    failures: list[str] = []
-    if result.returncode != 0 or counters.get("fail", 0) or counters.get("cancelled", 0):
-        failed = failed_tests(result.stdout)
-        failures.append(f"node --test failed (exit code {result.returncode}, {counters.get('fail', 0)} failed, "
-                        f"{counters.get('cancelled', 0)} cancelled, {ran} tests); failed tests: "
-                        f"{'; '.join(failed) or 'none named'}\n{tail(result.stdout)}\n{tail(result.stderr)}")
-    elif ran <= 0 or counters.get("pass", 0) != ran:
-        failures.append(f"node --test reported {ran} tests and {counters.get('pass', 0)} passes in {len(relative)} files: "
-                        "no test result can be trusted")
+    failures, ran = run_tests(node, root, environment, relative)
     return failures, ran, version
 
 

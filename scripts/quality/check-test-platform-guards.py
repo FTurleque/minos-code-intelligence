@@ -177,6 +177,32 @@ def test_sources(root: Path) -> list[Path]:
             if path.suffix == ".java" and "/src/test/" in "/" + path.relative_to(root).as_posix()]
 
 
+def guard_failures(relative: str, guards: list[tuple[int, bool, str]], declared: bool) -> list[str]:
+    """Failures of the guards of one file: all of them when undeclared, those inside a test method otherwise."""
+    failures: list[str] = []
+    for line, in_test, excerpt in guards:
+        if not declared:
+            failures.append(f"{relative}:{line}: `{excerpt}` - a test restricted to one system must use "
+                            f"@EnabledOnOs (counted as skipped), not an early return (counted as passed)")
+        elif in_test:
+            failures.append(f"{relative}:{line}: `{excerpt}` is in a test method; an exception only covers "
+                            f"extension callbacks and test tooling: use @EnabledOnOs")
+    return failures
+
+
+def exception_failures(exceptions: dict[str, tuple[int, str]], occurrences: dict[str, int]) -> list[str]:
+    """The exception list is a ratchet: each entry has a reason and the exact number of occurrences found."""
+    failures: list[str] = []
+    for relative, (expected, reason) in sorted(exceptions.items()):
+        actual = occurrences.get(relative, 0)
+        if not reason.strip():
+            failures.append(f"exception {relative} has no written reason")
+        if actual != expected:
+            failures.append(f"exception {relative} declares {expected} occurrence(s), found {actual}: "
+                            f"tighten the exception list")
+    return failures
+
+
 def check(root: Path, exceptions: dict[str, tuple[int, str]] | None = None) -> tuple[list[str], int, int]:
     exceptions = EXCEPTIONS if exceptions is None else exceptions
     files = test_sources(root)
@@ -187,27 +213,15 @@ def check(root: Path, exceptions: dict[str, tuple[int, str]] | None = None) -> t
     for path in files:
         relative = path.relative_to(root).as_posix()
         guards = platform_guards(path.read_text(encoding="utf-8"))
-        if not guards:
-            continue
-        occurrences[relative] = len(guards)
-        for line, in_test, excerpt in guards:
-            if relative not in exceptions:
-                failures.append(f"{relative}:{line}: `{excerpt}` - a test restricted to one system must use "
-                                f"@EnabledOnOs (counted as skipped), not an early return (counted as passed)")
-            elif in_test:
-                failures.append(f"{relative}:{line}: `{excerpt}` is in a test method; an exception only covers "
-                                f"extension callbacks and test tooling: use @EnabledOnOs")
-    for relative, (expected, reason) in sorted(exceptions.items()):
-        actual = occurrences.get(relative, 0)
-        if not reason.strip():
-            failures.append(f"exception {relative} has no written reason")
-        if actual != expected:
-            failures.append(f"exception {relative} declares {expected} occurrence(s), found {actual}: "
-                            f"tighten the exception list")
+        if guards:
+            occurrences[relative] = len(guards)
+            failures.extend(guard_failures(relative, guards, relative in exceptions))
+    failures.extend(exception_failures(exceptions, occurrences))
     return failures, len(files), len(exceptions)
 
 
-def self_test() -> int:
+def self_test_cases() -> list[tuple[str, dict[str, str], dict[str, tuple[int, str]], int, str]]:
+    """(name, files, exceptions, expected exit code, text expected in the failures)."""
     windows_two_lines = ("class A {\n    @Test\n    void t() {\n        if (!CommandLocator.isWindows()) {\n"
                          "            return;\n        }\n        run();\n    }\n}\n")
     one_line = "class B {\n    @Test\n    void t() {\n        if (!SystemInfo.isLinux()) return;\n        run();\n    }\n}\n"
@@ -231,8 +245,7 @@ def self_test() -> int:
                 "    }\n}\n")
     in_test = "class T {\n    @Test\n    void t() {\n        if (!windows()) return;\n    }\n}\n"
     ext = "m/src/test/java/Ext.java"
-    cases = [
-        # (name, files, exceptions, expected exit code, text expected in the failures)
+    return [
         ("two-line guard", {"m/src/test/java/A.java": windows_two_lines}, {}, 1, "m/src/test/java/A.java:4"),
         ("one-line guard", {"m/src/test/java/B.java": one_line}, {}, 1, "m/src/test/java/B.java:4"),
         ("local variable from os.name", {"m/src/test/java/C.java": local}, {}, 1, "m/src/test/java/C.java:5"),
@@ -252,17 +265,28 @@ def self_test() -> int:
         ("exception in a test method refused", {"m/src/test/java/T.java": in_test},
          {"m/src/test/java/T.java": (1, "tooling")}, 1, "is in a test method"),
     ]
+
+
+def case_errors(name: str, files: dict[str, str], exceptions: dict[str, tuple[int, str]], expected: int,
+                needle: str) -> list[str]:
+    """Runs the gate on a temporary tree holding ``files`` and compares its verdict with the expected one."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for relative, content in files.items():
+            (root / relative).parent.mkdir(parents=True, exist_ok=True)
+            (root / relative).write_text(content, encoding="utf-8")
+        failures, _, _ = check(root, exceptions)
+    code = 1 if failures else 0
+    if code != expected or (needle and not any(needle in failure for failure in failures)):
+        return [f"{name}: expected code {expected} with '{needle}', got {code}: {failures}"]
+    return []
+
+
+def self_test() -> int:
+    cases = self_test_cases()
     errors: list[str] = []
-    for name, files, exceptions, expected, needle in cases:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            for relative, content in files.items():
-                (root / relative).parent.mkdir(parents=True, exist_ok=True)
-                (root / relative).write_text(content, encoding="utf-8")
-            failures, _, _ = check(root, exceptions)
-            code = 1 if failures else 0
-            if code != expected or (needle and not any(needle in failure for failure in failures)):
-                errors.append(f"{name}: expected code {expected} with '{needle}', got {code}: {failures}")
+    for case in cases:
+        errors.extend(case_errors(*case))
     # The real exception list must match the repository it guards.
     real_failures, real_files, _ = check(DEFAULT_ROOT)
     stale = [failure for failure in real_failures if failure.startswith("exception ")]

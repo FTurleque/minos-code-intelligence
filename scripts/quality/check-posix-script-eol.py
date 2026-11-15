@@ -9,8 +9,9 @@ LF on every checkout; this gate keeps the rule covering each new script.
 A POSIX script is a file tracked by Git whose name ends with ``.sh``, or whose first recorded line starts with ``#!``
 and names ``sh``, ``bash``, ``dash``, ``ksh`` or ``zsh`` right after the ``#!``, a ``/`` or ``env`` and its options
 (``#!/usr/bin/fish`` is not one), outside any ``fixtures/`` directory. The properties file of the Maven wrapper, read
-by the POSIX ``mvnw``, is checked by name when it is tracked. For each file, two facts are read from Git itself (``git ls-files --eol`` and ``git grep --cached``): the
-resolved attribute must carry the ``eol=lf`` token and the recorded content must have no carriage return (``i/lf``).
+by the POSIX ``mvnw``, is checked by name when it is tracked. For each file, two facts are read from Git itself
+(``git ls-files --eol`` and ``git grep --cached``): the resolved attribute must carry the ``eol=lf`` token and the
+recorded content must have no carriage return (``i/lf``).
 Git resolves ``eol=lf`` alone as ``text eol=lf``; ``-text eol=lf`` disables the conversion and is refused.
 
 Fail-closed: ``git`` missing, a root that is not the top level of a Git repository, or zero POSIX script found is a
@@ -193,14 +194,14 @@ def check_without_git(root: Path, empty_directory: Path) -> list[str]:
             os.environ["PATH"] = saved
 
 
-def self_test() -> int:
+def self_test_cases() -> list[tuple]:
+    """(name, files, attributes, attributes staged after the files, expected exit code, expected message fragment,
+    expected number of files checked on success)."""
     lf_script = b"#!/usr/bin/env bash\nset -euo pipefail\necho ok\n"
     crlf_script = lf_script.replace(b"\n", b"\r\n")
     rules = "*.sh text eol=lf\noutil text eol=lf\n"
     fish_script = b"#!/usr/bin/fish\necho ok\n"
-    # (name, files, attributes, attributes staged after the files, expected exit code, expected message fragment,
-    #  expected number of files checked on success)
-    cases = [
+    return [
         ("script without attribute", {"build.sh": lf_script}, None, False, 1, "add '*.sh text eol=lf'", None),
         ("shebang script without extension", {"outil": lf_script, "a.sh": lf_script}, "*.sh text eol=lf\n", False, 1,
          "outil: no 'eol=lf' attribute (attr/); add 'outil text eol=lf' to .gitattributes", None),
@@ -222,30 +223,46 @@ def self_test() -> int:
                                   "tool.py": b"#!/usr/bin/env python3\n"},
          rules + "bin/run text eol=lf\nbin/env-s text eol=lf\n", False, 0, None, 4),
     ]
+
+
+def case_failures(base: Path, cases: list[tuple]) -> list[str]:
+    """Builds one repository per case and compares the gate's verdict with the expected one."""
     failures: list[str] = []
+    for index, (name, files, attributes, after, expected, fragment, checked) in enumerate(cases):
+        repository = base / f"case-{index}"
+        make_repository(repository, files, attributes, after)
+        found, count = check(repository)
+        code = 1 if found else 0
+        if code != expected or (fragment and not any(fragment in line for line in found)):
+            failures.append(f"{name}: exit {code} (expected {expected}), failures {found}")
+        if checked is not None and count != checked:
+            failures.append(f"{name}: {count} files checked (expected {checked})")
+    return failures
+
+
+def root_failures(base: Path, compliant: Path) -> list[str]:
+    """The roots the gate refuses: outside a repository, a subdirectory, and a PATH without git."""
+    failures: list[str] = []
+    outside = base / "not-a-repository"
+    outside.mkdir()
+    found, _ = check(outside)
+    if not found or "not a Git repository" not in found[0] or str(base) in found[0] or str(outside) in found[0]:
+        failures.append(f"directory outside a repository: {found}")
+    found, _ = check(compliant / "bin")
+    if not found or "top level" not in found[0]:
+        failures.append(f"subdirectory of a repository: {found}")
+    found = check_without_git(compliant, base / "empty-path")
+    if found != ["git was not found on the PATH; line endings cannot be read"]:
+        failures.append(f"git missing from the PATH: {found}")
+    return failures
+
+
+def self_test() -> int:
+    cases = self_test_cases()
     with tempfile.TemporaryDirectory() as scratch:
         base = Path(scratch)
-        for index, (name, files, attributes, after, expected, fragment, checked) in enumerate(cases):
-            repository = base / f"case-{index}"
-            make_repository(repository, files, attributes, after)
-            found, count = check(repository)
-            code = 1 if found else 0
-            if code != expected or (fragment and not any(fragment in line for line in found)):
-                failures.append(f"{name}: exit {code} (expected {expected}), failures {found}")
-            if checked is not None and count != checked:
-                failures.append(f"{name}: {count} files checked (expected {checked})")
-        outside = base / "not-a-repository"
-        outside.mkdir()
-        found, _ = check(outside)
-        if not found or "not a Git repository" not in found[0] or scratch in found[0] or str(outside) in found[0]:
-            failures.append(f"directory outside a repository: {found}")
-        compliant = base / f"case-{len(cases) - 1}"
-        found, _ = check(compliant / "bin")
-        if not found or "top level" not in found[0]:
-            failures.append(f"subdirectory of a repository: {found}")
-        found = check_without_git(compliant, base / "empty-path")
-        if found != ["git was not found on the PATH; line endings cannot be read"]:
-            failures.append(f"git missing from the PATH: {found}")
+        failures = case_failures(base, cases)
+        failures += root_failures(base, base / f"case-{len(cases) - 1}")
     if gate_cli.report_failures(f"{LABEL} SELF-TEST", failures):
         return 1
     print(f"{LABEL} SELF-TEST SUCCESS (cases={len(cases) + 3})")
