@@ -5,8 +5,9 @@ auto-test sont des étapes sans condition du job `invariants` (`find_ci_wiring_v
 Ce module n'est pas un gate : il n'a ni `check-` dans son nom ni auto-test propre. Il est exercé par
 les auto-tests des gates qui l'utilisent (`test_check_single_execution.py`, `test_check_ci_wiring.py`,
 `test_check_image_pins.py`, `test_check_compose_limits.py`, `test_check_twin_script_functions.py`,
-`check-milestone-artifact-references.py --self-test`). Un gate qui l'importe n'a pas de repli : si le
-module manque, l'import échoue et le gate se termine avec un code non nul.
+`check-milestone-artifact-references.py --self-test`, `check-jacoco.py --self-test`). Un gate qui
+l'importe n'a pas de repli : si le module manque, l'import échoue et le gate se termine avec un code
+non nul.
 
 Un gate l'importe ainsi, que le script soit lancé directement ou chargé par un auto-test :
 
@@ -107,6 +108,16 @@ def report_failures(label: str, failures: list[str]) -> bool:
         print(f"{label} FAILED: {failure}", file=sys.stderr)
     return bool(failures)
 
+
+
+def report_failure_list(label: str, failures: list[str]) -> bool:
+    """Écrit `<label> FAILED` puis chaque échec sous la forme ` - <échec>` sur stderr ; rend True s'il y en a."""
+    if not failures:
+        return False
+    print(f"{label} FAILED", file=sys.stderr)
+    for failure in failures:
+        print(f" - {failure}", file=sys.stderr)
+    return True
 
 def run(doc: str, default_root: Path, check: Callable[[Path], tuple], label: str,
         success: Callable[..., str]) -> int:

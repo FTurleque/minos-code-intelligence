@@ -157,10 +157,7 @@ def check(root: Path) -> tuple[list[str], int, int]:
 def main(argv: list[str] | None = None) -> int:
     root = gate_cli.parse_root(__doc__, DEFAULT_ROOT, argv)
     failures, identical, zones = check(root)
-    if failures:
-        print("JOB OBJECT LAUNCHER PARITY GATE FAILED", file=sys.stderr)
-        for failure in failures:
-            print(f" - {failure}", file=sys.stderr)
+    if gate_cli.report_failure_list("JOB OBJECT LAUNCHER PARITY GATE", failures):
         return 1
     print(f"JOB OBJECT LAUNCHER PARITY GATE SUCCESS (identical fragments={identical}, assumed divergent zones={zones})")
     return 0
