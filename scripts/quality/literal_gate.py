@@ -69,6 +69,7 @@ class _State:
         self.disk: dict[str, str | None] = {}
         self.reads: dict[str, str] = {}
         self.facts: list[Fact] = []
+        self.normalised: dict[tuple[Normalise, str], str] = {}
 
     def reset(self, root: Path, overlay: dict[str, str | None]) -> None:
         if root != self.root:
@@ -77,6 +78,7 @@ class _State:
         self.overlay = overlay
         self.reads = {}
         self.facts = []
+        self.normalised = {}
 
 
 _STATE = _State()
@@ -111,6 +113,14 @@ def _same(value: str) -> str:
     return value
 
 
+def _normalised(normalise: Normalise, text: str) -> str:
+    """``normalise(text)``, computed once per evaluation: a gate checks many literals against the same document."""
+    key = (normalise, text)
+    if key not in _STATE.normalised:
+        _STATE.normalised[key] = normalise(text)
+    return _STATE.normalised[key]
+
+
 # Primitives: they record the fact and return whether it holds, for the gates that compose their own message.
 
 def read(relative: str, missing: str = "missing required file: {path}") -> str:
@@ -131,13 +141,13 @@ def exists(relative: str) -> bool:
 def contains(label: str, text: str, literal: str, normalise: Normalise | None = None) -> bool:
     normalise = normalise or _same
     _record("require", label, literal, text)
-    return normalise(literal) in normalise(text)
+    return normalise(literal) in _normalised(normalise, text)
 
 
 def lacks(label: str, text: str, literal: str, normalise: Normalise | None = None) -> bool:
     normalise = normalise or _same
     _record("forbid", label, literal, text)
-    return normalise(literal) not in normalise(text)
+    return normalise(literal) not in _normalised(normalise, text)
 
 
 def matches(label: str, text: str, pattern: str, flags: int = 0) -> bool:
