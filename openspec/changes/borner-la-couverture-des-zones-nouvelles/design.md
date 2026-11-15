@@ -27,6 +27,23 @@ HEAD `89be3fb4`. Aucun build n'a été lancé : les mesures de couverture ne son
 | Le résultat `jacoco-gate.json` est écrit dans `target/m21-quality/`, dossier que l'artefact `pr-validation` ne publie pas ; le journal du job porte une ligne `JaCoCo <scope>: <statut> line=…` par scope | `scripts/quality/check-jacoco.py:542`, `:692` ; `.github/workflows/pr-ci.yml:491-495` |
 | `com/minos/cli/ExplorerCommandLine` et `com/minos/cli/ExplorerLaunchRoute` portent le lancement de l'explorateur côté CLI | `minos-cli/src/main/java/com/minos/cli/` |
 
+## Mesure de référence (tâche 1.1)
+
+Run `pr-ci.yml` 43650742311 (`push` sur `main`, commit `89be3fb4`, 2026-11-14), artefacts `pr-validation-Linux-1` et `pr-validation-Windows-1`, rapport agrégé `target/site/jacoco-aggregate/jacoco.xml` de chaque job `Verify`. Chaque préfixe désigne au moins une classe mesurée (E5 levé) ; `com/minos/application/Wsl` désigne 6 classes à 12 lignes et aucune branche.
+
+| Périmètre | Linux ligne / branche | Windows ligne / branche | Plancher retenu |
+|---|---|---|---|
+| `explorer-surface` (45 classes) | 0,950 (958/1008) / 0,882 (456/517) | identique | 0,93 / 0,86 |
+| `com/minos/explorer/RequestGuard` | 1,000 (26/26) / 1,000 (18/18) | identique | 0,95 / 0,95 |
+| `com/minos/explorer/SessionToken` | 1,000 (13/13) / 1,000 (4/4) | identique | 0,95 / 0,95 |
+| `com/minos/explorer/ListeningPolicy` | 0,821 (23/28) / 1,000 (24/24) | identique | 0,77 / 0,95 |
+| `wsl-lane` (34 classes) | 0,941 (822/874) / 0,847 (365/431) | 0,922 (806/874) / 0,833 (359/431) | Linux 0,92 / 0,82 ; Windows 0,90 / 0,81 |
+| `semantic-projection` (35 classes) | 0,979 (654/668) / 0,887 (236/266) | identique | 0,95 / 0,86 |
+| `storage-codec-and-state` avec `QueryViewMemoryBudget` (24 classes) | 0,924 (1660/1796) / 0,797 (509/639) | 0,924 / 0,798 (510/639) | inchangé : 0,89 / 0,73 |
+| `com/minos/storage/codec/QueryViewMemoryBudget` | 0,943 (115/122) / 0,868 (59/68) | identique | 0,89 / 0,81 |
+
+Le gate modifié, rejoué sur ces deux rapports, rend `PASS` pour les trois scopes, le scope `storage-codec-and-state` et les quatre planchers de classe (les autres échecs de ce rejeu viennent du poste : scopes de l'autre système, rapport de `minos-app` absent, `m30-postgresql-pgvector` sans `--skip-scope`).
+
 ## Écarts
 
 | Écart | Source A | Source B | Suite proposée |
@@ -74,12 +91,12 @@ HEAD `89be3fb4`. Aucun build n'a été lancé : les mesures de couverture ne son
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Les zones créées après la mesure de référence sont sous un scope nominatif | Les trois scopes sont évalués | D1, D3 | 1.1, 1.3, 1.5 | à produire : ligne `JaCoCo <scope>: PASS` du journal des deux jobs `Verify` et `jacoco-gate.json` de l'artefact (D6) |
-| idem | Les tests d'une zone disparaissent | D2 | 1.2, 1.3 | à écrire : cas de `--self-test` |
-| idem | Une zone est renommée sans son scope | règle existante du préfixe mort | 1.2 | `--self-test`, cas « dead prefix » existant |
-| idem | Déclaration retirée du gate | D5 | 1.2, 1.3 | à écrire : cas de `--self-test` |
-| controles-de-fusion › La garde de la surface HTTP locale a un plancher de classe | Garde affaiblie ; Classe de garde absente | D3 | 1.2, 1.3 | à écrire : cas de `--self-test` ; `jacoco-gate.json` |
-| controles-de-fusion › Le budget mémoire des vues a un plancher de classe | Budget sous son plancher ; État du dépôt | D4 | 1.2, 1.4, 1.5 | à écrire : cas de `--self-test` ; `jacoco-gate.json` |
+| controles-de-fusion › Les zones créées après la mesure de référence sont sous un scope nominatif | Les trois scopes sont évalués | D1, D3 | 1.1, 1.3, 1.5 | rejeu local du gate sur les rapports du run 43650742311 (PASS sur les deux systèmes) ; **manquant** : ligne `JaCoCo <scope>: PASS` des deux jobs `Verify` de la PR et `jacoco-gate.json` de son artefact (D6) |
+| idem | Les tests d'une zone disparaissent | D2 | 1.2, 1.3 | règle existante du plancher de scope, cas « threshold breach » de `--self-test` ; aucun cas propre à `explorer-surface` |
+| idem | Une zone est renommée sans son scope | règle existante du préfixe mort | 1.2 | `--self-test`, cas « dead prefix beside live » et « dead package prefix » |
+| idem | Déclaration retirée du gate | D5 | 1.2, 1.3 | `--self-test`, cas « real table declares the new zones and their class floors » et « table deprived of a zone scope is refused » (`missing_zone_declarations`) |
+| controles-de-fusion › La garde de la surface HTTP locale a un plancher de classe | Garde affaiblie ; Classe de garde absente | D3 | 1.2, 1.3 | `--self-test`, cas « guard class under its floor in a passing scope » et « guard class absent from the report » ; **manquant** : `jacoco-gate.json` de l'artefact de la PR |
+| controles-de-fusion › Le budget mémoire des vues a un plancher de classe | Budget sous son plancher ; État du dépôt | D4 | 1.2, 1.4, 1.5 | `--self-test`, cas « real table declares… » (déclaration) et « weak live prefix » (règle du plancher de classe) ; rejeu local sur le run 43650742311 ; **manquant** : `jacoco-gate.json` de l'artefact de la PR |
 
 ## Questions ouvertes
 

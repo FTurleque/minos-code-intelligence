@@ -33,7 +33,7 @@ Quand une section du banc sémantique ne peut pas être mesurée, le résultat S
 - **THEN** `result.tsv` contient une ligne de refus pour la section PostgreSQL qui nomme le paramètre manquant, les sections locales sont mesurées et le code de sortie est non nul
 
 #### Scenario: Refus attendu au-delà du budget de décodage local
-- **GIVEN** un jeu du stockage local plus grand que ce que le magasin décode en entier, déclaré à refus attendu pour la liste, le détail et les voisins
+- **GIVEN** un jeu du stockage local plus grand que ce que le magasin décode en entier, déclaré à refus attendu pour la liste, le détail, les voisins et la recherche sémantique
 - **WHEN** le banc interroge ces routes
 - **THEN** `result.tsv` contient une ligne de refus par route avec le motif rendu par le produit, aucune latence pour ces routes, et le code de sortie est nul
 

@@ -104,6 +104,7 @@ existant et l'exécution sous WSL2 restent des preuves manuelles.
 | E4 | Le refus « gate JaCoCo lancé dans les invariants » n'a aucun auto-test, contrairement à la règle des gates | `scripts/remediation/check-audit-remediation-v2.py:111` | [Proposition] Auto-test ou reprise par un gate testé |
 | E5 | Le contexte SonarCloud (`source: application`) est compté parmi les contextes « résolus » sans vérification | `scripts/quality/check-ci-wiring.py:250` | [Proposition] Compter à part les contextes d'application |
 | E6 | « Branche à jour » n'apparaît ni dans la spec, ni dans la liste déclarée, ni dans `verify-ruleset.py` | `scripts/quality/verify-ruleset.py:39` | [Question] À spécifier et à mesurer ? |
+| E7 | Les planchers de `explorer-surface`, `wsl-lane`, `semantic-projection` et de `QueryViewMemoryBudget` sortent du run `pr-ci.yml` 43650742311 (`main` 89be3fb4) ; leur évaluation sur les deux jobs `Verify` d'une PR n'est pas encore observée ; les trois exigences du changement `borner-la-couverture-des-zones-nouvelles` entrent dans la traçabilité à son archivage (preuves : `scripts/quality/check-jacoco.py:364` et les cas « table deprived of a zone scope is refused », « guard class under its floor in a passing scope », « guard class absent from the report » de `--self-test`) | `scripts/quality/check-jacoco.py:44` | [Proposition] Lire les lignes `JaCoCo <scope>: PASS` et `jacoco-gate.json` de l'artefact de la PR |
 
 ## Questions ouvertes
 

@@ -1,0 +1,20 @@
+{
+  "benchmark": "semantic-exploration",
+  "mainClass": "com.minos.explorer.SemanticExplorerBenchmark",
+  "jvmArguments": ["-Xmx8g"],
+  "dimensions": 768,
+  "seed": 42,
+  "warmup": 3,
+  "iterations": 15,
+  "deepPage": 10,
+  "maxPoints": 100000,
+  "maxMemoryMegabytes": 256,
+  "requestTimeoutSeconds": 300,
+  "datasets": [
+    { "storage": "local", "documents": 25000 },
+    { "storage": "local", "documents": 32768 },
+    { "storage": "local", "documents": 100000, "expectRefusal": ["DOCUMENTS", "DOCUMENT", "NEIGHBORS", "SEARCH"] },
+    { "storage": "postgresql", "documents": 25000 },
+    { "storage": "postgresql", "documents": 100000 }
+  ]
+}
