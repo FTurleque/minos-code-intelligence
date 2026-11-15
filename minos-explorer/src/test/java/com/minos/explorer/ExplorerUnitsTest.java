@@ -179,7 +179,7 @@ class ExplorerUnitsTest {
 
     @Test
     void theEmbeddedPageIsAClosedSetOfResources() throws Exception {
-        assertEquals(java.util.Set.of("/", "/index.html", "/app.js", "/app.css"), WebResources.paths());
+        assertEquals(java.util.Set.of("/", "/index.html", "/map.js", "/app.js", "/app.css"), WebResources.paths());
         assertEquals("text/html; charset=utf-8", WebResources.find("/").orElseThrow().mediaType());
         assertEquals(Optional.empty(), WebResources.find("/pom.xml"));
         WebResources.Resource page = WebResources.find("/").orElseThrow();

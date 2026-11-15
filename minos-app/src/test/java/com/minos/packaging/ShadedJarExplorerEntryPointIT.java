@@ -33,7 +33,8 @@ class ShadedJarExplorerEntryPointIT {
             assertEquals(List.of(PROVIDER), serviceLines(jar, ROUTE_SERVICE));
             for (String entry : List.of("com/minos/app/ExplorerLaunchRouteProvider.class",
                     "com/minos/cli/ExplorerLaunchRoute.class", "com/minos/explorer/ExplorerSession.class",
-                    "com/minos/explorer/web/index.html", "com/minos/explorer/web/app.js",
+                    "com/minos/explorer/web/index.html", "com/minos/explorer/web/map.js",
+                    "com/minos/explorer/web/app.js",
                     "com/minos/explorer/web/app.css")) {
                 assertNotNull(jar.getJarEntry(entry), () -> "missing from the shaded JAR: " + entry);
             }
