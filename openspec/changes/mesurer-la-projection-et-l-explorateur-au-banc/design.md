@@ -97,6 +97,18 @@ Aucun objectif chiffré : ce changement produit la mesure, il ne la juge pas. St
 | AUD-PERF-03 — liste, détail et voisins décodent l'index entier | sur `local`, latence p50 / p95 et octets alloués par requête de la liste, du détail et des voisins à 25 000 et à 32 768 documents ; première requête à froid ; tas retenu ; et le **refus constaté** de ces trois routes à 100 000 documents. Les mêmes routes sont mesurées sous PostgreSQL à 25 000 et 100 000 | mêmes lignes ; une pagination sans chargement se lit dans les octets alloués par requête, qui cessent de croître avec la taille, et dans la disparition du refus à 100 000 documents (le jeu perd alors son `expectRefusal`) |
 | AUD-PERF-04 (sprint 5) — caches hors budget | tas retenu après une page d'explorateur et après la lecture des points | même mesure, bénéficiaire sans être prérequis |
 
+Lignes exactes de `result.tsv` à comparer (format `METRIC section jeu mesure valeur` ; un jeu au-delà du budget de construction porte le suffixe `-beyond-build-budget`, soit `local-n100000-d768-beyond-build-budget` et `postgresql-n100000-d768-beyond-build-budget` à 768 dimensions) :
+
+| Constat | Section | Jeux | Mesures |
+|---|---|---|---|
+| AUD-PERF-01 | `projection` | `postgresql-n25000-d768`, `postgresql-n100000-d768-beyond-build-budget` | `durationMillis`, `passes`, `vectorPages`, `vectorsRead` |
+| AUD-PERF-01 | `explorer` | mêmes jeux | `list-first.p50Micros`, `list-first.p95Micros`, `list-deep.p50Micros`, `list-deep.p95Micros` |
+| AUD-PERF-02 | `projection` | `local-n25000-d768`, `local-n32768-d768`, `local-n100000-d768-beyond-build-budget`, `postgresql-n25000-d768`, `postgresql-n100000-d768-beyond-build-budget` | `passes`, `vectorsRead`, `durationMillis`, `peakWorkingBytes` |
+| AUD-PERF-03 | `explorer` | `local-n25000-d768`, `local-n32768-d768`, et les deux jeux PostgreSQL | `list-first.*`, `list-deep.*`, `detail.*`, `neighbors.*` (`coldMicros`, `p50Micros`, `p95Micros`, `allocatedBytesPerRequest`) |
+| AUD-PERF-03 | `heap` | mêmes jeux | `retainedAfterListBytes`, `retainedAfterNeighborsBytes` |
+| AUD-PERF-03 | `REFUSED explorer` | `local-n100000-d768-beyond-build-budget` | raisons `list-first:`, `list-deep:`, `detail:`, `neighbors:` ; leur disparition fait échouer le banc tant que `expectRefusal` reste déclaré |
+| AUD-PERF-04 | `heap` | tous | `retainedAfterListBytes`, `retainedAfterAllPointsBytes` |
+
 Ce que le banc ne donne pas : le temps de rendu dans le navigateur (AUD-PERF-10, couvert par les compteurs du front), ni une mesure sur un index produit par un modèle d'embedding réel.
 
 ## Vérification
@@ -111,11 +123,13 @@ Ce que le banc ne donne pas : le temps de rendu dans le navigateur (AUD-PERF-10,
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › Le banc de scalabilité produit une référence pour la projection et les routes de l'explorateur | Mesure sur le stockage local ; Deux exécutions comparables | D1, D2, D3 | 1.2, 2.1, 2.3, 3.1 | à produire : `result.tsv` de deux exécutions |
-| idem | Sortie dans le dépôt refusée | D5 | 2.1, 2.2 | à écrire : contrôle du script, rejoué à la main |
-| idem | Banc absent du build | D1 | 1.2 | rapport Surefire de `minos-explorer` |
-| exploration-semantique › Une mesure impossible est nommée dans le résultat | PostgreSQL non configuré ; Refus attendu au-delà du budget de décodage local ; Refus attendu qui ne se produit plus ; Préparation refusée par le budget | D4, D7 | 1.3, 3.1 | à écrire : cas du test de fumée |
-| exploration-semantique › Le harnais du banc sémantique est gardé par un test du build | Toutes les mesures sont émises ; Route non mesurée | D6 | 1.1, 1.2 | à écrire : test de fumée |
+| exploration-semantique › Le banc de scalabilité produit une référence pour la projection et les routes de l'explorateur | Mesure sur le stockage local ; Deux exécutions comparables | D1, D2, D3 | 1.2, 2.1, 2.3, 3.1 | partiel : forme des mesures prouvée par `SemanticExplorerBenchmarkSmokeTest` et par l'exécution réduite de 2.2 ; **manque** la référence complète et sa seconde exécution (3.1), dont les valeurs PostgreSQL, qui demandent le serveur de test |
+| idem | Sortie dans le dépôt refusée | D5 | 2.1, 2.2 | contrôle de `run-semantic-benchmark.ps1`, rejoué à la main (2.2) sous PowerShell 7 et Windows PowerShell 5.1 |
+| idem | Banc absent du build | D1 | 1.2 | `SemanticExplorerBenchmark` ne correspond à aucun motif d'inclusion de Surefire (le `pom.xml` parent n'en déclare aucun) ; rapport Surefire de `minos-explorer` sans cette classe |
+| exploration-semantique › Une mesure impossible est nommée dans le résultat | PostgreSQL non configuré ; Refus attendu au-delà du budget de décodage local ; Refus attendu qui ne se produit plus ; Préparation refusée par le budget | D4, D7 | 1.3, 3.1 | `SemanticExplorerBenchmarkSmokeTest` (cas PostgreSQL sans URL, budget, refus attendu observé et absent, raisons sans chemin ni secret) ; le refus attendu y est simulé par une réponse `500` de la surface ; le refus réel du magasin local à 100 000 documents reste à constater (3.1) |
+| exploration-semantique › Le harnais du banc sémantique est gardé par un test du build | Toutes les mesures sont émises ; Route non mesurée | D6 | 1.1, 1.2 | `SemanticExplorerBenchmarkSmokeTest` (liste exacte des mesures, `everyRouteOfTheSurfaceHasAMeasuredScenario`) |
+
+Écart de réalisation : le harnais compte les pages de vecteurs lues (`vectorPages`) par le rappel de progression de la préparation, appelé une fois par page, en local comme sous PostgreSQL ; aucun compteur n'est ajouté au produit.
 
 ## Questions ouvertes
 
