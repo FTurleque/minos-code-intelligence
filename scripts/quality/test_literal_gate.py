@@ -156,10 +156,8 @@ class VacuousGateTest(DriverTestCase):
 
     def test_an_optional_read_is_reported(self):
         def evaluate():
-            try:
+            with contextlib.suppress(lg.GateFailure):
                 lg.read("docs/guide.md")
-            except lg.GateFailure:
-                pass
             return "OK"
         self.assert_refused(evaluate, "accepted", "docs/guide.md")
 
