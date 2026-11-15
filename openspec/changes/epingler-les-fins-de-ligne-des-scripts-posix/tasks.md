@@ -3,7 +3,7 @@
 ## 1. Gate des fins de ligne (AUD-DEP-02)
 
 - [x] 1.1 AUD-DEP-02 — Rouge : écrire `scripts/quality/check-posix-script-eol.py` (lecture par `git ls-files --eol -z`, scripts `*.sh` et fichiers à `#!` d'un interpréteur POSIX, fichier de propriétés du wrapper, échec fermé) ; vérifier que `python scripts/quality/check-posix-script-eol.py` échoue au HEAD en nommant les treize `*.sh` et `mvnw` (`controles-de-fusion` › Un script POSIX est extrait en LF quel que soit le réglage du clone)
-- [x] 1.2 AUD-DEP-02 — `--self-test` sur dépôts Git temporaires : script sans attribut, script à `#!` sans extension, script indexé en CRLF, dépôt sans script, dossier hors dépôt, cas conforme ; vérifier par `python scripts/quality/check-posix-script-eol.py --self-test` ; l'option est déclarée sous la forme littérale `add_argument("--self-test"`, que `check-ci-wiring.py` reconnaît : dès cette tâche, `check-ci-wiring.py` et `run_gates.py` sont rouges jusqu'au câblage dans `invariants` (rouge attendu) (tâche 2.4) (`controles-de-fusion` › Le contrôle des fins de ligne échoue fermé)
+- [x] 1.2 AUD-DEP-02 — `--self-test` sur dépôts Git temporaires : script sans attribut, script à `#!` sans extension, script indexé en CRLF, dépôt sans script, dossier hors dépôt, `git` absent du `PATH`, interpréteur `fish` non compté, cas conforme ; vérifier par `python scripts/quality/check-posix-script-eol.py --self-test` ; l'option est déclarée sous la forme littérale `add_argument("--self-test"`, que `check-ci-wiring.py` reconnaît : dès cette tâche, `check-ci-wiring.py` et `run_gates.py` sont rouges jusqu'au câblage dans `invariants` (rouge attendu) (tâche 2.4) (`controles-de-fusion` › Le contrôle des fins de ligne échoue fermé)
 
 ## 2. Attributs et renormalisation (AUD-DEP-02)
 

@@ -129,12 +129,12 @@ Les scripts livrés ne dot-sourcent aucune bibliothèque : la distribution Windo
 
 ## Fins de ligne des scripts POSIX (`check-posix-script-eol.py`)
 
-`python scripts/quality/check-posix-script-eol.py` (job `invariants`, auto-test `--self-test` sur dépôts Git temporaires, racine paramétrable par `--root`) garde les scripts POSIX en LF quel que soit le réglage `core.autocrlf` du clone (AUD-DEP-02). Est un script POSIX tout fichier suivi dont le nom finit par `.sh`, ou dont la première ligne enregistrée commence par `#!` et nomme `sh`, `bash`, `dash`, `ksh` ou `zsh` (directement ou par `env`), hors dossier `fixtures/` ; `.mvn/wrapper/maven-wrapper.properties`, lu par `mvnw`, est contrôlé par son nom. Pour chacun, il lit par `git ls-files --eol -z` et `git grep --cached` (environnement réduit à une liste d'autorisation) :
+`python scripts/quality/check-posix-script-eol.py` (job `invariants`, auto-test `--self-test` sur dépôts Git temporaires, racine paramétrable par `--root`) garde les scripts POSIX en LF quel que soit le réglage `core.autocrlf` du clone (AUD-DEP-02). Est un script POSIX tout fichier suivi dont le nom finit par `.sh`, ou dont la première ligne enregistrée commence par `#!` et nomme `sh`, `bash`, `dash`, `ksh` ou `zsh` juste après le `#!`, un `/` ou `env` et ses options (`#!/usr/bin/fish` n'en est pas un), hors dossier `fixtures/` ; `.mvn/wrapper/maven-wrapper.properties`, lu par `mvnw`, est contrôlé par son nom. Pour chacun, il lit par `git ls-files --eol -z` et `git grep --cached` (environnement réduit à une liste d'autorisation) :
 
-- l'attribut résolu doit porter `eol=lf` ; sinon le message nomme le fichier et la règle à ajouter à `.gitattributes` ;
+- l'attribut résolu doit porter le jeton `eol=lf` ; sinon le message nomme le fichier et la règle à ajouter à `.gitattributes`. Git résout une règle `eol=lf` sans `text` en `text eol=lf`, acceptée ; `-text eol=lf` coupe la conversion et est refusée ;
 - le contenu enregistré doit être `i/lf` ; sinon le message propose `git add --renormalize -- <fichier>`.
 
-Il échoue fermé : `git` introuvable, racine qui n'est pas le sommet d'un dépôt Git, zéro script trouvé. Ce qu'il ne prouve pas : les octets de la copie de travail d'un clone fait avant la règle, qui garde ses fichiers CRLF jusqu'à leur ré-extraction (remise à niveau : `docs/developer/testing.md`, section « Fins de ligne des scripts POSIX d'un clone Windows ») ; qu'un script sans `#!` ni extension `.sh` soit un script.
+Il échoue fermé, avec un message qui nomme la cause : `git` introuvable, racine qui n'est pas le sommet d'un dépôt Git, zéro script trouvé. Ce qu'il ne prouve pas : la résolution d'attributs d'une autre version de Git que celle du poste ou du runner (l'auto-test la constate à chaque exécution) ; les octets de la copie de travail d'un clone fait avant la règle, qui garde ses fichiers CRLF jusqu'à leur ré-extraction (remise à niveau : `docs/developer/testing.md`, section « Fins de ligne des scripts POSIX d'un clone Windows ») ; qu'un script sans `#!` ni extension `.sh` soit un script.
 
 ## Garde des E/S privées et des journaux (`check-private-io.py`)
 

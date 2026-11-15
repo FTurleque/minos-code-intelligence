@@ -50,7 +50,7 @@ Non rejoué : l'échec `set: pipefail\r: invalid option name` et les deux auto-t
 [Décision] Documentée, non automatisée : supprimer de la copie de travail les fichiers visés puis les ré-extraire (`git ls-files -z -- '*.sh' mvnw '.mvn/wrapper/maven-wrapper.properties'`, suppression, `git checkout -- <mêmes chemins>`), dans le dépôt principal et dans chaque worktree. Un script de plus pour une opération faite une fois par clone n'est pas justifié.
 
 ### D5 — Gate `check-posix-script-eol.py`
-[Décision] Bibliothèque standard ; appelle `git ls-files --eol -z` par une liste d'arguments, environnement réduit. Est un script POSIX tout fichier suivi dont le nom finit par `.sh`, ou dont la première ligne commence par `#!` et nomme `sh`, `bash`, `dash`, `ksh` ou `zsh` (directement ou par `env`), hors `fixtures/`. Pour chacun : attribut `eol=lf` et index `i/lf`. Le fichier de propriétés du wrapper est contrôlé par nom. Échec fermé : `git` introuvable, racine hors dépôt, zéro script. Messages en chemins relatifs. `--self-test` : dépôts Git temporaires créés par le test (aucun accès réseau), cas des scénarios. Écarté : analyser `.gitattributes` à la main (réimplémente la résolution des motifs de Git).
+[Décision] Bibliothèque standard ; appelle `git ls-files --eol -z` par une liste d'arguments, environnement réduit. Est un script POSIX tout fichier suivi dont le nom finit par `.sh`, ou dont la première ligne commence par `#!` et nomme `sh`, `bash`, `dash`, `ksh` ou `zsh` juste après le `#!`, un `/` ou `env` et ses options, hors `fixtures/`. Pour chacun : attribut `eol=lf` et index `i/lf`. Le fichier de propriétés du wrapper est contrôlé par nom. Échec fermé : `git` introuvable, racine hors dépôt, zéro script. Messages en chemins relatifs. `--self-test` : dépôts Git temporaires créés par le test (aucun accès réseau), cas des scénarios. Écarté : analyser `.gitattributes` à la main (réimplémente la résolution des motifs de Git).
 
 ## Vérification
 
@@ -68,9 +68,9 @@ Non rejoué : l'échec `set: pipefail\r: invalid option name` et les deux auto-t
 |---|---|---|---|---|
 | controles-de-fusion › Un script POSIX est extrait en LF quel que soit le réglage du clone | État du dépôt | D1, D2, D5 | 1.1, 2.1, 2.2 | `scripts/quality/check-posix-script-eol.py` (rouge au HEAD sur 15 fichiers, vert après correction : 16 contrôlés) |
 | idem | Clone Windows avec conversion automatique | D1 | 2.3 | commande du scénario sur un clone jetable `core.autocrlf=true` : `i/lf w/lf attr/text eol=lf` partout (preuve locale, non rejouable en CI) |
-| idem | Script ajouté sans règle ; Script enregistré avec des retours chariot | D5 | 1.2 | `check-posix-script-eol.py --self-test` (cas « script without attribute », « shebang script without extension », « script recorded with CRLF ») |
+| idem | Script ajouté sans règle ; Script enregistré avec des retours chariot | D5 | 1.2 | `check-posix-script-eol.py --self-test` (cas « script without attribute », « shebang script without extension » avec le message complet, « script recorded with CRLF », « attribute disabling text conversion », « fish shebangs are not POSIX scripts », « eol=lf without text, resolved by Git as text eol=lf ») |
 | idem | Auto-tests des scripts shell sur le poste | D4 | 3.1, 3.2 | `test_start_test_postgres.py`, `test_cgroup_root_validation.py` (existants) ; **preuve manuelle** 3.1 (clone du mainteneur, chaque worktree) et 3.2 (WSL2) |
-| controles-de-fusion › Le contrôle des fins de ligne échoue fermé | Aucun script trouvé ; Racine hors dépôt | D5 | 1.2 | `check-posix-script-eol.py --self-test` (cas « repository without script », « directory outside a repository », « subdirectory of a repository ») |
+| controles-de-fusion › Le contrôle des fins de ligne échoue fermé | Aucun script trouvé ; Racine hors dépôt ; Git absent | D5 | 1.2 | `check-posix-script-eol.py --self-test` (cas « repository without script », « directory outside a repository », « subdirectory of a repository », « git missing from the PATH ») |
 | idem | Auto-test câblé | D5 | 2.4 | `check-ci-wiring.py` (règle existante) |
 
 ## Questions ouvertes
