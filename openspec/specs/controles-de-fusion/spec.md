@@ -316,6 +316,211 @@ Dans un job qui se connecte à un registre d'images, une étape `run:` postérie
 - **WHEN** le gate est exécuté
 - **THEN** il échoue en nommant l'entrée périmée
 
+### Requirement: Un script POSIX est extrait en LF quel que soit le réglage du clone
+Tout fichier suivi par Git dont le nom finit par `.sh`, ou dont la première ligne désigne un interpréteur de commandes POSIX, SHALL porter l'attribut `eol=lf` et SHALL être enregistré sans retour chariot. Un gate du job des invariants SHALL échouer en nommant tout fichier qui déroge. Le wrapper Maven POSIX et son fichier de propriétés SHALL être couverts.
+
+#### Scenario: État du dépôt
+- **GIVEN** le dépôt au commit candidat
+- **WHEN** `python scripts/quality/check-posix-script-eol.py` est exécuté
+- **THEN** il se termine avec le code 0 et affiche le nombre de scripts POSIX contrôlés, supérieur à zéro
+
+#### Scenario: Clone Windows avec conversion automatique
+- **GIVEN** un clone neuf fait avec `git -c core.autocrlf=true clone`
+- **WHEN** `git ls-files --eol '*.sh' mvnw` est exécuté dans ce clone
+- **THEN** chaque ligne commence par `i/lf    w/lf` et porte `attr/text eol=lf`
+
+#### Scenario: Script ajouté sans règle
+- **GIVEN** un dépôt temporaire où un fichier `outil` commençant par `#!/usr/bin/env bash` est suivi sans attribut `eol=lf`
+- **WHEN** `python scripts/quality/check-posix-script-eol.py --self-test` l'évalue
+- **THEN** le cas constate le code 1 et un message qui nomme le fichier et la règle à ajouter à `.gitattributes`
+
+#### Scenario: Script enregistré avec des retours chariot
+- **GIVEN** un dépôt temporaire où un `*.sh` porte l'attribut mais a été enregistré en CRLF
+- **WHEN** l'auto-test l'évalue
+- **THEN** le cas constate le code 1
+
+#### Scenario: Auto-tests des scripts shell sur le poste
+- **GIVEN** un clone Windows à `core.autocrlf=true` remis à niveau
+- **WHEN** `python scripts/dev/test_start_test_postgres.py` et `python scripts/deploy/test_cgroup_root_validation.py` sont exécutés avec le bash de Git pour Windows
+- **THEN** les deux se terminent avec le code 0
+
+### Requirement: Le contrôle des fins de ligne échoue fermé
+Le gate des fins de ligne SHALL lire les attributs et le contenu enregistré par Git lui-même. Quand Git est absent, quand la racine n'est pas un dépôt ou quand aucun script POSIX n'est trouvé, il SHALL se terminer avec le code 1 et un message qui nomme la cause ; il SHALL NOT conclure à un succès sur zéro fichier.
+
+#### Scenario: Aucun script trouvé
+- **GIVEN** un dépôt temporaire sans aucun script POSIX suivi
+- **WHEN** l'auto-test du gate l'évalue
+- **THEN** le cas constate le code 1
+
+#### Scenario: Racine hors dépôt
+- **GIVEN** un dossier qui n'est pas un dépôt Git
+- **WHEN** l'auto-test évalue le gate sur ce dossier
+- **THEN** le cas constate le code 1 et un message qui nomme la cause sans afficher de chemin absolu
+
+#### Scenario: Git absent
+- **GIVEN** un dépôt temporaire conforme et un `PATH` qui ne nomme qu'un dossier vide
+- **WHEN** l'auto-test évalue le gate sur ce dépôt
+- **THEN** le cas constate le code 1 et un message qui dit que `git` est introuvable
+
+#### Scenario: Auto-test câblé
+- **GIVEN** un `pr-ci.yml` dont le job `invariants` ne lance pas `check-posix-script-eol.py --self-test`
+- **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté
+- **THEN** il se termine avec le code 1 et nomme le script
+
+### Requirement: Tout gate a un auto-test
+Tout script `scripts/**/check-*.py` hors `history/` SHALL déclarer l'option `--self-test` ou posséder un fichier `test_*.py` jumeau dans son dossier. `check-ci-wiring.py` SHALL échouer en nommant tout gate qui n'a ni l'un ni l'autre et qui ne figure pas dans la liste fermée des gates en attente.
+
+#### Scenario: État du dépôt
+- **GIVEN** le dépôt au commit candidat
+- **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté
+- **THEN** il se termine avec le code 0 et son message de succès compte les gates dotés d'un auto-test et les gates en attente
+
+#### Scenario: Gate ajouté sans auto-test
+- **GIVEN** un arbre où `scripts/quality/check-exemple.py` existe sans `--self-test`, sans `test_check_exemple.py` et hors de la liste fermée
+- **WHEN** `python scripts/quality/test_check_ci_wiring.py` évalue cet arbre
+- **THEN** le cas constate le code 1 et un message qui nomme `scripts/quality/check-exemple.py`
+
+#### Scenario: Les dix gates du constat
+- **GIVEN** les huit gates `check-*-consistency.py`, `check-current-docs-vertical-extension.py` et `scripts/docs/check-current-docs.py`
+- **WHEN** chacun est lancé avec `--self-test`
+- **THEN** chacun se termine avec le code 0 et affiche le nombre de mutations refusées, supérieur à zéro
+
+### Requirement: L'auto-test d'un gate littéral refuse une mutation par fait affirmé
+L'auto-test d'un gate qui affirme des chaînes ou des motifs lus dans des fichiers SHALL, pour chaque fait affirmé sur l'état du dépôt, appliquer une mutation qui le rend faux et constater que le gate échoue en nommant le fichier. Il SHALL échouer quand une mutation est acceptée, quand un fait n'a produit aucune mutation ou quand aucun fait n'a été relevé. Il SHALL NOT modifier un fichier du dépôt.
+
+#### Scenario: Littéral exigé retiré
+- **GIVEN** un fait « le fichier contient ce littéral » d'un gate de cohérence
+- **WHEN** `--self-test` retire ce littéral d'une copie en mémoire du fichier et réévalue le gate
+- **THEN** le gate échoue avec un message qui nomme le fichier
+
+#### Scenario: Littéral interdit introduit
+- **GIVEN** un fait « le fichier ne contient pas ce littéral »
+- **WHEN** `--self-test` l'introduit dans la copie et réévalue le gate
+- **THEN** le gate échoue
+
+#### Scenario: Règle devenue vacuitaire
+- **GIVEN** un gate dont une règle accepte la copie mutée
+- **WHEN** `--self-test` est exécuté
+- **THEN** il se termine avec le code 1 et nomme la règle, le fichier et le littéral
+
+#### Scenario: Aucun fait relevé
+- **GIVEN** un gate dont l'évaluation ne relève aucun fait
+- **WHEN** `--self-test` est exécuté
+- **THEN** il se termine avec le code 1 et non par un succès sur zéro mutation
+
+#### Scenario: Dépôt intact
+- **GIVEN** un arbre de travail propre
+- **WHEN** les dix auto-tests sont exécutés
+- **THEN** `git status --porcelain` ne liste aucun fichier
+
+### Requirement: Les gates sans auto-test sont une liste fermée qui ne peut que diminuer
+La liste des gates tolérés sans auto-test SHALL être déclarée dans `check-ci-wiring.py`, chaque entrée avec sa raison. Le gate SHALL échouer quand une entrée désigne un script absent ou un script qui a désormais un auto-test, de sorte que la liste ne puisse ni s'allonger sans relecture ni garder une entrée périmée.
+
+#### Scenario: Entrée périmée
+- **GIVEN** une liste fermée qui nomme un gate déclarant maintenant `--self-test`
+- **WHEN** `python scripts/quality/test_check_ci_wiring.py` évalue cet arbre
+- **THEN** le cas constate le code 1 et un message qui demande de retirer l'entrée
+
+#### Scenario: Entrée sans script
+- **GIVEN** une liste fermée qui nomme un script qui n'existe pas
+- **WHEN** l'auto-test évalue cet arbre
+- **THEN** le cas constate le code 1 et nomme l'entrée
+
+### Requirement: Les zones créées après la mesure de référence sont sous un scope nominatif
+Le gate JaCoCo SHALL évaluer un scope nominatif pour le module de l'explorateur sémantique, pour la voie d'indexation WSL2 et pour la projection 2D, chacun avec un plancher de lignes et de branches tiré d'une mesure citée du rapport agrégé de la CI. Il SHALL échouer quand un préfixe de ces scopes ne désigne plus aucune classe du rapport, et SHALL NOT laisser le scope `global` seul juge de ces zones.
+
+#### Scenario: Les trois scopes sont évalués
+- **GIVEN** un rapport agrégé produit par `./mvnw -B -ntp verify`
+- **WHEN** `python scripts/quality/check-jacoco.py` est exécuté
+- **THEN** `jacoco-gate.json` contient `explorer-surface`, `wsl-lane` et `semantic-projection` avec leur mesure et leur plancher pour le système courant
+
+#### Scenario: Les tests d'une zone disparaissent
+- **GIVEN** un rapport où la couverture des classes de `com/minos/explorer/` est tombée sous le plancher du scope alors que `global` respecte le sien
+- **WHEN** le gate est exécuté
+- **THEN** il se termine avec le code 1 et nomme `explorer-surface`, la mesure et le plancher
+
+#### Scenario: Une zone est renommée sans son scope
+- **GIVEN** un rapport où aucune classe ne commence par `com/minos/runtime/local/wsl/`
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant le préfixe mort du scope `wsl-lane`
+
+#### Scenario: Déclaration retirée du gate
+- **GIVEN** une copie de la table des scopes privée de `semantic-projection`
+- **WHEN** `python scripts/quality/check-jacoco.py --self-test` l'évalue
+- **THEN** le cas correspondant de l'auto-test échoue en nommant le scope manquant
+
+### Requirement: La garde de la surface HTTP locale a un plancher de classe
+Dans le scope de l'explorateur, les classes qui décident de servir une requête (contrôle de l'hôte, de l'origine et du jeton, jeton de session, politique d'écoute) SHALL chacune porter un plancher de lignes et de branches. Le gate SHALL échouer quand l'une d'elles passe sous son plancher, même si le scope respecte le sien.
+
+#### Scenario: Garde affaiblie dans un module bien couvert
+- **GIVEN** un rapport où `explorer-surface` respecte son plancher et où `RequestGuard` est sous son plancher de classe
+- **WHEN** `python scripts/quality/check-jacoco.py` est exécuté
+- **THEN** le gate se termine avec le code 1 et nomme `com/minos/explorer/RequestGuard`, sa mesure et son plancher
+
+#### Scenario: Classe de garde absente du rapport
+- **GIVEN** un rapport où `com/minos/explorer/SessionToken` ne figure plus
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant la classe et ne la compte pas comme conforme
+
+### Requirement: Le budget mémoire des vues a un plancher de classe
+La classe qui tient le budget mémoire des vues de requête SHALL appartenir à un scope ciblé du stockage et y porter un plancher de classe. Le gate SHALL échouer quand elle disparaît du rapport ou passe sous ce plancher.
+
+#### Scenario: Budget sous son plancher
+- **GIVEN** un rapport où `com/minos/storage/codec/QueryViewMemoryBudget` est sous son plancher de classe
+- **WHEN** `python scripts/quality/check-jacoco.py` est exécuté
+- **THEN** le gate échoue en nommant la classe, sa mesure et son plancher
+
+#### Scenario: État du dépôt
+- **GIVEN** un rapport agrégé produit par `./mvnw -B -ntp verify` au commit candidat
+- **WHEN** `python scripts/quality/check-jacoco.py` est exécuté
+- **THEN** il se termine avec le code 0 et `target/m21-quality/jacoco-gate.json` porte la mesure et le plancher de la classe
+
+### Requirement: Aucun test ne passe à vide derrière un retour anticipé de plateforme
+Dans les sources de test Java de tous les modules, plugin IntelliJ compris, une instruction `return` sans valeur gardée par une condition sur le système d'exploitation SHALL être refusée par un gate du job des invariants, que la garde tienne sur une ou plusieurs lignes et quelle que soit l'expression qui lit le système. Un test propre à un système SHALL être restreint par `@EnabledOnOs` et SHALL figurer comme sauté, avec sa raison, dans le rapport de l'autre système.
+
+#### Scenario: État du dépôt
+- **GIVEN** le dépôt au commit candidat
+- **WHEN** `python scripts/quality/check-test-platform-guards.py` est exécuté
+- **THEN** il se termine avec le code 0 et affiche le nombre de fichiers de test lus et le nombre d'exceptions déclarées
+
+#### Scenario: Garde sur deux lignes
+- **GIVEN** un fichier de test contenant `if (!CommandLocator.isWindows()) {` suivi de `return;` sur la ligne suivante
+- **WHEN** `python scripts/quality/check-test-platform-guards.py --self-test` l'évalue
+- **THEN** le cas constate le code 1 et un message qui nomme le fichier et la ligne
+
+#### Scenario: Garde par variable locale
+- **GIVEN** un fichier de test qui lit `os.name` dans une variable puis contient `if (!os.contains("linux")) return;`
+- **WHEN** l'auto-test l'évalue
+- **THEN** le cas constate le code 1
+
+#### Scenario: Test Windows sous Linux
+- **GIVEN** les tests de `minos-runtime-local` exécutés sous Linux
+- **WHEN** le rapport Surefire de `CommandLocatorTest` est lu
+- **THEN** `realWindowsBatchInvocationUsesCanonicalSystem32Cmd` et `realWindowsCmdPreservesAdversarialQuotedArguments` y figurent comme sautés
+
+#### Scenario: Aucun fichier lu
+- **GIVEN** une racine sans aucune source de test Java
+- **WHEN** l'auto-test évalue le gate sur cette racine
+- **THEN** le cas constate le code 1 et non un succès sur zéro fichier
+
+### Requirement: Les retours anticipés de plateforme tolérés sont une liste fermée et motivée
+Un retour anticipé gardé par le système d'exploitation SHALL n'être toléré que hors d'une méthode de test (extension ou outillage de test) et seulement s'il figure dans la liste d'exceptions du gate, par fichier et par nombre d'occurrences, avec sa raison. Le gate SHALL échouer quand une exception ne correspond plus à aucune occurrence, et SHALL NOT accepter une exception située dans une méthode annotée `@Test`.
+
+#### Scenario: Exception devenue sans objet
+- **GIVEN** une liste d'exceptions qui déclare deux occurrences pour un fichier qui n'en contient plus qu'une
+- **WHEN** l'auto-test du gate l'évalue
+- **THEN** le cas constate le code 1 et un message qui nomme le fichier et les deux nombres
+
+#### Scenario: Exception dans une méthode de test
+- **GIVEN** une exception déclarée pour un fichier dont l'occurrence est dans une méthode annotée `@Test`
+- **WHEN** l'auto-test l'évalue
+- **THEN** le cas constate le code 1
+
+#### Scenario: Auto-test câblé
+- **GIVEN** un `pr-ci.yml` dont le job `invariants` ne lance pas `check-test-platform-guards.py --self-test`
+- **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté
+- **THEN** il se termine avec le code 1 et nomme le script
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [controles-de-fusion](../../../docs/architecture/diagrams/capacites/controles-de-fusion.md)

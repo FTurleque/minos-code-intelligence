@@ -73,26 +73,32 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 | Chaque job a un délai maximal | tous | V1 | `scripts/quality/test_check_workflow_pins.py#test_a_job_on_a_runner_without_a_timeout_is_refused`, `scripts/quality/test_check_workflow_pins.py#test_a_step_timeout_does_not_stand_for_the_job_timeout` | couverte |
 | Le runner et l'outil de build d'un workflow sont épinglés | tous | V1 | `scripts/quality/test_check_workflow_pins.py#test_a_floating_runner_image_is_refused`, `scripts/quality/test_check_toolchain_baseline.py#test_a_workflow_that_installs_the_wrapper_version_is_refused` | couverte |
 | Les identifiants de registre ne restent pas exposés au code d'une pull request sans nécessité | portée du jeton Docker Hub : réglage manuel | — | `scripts/quality/test_check_workflow_pins.py#test_code_run_while_logged_in_is_refused`, `scripts/quality/test_check_workflow_pins.py#test_a_stale_entry_of_the_closed_list_is_refused` | partielle |
+| Un script POSIX est extrait en LF quel que soit le réglage du clone | 4/5 ; clone Windows `core.autocrlf=true` : relevé local sur un clone jetable, non rejoué en CI ; auto-tests shell sur un clone existant remis à niveau et sous WSL2 : manuels (E8) | V1 | `scripts/quality/check-posix-script-eol.py` (dépôt réel, puis cas « script without attribute », « shebang script without extension », « script recorded with CRLF », « attribute disabling text conversion » de `--self-test`), `scripts/dev/test_start_test_postgres.py`, `scripts/deploy/test_cgroup_root_validation.py`, `.gitattributes` | partielle |
+| Le contrôle des fins de ligne échoue fermé | tous | V1 | `scripts/quality/check-posix-script-eol.py` (cas « repository without script », « directory outside a repository », « subdirectory of a repository », « git missing from the PATH » de `--self-test`), `.github/workflows/pr-ci.yml` (étapes du job `invariants`, câblage gardé par `scripts/quality/check-ci-wiring.py`) | couverte |
+| Tout gate a un auto-test | tous ; les dix gates du constat par leur `--self-test` (étape « Literal gate self-tests » du job `invariants`) | V1 | `scripts/quality/test_check_ci_wiring.py#test_the_repository_satisfies_the_rule_with_its_closed_list`, `scripts/quality/test_check_ci_wiring.py#test_a_gate_without_a_self_test_outside_the_list_is_refused_by_name`, `scripts/quality/test_check_ci_wiring.py#test_a_gate_with_a_twin_test_is_accepted`, `scripts/quality/test_check_ci_wiring.py#test_archived_gates_are_excluded` | couverte |
+| L'auto-test d'un gate littéral refuse une mutation par fait affirmé | tous ; « dépôt intact » : le pilote compare l'arbre avant et après chaque auto-test | — | `scripts/quality/test_literal_gate.py#SoundGateTest`, `scripts/quality/test_literal_gate.py#test_a_rule_that_accepts_the_mutated_copy_is_named_with_its_file_and_literal`, `scripts/quality/test_literal_gate.py#test_a_gate_without_any_fact_fails`, `scripts/quality/test_literal_gate.py#test_a_forbidden_pattern_without_witness_has_no_mutation` | couverte |
+| Les gates sans auto-test sont une liste fermée qui ne peut que diminuer | tous | — | `scripts/quality/test_check_ci_wiring.py#test_a_listed_gate_that_now_has_a_self_test_is_refused`, `scripts/quality/test_check_ci_wiring.py#test_a_listed_gate_with_a_twin_test_is_refused_too`, `scripts/quality/test_check_ci_wiring.py#test_an_entry_without_a_script_is_refused` | couverte |
+| Les zones créées après la mesure de référence sont sous un scope nominatif | tous ; « les trois scopes sont évalués » : `JaCoCo explorer-surface: PASS`, `JaCoCo wsl-lane: PASS` et `JaCoCo semantic-projection: PASS` dans les deux jobs `Verify` du run 43731190854 de la PR #739 | V1 | `scripts/quality/check-jacoco.py:49` (scopes `explorer-surface`, `wsl-lane`, `semantic-projection`), `scripts/quality/check-jacoco.py:612` (cas « real table declares the new zones and their class floors » et « table deprived of a zone scope is refused » de `--self-test`), cas « threshold breach », « dead prefix beside live », « dead package prefix » de `--self-test` | couverte |
+| La garde de la surface HTTP locale a un plancher de classe | tous | V1 | `scripts/quality/check-jacoco.py:57` (plancher de `RequestGuard`), `scripts/quality/check-jacoco.py:637` (cas « guard class under its floor in a passing scope » et « guard class absent from the report » de `--self-test`) | couverte |
+| Le budget mémoire des vues a un plancher de classe | tous ; « état du dépôt » : le rapport jacoco-gate.json de l'artefact pr-validation-Linux-1 du run 43749092436 (PR #743) porte la mesure et le plancher de `QueryViewMemoryBudget` | V1 | `scripts/quality/check-jacoco.py:41` (plancher de `QueryViewMemoryBudget`), `scripts/quality/check-jacoco.py:561` (cas « weak live prefix » de `--self-test`) | couverte |
+| Aucun test ne passe à vide derrière un retour anticipé de plateforme | tous ; « test Windows sous Linux » : rapports Surefire de `Verify (ubuntu-24.04)` du run 43744069549 (PR #742), tests Windows de `CommandLocatorTest`, `ManagedPolyglotScipRuntimeManagerTest` et `M24PolyglotProviderTest` comptés sautés | V1 | `scripts/quality/check-test-platform-guards.py` (dépôt réel, puis cas « two-line guard », « local variable from os.name », « no test source » de `--self-test`) | couverte |
+| Les retours anticipés de plateforme tolérés sont une liste fermée et motivée | tous | V1 | `scripts/quality/check-test-platform-guards.py` (cas « stale exception refused », « exception in a test method refused », « exception without reason refused » de `--self-test`), `.github/workflows/pr-ci.yml` (étapes du job `invariants`, câblage gardé par `scripts/quality/check-ci-wiring.py`) | couverte |
 
 `check-jacoco.py` porte son auto-test en option (`--self-test`), exécuté par le job `invariants` ; ses cas sont
 des étiquettes de la fonction `self_test`, d'où les preuves citées par ligne.
 
 `scripts/quality/check-test-platform-guards.py` (job `invariants`, auto-test `--self-test`) refuse un test qui
 passe à vide derrière un retour anticipé de plateforme, et n'en tolère que la liste fermée hors méthode de test
-(AUD-TST-04). Ses deux exigences entrent dans la spec de référence à l'archivage du changement
-`compter-comme-sautes-les-tests-propres-a-une-plateforme` ; leurs lignes de traçabilité s'ajoutent alors ici.
+(AUD-TST-04).
 
 Tout gate a un auto-test (`check-ci-wiring.py`, règle 7, liste fermée `GATES_WITHOUT_SELF_TEST`) ; les gates
 littéraux le tirent du pilote commun `scripts/quality/literal_gate.py`, qui refuse une mutation en mémoire par fait
-affirmé (`scripts/quality/test_literal_gate.py`). Les exigences correspondantes du changement
-`doter-chaque-gate-d-un-auto-test` entrent dans la table à son archivage.
+affirmé (`scripts/quality/test_literal_gate.py`).
 
-Fins de ligne des scripts POSIX (changement `epingler-les-fins-de-ligne-des-scripts-posix`, AUD-DEP-02, non
-archivé) : `.gitattributes` épingle `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties` en LF et `*.cmd` en
-CRLF ; `scripts/quality/check-posix-script-eol.py` et son `--self-test` (job `invariants`) refusent un script
-POSIX sans attribut `eol=lf` ou enregistré en CRLF, et échouent fermés sans `git`, hors dépôt ou sur zéro script.
-Ses deux exigences entrent dans la table ci-dessus à l'archivage du changement ; la remise à niveau d'un clone
-existant et l'exécution sous WSL2 restent des preuves manuelles.
+`.gitattributes` épingle `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties` en LF et `*.cmd` en CRLF
+(AUD-DEP-02) ; `scripts/quality/check-posix-script-eol.py` et son `--self-test` (job `invariants`) refusent un
+script POSIX sans attribut `eol=lf` ou enregistré en CRLF, et échouent fermés sans `git`, hors dépôt ou sur zéro
+script. La remise à niveau d'un clone existant et l'exécution sous WSL2 restent des preuves manuelles (écart E8).
 
 ## Écarts
 
@@ -104,7 +110,7 @@ existant et l'exécution sous WSL2 restent des preuves manuelles.
 | E4 | Le refus « gate JaCoCo lancé dans les invariants » n'a aucun auto-test, contrairement à la règle des gates | `scripts/remediation/check-audit-remediation-v2.py:111` | [Proposition] Auto-test ou reprise par un gate testé |
 | E5 | Le contexte SonarCloud (`source: application`) est compté parmi les contextes « résolus » sans vérification | `scripts/quality/check-ci-wiring.py:250` | [Proposition] Compter à part les contextes d'application |
 | E6 | « Branche à jour » n'apparaît ni dans la spec, ni dans la liste déclarée, ni dans `verify-ruleset.py` | `scripts/quality/verify-ruleset.py:39` | [Question] À spécifier et à mesurer ? |
-| E7 | Les planchers de `explorer-surface`, `wsl-lane`, `semantic-projection` et de `QueryViewMemoryBudget` sortent du run `pr-ci.yml` 43650742311 (`main` 89be3fb4) ; leur évaluation sur les deux jobs `Verify` d'une PR n'est pas encore observée ; les trois exigences du changement `borner-la-couverture-des-zones-nouvelles` entrent dans la traçabilité à son archivage (preuves : `scripts/quality/check-jacoco.py:364` et les cas « table deprived of a zone scope is refused », « guard class under its floor in a passing scope », « guard class absent from the report » de `--self-test`) | `scripts/quality/check-jacoco.py:44` | [Proposition] Lire les lignes `JaCoCo <scope>: PASS` et `jacoco-gate.json` de l'artefact de la PR |
+| E8 | Deux preuves des fins de ligne ne sont pas des commandes de la CI : la remise à niveau d'un clone existant et l'exécution de `mvnw` sous WSL2 sont manuelles | `scripts/quality/check-posix-script-eol.py` | [Proposition] Preuves manuelles consignées dans le suivi d'audit |
 
 ## Questions ouvertes
 

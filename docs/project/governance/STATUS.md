@@ -158,6 +158,19 @@ Les quatre phases du chantier (AUD-ARC-01, -05, -08, -12) sont **fusionnées dan
 
 Reste au plan du chantier hexagonal : SH-12. Détail et preuves : [`docs/project/audits/2026-10-10/SUIVI.md`](../audits/2026-10-10/SUIVI.md).
 
+## Audit 2026-11-15 — sprint 1 (2026-11-15)
+
+Les sept changements du sprint 1 de l'audit du 15 novembre 2026 (« remettre la mesure à niveau sur les zones nouvelles », 8 constats) sont **fusionnés dans `main` et archivés** (PR #737 à #743). Aucune sortie CLI, API Java, MCP ni du plugin ne change ; le badge d'en-tête de l'explorateur affiche l'état d'index par un libellé.
+
+- **Fins de ligne** : `.gitattributes` épingle les scripts POSIX et `mvnw` en LF, `*.cmd` en CRLF ; `check-posix-script-eol.py` refuse un script POSIX sans `eol=lf` ou enregistré en CRLF.
+- **Auto-tests de gates** : tout gate a un auto-test câblé dans `invariants` ; les gates littéraux le tirent du pilote commun `scripts/quality/literal_gate.py`, les gates encore sans auto-test forment une liste fermée décroissante.
+- **Couverture** : scopes JaCoCo nominatifs `explorer-surface`, `wsl-lane` et `semantic-projection`, planchers de classe pour la garde HTTP de l'explorateur et `QueryViewMemoryBudget`.
+- **Banc** : `benchmarks/scalability` mesure la projection 2D et les routes de l'explorateur, refus attendus déclarés au-delà du budget de décodage local ; la référence complète sur la machine de référence, PostgreSQL compris, reste à produire.
+- **Front de l'explorateur** : `app.js` est exécuté sous Node par des tests (faux DOM, puits de balisage refusés) et contrôlé par `check-explorer-front.py` avant toute fusion.
+- **Tests** : un test propre à une plateforme est compté sauté (`check-test-platform-guards.py`) ; les preuves de verrou échouent quand leur processus détenteur ne démarre pas ou quand le bail n'est plus tenu.
+
+Restes manuels : remise à niveau des fins de ligne d'un clone existant, référence complète du banc. Détail et preuves : [`docs/project/audits/2026-11-15/SUIVI.md`](../audits/2026-11-15/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.

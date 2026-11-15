@@ -14,7 +14,8 @@
 
 - [x] 2.1 AUD-TST-02 — Preuve locale : `python .claude/scripts/run_gates.py` vert ; `./mvnw -B -ntp -pl minos-explorer -am test "-Dtest=com.minos.explorer.**.*Test" "-Dsurefire.failIfNoSpecifiedTests=false"` vert (tests du module ; les modules amont sont compilés, leurs tests ne sont pas lancés : le changement ne touche aucun code Java) ; aucun fichier de `src/test/js/` sous `minos-explorer/target/classes`
   - Preuve : `run_gates.py` 64/64 ; la commande Maven ci-dessus, par le verrou Maven partagé : BUILD SUCCESS, 51 tests du module ; aucun `.mjs` sous `minos-explorer/target`.
-- [ ] 2.2 AUD-TST-02 — **(manuelle)** Sur la PR : lire dans le journal du job `invariants` la version de Node du runner et le nombre de tests exécutés ; si Node manque ou est sous la minimale, appliquer l'alternative de D4 (`actions/setup-node` épinglée par SHA) après accord du propriétaire
+- [x] 2.2 AUD-TST-02 — **(manuelle)** Sur la PR : lire dans le journal du job `invariants` la version de Node du runner et le nombre de tests exécutés ; si Node manque ou est sous la minimale, appliquer l'alternative de D4 (`actions/setup-node` épinglée par SHA) après accord du propriétaire
+  - Fait : job `Static invariants (single run)` de la PR #741 (run 43740054224, tête a600e904) : `node --version` rend v22.23.4 (minimum 20) et le gate journalise « 26 tests passed » ; l'alternative de D4 est sans objet.
 - [x] 2.3 AUD-TST-02 — Documentation : `docs/developer/semantic-explorer.md` (tests du front, comment les lancer), `docs/developer/quality-gates.md` (nouveau gate, ce qu'il ne prouve pas : aucun vrai navigateur), `docs/developer/testing.md` (Node requis pour ce gate) ; vérifier par `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check`
 
 ## 3. Rejet du presse-papiers (AUD-TST-02, décision D6)
