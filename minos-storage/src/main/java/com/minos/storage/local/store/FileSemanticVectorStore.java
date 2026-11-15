@@ -30,10 +30,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.minos.domain.Preconditions.requireText;
@@ -58,6 +62,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private static final long MAX_DECODED_STRING_BYTES = 192L * 1024L * 1024L;
     private static final long MAX_DECODED_VECTOR_BYTES = 192L * 1024L * 1024L;
     public static final long DEFAULT_MAX_CACHE_WEIGHT_BYTES = 256L * 1024L * 1024L;
+    /** Fixed weight the cache counts for a document, before its vector and its strings. */
+    private static final long MINIMUM_DOCUMENT_WEIGHT_BYTES = 256L;
 
     private final Path root;
     private final long maxCacheWeightBytes;
@@ -67,6 +73,11 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private long cacheMisses;
     private long invalidationEvictions;
     private final Map<String, ResumePoint> resumePoints = new HashMap<>();
+    private final Map<String, ResumePoint> documentResumePoints = new HashMap<>();
+    /** One lock per project around a full decode: a reader that waits finds the index in the cache. */
+    private final Map<String, Object> decodeLocks = new ConcurrentHashMap<>();
+    /** The file, by project, that a full decode produced an index the cache refused to keep. */
+    private final Map<String, FileStamp> cacheRefusals = new HashMap<>();
 
     public FileSemanticVectorStore(Path root) throws IOException {
         this(root, DEFAULT_MAX_CACHE_WEIGHT_BYTES);
@@ -89,20 +100,33 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             return Optional.empty();
         }
         requireIndexFileSize(file);
+        Optional<IndexSnapshot> cached = cachedSnapshot(projectId, file);
+        if (cached.isPresent()) return cached;
+        synchronized (decodeLocks.computeIfAbsent(projectId, ignored -> new Object())) {
+            // Another reader may have decoded the index while this one waited for the lock.
+            cached = cachedSnapshot(projectId, file);
+            if (cached.isPresent()) return cached;
+            return Optional.of(decode(projectId, file));
+        }
+    }
+
+    private Optional<IndexSnapshot> cachedSnapshot(String projectId, Path file) throws IOException {
         CacheEntry cached;
         synchronized (cacheLock) { cached = cache.get(projectId); }
-        if (cached != null && cached.matches(file)) {
-            synchronized (cacheLock) {
-                CacheEntry current = cache.get(projectId);
-                if (current == cached) {
-                    cacheHits++;
-                    return Optional.of(cached.snapshot());
-                }
-            }
-        } else if (cached != null) {
+        if (cached == null) return Optional.empty();
+        if (!cached.matches(file)) {
             removeCached(projectId, false);
+            return Optional.empty();
         }
+        synchronized (cacheLock) {
+            CacheEntry current = cache.get(projectId);
+            if (current != cached) return Optional.empty();
+            cacheHits++;
+            return Optional.of(cached.snapshot());
+        }
+    }
 
+    private IndexSnapshot decode(String projectId, Path file) throws IOException {
         synchronized (cacheLock) { cacheMisses++; }
         DecodeBudget budget = new DecodeBudget();
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
@@ -141,8 +165,11 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             if (input.read() != -1) throw new IOException("unexpected trailing semantic index data");
             IndexSnapshot snapshot = new IndexSnapshot(storedProject, snapshotId, providerId, modelId,
                     dimensions, builtAt, documents);
-            putCached(projectId, CacheEntry.capture(file, snapshot));
-            return Optional.of(snapshot);
+            CacheEntry entry = CacheEntry.capture(file, snapshot);
+            boolean held = putCached(projectId, entry);
+            rememberCacheRefusal(projectId,
+                    held ? null : new FileStamp(file, entry.sizeBytes(), entry.lastModifiedMillis()));
+            return snapshot;
         } catch (EOFException exception) {
             throw new IOException("truncated semantic index: " + leafName(file), exception);
         }
@@ -227,19 +254,13 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             return SemanticVectorStore.super.vectorPage(projectId, afterStableKey, limit);
         }
         FileStamp stamp = FileStamp.of(file);
-        Optional<ResumePoint> resume = resumePoint(projectId, stamp, afterStableKey);
+        Optional<ResumePoint> resume = resumePoint(resumePoints, projectId, stamp, afterStableKey);
         try (IndexReader reader = IndexReader.open(file, resume.map(ResumePoint::offset).orElse(0L))) {
-            if (!stamp.equals(FileStamp.of(file))) {
-                throw new IOException("semantic index was replaced while it was read; read it again");
-            }
-            VectorWalk walk = resume.isPresent()
-                    ? new VectorWalk(reader, resume.orElseThrow().header(), resume.orElseThrow().consumed(),
-                            resume.orElseThrow().afterStableKey())
-                    : new VectorWalk(reader, reader.header(projectId), 0, null);
-            List<StoredVector> vectors = walk.read(afterStableKey, limit);
-            rememberResumePoint(projectId, walk.hasMore() && !vectors.isEmpty()
-                    ? Optional.of(new ResumePoint(stamp, vectors.getLast().stableKey(), reader.position(),
-                            walk.consumed, walk.header))
+            requireUnchanged(stamp, file);
+            EntryWalk walk = EntryWalk.resumedOrStarted(reader, resume, projectId);
+            List<StoredVector> vectors = walk.readVectors(afterStableKey, limit);
+            rememberResumePoint(resumePoints, projectId, walk.hasMore() && !vectors.isEmpty()
+                    ? Optional.of(walk.resumePoint(stamp, vectors.getLast().stableKey()))
                     : Optional.empty());
             return Optional.of(new VectorPage(walk.header.metadata(), vectors, walk.hasMore()));
         } catch (EOFException exception) {
@@ -249,55 +270,267 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         }
     }
 
+    /**
+     * One page of the documents, read by walking the file from the place the previous page of documents
+     * stopped at: only the documents of the page are decoded, no vector is, and the index cache is not used.
+     * Order, replacement and legacy format are handled as for {@link #vectorPage}.
+     */
+    @Override
+    public Optional<DocumentPage> documentPage(String projectId, String afterStableKey, int limit)
+            throws IOException {
+        SemanticVectorStore.requireDocumentPageBounds(afterStableKey, limit);
+        requireText(projectId, "projectId");
+        Path file = readableIndexFile(projectId);
+        if (file == null) return Optional.empty();
+        requireIndexFileSize(file);
+        if (formatVersion(projectId) == LEGACY_FORMAT_VERSION) {
+            return SemanticVectorStore.super.documentPage(projectId, afterStableKey, limit);
+        }
+        FileStamp stamp = FileStamp.of(file);
+        Optional<ResumePoint> resume = resumePoint(documentResumePoints, projectId, stamp, afterStableKey);
+        try (IndexReader reader = IndexReader.open(file, resume.map(ResumePoint::offset).orElse(0L))) {
+            requireUnchanged(stamp, file);
+            EntryWalk walk = EntryWalk.resumedOrStarted(reader, resume, projectId);
+            List<SemanticDocument> documents = walk.readDocuments(afterStableKey, limit);
+            rememberResumePoint(documentResumePoints, projectId, walk.hasMore() && !documents.isEmpty()
+                    ? Optional.of(walk.resumePoint(stamp, documents.getLast().stableKey()))
+                    : Optional.empty());
+            return Optional.of(new DocumentPage(walk.header.metadata(), documents, walk.hasMore()));
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("invalid semantic index entry: " + leafName(file), exception);
+        }
+    }
+
+    /**
+     * One document and its vector. An index the cache already holds answers from the cache; otherwise the file is
+     * walked up to the stable key: the entries before it are skipped, neither decoded nor kept, and the walk
+     * stops at the first key that follows it.
+     */
+    @Override
+    public Optional<StoredDocument> storedDocument(String projectId, String stableKey) throws IOException {
+        requireText(stableKey, "stableKey");
+        requireText(projectId, "projectId");
+        Path file = readableIndexFile(projectId);
+        if (file == null) return Optional.empty();
+        requireIndexFileSize(file);
+        if (formatVersion(projectId) == LEGACY_FORMAT_VERSION) {
+            return SemanticVectorStore.super.storedDocument(projectId, stableKey);
+        }
+        Optional<IndexSnapshot> cached = cachedSnapshot(projectId, file);
+        if (cached.isPresent()) return Optional.of(storedIn(cached.orElseThrow(), stableKey));
+        FileStamp stamp = FileStamp.of(file);
+        try (IndexReader reader = IndexReader.open(file, 0L)) {
+            requireUnchanged(stamp, file);
+            EntryWalk walk = new EntryWalk(reader, reader.header(projectId), 0, null);
+            return Optional.of(new StoredDocument(walk.header.metadata(), walk.find(stableKey)));
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("invalid semantic index entry: " + leafName(file), exception);
+        }
+    }
+
+    private static StoredDocument storedIn(IndexSnapshot index, String stableKey) {
+        Optional<IndexedDocument> found = Optional.empty();
+        for (IndexedDocument value : index.documents()) {
+            if (stableKey.equals(value.document().stableKey())) {
+                found = Optional.of(value);
+                break;
+            }
+        }
+        return new StoredDocument(new IndexMetadata(index.projectId(), index.snapshotId(), index.providerId(),
+                index.modelId(), index.dimensions(), index.builtAtEpochMilli(), index.documents().size()), found);
+    }
+
+    /**
+     * Ranks {@code query} against the stored vectors. An index the cache can keep is ranked on the loaded index,
+     * so that a process that searches repeatedly keeps it warm. An index the cache cannot keep is ranked by two
+     * walks of the file, one that keeps the best stable keys and their scores and one that decodes the documents
+     * of the result: neither the index nor any other content is retained. Both give the same documents, order
+     * and scores.
+     */
+    @Override
+    public List<VectorHit> search(String projectId, SemanticVector query, int limit, double minimumScore)
+            throws IOException {
+        SemanticVectorStore.requireSearchBounds(query, limit, minimumScore);
+        requireText(projectId, "projectId");
+        Path file = readableIndexFile(projectId);
+        if (file == null) return List.of();
+        requireIndexFileSize(file);
+        if (formatVersion(projectId) == LEGACY_FORMAT_VERSION || cacheMayHold(projectId, file)) {
+            return SemanticVectorStore.super.search(projectId, query, limit, minimumScore);
+        }
+        return rankByWalking(projectId, file, query, limit, minimumScore);
+    }
+
+    /**
+     * Whether the cache can keep the index of {@code file}: unless a full decode of this very file was refused
+     * by the cache, or the lightest possible index of its header (vectors and per-document overhead alone)
+     * already weighs more than the ceiling.
+     */
+    private boolean cacheMayHold(String projectId, Path file) throws IOException {
+        synchronized (cacheRefusals) {
+            FileStamp refused = cacheRefusals.get(projectId);
+            if (refused != null && refused.equals(FileStamp.of(file))) return false;
+        }
+        IndexMetadata metadata = metadata(projectId).orElseThrow(() -> new IOException("semantic index vanished"));
+        long perDocument = (long) metadata.dimensions() * Double.BYTES + MINIMUM_DOCUMENT_WEIGHT_BYTES;
+        return (long) metadata.documentCount() * perDocument <= maxCacheWeightBytes;
+    }
+
+    private List<VectorHit> rankByWalking(String projectId, Path file, SemanticVector query, int limit,
+                                          double minimumScore) throws IOException {
+        FileStamp stamp = FileStamp.of(file);
+        Ranking ranking = rankKeys(projectId, file, stamp, query, limit, minimumScore);
+        if (ranking.keys().isEmpty()) return List.of();
+        Map<String, SemanticDocument> documents = documentsOf(projectId, file, stamp, ranking);
+        requireUnchanged(stamp, file);
+        List<VectorHit> hits = new ArrayList<>(ranking.keys().size());
+        for (ScoredKey key : ranking.keys()) hits.add(new VectorHit(documents.get(key.stableKey()), key.score()));
+        return List.copyOf(hits);
+    }
+
+    /** First walk: the {@code limit} best stable keys with their scores, best first, and the index they come from. */
+    private Ranking rankKeys(String projectId, Path file, FileStamp stamp, SemanticVector query, int limit,
+                             double minimumScore) throws IOException {
+        Comparator<ScoredKey> bestFirst = Comparator.comparingDouble(ScoredKey::score).reversed()
+                .thenComparing(ScoredKey::stableKey);
+        PriorityQueue<ScoredKey> top = new PriorityQueue<>(limit, bestFirst.reversed());
+        try (IndexReader reader = IndexReader.open(file, 0L)) {
+            requireUnchanged(stamp, file);
+            IndexHeader header = reader.header(projectId);
+            if (query.dimensions() != header.metadata().dimensions()) {
+                throw new IllegalArgumentException("vector dimensions mismatch");
+            }
+            EntryWalk walk = new EntryWalk(reader, header, 0, null);
+            while (walk.hasMore()) {
+                ScoredKey candidate = walk.score(query);
+                if (candidate.score() < minimumScore) continue;
+                if (top.size() < limit) {
+                    top.add(candidate);
+                } else if (bestFirst.compare(candidate, top.peek()) < 0) {
+                    top.poll();
+                    top.add(candidate);
+                }
+            }
+            List<ScoredKey> ranked = new ArrayList<>(top);
+            ranked.sort(bestFirst);
+            return new Ranking(header.metadata(), ranked);
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
+        }
+    }
+
+    /** Second walk: the documents of the ranked keys, from the very index and file the first walk read. */
+    private Map<String, SemanticDocument> documentsOf(String projectId, Path file, FileStamp stamp,
+                                                      Ranking ranking) throws IOException {
+        Set<String> wanted = new HashSet<>();
+        for (ScoredKey key : ranking.keys()) wanted.add(key.stableKey());
+        Map<String, SemanticDocument> documents = new HashMap<>();
+        try (IndexReader reader = IndexReader.open(file, 0L)) {
+            requireUnchanged(stamp, file);
+            IndexHeader header = reader.header(projectId);
+            if (!ranking.metadata().equals(header.metadata())) throw replaced();
+            EntryWalk walk = new EntryWalk(reader, header, 0, null);
+            while (walk.hasMore() && documents.size() < wanted.size()) walk.collect(wanted, documents);
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index: " + leafName(file), exception);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("invalid semantic index entry: " + leafName(file), exception);
+        }
+        if (documents.size() != wanted.size()) throw replaced();
+        return documents;
+    }
+
+    /** The best stable keys of a ranking walk, best first, and the metadata of the index it walked. */
+    private record Ranking(IndexMetadata metadata, List<ScoredKey> keys) {
+    }
+
+    private static IOException replaced() {
+        return new IOException("semantic index was replaced while it was read; read it again");
+    }
+
+    private static void requireUnchanged(FileStamp stamp, Path file) throws IOException {
+        if (!stamp.equals(FileStamp.of(file))) throw replaced();
+    }
+
     /** The place the previous page of this very file stopped at, when the page asked for follows it. */
-    private Optional<ResumePoint> resumePoint(String projectId, FileStamp stamp, String afterStableKey) {
-        synchronized (resumePoints) {
-            ResumePoint known = resumePoints.get(projectId);
+    private static Optional<ResumePoint> resumePoint(Map<String, ResumePoint> points, String projectId,
+                                                     FileStamp stamp, String afterStableKey) {
+        synchronized (points) {
+            ResumePoint known = points.get(projectId);
             boolean follows = known != null && known.stamp().equals(stamp)
                     && known.afterStableKey().equals(afterStableKey);
             return follows ? Optional.of(known) : Optional.empty();
         }
     }
 
-    private void rememberResumePoint(String projectId, Optional<ResumePoint> point) {
-        synchronized (resumePoints) {
-            if (point.isEmpty()) resumePoints.remove(projectId);
-            else resumePoints.put(projectId, point.orElseThrow());
+    private static void rememberResumePoint(Map<String, ResumePoint> points, String projectId,
+                                            Optional<ResumePoint> point) {
+        synchronized (points) {
+            if (point.isEmpty()) points.remove(projectId);
+            else points.put(projectId, point.orElseThrow());
         }
     }
 
+    /** The stable key of a document and its score against a query. */
+    private record ScoredKey(String stableKey, double score) {
+    }
+
     /** The reading of the entries of an index file from one position, in stable-key order. */
-    private static final class VectorWalk {
+    private static final class EntryWalk {
         private final IndexReader reader;
         private final IndexHeader header;
         private int consumed;
         private String previous;
+        private String currentId;
 
-        VectorWalk(IndexReader reader, IndexHeader header, int consumed, String previous) {
+        EntryWalk(IndexReader reader, IndexHeader header, int consumed, String previous) {
             this.reader = reader;
             this.header = header;
             this.consumed = consumed;
             this.previous = previous;
         }
 
+        /** The walk the reader is positioned for: after the resume point when there is one, else at the start. */
+        static EntryWalk resumedOrStarted(IndexReader reader, Optional<ResumePoint> resume, String projectId)
+                throws IOException {
+            return resume.isPresent()
+                    ? new EntryWalk(reader, resume.orElseThrow().header(), resume.orElseThrow().consumed(),
+                            resume.orElseThrow().afterStableKey())
+                    : new EntryWalk(reader, reader.header(projectId), 0, null);
+        }
+
+        ResumePoint resumePoint(FileStamp stamp, String lastStableKey) {
+            return new ResumePoint(stamp, lastStableKey, reader.position(), consumed, header);
+        }
+
         boolean hasMore() {
             return consumed < header.count();
         }
 
+        /** The stable key of the next entry, once its identifier is read; refuses a key out of order. */
+        private String nextKey() throws IOException {
+            currentId = reader.string();
+            String stableKey = reader.string();
+            if (previous != null && previous.compareTo(stableKey) >= 0) {
+                throw new IOException("semantic index is not in stable-key order");
+            }
+            previous = stableKey;
+            consumed++;
+            return stableKey;
+        }
+
         /** Up to {@code limit} vectors whose stable key follows {@code afterStableKey}; the others are skipped. */
-        List<StoredVector> read(String afterStableKey, int limit) throws IOException {
+        List<StoredVector> readVectors(String afterStableKey, int limit) throws IOException {
             List<StoredVector> vectors = new ArrayList<>(Math.min(limit, 1_024));
             while (hasMore() && vectors.size() < limit) {
-                reader.skipString();
-                String stableKey = reader.string();
-                if (previous != null && previous.compareTo(stableKey) >= 0) {
-                    throw new IOException("semantic index is not in stable-key order");
-                }
-                previous = stableKey;
+                String stableKey = nextKey();
                 SemanticDocumentKind kind = SemanticDocumentKind.valueOf(reader.string());
                 reader.skipDocumentTail();
                 reader.skipString();
-                consumed++;
                 if (afterStableKey != null && stableKey.compareTo(afterStableKey) <= 0) {
                     reader.skipVector(header);
                 } else {
@@ -305,6 +538,82 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                 }
             }
             return vectors;
+        }
+
+        /** Up to {@code limit} documents whose stable key follows {@code afterStableKey}; no vector is decoded. */
+        List<SemanticDocument> readDocuments(String afterStableKey, int limit) throws IOException {
+            List<SemanticDocument> documents = new ArrayList<>(Math.min(limit, 1_024));
+            while (hasMore() && documents.size() < limit) {
+                String stableKey = nextKey();
+                if (afterStableKey != null && stableKey.compareTo(afterStableKey) <= 0) {
+                    skipDocument();
+                } else {
+                    documents.add(document(stableKey));
+                }
+                reader.skipVector(header);
+            }
+            return documents;
+        }
+
+        /** The document under {@code stableKey} and its vector, or empty; stops at the first greater key. */
+        Optional<IndexedDocument> find(String stableKey) throws IOException {
+            while (hasMore()) {
+                String key = nextKey();
+                int order = key.compareTo(stableKey);
+                if (order > 0) return Optional.empty();
+                if (order < 0) {
+                    skipDocument();
+                    reader.skipVector(header);
+                    continue;
+                }
+                SemanticDocument document = document(key);
+                return Optional.of(new IndexedDocument(document,
+                        SemanticVector.fromArray(key, reader.vector(header))));
+            }
+            return Optional.empty();
+        }
+
+        /** The next entry's stable key and its cosine score with {@code query}; contents are skipped. */
+        ScoredKey score(SemanticVector query) throws IOException {
+            String stableKey = nextKey();
+            skipDocument();
+            SemanticVector stored = SemanticVector.fromArray(stableKey, reader.vector(header));
+            double denominator = query.norm() * stored.norm();
+            double score = 0.0;
+            if (denominator != 0.0) {
+                double dot = 0.0;
+                for (int i = 0; i < query.dimensions(); i++) dot += query.valueAt(i) * stored.valueAt(i);
+                score = Math.max(-1.0, Math.min(1.0, dot / denominator));
+            }
+            return new ScoredKey(stableKey, score);
+        }
+
+        /** Reads the next entry; keeps its document when its stable key is wanted, skips it otherwise. */
+        void collect(Set<String> wanted, Map<String, SemanticDocument> documents) throws IOException {
+            String stableKey = nextKey();
+            if (wanted.contains(stableKey)) documents.put(stableKey, document(stableKey));
+            else skipDocument();
+            reader.skipVector(header);
+        }
+
+        /** Kind, source, file, lines, content and checksum of the entry whose identifier and key were read. */
+        private SemanticDocument document(String stableKey) throws IOException {
+            SemanticDocumentKind kind = SemanticDocumentKind.valueOf(reader.string());
+            String sourceId = reader.string();
+            String fileId = reader.string();
+            int startLine = reader.integer();
+            int endLine = reader.integer();
+            String content = reader.string();
+            String checksum = reader.string();
+            IndexMetadata metadata = header.metadata();
+            return new SemanticDocument(currentId, stableKey, metadata.projectId(), metadata.snapshotId(), kind,
+                    sourceId, nullable(fileId), startLine, endLine, content, checksum);
+        }
+
+        private void skipDocument() throws IOException {
+            reader.skipString();
+            reader.skipDocumentTail();
+            reader.skipString();
         }
     }
 
@@ -431,9 +740,16 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         return root;
     }
 
-    private void putCached(String projectId, CacheEntry entry) {
+    private boolean putCached(String projectId, CacheEntry entry) {
         synchronized (cacheLock) {
-            cache.put(projectId, entry, entry.weightBytes());
+            return cache.put(projectId, entry, entry.weightBytes());
+        }
+    }
+
+    private void rememberCacheRefusal(String projectId, FileStamp refused) {
+        synchronized (cacheRefusals) {
+            if (refused == null) cacheRefusals.remove(projectId);
+            else cacheRefusals.put(projectId, refused);
         }
     }
 
@@ -712,7 +1028,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         long weight = 1024L;
         for (IndexedDocument indexed : snapshot.documents()) {
             SemanticDocument document = indexed.document();
-            weight = saturatingAdd(weight, 256L);
+            weight = saturatingAdd(weight, MINIMUM_DOCUMENT_WEIGHT_BYTES);
             weight = saturatingAdd(weight, (long) indexed.vector().dimensions() * Double.BYTES);
             weight = saturatingAdd(weight, stringWeight(document.id()));
             weight = saturatingAdd(weight, stringWeight(document.stableKey()));

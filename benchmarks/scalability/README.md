@@ -122,8 +122,7 @@ PowerShell 5.1 et PowerShell 7.
 ### Jeux
 
 `semantic.json` déclare la dimension (768), la graine, l'échauffement, les itérations et les jeux par
-stockage : `local` 25 000 et 32 768 documents, `local` 100 000 documents à refus attendu sur la liste, le
-détail, les voisins et la recherche sémantique, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
+stockage : `local` 25 000, 32 768 et 100 000 documents, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
 neuf ; son libellé porte le stockage, la taille et la dimension (`local-n25000-d768`).
 
 `-ContentPaddingChars` complète chaque contenu synthétique, de 60 caractères environ, jusqu'au nombre demandé :
@@ -137,9 +136,10 @@ Tous les jeux sont **synthétiques** : textes tirés de la graine, vecteurs du p
 de construire (budget `SemanticIndexBudget.DEFAULT`, relu au HEAD par le harnais : au plus 32 768 documents à
 768 dimensions) porte la mention `beyond-build-budget` dans son libellé : il caractérise le magasin et les
 lectures, pas un index que l'utilisateur peut obtenir. Le jeu local de 100 000 documents dépasse aussi le
-décodage complet du magasin local : la liste, le détail, les voisins et la recherche sémantique (classement
-exact par défaut du port `SemanticVectorStore.search`, qui charge l'index entier) y sont refusés, et le banc
-constate ce refus.
+décodage complet du magasin local (192 Mio de vecteurs) : la liste, le détail, les voisins et la recherche
+sémantique y sont servis par un parcours du fichier, qui ne décode jamais l'index entier. Un jeu ne peut déclarer
+dans `semantic.json` un refus attendu (`expectRefusal`, liste de routes) que pour une route que le magasin
+refuse réellement ; le banc échoue si ce refus ne se produit pas.
 
 ### Mesures
 
