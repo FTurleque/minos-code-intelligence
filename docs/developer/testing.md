@@ -98,6 +98,8 @@ Le concurrent pose d'abord un loquet « démarré » et publie son `Thread` : av
 
 **Rejeu.** Un test de concurrence nouveau ou réécrit est rejoué 50 fois avant d'être déclaré stable : `@RepeatedTest(50)` temporaire (retiré avant commit) ou boucle sur `./mvnw -B -ntp -pl <module> -am test "-Dtest=Classe#methode"`. Un seul échec renvoie à la réécriture. Le décompte, et la plateforme qui n'a tourné qu'en CI, sont consignés.
 
+**Affirmation constante.** `assertTrue(true)` n'est pas une preuve. Un test de bail affirme un fait observé : après une fermeture refusée, un concurrent sur un autre fil est vu en attente ou échoue à une échéance courte, puis obtient le bail après la fermeture par le propriétaire (`ProjectLeaseOwnershipTest`, `SnapshotProjectLeaseTest`, AUD-TST-07).
+
 ### Tests de frontières
 
 Exemples :
@@ -118,6 +120,8 @@ Le script de la page de l'explorateur est exécuté par des tests `node:test` (`
 ### Variables d'environnement des tests
 
 Un test ne lit jamais l'environnement de l'hôte pour décider de son résultat. Un test de processus fils pose lui-même l'environnement de ce processus (modèle : `ChildJvm` de `minos-provider-scip`, qui vide l'environnement puis pose `PATH` et `JAVA_HOME`). Une moitié de test propre à un système s'écrit dans un test `@EnabledOnOs`, compté comme sauté ailleurs, jamais derrière un `if`. `minos-provider-scip` retire `JAVA_HOME` du JVM de ses tests (`excludedEnvironmentVariables` de surefire) : un test qui lirait le `JAVA_HOME` de l'hôte y échoue partout, CI comprise (AUD-TST-18).
+
+Un test de processus fils **échoue**, sans se sauter, quand son fils ne démarre pas ou ne signale pas qu'il est prêt : le message porte le code de sortie du fils et la fin bornée de sa sortie d'erreur, vidée en continu pour que le fils ne se bloque jamais sur un tube plein (modèle : `LockHolder` de `FileSemanticSyncConsistencyTest`, AUD-TST-05).
 
 ### Fixtures réelles
 
