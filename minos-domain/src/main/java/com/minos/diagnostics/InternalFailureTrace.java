@@ -40,7 +40,7 @@ public final class InternalFailureTrace implements DiagnosticEntry {
     private static final int REFERENCE_BYTES = 4;
     private static final int MAX_OPERATION_CHARS = 80;
     private static final int MAX_CHAIN_STEPS = 1_000;
-    private static final Pattern PLAIN_LABEL = Pattern.compile("[A-Za-z0-9_.:/ -]+");
+    private static final Pattern PLAIN_LABEL = Pattern.compile("[A-Za-z0-9_.:-]+");
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final String surface;
@@ -60,9 +60,9 @@ public final class InternalFailureTrace implements DiagnosticEntry {
         List<Throwable> all = causeChain(failure);
         this.chain = List.copyOf(all.subList(0, Math.min(all.size(), MAX_CAUSES)));
         this.omittedCauses = Math.max(0, all.size() - MAX_CAUSES);
-        this.type = failure.getClass().getName();
+        this.type = token(failure.getClass().getName());
         Throwable root = all.get(all.size() - 1);
-        this.rootCauseType = root.getClass().getName();
+        this.rootCauseType = token(root.getClass().getName());
         this.rootFrames = root.getStackTrace();
         this.origin = originOf(root);
     }
@@ -140,7 +140,7 @@ public final class InternalFailureTrace implements DiagnosticEntry {
                 .append(" operation=").append(operation).append(" ref=").append(reference).append('\n');
         for (int index = 0; index < chain.size(); index++) {
             Throwable cause = chain.get(index);
-            text.append(index == 0 ? "" : "caused by ").append(cause.getClass().getName());
+            text.append(index == 0 ? "" : "caused by ").append(token(cause.getClass().getName()));
             String message = messageOf(cause);
             if (message != null) text.append(": ").append(message);
             text.append('\n');
@@ -154,8 +154,8 @@ public final class InternalFailureTrace implements DiagnosticEntry {
         int written = Math.min(frames.length, MAX_FRAMES);
         for (int index = 0; index < written; index++) {
             StackTraceElement frame = frames[index];
-            text.append("  at ").append(frame.getClassName()).append('.').append(frame.getMethodName()).append('(')
-                    .append(frame.getFileName() == null ? "Unknown Source" : frame.getFileName());
+            text.append("  at ").append(token(frame.getClassName())).append('.').append(token(frame.getMethodName()))
+                    .append('(').append(frame.getFileName() == null ? "Unknown_Source" : token(frame.getFileName()));
             if (frame.getLineNumber() > 0) text.append(':').append(frame.getLineNumber());
             text.append(")\n");
         }
@@ -208,10 +208,13 @@ public final class InternalFailureTrace implements DiagnosticEntry {
         return safe.toString();
     }
 
-    /** A plain label is kept; anything else (a path, a secret, a control character) becomes a fixed text. */
+    /**
+     * A plain label (letters, digits, {@code . : _ -}) is kept; anything else, a path, a secret or a control
+     * character included, becomes a fixed text.
+     */
     private static String label(String value, String fallbackName) {
         if (value == null || value.isBlank() || value.length() > MAX_OPERATION_CHARS
-                || !PLAIN_LABEL.matcher(value).matches() || PublicErrorMessages.looksSensitive(value.replace('/', '_'))) {
+                || !PLAIN_LABEL.matcher(value).matches() || PublicErrorMessages.looksSensitive(value)) {
             return "surface".equals(fallbackName) ? "unknown" : UNNAMED_OPERATION;
         }
         return value;

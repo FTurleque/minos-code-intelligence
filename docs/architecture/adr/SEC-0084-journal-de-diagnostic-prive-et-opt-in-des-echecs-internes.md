@@ -47,10 +47,12 @@ La trace d'un échec interne a **deux niveaux**.
    qui porte la chaîne de causes et leurs trames. Toute autre valeur laisse le journal éteint. Le journal est :
    - **privé** : dossier et fichiers créés par `PrivateLocalStorage` (ACL sous Windows, `0700`/`0600` sous Linux) ;
    - **sans chemin ni secret** : un message d'exception n'y figure que si `PublicErrorMessages.looksSensitive` ne le juge
-     pas sensible, sinon un texte fixe le remplace ; aucune valeur d'argument n'est écrite ;
-   - **borné** : 200 entrées (les plus anciennes sont supprimées), 8 causes, 64 trames par cause, 300 caractères par
-     message ;
-   - **écrit par les primitives existantes seulement** (`ensurePrivateDirectory`, `writePrivateFile`,
+     pas sensible, sinon un texte fixe le remplace. Aucune valeur d'argument n'est écrite par le journal lui-même ;
+     un message non sensible peut en reprendre une (un genre inconnu, un motif de recherche) ;
+   - **borné** : 200 entrées (les plus anciennes, parmi les fichiers qui portent un nom d'entrée, sont supprimées),
+     60 entrées par minute (la rafale au-delà est abandonnée et dite une fois par fenêtre : un appelant ne peut pas
+     inonder le journal), 8 causes, 64 trames par cause, 300 caractères par message ;
+   - **écrit par les primitives existantes seulement** (`ensurePrivateDirectory`, `createPrivateOutputStream`,
      `DurableAtomicFile.deleteIfExists`) : un fichier entier par échec, donc ni ajout, ni verrou, ni renommage, et la
      liste nominative du garde d'E/S privées est inchangée ;
    - **sans effet sur la réponse** : s'il ne peut être ouvert ou écrit, l'entrée est abandonnée, l'indisponibilité est

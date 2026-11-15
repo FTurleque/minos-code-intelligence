@@ -34,12 +34,15 @@ n'écrit ni fichier ni dossier de journal.
 Journal actif, **chaque échec interne** ajoute un fichier dans `MINOS_HOME/logs/internal-failures/` :
 
 - un fichier par échec, nommé `<instant UTC compact>-<référence>.txt` ;
-- 200 fichiers au plus : les plus anciens sont supprimés au-delà ;
+- 200 fichiers au plus : les plus anciens sont supprimés au-delà ; 60 entrées par minute au plus, la rafale au-delà
+  est abandonnée et signalée une fois (`diagnostic journal is rate limited`) ;
 - permissions réservées à l'utilisateur courant (ACL sous Windows, mode `0600`/`0700` sous Linux) ;
 - une première ligne `<instant> surface=<mcp|cli|api|wsl-worker|explorer> operation=<nom> ref=<référence>`, puis la
   chaîne de causes (au plus 8, 64 trames chacune, l'omis est annoncé) avec classe, méthode, fichier source et ligne ;
 - un message d'exception n'y figure que s'il ne ressemble ni à un chemin, ni à un mot de passe, ni à une chaîne de
-  connexion ; sinon il est remplacé par un texte fixe. Aucune valeur d'argument de l'appelant n'est écrite.
+  connexion ; sinon il est remplacé par un texte fixe. Le journal n'écrit lui-même aucune valeur d'argument, mais un
+  message non sensible peut en reprendre une (un genre inconnu, un motif de recherche) : traitez une entrée comme une
+  donnée de projet.
 
 Le journal ne s'écrit que sur échec interne : une consultation réussie, un refus attendu (projet inconnu, registre
 illisible, erreur d'usage) ne laissent rien. Pour effacer le journal, supprimez le dossier `logs/internal-failures/`.

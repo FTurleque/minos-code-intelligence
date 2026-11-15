@@ -12,7 +12,8 @@ import java.util.regex.Pattern;
  * The diagnostic that a worker running in another environment sends about its own internal failure: a reference, the
  * classes of its cause chain, the origin and a few frames. It carries no message and no path, and its grammar is
  * closed: the receiving side keeps only a payload that {@link #parse} accepts and ignores any other, so a line that
- * the worker (or anything printing on its output) controls cannot carry a path, a secret or free text into a journal.
+ * the worker (or anything printing on its output) controls cannot carry a path, a separator or free text with spaces
+ * into a journal; a token is at most 200 characters of letters, digits and {@code . $ _ :}.
  *
  * <p>The payload is {@code DIAGNOSTIC ref=<8 hex> types=<c1>,<c2> at=<origin> frames=<f1>,<f2>}; a token is made of
  * letters, digits and {@code . $ _ :}.</p>
@@ -28,7 +29,7 @@ public final class WorkerDiagnostic implements DiagnosticEntry {
     /** Frames token when the root cause has no frame. */
     static final String NO_FRAMES = "none";
 
-    private static final String TOKEN = "[A-Za-z0-9._$:]+";
+    private static final String TOKEN = "[A-Za-z0-9._$:]{1,200}";
     private static final Pattern PAYLOAD = Pattern.compile(KEYWORD + " ref=([0-9a-f]{8}) types=(" + TOKEN
             + "(?:," + TOKEN + "){0," + (InternalFailureTrace.MAX_CAUSES - 1) + "}) at=(" + TOKEN
             + ") frames=(" + TOKEN + "(?:," + TOKEN + "){0," + (MAX_FRAMES - 1) + "})");

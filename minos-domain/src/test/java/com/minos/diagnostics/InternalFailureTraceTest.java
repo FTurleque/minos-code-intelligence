@@ -97,11 +97,11 @@ class InternalFailureTraceTest {
 
     @Test
     void theEntryHeaderNamesTheInstantTheSurfaceTheOperationAndTheReference() {
-        InternalFailureTrace trace = InternalFailureTrace.describe("explorer", "GET /api/search", new RuntimeException());
+        InternalFailureTrace trace = InternalFailureTrace.describe("explorer", "explorer.search", new RuntimeException());
 
         String header = trace.entry(INSTANT).lines().findFirst().orElseThrow();
 
-        assertEquals("2026-11-15T10:20:30.123Z surface=explorer operation=GET /api/search ref=" + trace.reference(),
+        assertEquals("2026-11-15T10:20:30.123Z surface=explorer operation=explorer.search ref=" + trace.reference(),
                 header);
     }
 
@@ -189,6 +189,29 @@ class InternalFailureTraceTest {
         assertFalse(entry.contains("alice"), entry);
         assertFalse(entry.contains("zzz"), entry);
         assertFalse(trace.line("failed", "tool", trace.operation()).contains("alice"));
+    }
+
+    @Test
+    void aPathShapedLabelIsNotAcceptedAsAnOperationNorAsASurface() {
+        for (String label : new String[]{"/etc/passwd", "C:/Users/alice/.minos", "a/b"}) {
+            InternalFailureTrace trace = InternalFailureTrace.describe(label, label, new RuntimeException());
+
+            assertEquals(InternalFailureTrace.UNNAMED_OPERATION, trace.operation(), label);
+            assertFalse(trace.entry(INSTANT).contains(label), label);
+            assertFalse(trace.line("failed", "tool", label).contains(label), label);
+        }
+    }
+
+    @Test
+    void classAndMethodNamesAreWrittenAsSafeTokens() {
+        Exception failure = framed(new IllegalStateException("x"),
+                frame("com.minos.demo.Widget", "<init>", "Widget.java", 7),
+                frame("com.minos.demo.Widget", "lambda$run$0", null, -1));
+
+        String entry = InternalFailureTrace.describe("mcp", "tool", failure).entry(INSTANT);
+
+        assertTrue(entry.contains("  at com.minos.demo.Widget._init_(Widget.java:7)"), entry);
+        assertTrue(entry.contains("  at com.minos.demo.Widget.lambda$run$0(Unknown_Source)"), entry);
     }
 
     private static Exception framed(Exception failure, StackTraceElement... frames) {

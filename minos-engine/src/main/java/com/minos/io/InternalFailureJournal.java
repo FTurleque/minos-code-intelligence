@@ -3,10 +3,12 @@ package com.minos.io;
 import com.minos.diagnostics.DiagnosticEntry;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 /**
  * Private, opt-in journal of internal failures: one owner-only file per failure under
@@ -33,7 +36,11 @@ public final class InternalFailureJournal {
     public static final String ENABLED = "enabled";
     /** Entries kept; the oldest are removed beyond it. */
     public static final int MAX_ENTRIES = 200;
+    /** Entries accepted per {@link #WINDOW}; a burst beyond it is dropped, so a caller cannot flood the journal. */
+    public static final int MAX_ENTRIES_PER_WINDOW = 60;
+    public static final Duration WINDOW = Duration.ofMinutes(1);
     static final String ENTRY_GLOB = "*.txt";
+    private static final Pattern ENTRY_NAME = Pattern.compile("[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}\\.txt");
 
     private static final System.Logger LOGGER = System.getLogger(InternalFailureJournal.class.getName());
 
@@ -45,6 +52,9 @@ public final class InternalFailureJournal {
     private final boolean unrecognizedSetting;
     private State state;
     private boolean unrecognizedReported;
+    private Instant windowStart;
+    private int writtenInWindow;
+    private boolean limitReported;
 
     /** A journal under {@code home}, switched on or off by {@code environment} and {@code properties}. */
     public InternalFailureJournal(Path home, Map<String, String> environment, Properties properties) {
@@ -87,9 +97,11 @@ public final class InternalFailureJournal {
         if (state != State.ACTIVE) return;
         try {
             Instant now = clock.get();
+            if (!withinRate(now)) return;
             PrivateLocalStorage.ensurePrivateDirectory(directory);
-            PrivateLocalStorage.writePrivateFile(directory.resolve(entry.fileName(now)),
-                    entry.entry(now).getBytes(StandardCharsets.UTF_8));
+            try (OutputStream output = PrivateLocalStorage.createPrivateOutputStream(directory.resolve(entry.fileName(now)))) {
+                output.write(entry.entry(now).getBytes(StandardCharsets.UTF_8));
+            }
             purge();
         } catch (IOException | RuntimeException failure) {
             state = State.UNAVAILABLE;
@@ -98,10 +110,32 @@ public final class InternalFailureJournal {
         }
     }
 
+    /** Whether one more entry fits the current window; says once per window that entries are being dropped. */
+    private boolean withinRate(Instant now) {
+        if (windowStart == null || !now.isBefore(windowStart.plus(WINDOW))) {
+            windowStart = now;
+            writtenInWindow = 0;
+            limitReported = false;
+        }
+        if (writtenInWindow < MAX_ENTRIES_PER_WINDOW) {
+            writtenInWindow++;
+            return true;
+        }
+        if (!limitReported) {
+            limitReported = true;
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "diagnostic journal is rate limited; further entries of this window are dropped");
+        }
+        return false;
+    }
+
     private void purge() throws IOException {
         List<String> names = new ArrayList<>();
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory, ENTRY_GLOB)) {
-            for (Path entry : entries) names.add(entry.getFileName().toString());
+            for (Path entry : entries) {
+                String name = entry.getFileName().toString();
+                if (ENTRY_NAME.matcher(name).matches()) names.add(name);
+            }
         }
         if (names.size() <= maxEntries) return;
         Collections.sort(names);

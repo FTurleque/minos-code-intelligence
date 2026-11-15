@@ -106,6 +106,42 @@ class InternalFailureJournalTest {
     }
 
     @Test
+    void aBurstBeyondTheWindowBoundIsDroppedAndSaidOnceThenTheNextWindowWritesAgain() throws Exception {
+        AtomicLong tick = new AtomicLong();
+        InternalFailureJournal journal = new InternalFailureJournal(temp, ENABLED, new Properties(), 200,
+                () -> Instant.parse("2026-11-15T10:00:00Z").plusSeconds(tick.get()));
+
+        try (LogCapture log = new LogCapture(InternalFailureJournal.class)) {
+            for (int index = 0; index < InternalFailureJournal.MAX_ENTRIES_PER_WINDOW + 10; index++) {
+                journal.append(trace());
+            }
+
+            assertEquals(InternalFailureJournal.MAX_ENTRIES_PER_WINDOW, entries().size());
+            assertEquals(1, log.warnings().size(), log.warnings().toString());
+            assertTrue(log.warnings().get(0).contains("rate limited"), log.warnings().get(0));
+
+            tick.set(InternalFailureJournal.WINDOW.toSeconds() + 1);
+            journal.append(trace());
+
+            assertEquals(InternalFailureJournal.MAX_ENTRIES_PER_WINDOW + 1, entries().size());
+        }
+    }
+
+    @Test
+    void thePurgeLeavesAFileThatIsNotAnEntryAlone() throws Exception {
+        Path directory = Files.createDirectories(temp.resolve("logs").resolve("internal-failures"));
+        Files.writeString(directory.resolve("notes.txt"), "kept");
+        AtomicLong tick = new AtomicLong();
+        InternalFailureJournal journal = new InternalFailureJournal(temp, ENABLED, new Properties(), 2,
+                () -> Instant.parse("2026-11-15T10:00:00Z").plusMillis(tick.incrementAndGet()));
+
+        for (int index = 0; index < 5; index++) journal.append(trace());
+
+        assertTrue(Files.exists(directory.resolve("notes.txt")));
+        assertEquals(3, entries().size(), "two entries and the unrelated file");
+    }
+
+    @Test
     void anUnavailableJournalDropsTheEntryReportsOnceAndNeverThrows() throws Exception {
         Files.writeString(temp.resolve("logs"), "a file where the directory should be");
         List<String> before = listing(temp);
