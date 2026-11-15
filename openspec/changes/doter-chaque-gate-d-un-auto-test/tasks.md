@@ -23,10 +23,10 @@
 
 ## 4. Clôture
 
-- [ ] 4.1 Mettre à jour la matrice de traçabilité du design ; nommer les règles vacuitaires trouvées en 2.6 et leur suite ; vérifier qu'aucune ligne n'affirme une couverture sans preuve
-- [ ] 4.2 Vérifier le dossier durable `controles-de-fusion` par `python scripts/docs/check-capability-dossiers.py`
-- [ ] 4.3 Valider les spécifications par `openspec validate --all --strict`
-- [ ] 4.4 Lister les documents à mettre à jour avant archivage (`docs/developer/quality-gates.md`, `SUIVI.md` de l'audit du 2026-11-15 avec la liste fermée restante) ; vérifier que chacun est fait ou nommé comme reste
+- [x] 4.1 Mettre à jour la matrice de traçabilité du design ; nommer les règles vacuitaires trouvées en 2.6 et leur suite ; vérifier qu'aucune ligne n'affirme une couverture sans preuve
+- [x] 4.2 Vérifier le dossier durable `controles-de-fusion` par `python scripts/docs/check-capability-dossiers.py`
+- [x] 4.3 Valider les spécifications par `openspec validate --all --strict`
+- [x] 4.4 Lister les documents à mettre à jour avant archivage (`docs/developer/quality-gates.md`, `SUIVI.md` de l'audit du 2026-11-15 avec la liste fermée restante) ; vérifier que chacun est fait ou nommé comme reste
 
 ## Workflow follow-up
 
