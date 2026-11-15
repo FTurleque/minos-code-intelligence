@@ -99,6 +99,10 @@ MinosMultiRepositoryApiContractTest
 
 Ils empêchent notamment une fuite de types fournisseur ou de packages internes vers les contrats publics.
 
+### Tests du front de l'explorateur (Node)
+
+Le script de la page de l'explorateur est exécuté par des tests `node:test` (`minos-explorer/src/test/js/`), lancés par `python scripts/quality/check-explorer-front.py`. Ce gate exige **Node 20 ou plus** dans le `PATH` : sans Node, il échoue (code 1), il ne saute pas. Aucun paquet npm n'est installé. Maven ne lance pas ces tests et ne les copie pas dans `target/classes` (ce ne sont pas des ressources). Détail : [semantic-explorer.md](semantic-explorer.md#page-embarquée) et [quality-gates.md](quality-gates.md).
+
 ### Variables d'environnement des tests
 
 Un test ne lit jamais l'environnement de l'hôte pour décider de son résultat. Un test de processus fils pose lui-même l'environnement de ce processus (modèle : `ChildJvm` de `minos-provider-scip`, qui vide l'environnement puis pose `PATH` et `JAVA_HOME`). Une moitié de test propre à un système s'écrit dans un test `@EnabledOnOs`, compté comme sauté ailleurs, jamais derrière un `if`. `minos-provider-scip` retire `JAVA_HOME` du JVM de ses tests (`excludedEnvironmentVariables` de surefire) : un test qui lirait le `JAVA_HOME` de l'hôte y échoue partout, CI comprise (AUD-TST-18).

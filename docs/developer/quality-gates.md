@@ -137,6 +137,14 @@ Les scripts livrés ne dot-sourcent aucune bibliothèque : la distribution Windo
 
 Limite : le garde ne connaît pas les types ; un `Path` obtenu par un appel imbriqué, ou une variable qui change de type d'une méthode à l'autre du même fichier, n'est pas distingué. L'auto-test fixe ce qu'il voit et ne voit pas.
 
+## Front de l'explorateur exécuté sous Node (`check-explorer-front.py`)
+
+`python scripts/quality/check-explorer-front.py` (job `invariants`, auto-test `--self-test`, AUD-TST-02) contrôle la syntaxe de `minos-explorer/src/main/resources/com/minos/explorer/web/app.js` (`node --check`) puis exécute les fichiers `minos-explorer/src/test/js/*.test.mjs` (`node --test --test-reporter=tap`), qui chargent le vrai script dans `node:vm` avec un faux DOM (détail : [semantic-explorer.md](semantic-explorer.md#page-embarquée)). Aucun paquet npm : le Node de l'image du runner sert, comme son Python ; l'étape précédente du job affiche sa version.
+
+- **Échecs** (code 1, jamais un saut) : Node absent du `PATH` ou de majeure inférieure à `MINIMUM_NODE_MAJOR` (20) ; `app.js` refusé par `node --check` ; un test en échec ou annulé ; aucun fichier de test ou zéro test exécuté. Le message nomme les tests en échec. Node reçoit une liste d'arguments (aucun shell) et un environnement réduit (`PATH`, variables système et dossiers temporaires).
+- **Auto-test** : dix cas sur des copies temporaires de la page et des tests (état du dépôt accepté ; accolade retirée ; dossier de tests vide ; `PATH` sans Node ; minimale au-dessus de la version installée ; puits `insertAdjacentHTML` ; puits sous un nom de propriété calculé ; `eval` ; rayon de capture changé ; constante du contrat sans libellé). Chaque mutation doit faire échouer le test qui possède le comportement, nommé dans le message.
+- **Ce qu'il ne prouve pas** : le comportement dans un vrai navigateur (rendu, durées, événements réels) ; `index.html` et `app.css`, gardés par `WebResourcesContentTest`.
+
 ## Supply-chain des workflows
 
 Le gate reproductible est :
