@@ -25,7 +25,11 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$Output = [System.IO.Path]::GetFullPath($OutputDirectory)
+# A relative path is resolved against the current PowerShell location, not the working directory of the process.
+function Resolve-FullPath([string] $Path) {
+    [System.IO.Path]::GetFullPath($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path))
+}
+$Output = Resolve-FullPath $OutputDirectory
 $RepoPrefix = $RepoRoot.TrimEnd('\') + '\'
 if ($Output.Equals($RepoRoot.TrimEnd('\'), [System.StringComparison]::OrdinalIgnoreCase) -or
     $Output.StartsWith($RepoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -94,17 +98,15 @@ $Arguments = @($Configuration.jvmArguments) + @(
 ) + $DatasetArguments
 
 $PostgresHost = "none"
+$PassPassword = $false
 if ($NeedsPostgres) {
     if ($PostgresUrl) {
         $Arguments += "--postgres-url=$PostgresUrl"
         if ($PostgresUrl -match '^jdbc:postgresql://([^/?]+)') { $PostgresHost = $Matches[1] -replace '^.*@', '' }
     }
     if ($PostgresUser) { $Arguments += "--postgres-user=$PostgresUser" }
-    if ($PostgresPasswordFile) { $Arguments += "--postgres-password-file=$([System.IO.Path]::GetFullPath($PostgresPasswordFile))" }
-    elseif ($env:MINOS_TEST_POSTGRES_PASSWORD) {
-        # Inherited by the benchmark JVM through the environment, never written in an argument or a file.
-        $env:MINOS_POSTGRES_PASSWORD = $env:MINOS_TEST_POSTGRES_PASSWORD
-    }
+    if ($PostgresPasswordFile) { $Arguments += "--postgres-password-file=$(Resolve-FullPath $PostgresPasswordFile)" }
+    elseif ($env:MINOS_TEST_POSTGRES_PASSWORD) { $PassPassword = $true }
 }
 
 # The JDK of JAVA_HOME when it is set, never a java.exe of the current directory.
@@ -132,8 +134,19 @@ $Environment = @(
 $Result = Join-Path $Output "result.tsv"
 $Errors = Join-Path $Output "stderr.txt"
 $Started = Get-Date
-$Process = Start-Process -FilePath $Java -ArgumentList ($Arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) `
-    -NoNewWindow -Wait -PassThru -RedirectStandardOutput $Result -RedirectStandardError $Errors
+# The password is inherited by the benchmark JVM through the environment, never written in an argument or a file;
+# Windows PowerShell 5.1 has no per-process environment, so the variable is set for the launch only and the
+# previous value of the calling session is restored afterwards.
+$PreviousPassword = $env:MINOS_POSTGRES_PASSWORD
+try {
+    if ($PassPassword) { $env:MINOS_POSTGRES_PASSWORD = $env:MINOS_TEST_POSTGRES_PASSWORD }
+    $Process = Start-Process -FilePath $Java -ArgumentList ($Arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) `
+        -NoNewWindow -Wait -PassThru -RedirectStandardOutput $Result -RedirectStandardError $Errors
+}
+finally {
+    if ($null -eq $PreviousPassword) { Remove-Item -LiteralPath Env:MINOS_POSTGRES_PASSWORD -ErrorAction SilentlyContinue }
+    else { $env:MINOS_POSTGRES_PASSWORD = $PreviousPassword }
+}
 $Elapsed = (Get-Date) - $Started
 
 # Summary: one object per section and dataset, built from the METRIC lines; the refusals are listed apart.
