@@ -62,11 +62,11 @@ Statut du constat : **confirmé**, et plus large que décrit (cinq tests, non qu
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Aucun test ne passe à vide derrière un retour anticipé de plateforme | État du dépôt | D1, D2 | 1.1, 2.1, 2.2 | à écrire : gate |
-| idem | Garde sur deux lignes ; Garde par variable locale ; Aucun fichier lu | D2 | 1.1, 1.2 | à écrire : `--self-test` |
-| idem | Test Windows sous Linux | D1 | 2.1, 2.3 | rapport Surefire du job `Verify (ubuntu-24.04)` |
-| controles-de-fusion › Les retours anticipés de plateforme tolérés sont une liste fermée et motivée | Exception devenue sans objet ; Exception dans une méthode de test | D3 | 1.2 | à écrire : `--self-test` |
-| idem | Auto-test câblé | D2 | 3.1, 3.2 | `check-ci-wiring.py` (règle existante) |
+| controles-de-fusion › Aucun test ne passe à vide derrière un retour anticipé de plateforme | État du dépôt | D1, D2 | 1.1, 2.1, 2.2 | `python scripts/quality/check-test-platform-guards.py` (vert, 914 fichiers, 2 exceptions) |
+| idem | Garde sur deux lignes ; Garde par variable locale ; Aucun fichier lu | D2 | 1.1, 1.2 | `--self-test`, cas `two-line guard`, `local variable from os.name`, `no test source` |
+| idem | Test Windows sous Linux | D1 | 2.1, 2.3 | **manquant** : rapport Surefire du job `Verify (ubuntu-24.04)` (la CI n'a pas tourné) ; sous Windows, le test Linux de `CommandLocatorTest` est sauté et les deux tests Windows exécutés |
+| controles-de-fusion › Les retours anticipés de plateforme tolérés sont une liste fermée et motivée | Exception devenue sans objet ; Exception dans une méthode de test | D3 | 1.2 | `--self-test`, cas `stale exception refused`, `exception in a test method refused`, `exception without reason refused` |
+| idem | Auto-test câblé | D2 | 3.1, 3.2 | `check-ci-wiring.py` rouge avant câblage, vert après |
 
 ## Questions ouvertes
 

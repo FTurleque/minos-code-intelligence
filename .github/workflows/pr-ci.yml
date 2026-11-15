@@ -279,6 +279,13 @@ jobs:
       - name: Docker upgrade evidence checker unit tests
         run: python scripts/release/test_check_docker_upgrade_evidence.py -v
 
+      # AUD-TST-04: a test restricted to one system uses @EnabledOnOs (counted as skipped), never an early return.
+      - name: Test platform guards gate
+        run: python scripts/quality/check-test-platform-guards.py
+
+      - name: Test platform guards gate self-test
+        run: python scripts/quality/check-test-platform-guards.py --self-test
+
       # AUD-TST-02: the explorer page is parsed and executed under the Node of the runner image (no npm package).
       - name: Node version used by the explorer front gate
         run: node --version

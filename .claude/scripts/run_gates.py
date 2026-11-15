@@ -45,7 +45,7 @@ def invariants_commands() -> list[str]:
 
 
 def is_selftest(command: str) -> bool:
-    return "--self-test" in command or re.search(r"/test_[^ ]+\.py", command) is not None or "test-" in command
+    return "--self-test" in command or re.search(r"/test_[^ ]+\.py", command) is not None or "/test-" in command
 
 
 def main() -> int:
