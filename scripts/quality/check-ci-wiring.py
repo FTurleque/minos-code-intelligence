@@ -68,19 +68,8 @@ PLUGIN_RELEASE = "intellij-plugin-release.yml"
 # A step that creates the release: the publication script outside its validation-only mode, or the CLI itself.
 RELEASE_PUBLICATION = re.compile(r"publish-windows-release\.ps1(?!.*-ValidateOnly)|\bgh\s+release\s+create\b")
 _CLOSED_AUDIT_GATE = "remediation gate of a closed audit, to equip with a self-test or to retire (AUD-TST-09, D4)"
-_CONSTAT_GATE = "literal consistency gate of AUD-TST-09, waiting for its --self-test"
 # Gates tolerated without a self-test (rule 7): a closed list that only shrinks, one reason per entry.
 GATES_WITHOUT_SELF_TEST: dict[str, str] = {
-    "scripts/docs/check-current-docs.py": _CONSTAT_GATE,
-    "scripts/quality/check-advanced-provider-consistency.py": _CONSTAT_GATE,
-    "scripts/quality/check-current-docs-vertical-extension.py": _CONSTAT_GATE,
-    "scripts/quality/check-hosted-control-plane-consistency.py": _CONSTAT_GATE,
-    "scripts/quality/check-java-ast-provider-consistency.py": _CONSTAT_GATE,
-    "scripts/quality/check-polyglot-provider-consistency.py": _CONSTAT_GATE,
-    "scripts/quality/check-remote-distributed-consistency.py": _CONSTAT_GATE,
-    "scripts/quality/check-runtime-dynamic-consistency.py": _CONSTAT_GATE,
-    "scripts/quality/check-semantic-retrieval-consistency.py": _CONSTAT_GATE,
-    "scripts/quality/check-vertical-decomposition-consistency.py": _CONSTAT_GATE,
     "scripts/release/check-supply-chain.py": "release gate without a self-test, to equip or to retire (AUD-TST-09, D4)",
     "scripts/remediation/check-audit-remediation-v2.py": _CLOSED_AUDIT_GATE,
     "scripts/remediation/check-minos-01.py": _CLOSED_AUDIT_GATE,
