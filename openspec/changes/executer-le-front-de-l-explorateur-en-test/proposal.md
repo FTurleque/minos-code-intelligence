@@ -12,7 +12,7 @@ Ce changement est le **prérequis** de deux constats d'autres sprints : AUD-PERF
 - Des tests `node:test` chargent le **vrai** `app.js` dans un contexte `node:vm` muni d'un faux DOM minimal : fonctions pures (libellés, pourcentages, filtres, messages d'état), géométrie et sélection de la carte, pagination des points, traduction des états.
 - Un test de non-régression des puits DOM **par exécution** : le faux DOM refuse toute écriture de balisage et le contexte interdit la génération de code depuis une chaîne ; les rendus sont rejoués avec un contenu indexé hostile.
 - Le gate et son auto-test sont exécutés par le job `invariants` de `pr-ci.yml`.
-- `app.js` : le rejet de la promesse du presse-papiers (« Copier la référence ») est géré et signalé dans la page. C'est la seule modification du produit, de trois lignes (décision D6).
+- `app.js` : le rejet de la promesse du presse-papiers (« Copier la référence ») est géré et signalé dans la page. C'est la seule modification du produit, de deux lignes (décision D6).
 
 Aucune route, aucun champ du contrat v1, aucun comportement serveur ne change.
 
@@ -29,6 +29,7 @@ Aucune.
 
 - Les corrections de performance de la carte (grille spatiale, cache du filtre, survol limité à une image) : AUD-PERF-10, sprint 4. Ce changement fixe le comportement à préserver et les compteurs à comparer, il n'optimise rien.
 - Le renommage des constantes du contrat v1 et le `code` stable des erreurs : AUD-QUA-03, sprint 8.
+- La traduction du badge d'en-tête, qui affiche l'état d'index brut (`index : READY`) : les tests le caractérisent tel quel, la traduction relève d'AUD-QUA-03.
 - Les neuf variables globales mutables de `app.js` et l'objet `map` global : relevés par le constat, non restructurés ici (une restructuration sans test serait le défaut que ce changement corrige).
 - Un test dans un vrai navigateur, un linter (ESLint) ou un outil de build JavaScript : ils introduiraient une dépendance npm et un verrou.
 - La couverture JaCoCo du module Java `minos-explorer` : changement `borner-la-couverture-des-zones-nouvelles`.
