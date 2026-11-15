@@ -11,7 +11,7 @@ its success message. ``main`` parses the arguments (``--self-test`` among them) 
 content the fact reads. Then, for each fact, it re-evaluates the gate on an in-memory copy of those files in which
 the fact is false: a required literal or pattern removed, a forbidden literal or a witness of a forbidden pattern
 inserted, a required file removed, a forbidden file created. The gate must fail and name the fact's label (the
-file, most of the time). A structured rule (``check``) has no mutation that can be derived from its arguments: the
+file, most of the time; for a file fact, its path is enough, with either separator). A structured rule (``check``) has no mutation that can be derived from its arguments: the
 gate declares its mutations in a table, and a rule without one is a failure. Nothing is written to disk.
 
 The driver fails when the gate fails on the repository, when it asserts no fact, when a fact has no mutation
@@ -292,6 +292,11 @@ def _derived_mutation(fact: Fact, baseline: dict[str, str]) -> dict[str, str | N
     return {relative: _insert(baseline[relative], fact.text, inserted)}
 
 
+def _names(failure: str, label: str) -> bool:
+    """Whether ``failure`` names ``label``, a path being written with either separator (``Path`` on Windows)."""
+    return label in failure or label.replace("/", "\\") in failure
+
+
 def self_test(root: Path, evaluate: Callable[[], str], mutations: dict[str, list[Mutation]]) -> int:
     """Refuse one mutation per fact of the gate; print the count, or each problem on stderr."""
     problems: list[str] = []
@@ -330,7 +335,8 @@ def self_test(root: Path, evaluate: Callable[[], str], mutations: dict[str, list
         accepted, mutated_failure, _ = _evaluate(root, evaluate, overlay)
         if accepted is not None:
             problems.append(f"mutation accepted: {fact.describe()} holds after {', '.join(overlay)} changed")
-        elif fact.label not in (mutated_failure or ""):
+        elif not (_names(mutated_failure or "", fact.label)
+                  or (fact.kind in ("file", "absent") and _names(mutated_failure or "", fact.value))):
             problems.append(f"mutation of {fact.describe()} refused by a failure that does not name "
                             f"'{fact.label}': {mutated_failure}")
         else:
