@@ -151,6 +151,13 @@ jobs:
       - name: Reproducible build comparison self-test
         run: python scripts/quality/check-reproducible-build.py --self-test
 
+      # AUD-DEP-02: every POSIX shell script is pinned to LF by .gitattributes and recorded without carriage returns.
+      - name: POSIX script line endings gate (eol=lf attribute and LF index for every shell script)
+        run: python scripts/quality/check-posix-script-eol.py
+
+      - name: POSIX script line endings gate self-test (temporary Git repositories)
+        run: python scripts/quality/check-posix-script-eol.py --self-test
+
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 

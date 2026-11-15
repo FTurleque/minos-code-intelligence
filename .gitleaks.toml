@@ -35,8 +35,8 @@ regexes = ['''^\s*"(?:version|url|payload)"\s*:\s*"[^"]*[0-9a-f]{40}[^"]*",?\s*$
 
 # Test fixtures that look like credentials on purpose.
 [[allowlists]]
-description = "Test fixtures: HMAC test key and the fake Google API key of the redaction tests"
+description = "Test fixtures: HMAC test key, explorer session token and the fake Google API key of the redaction tests"
 targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''(?:^|[/\\])minos-[\w-]+[/\\]src[/\\]test[/\\]''']
-regexes = ['''^0123456789abcdef0123456789abcdef$''', '''^AIzaSyD-abcdef1234$''']
+regexes = ['''^0123456789abcdef0123456789abcdef$''', '''^0123456789abcdef$''', '''^AIzaSyD-abcdef1234$''']
