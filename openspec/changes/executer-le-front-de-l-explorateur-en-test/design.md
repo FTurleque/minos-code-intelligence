@@ -41,6 +41,7 @@ Non vérifié : la version de Node de l'image `ubuntu-24.04` des runners.
 | E3 — « tests unitaires des fonctions pures » : `app.js` n'exporte rien et démarre au chargement | action de AUD-TST-02 | `app.js:784` | charger le fichier réel dans `node:vm` avec un faux DOM ; aucune modification de structure de `app.js` (D2) |
 | E4 — « Node est déjà présent sur ubuntu-24.04 » : version non épinglée, alors que le comportement de `node:test` varie entre majeures. Aucune exigence n'épingle l'outillage d'un job (`controles-de-fusion › Le runner et l'outil de build d'un workflow sont épinglés` ne vise que les images `*-latest` et Gradle) ; le Python du même job ne l'est pas non plus | action de AUD-TST-02 | `openspec/specs/controles-de-fusion/spec.md:288-289` ; `.github/workflows/pr-ci.yml:49-52` | version minimale contrôlée par le gate, ou `actions/setup-node` épinglée (D4) |
 | E5 — Le cadrage du sprint dit « ne touche pas au code applicatif » ; l'action du constat inclut la gestion du rejet du presse-papiers | `sprints.md`, sprint 1 | action de AUD-TST-02 | l'inclure, isolée dans un groupe de tâches et précédée de son test rouge (D6) |
+| E6 — Le badge d'en-tête affiche l'état d'index brut (`index : READY`), et un état de projection inconnu de la page est affiché brut ; l'exigence « jamais par sa constante brute » n'est tenue que par les bandeaux et messages | `app.js:165`, `app.js:534` | exigence « La carte et la traduction des états ont un comportement caractérisé par des tests » | caractérisé par `labels.test.mjs` (« the header badge shows the raw index state… », cas `UNKNOWN_STATE`) ; la traduction relève d'AUD-QUA-03 (sprint 8) |
 
 ## Décisions
 
@@ -55,6 +56,8 @@ Non vérifié : la version de Node de l'image `ubuntu-24.04` des runners.
 
 ### D4 — Node du runner, version minimale contrôlée
 [Proposition, recommandée] Le job `invariants` utilise le Node de l'image, comme il utilise son Python ; le gate refuse une majeure inférieure à la minimale déclarée dans le script (celle où `node --test` et `node:vm` avec `codeGeneration` sont stables ; valeur fixée en tâche après lecture de la version du runner) et affiche la version utilisée. Écarté pour l'instant : `actions/setup-node` épinglée par SHA (une action de plus dans la chaîne d'approvisionnement) ; à retenir si la première exécution montre une image sans Node ou une dérive.
+
+Mise en œuvre : `MINIMUM_NODE_MAJOR = 20` dans `scripts/quality/check-explorer-front.py` (majeure où `node:test`, le reporter TAP et `codeGeneration` de `node:vm` sont stables ; les tests n'utilisent rien de plus récent). Valeur provisoire tant que la version du runner n'est pas lue (tâche 2.2) ; tests exécutés localement sous Node 24.18.0 seulement.
 
 ### D5 — Les compteurs sont des caractérisations, pas des seuils
 [Décision] Les tests de rafale (nombre de recherches de point et de tracés pour K déplacements, suite des décalages de pages) affirment les valeurs **actuelles**, nommées dans un seul tableau de constantes du test. Le sprint 4 modifie ce tableau en même temps que le code et la différence est la mesure de son gain. Aucun seuil de performance n'est inventé ici.
@@ -73,6 +76,8 @@ Non vérifié : la version de Node de l'image `ubuntu-24.04` des runners.
 - les invariants du zoom (bornes, point fixe sous le curseur) ;
 - l'**exécution de `drawMap` et de `pointAt` sous Node** : le faux canevas enregistre les appels de tracé (points dessinés, points marqués, effacement) pour un jeu et une vue donnés ; un tracé optimisé doit dessiner les mêmes points.
 
+Tests réels (`minos-explorer/src/test/js/map.test.mjs`, valeurs actuelles dans la table `CURRENT`) : « the point under the pointer is the nearest one inside the capture radius, on seeded sets », « on a set of 100 000 points the selection matches the reference, also with a kind filter and a zoom », « a tie keeps the first point received and a point beyond the radius is not selected », « the kind filter keeps the points of that kind in reception order, and all of them without filter », « the zoom stays within its bounds and keeps the point under the cursor in place », « the points are read page after page until the total is reached », « the reading stops when the state changes or a page is empty, and is abandoned when another one started », « a drawing clears the canvas, draws each plain point once and frames the selected one », « a burst of pointer moves without a frame looks a point up per move and requests one drawing » (50 déplacements : 50 recherches de point, 1 tracé demandé). Le cas « après changement de filtre » n'est couvert que par retour à `""` ; aucune invalidation de cache n'existe à tester aujourd'hui.
+
 Ce que ce changement ne donne pas : une durée dans un vrai navigateur. Les latences du serveur et la préparation de la projection sont mesurées par le changement `mesurer-la-projection-et-l-explorateur-au-banc` (AUD-PERF-13).
 
 **Sprint 8 — AUD-QUA-03** (constantes et codes du contrat v1). Le sprint 8 dispose de :
@@ -80,6 +85,8 @@ Ce que ce changement ne donne pas : une durée dans un vrai navigateur. Les late
 - une **table unique des constantes** du contrat dans les tests (états de projection, états d'index, divergences, causes de péremption), confrontée aux tables de libellés de la page : renommer une constante sans son libellé fait échouer le test en nommant la constante ;
 - la preuve qu'**aucune constante brute** n'est affichée : les rendus sont rejoués pour chaque état et le texte produit ne contient pas la constante ;
 - la **caractérisation de l'affichage d'une erreur d'API** : aujourd'hui le bandeau reprend `message` ; le passage à un `code` traduit se prouve en changeant cette attente, avec un cas « code inconnu ».
+
+Tests réels (`minos-explorer/src/test/js/labels.test.mjs`, table `CONTRACT`) : « every contract constant has a label in the page, and every label a contract constant », « the state banner shows the label of each index state and stale cause, never the raw constant », « the map message shows the label of each projection state, never the raw constant », « the detail shows the label of each divergence, never the raw constant », « an API error is shown by its message whatever its code (characterised), other failures by a fixed text ». Le badge d'en-tête, qui affiche l'état brut, est caractérisé à part (écart E6).
 
 ## Vérification
 
@@ -94,12 +101,12 @@ Ce que ce changement ne donne pas : une durée dans un vrai navigateur. Les late
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › La page de l'explorateur est exécutée par des tests et contrôlée avant toute fusion | État du dépôt ; Erreur de syntaxe ; Interpréteur absent ; Aucun test trouvé | D1, D4 | 1.1, 1.2, 1.4 | à écrire : `check-explorer-front.py --self-test` |
-| idem | Gate non câblé | D1 | 1.1, 1.3 | `check-ci-wiring.py` (règle existante) |
-| exploration-semantique › Aucun contenu indexé n'atteint un puits de balisage, prouvé par exécution | les trois scénarios | D2, D3 | 1.5 | à écrire : `sinks.test.mjs` et cas de `--self-test` |
-| exploration-semantique › La carte et la traduction des états ont un comportement caractérisé par des tests | Point désigné ; Filtre de nature ; Lecture paginée | D2, D5 | 1.6 | à écrire : `map.test.mjs` |
-| idem | État sans libellé | D5 | 1.7 | à écrire : `labels.test.mjs` |
-| exploration-semantique › Un échec de copie de la référence est signalé dans la page | Autorisation refusée ; Copie réussie | D6 | 3.1, 3.2 | à écrire : `clipboard.test.mjs` |
+| exploration-semantique › La page de l'explorateur est exécutée par des tests et contrôlée avant toute fusion | État du dépôt ; Erreur de syntaxe ; Interpréteur absent ; Aucun test trouvé | D1, D4 | 1.1, 1.2, 1.4 | `python scripts/quality/check-explorer-front.py` (code 0, nombre de tests affiché) ; `--self-test`, cas « repository state passes », « broken syntax names the file », « PATH without Node names Node and the minimum », « installed Node under the minimum », « empty test folder » ; Node du runner non lu (2.2) |
+| idem | Gate non câblé | D1 | 1.1, 1.3 | `scripts/quality/check-ci-wiring.py` (règle existante, rouge constaté avant câblage) |
+| exploration-semantique › Aucun contenu indexé n'atteint un puits de balisage, prouvé par exécution | les trois scénarios | D2, D3 | 1.5 | `sinks.test.mjs` (« list, header, detail and neighbours render hostile values as text », « search results, the map texts and the hover render hostile values as text », « an API error message is shown as text in the banner », « the test DOM refuses markup and the context refuses code generation ») ; `--self-test`, cas `insertAdjacentHTML`, nom calculé, `eval` |
+| exploration-semantique › La carte et la traduction des états ont un comportement caractérisé par des tests | Point désigné ; Filtre de nature ; Lecture paginée | D2, D5 | 1.6 | `map.test.mjs` (tests nommés plus haut) ; `--self-test`, cas « capture radius changed » |
+| idem | État sans libellé | D5 | 1.7 | `labels.test.mjs` ; `--self-test`, cas « contract constant without a label » (échec qui nomme `UNKNOWN_STATE`) ; écart E6 pour le badge |
+| exploration-semantique › Un échec de copie de la référence est signalé dans la page | Autorisation refusée ; Copie réussie | D6 | 3.1, 3.2 | `clipboard.test.mjs` (« a refused copy shows a message in the banner and leaves no unhandled rejection », rouge sur `app.js` du HEAD ; « a copy that succeeds writes the file and its lines and leaves the banner unchanged ») |
 
 ## Questions ouvertes
 
