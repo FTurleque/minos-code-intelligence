@@ -102,8 +102,9 @@ Le harnais est `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorer
 des sources de test de `minos-explorer` (le module de la surface, que `minos-bootstrap` ne voit pas) dont le
 nom ne correspond à aucun motif d'inclusion de Surefire : il ne tourne jamais dans `mvn verify`.
 `SemanticExplorerBenchmarkSmokeTest` l'exécute à chaque build sur un index local de quelques centaines de
-documents : il vérifie la liste exacte des mesures émises, que chaque route de `ExplorerApi` a un scénario
-mesuré, et la forme des refus. Il n'affirme aucune durée.
+documents : il vérifie la liste exacte des mesures émises (65 lignes `METRIC` pour un jeu local mesuré en
+entier), que chaque route de `ExplorerApi` a un scénario mesuré, la forme des refus, et que deux exécutions de
+même graine donnent les mêmes documents, passes et vecteurs lus. Il n'affirme aucune durée.
 
 ```powershell
 .\benchmarks\scalability\run-semantic-benchmark.ps1 -OutputDirectory <hors-dépôt>\semantic-run `
@@ -122,7 +123,7 @@ PowerShell 5.1 et PowerShell 7.
 
 `semantic.json` déclare la dimension (768), la graine, l'échauffement, les itérations et les jeux par
 stockage : `local` 25 000 et 32 768 documents, `local` 100 000 documents à refus attendu sur la liste, le
-détail et les voisins, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
+détail, les voisins et la recherche sémantique, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
 neuf ; son libellé porte le stockage, la taille et la dimension (`local-n25000-d768`).
 
 Tous les jeux sont **synthétiques** : textes tirés de la graine, vecteurs du provider déterministe
@@ -131,8 +132,9 @@ Tous les jeux sont **synthétiques** : textes tirés de la graine, vecteurs du p
 de construire (budget `SemanticIndexBudget.DEFAULT`, relu au HEAD par le harnais : au plus 32 768 documents à
 768 dimensions) porte la mention `beyond-build-budget` dans son libellé : il caractérise le magasin et les
 lectures, pas un index que l'utilisateur peut obtenir. Le jeu local de 100 000 documents dépasse aussi le
-décodage complet du magasin local : la liste, le détail et les voisins y sont refusés, et le banc constate ce
-refus.
+décodage complet du magasin local : la liste, le détail, les voisins et la recherche sémantique (classement
+exact par défaut du port `SemanticVectorStore.search`, qui charge l'index entier) y sont refusés, et le banc
+constate ce refus.
 
 ### Mesures
 
@@ -148,7 +150,7 @@ interrogées avec le jeton de session : la garde, l'encodage JSON et le magasin 
 
 Une mesure impossible est une ligne `REFUSED section jeu raison`, sans chemin absolu ni secret, et sans
 valeur ; les autres sections continuent. Pour une route, la raison donne le statut HTTP, le code d'erreur et
-le motif du produit. Code de sortie : 0 si chaque refus était attendu et chaque refus attendu s'est produit ;
+le motif du produit ; la page profonde de la liste reprend la raison de la page refusée en chemin. Code de sortie : 0 si chaque refus était attendu et chaque refus attendu s'est produit ;
 1 sinon (un refus attendu qui ne se produit plus demande, sur `stderr.txt`, de retirer la déclaration de
 `semantic.json`) ; 2 pour une erreur d'usage.
 

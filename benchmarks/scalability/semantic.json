@@ -13,7 +13,7 @@
   "datasets": [
     { "storage": "local", "documents": 25000 },
     { "storage": "local", "documents": 32768 },
-    { "storage": "local", "documents": 100000, "expectRefusal": ["DOCUMENTS", "DOCUMENT", "NEIGHBORS"] },
+    { "storage": "local", "documents": 100000, "expectRefusal": ["DOCUMENTS", "DOCUMENT", "NEIGHBORS", "SEARCH"] },
     { "storage": "postgresql", "documents": 25000 },
     { "storage": "postgresql", "documents": 100000 }
   ]
