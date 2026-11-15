@@ -308,7 +308,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             String head = Objects.requireNonNull(
                     repository.resolve(Constants.HEAD), "materialized repository has no HEAD").getName();
             if (!request.expectedCommit().equals(head)) throw new IOException("remote ref resolved to an unexpected commit");
-            if (!git.status().setIgnoreSubmodules(IgnoreSubmoduleMode.ALL).call().isClean()) throw new IOException("materialized remote checkout is not clean");
+            boolean clean = git.status().setIgnoreSubmodules(IgnoreSubmoduleMode.ALL).call().isClean();
+            if (!clean) throw new IOException("materialized remote checkout is not clean");
             String origin = repository.getConfig().getString("remote", "origin", "url");
             if (!request.canonicalRepositoryUri().equals(origin)) {
                 throw new IOException("materialized remote origin does not match the canonical repository URI");
