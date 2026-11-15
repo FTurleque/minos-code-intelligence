@@ -62,7 +62,7 @@ class SemanticExplorerBenchmarkSmokeTest {
     }
 
     @Test
-    void aTinyLocalIndexEmitsEveryExpectedMeasureWithAValue(@TempDir Path temp) throws Exception {
+    void aTinyLocalIndexEmitsEveryExpectedMeasureWithAValue(@TempDir Path temp) {
         Run run = run(temp, UnaryOperator.identity(), "--dataset=local:300");
 
         assertEquals(0, run.code(), run.err());
@@ -78,7 +78,7 @@ class SemanticExplorerBenchmarkSmokeTest {
     }
 
     @Test
-    void aPostgresqlDatasetWithoutUrlIsNamedAndTheLocalDatasetIsStillMeasured(@TempDir Path temp) throws Exception {
+    void aPostgresqlDatasetWithoutUrlIsNamedAndTheLocalDatasetIsStillMeasured(@TempDir Path temp) {
         Run run = run(temp, UnaryOperator.identity(), "--dataset=local:200", "--dataset=postgresql:200");
 
         assertNotEquals(0, run.code(), run.out());
@@ -92,7 +92,7 @@ class SemanticExplorerBenchmarkSmokeTest {
     }
 
     @Test
-    void aPreparationOverItsMemoryBudgetIsRefusedWithTheMotiveOfTheService(@TempDir Path temp) throws Exception {
+    void aPreparationOverItsMemoryBudgetIsRefusedWithTheMotiveOfTheService(@TempDir Path temp) {
         Run run = run(temp, UnaryOperator.identity(), "--dataset=local:300", "--max-memory-bytes=1");
 
         assertNotEquals(0, run.code(), run.out());
@@ -104,7 +104,7 @@ class SemanticExplorerBenchmarkSmokeTest {
     }
 
     @Test
-    void anExpectedRefusalThatIsObservedIsNamedAndEndsWithAZeroCode(@TempDir Path temp) throws Exception {
+    void anExpectedRefusalThatIsObservedIsNamedAndEndsWithAZeroCode(@TempDir Path temp) {
         Run run = run(temp, SemanticExplorerBenchmarkSmokeTest::refuseTheDecodingRoutes,
                 "--dataset=local:300:expect-refusal=DOCUMENTS+DOCUMENT+NEIGHBORS+SEARCH");
 
@@ -123,8 +123,7 @@ class SemanticExplorerBenchmarkSmokeTest {
     }
 
     @Test
-    void anExpectedRefusalThatNoLongerHappensEndsWithANonZeroCodeAndAsksToRemoveIt(@TempDir Path temp)
-            throws Exception {
+    void anExpectedRefusalThatNoLongerHappensEndsWithANonZeroCodeAndAsksToRemoveIt(@TempDir Path temp) {
         Run run = run(temp, UnaryOperator.identity(),
                 "--dataset=local:300:expect-refusal=DOCUMENTS+DOCUMENT+NEIGHBORS+SEARCH");
 
@@ -135,7 +134,7 @@ class SemanticExplorerBenchmarkSmokeTest {
     }
 
     @Test
-    void twoRunsWithTheSameSeedGiveTheSameDocumentsPassesAndVectorsRead(@TempDir Path temp) throws Exception {
+    void twoRunsWithTheSameSeedGiveTheSameDocumentsPassesAndVectorsRead(@TempDir Path temp) {
         Run first = run(temp.resolve("first"), UnaryOperator.identity(), "--dataset=local:300");
         Run second = run(temp.resolve("second"), UnaryOperator.identity(), "--dataset=local:300");
 
