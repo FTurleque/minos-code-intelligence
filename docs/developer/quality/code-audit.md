@@ -176,7 +176,7 @@ gitleaks dir . --redact=100 --report-format json --report-path <hors dépôt>/wo
 
 `.gitleaks.toml`, à la racine, garde les règles par défaut et n'ajoute que des listes d'autorisation **liées à une règle et à une forme** (action épinglée par SHA, commit cité en tête d'un rapport d'exécution, version d'outil de `embedded-tools.json`, clé HMAC et fausse clé Google des tests). Gitleaks le charge seul quand il analyse le dépôt. Vérifié le 9 octobre : 23 alertes sur l'historique local avec les seules règles par défaut, 0 avec la configuration (historique local et miroir) ; un jeton planté à côté de chaque forme autorisée reste signalé. Toute nouvelle exception suit la même règle : une règle, une forme, jamais un fichier entier.
 
-En CI, `secret-scan.yml` (sur chaque PR vers `main` et `develop`) installe Gitleaks 8.30.1 après vérification de sa somme SHA-256, analyse l'historique complet (`fetch-depth: 0`) avec `--redact=100 --exit-code 1` et publie le rapport rédigé en cas d'échec.
+En CI, `secret-scan.yml` (sur chaque PR vers `main`) installe Gitleaks 8.30.1 après vérification de sa somme SHA-256, analyse l'historique complet (`fetch-depth: 0`) avec `--redact=100 --exit-code 1` et publie le rapport rédigé en cas d'échec.
 
 ### Plugin IntelliJ (Gradle, hors réacteur)
 
