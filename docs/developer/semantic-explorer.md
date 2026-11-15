@@ -196,7 +196,8 @@ externe, tout script ou style en ligne.
 Le script de la page est exécuté par des tests `node:test` (`minos-explorer/src/test/js/`, hors des ressources
 livrées), sans paquet npm ni `package.json`. `harness.mjs` charge le vrai `app.js` dans un contexte `node:vm` muni
 d'un faux DOM qui refuse toute écriture de balisage (`innerHTML`, `outerHTML`, `insertAdjacentHTML`,
-`document.write`, `createContextualFragment`, `DOMParser`, y compris sous un nom calculé) et d'un contexte qui
+`document.write`, `createContextualFragment`, `DOMParser`, `srcdoc`, un attribut `on*` ou `srcdoc` posé par
+`setAttribute`, y compris sous un nom calculé) et d'un contexte qui
 refuse la génération de code depuis une chaîne (`eval`, `new Function`). `app.js` n'exporte rien et n'est pas
 modifié pour les tests : ses fonctions sont des propriétés du contexte, son état se lit par une expression évaluée
 dans le même contexte.
