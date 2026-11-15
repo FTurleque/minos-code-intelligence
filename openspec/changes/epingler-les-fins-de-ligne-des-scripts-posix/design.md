@@ -66,11 +66,11 @@ Non rejoué : l'échec `set: pipefail\r: invalid option name` et les deux auto-t
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Un script POSIX est extrait en LF quel que soit le réglage du clone | État du dépôt | D1, D2, D5 | 1.1, 2.1, 2.2 | à écrire : gate |
-| idem | Clone Windows avec conversion automatique | D1 | 2.3 | commande du scénario, clone jetable |
-| idem | Script ajouté sans règle ; Script enregistré avec des retours chariot | D5 | 1.2 | à écrire : `--self-test` |
-| idem | Auto-tests des scripts shell sur le poste | D4 | 3.1 | `test_start_test_postgres.py`, `test_cgroup_root_validation.py` (existants) |
-| controles-de-fusion › Le contrôle des fins de ligne échoue fermé | Aucun script trouvé ; Racine hors dépôt | D5 | 1.2 | à écrire : `--self-test` |
+| controles-de-fusion › Un script POSIX est extrait en LF quel que soit le réglage du clone | État du dépôt | D1, D2, D5 | 1.1, 2.1, 2.2 | `scripts/quality/check-posix-script-eol.py` (rouge au HEAD sur 15 fichiers, vert après correction : 16 contrôlés) |
+| idem | Clone Windows avec conversion automatique | D1 | 2.3 | commande du scénario sur un clone jetable `core.autocrlf=true` : `i/lf w/lf attr/text eol=lf` partout (preuve locale, non rejouable en CI) |
+| idem | Script ajouté sans règle ; Script enregistré avec des retours chariot | D5 | 1.2 | `check-posix-script-eol.py --self-test` (cas « script without attribute », « shebang script without extension », « script recorded with CRLF ») |
+| idem | Auto-tests des scripts shell sur le poste | D4 | 3.1, 3.2 | `test_start_test_postgres.py`, `test_cgroup_root_validation.py` (existants) ; **preuve manuelle** 3.1 (clone du mainteneur, chaque worktree) et 3.2 (WSL2) |
+| controles-de-fusion › Le contrôle des fins de ligne échoue fermé | Aucun script trouvé ; Racine hors dépôt | D5 | 1.2 | `check-posix-script-eol.py --self-test` (cas « repository without script », « directory outside a repository », « subdirectory of a repository ») |
 | idem | Auto-test câblé | D5 | 2.4 | `check-ci-wiring.py` (règle existante) |
 
 ## Questions ouvertes

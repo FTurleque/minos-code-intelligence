@@ -77,6 +77,13 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 `check-jacoco.py` porte son auto-test en option (`--self-test`), exécuté par le job `invariants` ; ses cas sont
 des étiquettes de la fonction `self_test`, d'où les preuves citées par ligne.
 
+Fins de ligne des scripts POSIX (changement `epingler-les-fins-de-ligne-des-scripts-posix`, AUD-DEP-02, non
+archivé) : `.gitattributes` épingle `*.sh`, `mvnw` et `.mvn/wrapper/maven-wrapper.properties` en LF et `*.cmd` en
+CRLF ; `scripts/quality/check-posix-script-eol.py` et son `--self-test` (job `invariants`) refusent un script
+POSIX sans attribut `eol=lf` ou enregistré en CRLF, et échouent fermés sans `git`, hors dépôt ou sur zéro script.
+Ses deux exigences entrent dans la table ci-dessus à l'archivage du changement ; la remise à niveau d'un clone
+existant et l'exécution sous WSL2 restent des preuves manuelles.
+
 ## Écarts
 
 | Id | Écart | Preuve | Suite proposée |
