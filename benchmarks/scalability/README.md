@@ -109,7 +109,7 @@ même graine donnent les mêmes documents, passes et vecteurs lus. Il n'affirme 
 ```powershell
 .\benchmarks\scalability\run-semantic-benchmark.ps1 -OutputDirectory <hors-dépôt>\semantic-run `
     [-PostgresUrl jdbc:postgresql://127.0.0.1:55432/postgres -PostgresUser minos] `
-    [-Only local:25000,postgresql:25000] [-Warmup 1] [-Iterations 3]
+    [-Only local:25000,postgresql:25000] [-Warmup 1] [-Iterations 3] [-ContentPaddingChars 2000]
 ```
 
 Le script compile le harnais (`mvnw -pl minos-explorer -am test-compile`), lance la JVM avec les paramètres
@@ -125,6 +125,11 @@ PowerShell 5.1 et PowerShell 7.
 stockage : `local` 25 000 et 32 768 documents, `local` 100 000 documents à refus attendu sur la liste, le
 détail, les voisins et la recherche sémantique, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
 neuf ; son libellé porte le stockage, la taille et la dimension (`local-n25000-d768`).
+
+`-ContentPaddingChars` complète chaque contenu synthétique, de 60 caractères environ, jusqu'au nombre demandé :
+sans lui, un index de 32 768 documents à 768 dimensions pèse environ 230 Mo en cache et tient dans le plafond de
+256 Mio du store local ; avec 2 000 caractères, il le dépasse sans dépasser le budget de construction de la
+synchronisation (au plus 192 Mio de contenu). Le libellé du jeu porte alors le suffixe `-c<caractères>`.
 
 Tous les jeux sont **synthétiques** : textes tirés de la graine, vecteurs du provider déterministe
 `local-hash`, écrits directement par le port d'écriture du magasin sémantique

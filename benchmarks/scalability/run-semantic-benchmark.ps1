@@ -14,7 +14,11 @@ param(
     # Reduced runs: only these datasets (storage:documents, as in the configuration) and these counts.
     [string[]] $Only,
     [int] $Warmup = -1,
-    [int] $Iterations = -1
+    [int] $Iterations = -1,
+
+    # Pads the content of every synthetic document to this many characters (0: the short generated contents), so
+    # that an index constructible by the synchronization weighs what real chunks do. Written in the dataset label.
+    [int] $ContentPaddingChars = 0
 )
 
 # Runs the semantic benchmark (see benchmarks/scalability/README.md): projection preparation and routes of the
@@ -96,6 +100,7 @@ $Arguments = @($Configuration.jvmArguments) + @(
     "--request-timeout-seconds=$($Configuration.requestTimeoutSeconds)",
     "--run-id=$([DateTime]::Now.ToString('yyyyMMddHHmmss', [Globalization.CultureInfo]::InvariantCulture))"
 ) + $DatasetArguments
+if ($ContentPaddingChars -gt 0) { $Arguments += "--content-padding-chars=$ContentPaddingChars" }
 
 $PostgresHost = "none"
 $PassPassword = $false
@@ -124,6 +129,7 @@ $Environment = @(
     "datasets=$(($DatasetArguments | ForEach-Object { $_.Substring(10) }) -join ' ')",
     "warmup=$Warmup",
     "iterations=$Iterations",
+    "contentPaddingChars=$ContentPaddingChars",
     "postgresHost=$PostgresHost",
     "=== java --version ===",
     ((& $Java --version 2>&1) -join [Environment]::NewLine)
