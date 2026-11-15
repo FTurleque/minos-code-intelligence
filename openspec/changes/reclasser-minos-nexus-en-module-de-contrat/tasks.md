@@ -1,0 +1,30 @@
+# Tasks
+
+Constat **AUD-ARC-08**. Aucune classe de production ne bouge ; tout `-pl` s'accompagne de `-am`. À fusionner avant `donner-une-source-unique-aux-tables-du-garde-de-frontieres` et avant `aligner-la-prose-d-architecture-sur-le-code`.
+
+## 0. Décisions préalables
+
+- [ ] 0.1 [AUD-ARC-08] **(manuelle)** Faire confirmer par le propriétaire D1 (requalifier, recommandé, ou absorber) et D2 (garder `NexusSemanticSignalService` déclarée non qualifiée, recommandé) ; consigner la réponse dans `design.md`. Si D1 = absorber : arrêter et réécrire specs et tâches. Vérifier : la section « Décisions » porte la date et le choix.
+
+## 1. Famille de contrat dans le garde et dans ArchUnit
+
+- [ ] 1.1 [AUD-ARC-08] Rouge : dans `scripts/architecture/test_check_module_boundaries.py`, écrire les cas refusés (module de contrat → surface ; module de contrat → `minos-bootstrap` en portée `runtime` ; surface → surface en portée `test` ; adaptateur → module de contrat, `minos-storage` → `minos-nexus` ; racine de composition → module de contrat, `minos-bootstrap` → `minos-nexus`, design D4) et le cas accepté (`minos-cli` → `minos-nexus`), et conserver le cas A11 « type du moteur réintroduit dans NEXUS » (frontieres-de-modules › Un module de contrat reste sous les surfaces ; › Aucune surface ne dépend d'une autre surface). Vérifier : `python scripts/architecture/test_check_module_boundaries.py` échoue sur les cas nouveaux, sortie rouge notée.
+- [ ] 1.2 [AUD-ARC-08] Correction : dans `scripts/architecture/check-module-boundaries.py`, ajouter `CONTRACT_MODULES`, retirer `minos-nexus` de `SURFACE_MODULES`, ajouter la famille aux rôles des règles hexagonales, écrire la règle surface ↛ surface et la règle du module de contrat, étendre aux modules de contrat les interdictions adaptateur ↛ surface (`:270`) et racine de composition ↛ surface (`:276`) (design D4), corriger le commentaire de `:81-82`, faire parcourir à A11 l'union des deux familles (design D3) ; garder le nom `ALLOWED_DEPENDENCIES` (affirmé par `scripts/remediation/check-p0-p2.py:252`). Vérifier : `python scripts/architecture/check-module-boundaries.py` (code 0, aucune différence de `docs/architecture/diagrams/module-dependencies.md`), `python scripts/architecture/test_check_module_boundaries.py`, `python scripts/remediation/check-p0-p2.py`.
+- [ ] 1.3 [AUD-ARC-08] Dans `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java` : sortir `minos-nexus` de `SURFACES`, ajouter l'ensemble des modules de contrat, une règle bytecode « un module de contrat n'utilise ni surface, ni adaptateur, ni racine de composition, ni assemblage », une règle « aucune surface n'utilise une autre surface », étendre aux modules de contrat `adaptersDoNotReachBackIntoUpperLayers` (`:167`) et `applicationOnlyKnowsPorts` (`:180`) (design D4, un cas refusé chacun, par une classe de test fictive ou une mutation consignée), garder `com.minos.nexus..` dans la liste interdite de la règle de l'explorateur (`:243-250`) en réécrivant sa raison (design D5), et faire parcourir à la règle A11 bytecode les deux familles. Rouge : la règle surface ↛ surface écrite avant le retrait échoue sur `minos-cli` → `minos-nexus`, sortie notée. Vérifier : `./mvnw -B -ntp -pl minos-app -am test "-Dtest=ModuleArchitectureTest" "-Dsurefire.failIfNoSpecifiedTests=false"` ; `archgate check` (la règle `allowed-dependency-tables-identical` lit la table `ALLOWED`, inchangée).
+
+## 2. Signal sémantique NEXUS et documentation
+
+- [ ] 2.1 [AUD-ARC-08] Écrire dans `scripts/architecture/test_check_module_boundaries.py` le cas A15 sur l'arbre réel : l'entrée `minos-nexus/com.minos.nexus.NexusSemanticSignalService` retirée de `UNREFERENCED_PRODUCTION_TYPES` fait échouer le garde en nommant la classe (aucun cas existant ne porte sur elle ; les cas de `:2125-2139` utilisent un type fictif) (frontieres-de-modules › Le signal sémantique NEXUS est déclaré non qualifié). Vérifier : `python scripts/architecture/test_check_module_boundaries.py`.
+- [ ] 2.2 [AUD-ARC-08] Documentation : `docs/developer/public-surfaces.md` (section NEXUS : le signal sémantique v2 est « non qualifié par un client », diagramme de classes annoté) ; `docs/architecture/arc42/05-vue-blocs.md` (diagramme 5.1 : `minos-nexus` hors du nœud « Surfaces » ; section `minos-nexus` : famille de contrat) ; `docs/architecture/diagrams/c4-container.md` ; `docs/architecture/diagrams/application/component-modules-et-dependances.md` ; `docs/developer/quality-gates.md` (A2, A11 dont la liste des surfaces de `:67`, règle nouvelle) ; `docs/architecture/SYNTHESE.md` (`:21`, `minos-nexus` hors de la liste des surfaces). Vérifier : `python scripts/docs/check-current-docs.py`, `python scripts/docs/product-facts.py --check`, `python scripts/architecture/check-module-boundaries.py` (A9), liens relatifs des fichiers modifiés.
+- [ ] 2.3 [AUD-ARC-08] **(manuelle)** Ajouter à ARCH-0068 une note datée de « Mise en œuvre » (famille de contrat, règle surface ↛ surface), sans réécrire la décision. Vérifier : `archgate check`, `python scripts/docs/check-current-docs.py`.
+
+## 3. Clôture
+
+- [ ] 3.1 [AUD-ARC-08] Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
+- [ ] 3.2 [AUD-ARC-08] Mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (trois exigences, vue des familles) ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [ ] 3.3 [AUD-ARC-08] `openspec validate --all --strict` et `python .claude/scripts/run_gates.py`.
+- [ ] 3.4 [AUD-ARC-08] Lister les documents à mettre à jour avant archivage (`docs/project/audits/2026-11-15/SUIVI.md`, STATUS et ROADMAP si l'état d'architecture y est cité) ; vérifier que chacun est fait ou nommé comme reste.
+
+## Workflow follow-up
+
+- Archiver le changement après revue (`openspec archive reclasser-minos-nexus-en-module-de-contrat -y`), puis vérifier que `openspec/specs/frontieres-de-modules/spec.md` garde sa section `## Documentation liée`.

@@ -1,0 +1,35 @@
+# Tasks
+
+## 1. Prérequis et mesure de référence (AUD-PERF-02)
+
+- [ ] 1.1 AUD-PERF-02 — Vérifier que le banc de AUD-PERF-13 (sprint 1, changement `mesurer-la-projection-et-l-explorateur-au-banc`) est fusionné et mesure `semantic projection prepare` (durée, `passes`, pic de mémoire) ; sinon s'arrêter. Vérifier : scénario décrit dans `benchmarks/scalability/README.md` et lançable.
+- [ ] 1.2 AUD-PERF-02 — **(manuelle)** Mesure « avant » sur `main` : stockage local puis PostgreSQL, index construits par la synchronisation — 25 000 documents à 768 dimensions (ou 32 768, plafond de `SemanticIndexBudget`) et 98 304 à 256 ; relever durée, `passes` réel et `peakWorkingBytes`. Un jeu plus grand n'est qu'un index synthétique écrit par le harnais : le mesurer à part et le dire. Vérifier : sorties jointes à la PR avec machine, révision, corpus et nature de chaque jeu.
+- [ ] 1.3 AUD-PERF-02 — **(manuelle, propriétaire)** Trancher D4 du design (arrondi `float` commun aux deux stratégies, version de méthode inchangée) et le seuil d'acceptation au vu de 1.2. Vérifier : décision écrite dans la PR ; si D4 est refusée, ajuster le scénario « Égalité des projections » avant de coder.
+
+## 2. Itérer en mémoire sur l'échantillon (AUD-PERF-02)
+
+- [ ] 2.1 AUD-PERF-02 — Rouge : étendre `ProjectionFixture` par un compte des parcours complets et un remplacement de l'index à une page donnée ; ajouter à `SemanticProjectionServiceTest` : (a) 2 000 documents, 500 points, budget large → exactement deux parcours, `passes == 2`, stratégie en mémoire ; (b) égalité stricte des clés, coordonnées et parts de variance entre un budget large et un budget qui force le flux ; (c) index remplacé pendant la copie → refus, rien de publié ; (d) question de capacité de `WorkingMemory` : une demande qui ne tient pas ne modifie ni la mémoire tenue ni le pic, et le pic rapporté en repli reste ≤ budget ; (e) pire cas constructible par le calcul des réservations (32 768 points à 768 dimensions, budget par défaut) → la matrice tient. Vérifier que (a) échoue au HEAD par le nombre de parcours et (d) par le pic. Exigences : exploration-semantique › La préparation ne relit pas l'index à chaque itération quand l'échantillon tient en mémoire ; › Les deux stratégies de préparation rendent les mêmes coordonnées. Vérifier : `./mvnw -B -ntp -pl minos-application -am test "-Dtest=SemanticProjectionServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false"` rouge.
+- [ ] 2.2 AUD-PERF-02 — Adapter le test existant `aPreparationReadsTheVectorsByBoundedPagesAndNeverLoadsTheWholeIndex` (`SemanticProjectionServiceTest.java:90-107`), qui encode le flux (`passes >= 3`, `vectorPages >= 3 * passes`, phase `fit`) et casse en mémoire avec la fixture de 64 Mio (`ProjectionFixture.java:103-106`) : le scinder en « lecture par pages bornées, aucun chargement complet » (vrai des deux stratégies) et « compte des parcours » par stratégie (2 en mémoire ; au moins 3 et au plus `MAX_ITERATIONS + 3` sous un budget qui force le flux). Les phases `select`, `fit` et `project` restent annoncées dans les deux stratégies. Vérifier : la version adaptée exprime le comportement visé et reste rouge jusqu'à 2.3 pour sa partie en mémoire.
+- [ ] 2.3 AUD-PERF-02 — Correction : dans `ProjectionPreparation`, après la sélection, demander à `WorkingMemory` si la matrice de l'échantillon tient (sans effet), la réserver si oui, la remplir en un parcours (ordre d'arrivée, contrôle « chaque point vu une fois ») et faire parcourir cette matrice à `PrincipalAxes` pour le centrage, l'ajustement et la projection ; appliquer l'arrondi commun de D4 au chemin en flux ; porter la stratégie et le nombre d'itérations dans `Outcome`. Vérifier : tests de 2.1 et 2.2 verts, tests existants de projection verts ; rejouer `python .claude/scripts/run_gates.py --fast`, `scripts/architecture/check-module-boundaries.py`, `scripts/quality/check-comment-language.py` ; scope JaCoCo nominatif de la projection s'il existe (AUD-TST-01).
+
+## 3. Repli annoncé (AUD-PERF-02)
+
+- [ ] 3.1 AUD-PERF-02 — Rouge : tests « budget qui ne contient pas l'échantillon mais suffit au flux → projection publiée, stratégie en flux annoncée, `--max-memory-mb` nommé, pic ≤ budget » et « budget insuffisant même en flux → refus de budget, rien de publié » ; test du rendu de la commande pour les champs de stratégie et d'itérations. Exigence : exploration-semantique › Un échantillon plus lourd que le budget garde le parcours en flux et l'annonce. Vérifier : rouge sur l'absence des champs.
+- [ ] 3.2 AUD-PERF-02 — Correction : porter la stratégie et le nombre d'itérations dans le `record` public `PreparationReport` (`SemanticProjectionService.java:224-226` ; adapter ses constructions dans les tests), les rendre dans `SemanticProjectionCommand` (champs additifs, ordre de clés déterministe), ajouter la limitation en repli. Vérifier : 3.1 vert ; `./mvnw -B -ntp -pl minos-cli -am test` ; goldens inchangés (`git diff --exit-code -- minos-app/src/test/resources/characterization/`) ; recherche des noms de champs et de `PreparationReport` dans `minos-intellij/`, `minos-api/` et `scripts/` (aucun consommateur attendu).
+- [ ] 3.3 AUD-PERF-02 — Documentation : `docs/user/semantic-explorer.md` (deux stratégies, effet de `--max-memory-mb` et `--max-points`, sans chiffre non mesuré) ; `docs/developer/semantic-explorer.md:108-116` (étapes de la préparation : deux parcours en mémoire, parcours par étape en flux). Vérifier : `python scripts/docs/check-current-docs.py`, liens valides.
+
+## 4. Mesure après correction (AUD-PERF-02)
+
+- [ ] 4.1 AUD-PERF-02 — **(manuelle)** Mesure « après » : même banc, même machine, mêmes jeux que 1.2, une fois au budget par défaut (chemin en mémoire attendu : `passes` = 2) et une fois sous un `--max-memory-mb` abaissé qui force le flux. Vérifier : tableau avant/après joint à la PR, gain écrit tel que mesuré, y compris nul ; stratégie, `passes` et itérations rapportés par chaque exécution.
+- [ ] 4.2 AUD-PERF-02 — **(manuelle, propriétaire)** Reporter la mesure dans `docs/project/audits/2026-11-15/SUIVI.md` ; remplacer le repère provisoire de `docs/user/semantic-explorer.md` seulement par la mesure d'un index construit par la synchronisation. Vérifier : relecture du propriétaire.
+
+## 5. Clôture
+
+- [ ] 5.1 AUD-PERF-02 — Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
+- [ ] 5.2 AUD-PERF-02 — Mettre à jour `docs/architecture/diagrams/capacites/exploration-semantique.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [ ] 5.3 AUD-PERF-02 — Valider les spécifications ; vérifier par `openspec validate --all --strict`.
+- [ ] 5.4 AUD-PERF-02 — Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, `docs/user`, `docs/developer`, arc42, SUIVI de l'audit) ; vérifier que chacun est fait ou nommé comme reste.
+
+## Workflow follow-up
+
+- Archiver le changement après revue (`openspec archive ajuster-la-projection-sur-l-echantillon-en-memoire -y`), puis vérifier que la spec de référence garde sa section `## Documentation liée`.
