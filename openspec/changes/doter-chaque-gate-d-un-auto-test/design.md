@@ -65,12 +65,19 @@ Statut : **confirmé** pour les dix gates ; l'affirmation du titre « chaque aut
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Tout gate a un auto-test | État du dépôt ; Gate ajouté sans auto-test | D3 | 1.1, 1.2, 3.3 | à écrire : cas de `test_check_ci_wiring.py` |
-| idem | Les dix gates du constat | D1, D2 | 2.3–2.5 | à écrire : `--self-test` de chaque gate |
-| controles-de-fusion › L'auto-test d'un gate littéral refuse une mutation par fait affirmé | Littéral exigé retiré ; Littéral interdit introduit ; Règle devenue vacuitaire ; Aucun fait relevé | D2 | 2.1, 2.2 | à écrire : `test_literal_gate.py` |
-| idem | Dépôt intact | D2 | 3.3 | `git status --porcelain` après `run_gates.py` |
-| controles-de-fusion › Les gates sans auto-test sont une liste fermée qui ne peut que diminuer | Entrée périmée ; Entrée sans script | D3, D4 | 1.1, 1.2 | à écrire : cas de `test_check_ci_wiring.py` |
+| controles-de-fusion › Tout gate a un auto-test | État du dépôt ; Gate ajouté sans auto-test | D3 | 1.1, 1.2, 3.3 | `scripts/quality/test_check_ci_wiring.py#test_the_repository_satisfies_the_rule_with_its_closed_list`, `#test_a_gate_without_a_self_test_outside_the_list_is_refused_by_name`, `#test_a_gate_with_a_twin_test_is_accepted`, `#test_archived_gates_are_excluded` ; `python scripts/quality/check-ci-wiring.py` (gates with a self-test=31, waiting=8) |
+| idem | Les dix gates du constat | D1, D2 | 2.3–2.5 | `--self-test` des dix gates, tous verts, de 40 à 287 mutations refusées chacun (étape « Literal gate self-tests » de `pr-ci.yml`) |
+| controles-de-fusion › L'auto-test d'un gate littéral refuse une mutation par fait affirmé | Littéral exigé retiré ; Littéral interdit introduit ; Règle devenue vacuitaire ; Aucun fait relevé | D2 | 2.1, 2.2 | `scripts/quality/test_literal_gate.py` (`SoundGateTest`, `VacuousGateTest#test_a_rule_that_accepts_the_mutated_copy_is_named_with_its_file_and_literal`, `#test_a_gate_without_any_fact_fails`, `#test_a_forbidden_pattern_without_witness_has_no_mutation`) |
+| idem | Dépôt intact | D2 | 3.3 | `test_literal_gate.py` compare l'arbre avant et après chaque pilote ; `git status --porcelain` vide après les dix auto-tests sur le poste |
+| controles-de-fusion › Les gates sans auto-test sont une liste fermée qui ne peut que diminuer | Entrée périmée ; Entrée sans script | D3, D4 | 1.1, 1.2 | `scripts/quality/test_check_ci_wiring.py#test_a_listed_gate_that_now_has_a_self_test_is_refused`, `#test_a_listed_gate_with_a_twin_test_is_refused_too`, `#test_an_entry_without_a_script_is_refused` |
 
 ## Questions ouvertes
 
 - [Question, propriétaire] D4 : inscrire les huit gates restants dans la liste fermée et les traiter dans un changement ultérieur (recommandé), ou les doter ici.
+
+## Résultat de l'implémentation
+
+- Règles vacuitaires (tâche 2.6) : aucune. Les dix auto-tests refusent toutes leurs mutations au commit de l'implémentation.
+- Redondance relevée, non vacuitaire : l'existence de `WorkerSandboxQualification.java` vérifiée en fin de `check-vertical-decomposition-consistency.py` est déjà imposée par la lecture du même fichier plus haut ; le pilote accepte qu'un fait de fichier soit refusé par une autre lecture qui nomme le même chemin.
+- Messages d'échec : identiques, sauf deux cas qui ne se produisent qu'en échec et donnent un message plus précis : un composant manquant de `check-vertical-decomposition-consistency.py` (lu par le module : « missing required file: … » au lieu de l'erreur d'E/S brute) et `require_absent` de `check-current-docs.py`, qui vise un fichier (un dossier homonyme n'est plus refusé).
+- Durée des onze auto-tests sur le poste Windows : environ 24 s au total (dont 4 s chacun pour `check-current-docs.py` et son extension). La durée dans le job `invariants` reste à lire sur la PR.

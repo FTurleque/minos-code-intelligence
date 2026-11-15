@@ -286,6 +286,21 @@ jobs:
       - name: Test platform guards gate self-test
         run: python scripts/quality/check-test-platform-guards.py --self-test
 
+      # AUD-TST-09: each literal gate refuses one in-memory mutation per fact it asserts.
+      - name: Literal gate self-tests (shared mutation driver and the gates built on it)
+        run: |
+          python scripts/quality/test_literal_gate.py -v
+          python scripts/docs/check-current-docs.py --self-test
+          python scripts/quality/check-current-docs-vertical-extension.py --self-test
+          python scripts/quality/check-advanced-provider-consistency.py --self-test
+          python scripts/quality/check-hosted-control-plane-consistency.py --self-test
+          python scripts/quality/check-java-ast-provider-consistency.py --self-test
+          python scripts/quality/check-polyglot-provider-consistency.py --self-test
+          python scripts/quality/check-remote-distributed-consistency.py --self-test
+          python scripts/quality/check-runtime-dynamic-consistency.py --self-test
+          python scripts/quality/check-semantic-retrieval-consistency.py --self-test
+          python scripts/quality/check-vertical-decomposition-consistency.py --self-test
+
   # The ONLY Maven build of a pull request, and so the only executor of the JaCoCo gate, the
   # Linux sandbox toolchain and the delegated cgroup. The path-filtered
   # M19 and M20 workflows used to repeat this exact job on a subset of paths (audit C2); they were
