@@ -1,10 +1,13 @@
 package com.minos.cli.support;
 
 import com.minos.application.ProjectOperations;
+import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.diagnostics.SnapshotMemoryExhaustedException;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.registry.DegradedEntry;
+import com.minos.domain.registry.UnreadableRegistryException;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -13,6 +16,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Shared fail-closed skeleton for the option-parsing MINOS commands.
@@ -34,8 +39,56 @@ import java.util.function.Supplier;
 public final class CliCommandSupport {
 
     private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
+    private static final String REFERENCE_LINE_PREFIX = "diagnostic reference: ";
+    private static final String UNKNOWN_COMMAND = "command";
+    private static final Pattern USAGE_COMMAND = Pattern.compile("^Usage: minos ([a-z][a-z0-9-]*)");
+    private static final int MAX_CAUSE_DEPTH = 16;
+
+    /** The reporter of the running process; the launcher binds one per run, a bare call has no journal. */
+    private static volatile InternalFailureReporter internalFailureReporter =
+            InternalFailureReporter.withoutJournal("cli");
 
     private CliCommandSupport() {
+    }
+
+    /** Binds the reporter that traces the execution failures of the commands run next (the launcher's, per run). */
+    public static void useInternalFailureReporter(InternalFailureReporter reporter) {
+        internalFailureReporter = Objects.requireNonNull(reporter, "reporter");
+    }
+
+    /** Drops the bound reporter: execution failures are no longer traced. */
+    public static void clearInternalFailureReporter() {
+        internalFailureReporter = InternalFailureReporter.withoutJournal("cli");
+    }
+
+    /**
+     * Traces an execution failure when the private diagnostic journal is on and returns the line that gives the
+     * reference of its entry, or {@code null}: with the journal off, or for an error that is public and expected (an
+     * unknown project, an unreadable registry, a memory refusal), nothing is traced and the output is unchanged.
+     */
+    public static String traceExecutionFailure(String operation, Throwable failure) {
+        InternalFailureReporter reporter = internalFailureReporter;
+        if (!reporter.journalEnabled() || isKnownPublicError(failure)) return null;
+        return REFERENCE_LINE_PREFIX + reporter.report(operation, failure).reference();
+    }
+
+    private static boolean isKnownPublicError(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; depth <= MAX_CAUSE_DEPTH && current != null; depth++) {
+            if (current instanceof ProjectResolver.ResolutionException
+                    || current instanceof UnreadableRegistryException
+                    || current instanceof SnapshotMemoryExhaustedException) {
+                return true;
+            }
+            if (current.getCause() == current) return false;
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static String operationOf(String usage) {
+        Matcher matcher = USAGE_COMMAND.matcher(usage);
+        return matcher.find() ? matcher.group(1) : UNKNOWN_COMMAND;
     }
 
     /**
@@ -103,6 +156,8 @@ public final class CliCommandSupport {
             throw openFailure;
         } catch (Exception exception) {
             error.append("error: ").append(failureReporter.describe(options, exception)).append('\n');
+            String reference = traceExecutionFailure(operationOf(usage), exception);
+            if (reference != null) error.append(reference).append('\n');
             return CliExitCodes.EXECUTION_ERROR;
         }
     }

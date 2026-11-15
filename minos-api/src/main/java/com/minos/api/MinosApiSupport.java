@@ -3,7 +3,10 @@ package com.minos.api;
 import com.minos.api.MinosApi.ErrorCode;
 import com.minos.api.MinosApi.MinosApiException;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosHome;
+import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.application.resolution.ProjectResolver;
+import com.minos.diagnostics.InternalFailureTrace;
 import com.minos.diagnostics.PublicErrorMessages;
 
 import java.io.IOException;
@@ -40,7 +43,38 @@ final class MinosApiSupport {
     /** Fixed, path-free replacement for an internal diagnostic that fails the public policy. */
     private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
 
+    private static final String TRACED_FAILURE_SUBJECT = "MINOS API call failed internally";
+
+    /** Null until a home is opened by path or the first traced failure resolves the process home. */
+    private static volatile InternalFailureReporter failureReporter;
+
     private MinosApiSupport() {
+    }
+
+    /** Traces the internal failures of the facades under {@code home} from now on. */
+    static void bindFailureReporter(Path home) {
+        failureReporter = new InternalFailureReporter(
+                "api", Objects.requireNonNull(home, "home"), System.getenv(), System.getProperties());
+    }
+
+    /** Replaces the reporter, for deterministic tests. */
+    static void useFailureReporter(InternalFailureReporter reporter) {
+        failureReporter = reporter;
+    }
+
+    private static InternalFailureReporter failureReporter() {
+        InternalFailureReporter bound = failureReporter;
+        if (bound != null) return bound;
+        synchronized (MinosApiSupport.class) {
+            if (failureReporter == null) {
+                try {
+                    bindFailureReporter(MinosHome.resolve(System.getenv(), System.getProperties()));
+                } catch (IllegalStateException noHome) {
+                    failureReporter = InternalFailureReporter.withoutJournal("api");
+                }
+            }
+            return failureReporter;
+        }
     }
 
     @FunctionalInterface
@@ -100,7 +134,9 @@ final class MinosApiSupport {
             ApplicationOpener opener
     ) throws MinosApiException {
         try {
-            return opener.open(Objects.requireNonNull(home, "home"));
+            MinosApplication opened = opener.open(Objects.requireNonNull(home, "home"));
+            bindFailureReporter(home);
+            return opened;
         } catch (IOException exception) {
             throw publicFailure(ErrorCode.IO_FAILURE, bootstrapFailureMessage, exception);
         } catch (IllegalArgumentException exception) {
@@ -183,6 +219,13 @@ final class MinosApiSupport {
      * values may contain credentials, absolute paths or other private deployment details.
      */
     private static void logFailure(ErrorCode code, Exception exception) {
+        if (code == ErrorCode.EXECUTION_FAILURE || code == ErrorCode.IO_FAILURE) {
+            // An execution or I/O failure is internal: the line names the origin and a reference, and the private
+            // journal, when enabled, keeps the stack under that reference. The caller still gets no cause.
+            InternalFailureTrace trace = failureReporter().report(code.name(), exception);
+            LOGGER.log(Level.WARNING, trace.line(TRACED_FAILURE_SUBJECT, "code", code.name()));
+            return;
+        }
         LOGGER.log(Level.WARNING, diagnosticSummary(code, exception));
     }
 

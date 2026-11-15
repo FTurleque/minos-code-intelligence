@@ -63,6 +63,37 @@ relatif à la racine gérée, nom simple de la classe de l'exception, jamais le 
 `scripts/architecture/check-private-io.py` refuse statiquement un chemin concaténé dans un appel de journal et
 toute cause transmise hors de la liste `scripts/architecture/private-io-allowlist.json`.
 
+### Que devient un échec interne d'un outil MCP ?
+
+Type : sequenceDiagram · Portée : existant vérifié par tests (`MinosMcpInternalFailureTraceTest`) · Exigences : changement
+`tracer-les-echecs-internes-des-surfaces` › « La ligne de diagnostic d'un échec interne nomme son origine et une
+référence », « Un journal privé indisponible ne change pas la réponse de la surface » (décision
+[SEC-0084](../../adr/SEC-0084-journal-de-diagnostic-prive-et-opt-in-des-echecs-internes.md))
+
+```mermaid
+sequenceDiagram
+    participant C as Client MCP
+    participant T as MinosMcpTools
+    participant R as "InternalFailureTrace (domain)"
+    participant J as "InternalFailureReporter (application) et InternalFailureJournal (engine)"
+    C->>T: appel d'outil
+    T->>T: le service lève une exception interne
+    T->>J: report(outil, exception)
+    J->>R: describe(...)
+    R-->>J: référence, ligne, entrée
+    alt journal actif et inscriptible
+        J-->>T: entrée écrite dans son fichier
+    else journal inactif
+        J-->>T: ignorée, aucun fichier
+    else journal indisponible
+        J-->>T: abandonnée, signalée une fois
+    end
+    T->>T: "System.Logger WARNING (stderr)"
+    T-->>C: "error: MINOS tool execution failed (ref ...)"
+```
+
+La réponse ne dépend d'aucune branche du journal. La référence relie la réponse, la ligne stderr et l'entrée privée.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

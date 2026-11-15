@@ -31,7 +31,7 @@ class MinosMcpFailureLoggingTest {
 
         List<LogRecord> records = capture(() -> {
             var result = McpToolCalls.call(tools, "minos_index_status", Map.of("project", "client-supplied-name"));
-            assertEquals("error: MINOS tool execution failed", McpToolCalls.text(result));
+            McpToolCalls.assertGenericToolError(McpToolCalls.text(result));
         });
 
         LogRecord entry = records.stream()

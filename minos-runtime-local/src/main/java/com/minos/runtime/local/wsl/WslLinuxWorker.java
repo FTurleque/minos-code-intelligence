@@ -1,6 +1,8 @@
 package com.minos.runtime.local.wsl;
 
+import com.minos.diagnostics.InternalFailureTrace;
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.diagnostics.WorkerDiagnostic;
 import com.minos.io.BoundedProperties;
 import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexerDescriptor;
@@ -39,7 +41,8 @@ import java.util.stream.Collectors;
  * distribution is deleted.</p>
  *
  * <p>The outcome is one status line on standard output, prefixed by {@link WslIndexWorker#STATUS_PREFIX}; its
- * detail names no absolute path.</p>
+ * detail names no absolute path. A failure by exception is preceded by a {@link WorkerDiagnostic} line and its status
+ * carries the same reference.</p>
  */
 public final class WslLinuxWorker {
 
@@ -113,7 +116,12 @@ public final class WslLinuxWorker {
                     requestFile.toAbsolutePath().normalize().resolveSibling(WslWorkerRequest.BUNDLE_NAME));
             return status(output, SUCCESS, "OK");
         } catch (Exception failure) {
-            return status(output, FAILED, "FAILED " + request.providerId() + ": " + publicMessage(failure));
+            // The distribution keeps no journal and its stderr is discarded: the diagnostic travels on the channel the
+            // installation already reads, before the status line, and carries no message and no path.
+            InternalFailureTrace trace = InternalFailureTrace.describe("wsl-worker", "index", failure);
+            output.append(WslIndexWorker.STATUS_PREFIX).append(WorkerDiagnostic.of(trace).payload()).append('\n');
+            return status(output, FAILED, "FAILED " + request.providerId() + ": " + publicMessage(failure)
+                    + " (ref " + trace.reference() + ")");
         } finally {
             if (Files.exists(runDirectory, LinkOption.NOFOLLOW_LINKS)) {
                 FileTreeOperations.deleteRecursively(runDirectory);

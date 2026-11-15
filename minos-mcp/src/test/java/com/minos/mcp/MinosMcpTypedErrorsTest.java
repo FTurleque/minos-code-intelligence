@@ -54,7 +54,7 @@ class MinosMcpTypedErrorsTest {
                     "minos_team_tenant", Map.of());
 
             assertTrue(McpToolCalls.isError(result));
-            assertEquals("error: MINOS tool execution failed", McpToolCalls.text(result));
+            McpToolCalls.assertGenericToolError(McpToolCalls.text(result));
         }
     }
 
