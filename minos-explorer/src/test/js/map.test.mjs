@@ -123,7 +123,7 @@ test("the zoom stays within its bounds and keeps the point under the cursor in p
   assert.equal(page.evaluate("map.scale"), CURRENT.zoom.minimum);
 });
 
-function pointsPage(total, pageAnswers) {
+function pointsPage(pageAnswers) {
   let call = 0;
   const page = createPage({
     api: routes([["GET", /^projects\/p\/projection\/points\?offset=(\d+)&limit=(\d+)$/, (match, request) => {
@@ -144,7 +144,7 @@ function slice(state, offset, count, total) {
 }
 
 test("the points are read page after page until the total is reached", async () => {
-  const page = pointsPage(12000, (call, offset, limit) => slice("PRETE", offset, Math.min(limit, 12000 - offset), 12000));
+  const page = pointsPage((call, offset, limit) => slice("PRETE", offset, Math.min(limit, 12000 - offset), 12000));
   const points = await page.context.readMapPoints(1, "PRETE");
 
   assert.equal(points.length, 12000);
@@ -153,15 +153,15 @@ test("the points are read page after page until the total is reached", async () 
 });
 
 test("the reading stops when the state changes or a page is empty, and is abandoned when another one started", async () => {
-  const changed = pointsPage(12000, (call, offset, limit) => slice(call === 0 ? "PRETE" : "PERIMEE", offset, limit, 12000));
+  const changed = pointsPage((call, offset, limit) => slice(call === 0 ? "PRETE" : "PERIMEE", offset, limit, 12000));
   assert.equal((await changed.context.readMapPoints(1, "PRETE")).length, 5000);
   assert.equal(changed.log.requests.length, 2);
 
-  const empty = pointsPage(12000, (call, offset, limit) => slice("PRETE", offset, call === 0 ? limit : 0, 12000));
+  const empty = pointsPage((call, offset, limit) => slice("PRETE", offset, call === 0 ? limit : 0, 12000));
   assert.equal((await empty.context.readMapPoints(1, "PRETE")).length, 5000);
   assert.equal(empty.log.requests.length, 2);
 
-  const stale = pointsPage(12000, (call, offset, limit, page) => {
+  const stale = pointsPage((call, offset, limit, page) => {
     if (call === 1) page.assign("map.request", 2);
     return slice("PRETE", offset, limit, 12000);
   });
