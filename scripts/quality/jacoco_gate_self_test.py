@@ -8,6 +8,7 @@ JSON result. Runs without pytest so it can be invoked from any CI step. This mod
 """
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 import tempfile
@@ -15,7 +16,7 @@ from pathlib import Path
 from types import ModuleType
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import gate_cli  # noqa: E402 - after the script's directory is added to the path
+gate_cli = importlib.import_module("gate_cli")
 
 
 def run_self_test(gate: ModuleType) -> int:

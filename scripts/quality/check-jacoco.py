@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import gate_cli  # noqa: E402 - after the script's directory is added to the path
-
+gate_cli = importlib.import_module("gate_cli")
 SCOPES = {
     # AUD-TST-01: the whole product, floored per system. com/minos/app/ is left out by name: the aggregate report does
     # not carry minos-app's own tests (m29-backend-routing reads minos-app's report instead). Measured on the
