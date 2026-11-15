@@ -371,10 +371,14 @@ final class SemanticExplorerBenchmark {
                 for (Map.Entry<String, Request> entry : requests.entrySet()) {
                     String scenario = entry.getKey();
                     ExplorerApi.Route route = routeOf(scenario);
-                    Request request = scenario.equals("list-deep") ? deepPage(client, project) : entry.getValue();
-                    Outcome outcome = request == null
-                            ? Outcome.refused("no deep page: the first page of the list was refused")
-                            : measure(client, api, request);
+                    Outcome outcome;
+                    if (scenario.equals("list-deep")) {
+                        DeepPage deep = deepPage(client, api, project);
+                        outcome = deep.refusal() != null ? Outcome.refused(deep.refusal())
+                                : measure(client, api, deep.request());
+                    } else {
+                        outcome = measure(client, api, entry.getValue());
+                    }
                     boolean expected = dataset.expectedRefusals().contains(route);
                     if (outcome.refusal() != null) {
                         emit.refused("explorer", label, scenario + ": " + outcome.refusal());
@@ -399,17 +403,26 @@ final class SemanticExplorerBenchmark {
             }
         }
 
-        private Request deepPage(Client client, List<String> project) throws IOException {
+        /**
+         * The request of the deep page, reached by following the cursors; when a page on the way is refused, the
+         * refusal carries the answer of the surface and the motive of the product for that page.
+         */
+        private DeepPage deepPage(Client client, ExplorerApi api, List<String> project) throws IOException {
             String cursor = null;
             for (int page = 1; page < options.deepPage(); page++) {
                 Map<String, String> parameters = cursor == null ? Map.of() : Map.of("cursor", cursor);
-                Client.Response response = client.send(Request.get(concat(project, "documents"), parameters));
-                if (response.status() != 200) return null;
+                Request request = Request.get(concat(project, "documents"), parameters);
+                Client.Response response = client.send(request);
+                if (response.status() != 200) {
+                    return new DeepPage(null, "page " + page + " on the way to the deep page was refused, "
+                            + refusal(response, api, request));
+                }
                 Matcher next = NEXT_CURSOR.matcher(response.body());
                 if (!next.find()) break;
                 cursor = next.group(1);
             }
-            return Request.get(concat(project, "documents"), cursor == null ? Map.of() : Map.of("cursor", cursor));
+            return new DeepPage(Request.get(concat(project, "documents"),
+                    cursor == null ? Map.of() : Map.of("cursor", cursor)), null);
         }
 
         private void readAllPoints(Client client, List<String> project) throws IOException {
@@ -480,6 +493,10 @@ final class SemanticExplorerBenchmark {
             }
             throw new IllegalStateException("scenario without route: " + scenario);
         }
+    }
+
+    /** The request of the deep page of the list, or the reason why it could not be reached. */
+    private record DeepPage(Request request, String refusal) {
     }
 
     /** The statistics of one measured scenario, or the reason why it could not be measured. */
