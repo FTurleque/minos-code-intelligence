@@ -3,7 +3,7 @@
 // context; the let/const state is read and written by expressions evaluated in the same context.
 //
 // The fake DOM refuses every way to write markup (innerHTML, outerHTML, insertAdjacentHTML, document.write,
-// createContextualFragment, DOMParser, srcdoc), records the attempt and throws. The context refuses code
+// createContextualFragment, DOMParser, srcdoc, an on* or srcdoc attribute), records the attempt and throws. The context refuses code
 // generation from strings (eval, new Function). A rendering that reaches a sink fails whatever the sink is named.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -76,6 +76,8 @@ class FakeNode {
   insertAdjacentHTML(position, value) { this.page.refuseMarkup("insertAdjacentHTML", value); }
 
   setAttribute(name, value) {
+    const lower = String(name).toLowerCase();
+    if (lower.startsWith("on") || lower === "srcdoc") this.page.refuseMarkup("setAttribute(" + name + ")", value);
     this.attributes[name] = String(value);
     this.page.log.attributes.push([name, String(value)]);
   }

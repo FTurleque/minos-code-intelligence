@@ -14,8 +14,8 @@ Node receives an argument list (no shell) and a reduced environment.
 What it does not prove: that the page behaves the same in a real browser (no browser runs here).
 
 Self-test: ``--self-test`` replays the gate on mutated temporary copies (broken syntax, empty test folder,
-``PATH`` without Node, minimum above the installed version, markup sinks, code generation, capture radius,
-contract constant without a label).
+``PATH`` without Node, minimum above the installed version, markup sinks, event handler attribute, code
+generation, capture radius, contract constant without a label).
 """
 from __future__ import annotations
 
@@ -184,6 +184,9 @@ def cases() -> list[Case]:
         ("markup sink under a computed property name",
          lambda t: replace(t / app, "node.textContent = String(text);",
                            "node[\"inner\" + \"HTML\"] = String(text);"), {}, 1, hostile_list),
+        ("event handler attribute",
+         lambda t: replace(t / app, "node.textContent = String(text);",
+                           "node.setAttribute(\"onclick\", String(text));"), {}, 1, hostile_list),
         ("code generation from a string",
          lambda t: replace(t / app, "  if (!value) return \"—\";", "  if (!value) return \"—\";\n  eval(\"0\");"),
          {}, 1, hostile_list),

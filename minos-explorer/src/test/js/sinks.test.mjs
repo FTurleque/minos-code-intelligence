@@ -121,6 +121,14 @@ test("the test DOM refuses markup and the context refuses code generation", () =
   assert.throws(() => page.evaluate("document.write('x')"));
   assert.throws(() => page.evaluate("new DOMParser()"));
   assert.equal(page.log.markup.length, 4);
+  // An event handler or an inline document set as an attribute is markup too, whatever the case of its name.
+  assert.throws(() => node.setAttribute("onclick", HOSTILE));
+  assert.throws(() => node.setAttribute("OnMouseOver", HOSTILE));
+  assert.throws(() => node.setAttribute("srcdoc", HOSTILE));
+  assert.equal(page.log.markup.length, 7);
+  assert.equal(node.getAttribute("onclick"), null);
+  node.setAttribute("aria-pressed", "true");
+  assert.equal(node.getAttribute("aria-pressed"), "true");
   // The error comes from the context's realm: its name is compared, not its prototype.
   assert.throws(() => page.evaluate("eval('1')"), { name: "EvalError" });
   assert.throws(() => page.evaluate("new Function('return 1')"), { name: "EvalError" });
