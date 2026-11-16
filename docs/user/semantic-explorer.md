@@ -137,6 +137,14 @@ faites sous Windows sur des index `local-hash` synthétiques. Aucune mesure n'ex
 PostgreSQL à 100 000 documents, sous Linux ni avec un modèle d'embeddings appris. La carte a été parcourue sous
 Windows dans Chrome seulement.
 
+Stockage local et taille de l'index : la liste lit le fichier d'index sans le charger en mémoire, et le détail
+le parcourt jusqu'au document demandé ; les voisins et la recherche classent les vecteurs du fichier sans
+retenir l'index quand il est trop lourd pour le cache de 256 Mio du stockage local. Un index que ce cache tient
+est lu une fois puis gardé : le premier détail, avant ce chargement, parcourt le fichier. Sur des jeux
+synthétiques `local-hash` à 768 dimensions (32 768 documents, contenu de 2 000 caractères), mesurés sous
+Windows sur un seul poste et bruités, la liste passe d'environ 760 à 11 ms et le détail d'environ 690 à 47 ms ;
+aucune mesure n'existe sur un index réel. La taille maximale reste celle que l'indexation construit.
+
 Avec le provider `local-hash`, un badge permanent rappelle que l'index est une référence déterministe (hachage de
 tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL`).
 
