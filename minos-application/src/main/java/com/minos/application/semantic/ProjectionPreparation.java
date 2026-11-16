@@ -177,23 +177,6 @@ final class ProjectionPreparation {
         return new CopiedRows(matrix, positions, dimensions);
     }
 
-    /**
-     * Walks the index and gives the visitor the vectors of the sample, each with its position in the sample. A
-     * document is found by its stable key, not by its rank in the walk: the order in which a store returns its
-     * pages is its own (a database sorts text by its collation), and need not be the order of the sample.
-     */
-    private void walkSample(String phase, Sample sample, SampleVisitor visitor) throws IOException {
-        BitSet visited = new BitSet(sample.keys().length);
-        walk(phase, vector -> {
-            Integer position = sample.positions().get(vector.stableKey());
-            if (position == null) return;
-            if (visited.get(position)) throw indexChanged();
-            visited.set(position);
-            visitor.visit(position, vector.vector());
-        });
-        if (visited.cardinality() != sample.keys().length) throw indexChanged();
-    }
-
     /** One pass over the stored vectors, by pages, all of them read from the index the preparation started on. */
     private void walk(String phase, VectorVisitor visitor) throws IOException {
         passes++;
@@ -238,10 +221,27 @@ final class ProjectionPreparation {
 
         @Override
         public void each(String phase, RowVisitor visitor) throws IOException {
-            walkSample(phase, sample, (position, vector) -> {
+            walkSample(phase, (position, vector) -> {
                 for (int index = 0; index < row.length; index++) row[index] = (float) vector.valueAt(index);
                 visitor.visit(position, row, 0);
             });
+        }
+
+        /**
+         * Walks the index and gives the visitor the vectors of the sample, each with its position in the sample.
+         * A document is found by its stable key, not by its rank in the walk: the order in which a store returns
+         * its pages is its own (a database sorts text by its collation), and need not be the order of the sample.
+         */
+        private void walkSample(String phase, SampleVisitor visitor) throws IOException {
+            BitSet visited = new BitSet(sample.keys().length);
+            walk(phase, vector -> {
+                Integer position = sample.positions().get(vector.stableKey());
+                if (position == null) return;
+                if (visited.get(position)) throw indexChanged();
+                visited.set(position);
+                visitor.visit(position, vector.vector());
+            });
+            if (visited.cardinality() != sample.keys().length) throw indexChanged();
         }
     }
 

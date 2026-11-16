@@ -66,12 +66,7 @@ class SemanticProjectionCommandLineTest {
             assertTrue(first.output().contains("\"state\":\"PRETE\""), first.output());
             assertTrue(first.output().contains("\"seed\":7"), first.output());
             assertTrue(first.output().contains("\"sampled\":false"), first.output());
-            assertTrue(first.error().contains("projection: pass 1 (select)"), first.error());
-            assertTrue(first.error().contains("projection: pass 2 (copy)"), first.error());
-            assertTrue(first.output().contains("\"strategy\":\"in-memory\""), first.output());
-            assertTrue(first.output().contains("\"passes\":2"), first.output());
-            assertTrue(first.output().contains("\"iterations\":"), first.output());
-            assertTrue(first.output().contains("\"limitations\":[]"), first.output());
+            assertReportsTheInMemoryStrategy(first);
             assertTrue(first.error().contains("projection: published in "), first.error());
             assertFalse(first.error().contains(temp.toString()), "no absolute path on the error stream");
             assertFalse(first.output().contains(temp.toString()), "no absolute path in the report");
@@ -85,6 +80,16 @@ class SemanticProjectionCommandLineTest {
             assertTrue(readyText.output().contains("state: PRETE"), readyText.output());
             assertTrue(readyText.output().contains("seed: 7"), readyText.output());
         }
+    }
+
+    /** A sample that fits the budget: two walks of the index, announced on the error stream and in the report. */
+    private static void assertReportsTheInMemoryStrategy(Run run) {
+        assertTrue(run.error().contains("projection: pass 1 (select)"), run.error());
+        assertTrue(run.error().contains("projection: pass 2 (copy)"), run.error());
+        assertTrue(run.output().contains("\"strategy\":\"in-memory\""), run.output());
+        assertTrue(run.output().contains("\"passes\":2"), run.output());
+        assertTrue(run.output().contains("\"iterations\":"), run.output());
+        assertTrue(run.output().contains("\"limitations\":[]"), run.output());
     }
 
     @Test
