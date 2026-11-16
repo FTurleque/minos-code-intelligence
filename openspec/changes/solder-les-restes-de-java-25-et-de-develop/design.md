@@ -41,7 +41,7 @@ Non vérifié : l'état réel du ruleset GitHub et l'absence de la branche dista
 |---|---|---|---|
 | E1. L'audit envisage de garder Java 25 dans `docker-upgrade-qualification.yml` « si [il] doit encore partir d'une release 1.2.0 en Java 25 » | action d'AUD-DEP-04 | `v1.2.0` impose Java 24, pas 25 ; `v1.3.0` impose 21 : aucun candidat A publié n'est construit pour Java 25 | Retirer l'étape des **deux** workflows. Une qualification manuelle depuis `v1.2.0` échoue déjà aujourd'hui (JDK 24 absent) avec un message actionnable ; ce n'est pas une régression (D2) |
 | E2. L'audit cite `quality-gates.md:55` parmi la dérive | preuve d'AUD-DEP-06 | la phrase décrit au passé des workflows supprimés | Ne pas la modifier (relevé) |
-| E3. L'audit liste trois lignes à corriger ; deux autres phrases au présent citent `develop` | action d'AUD-DEP-06 | `STATUS.md:9`, `ROADMAP.md:9` | Les relire et corriger celles qui décrivent le flux en vigueur (tâche 2.2) |
+| E3 (traité). L'audit liste trois lignes à corriger ; deux autres phrases au présent citent `develop` | action d'AUD-DEP-06 | `STATUS.md:9`, `ROADMAP.md:9` | Les relire et corriger celles qui décrivent le flux en vigueur (tâche 2.2) |
 | E4. Aucune garde n'empêche le retour de l'ancien nom de ruleset | critère de sortie du sprint 2 | `check-current-docs.py` ne lit pas `.github/required-checks.json` | Deux contrôles ajoutés au gate des documents courants (D3) |
 | E5. R-25 : « clore ou réécrire » | action d'AUD-DEP-06 | sa cause (aucun runner auto-hébergé) est devenue une règle du dépôt, et la preuve A → B est produite sur runner hébergé à chaque PR | Clore R-25 avec sa raison datée (D4) ; si AUD-DEP-03 restreint la qualification, le risque résiduel est porté par ce changement-là |
 
@@ -74,13 +74,13 @@ Non vérifié : l'état réel du ruleset GitHub et l'absence de la branche dista
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| socle-d-execution › Aucun workflow n'installe une baseline Java précédente | Étape Java 25 dans un workflow de qualification | D1 | 1.1, 1.2 | `test_check_toolchain_baseline.py` — cas à réécrire |
+| socle-d-execution › Aucun workflow n'installe une baseline Java précédente | Étape Java 25 dans un workflow de qualification | D1 | 1.1, 1.2 | `test_check_toolchain_baseline.py#test_an_upgrade_qualification_installs_no_other_java_than_the_baseline` (rouge observé : 2 échecs avant 1.2, vert après) |
 | idem | Dépôt réel | D1 | 1.2 | `check-toolchain-baseline.py` |
-| idem | Candidat A construit pour une autre version | D2 | 1.3 | lecture de `qualify-docker-upgrade.ps1:54-71` ; preuve exécutée manquante (aucun test du script) |
-| controles-de-fusion › Les documents courants nomment les rulesets déclarés et aucun risque ouvert ne vise une branche retirée | Ancien nom de ruleset dans l'état courant | D3 | 2.1, 2.2 | cas de `check-current-docs.py --self-test` — à écrire |
-| idem | Risque ouvert sur la branche retirée | D3, D4 | 2.1, 2.3 | idem — à écrire |
-| idem | Dépôt réel | D3 | 2.2, 2.3 | `check-current-docs.py`, `product-facts.py --check` |
-| idem | Relevé daté | D3 | 2.1 | idem — à écrire |
+| idem | Candidat A construit pour une autre version | D2 | 1.3 | lecture de `qualify-docker-upgrade.ps1:54-71` ; preuve exécutée manquante (aucun test du script) ; une qualification en CI sans JDK 25 reste manuelle (tâche 1.4) |
+| controles-de-fusion › Les documents courants nomment les rulesets déclarés et aucun risque ouvert ne vise une branche retirée | Ancien nom de ruleset dans l'état courant | D3 | 2.1, 2.2 | règle « current documents name the declared rulesets » de `check-current-docs.py` ; mutations STATUS, ROADMAP et `quality-gates.md` dans `--self-test` (rouge observé sur le dépôt réel avant 2.2 : STATUS et ROADMAP nommés) |
+| idem | Risque ouvert sur la branche retirée | D3, D4 | 2.1, 2.3 | règle « no open risk names the removed branch develop » ; mutation `R-99` dans `--self-test` (rouge observé avant 2.3 : R-25, ligne 22 du registre) |
+| idem | Dépôt réel | D3 | 2.2, 2.3 | `check-current-docs.py`, `product-facts.py --check` (verts) |
+| idem | Relevé daté | D3 | 2.1 | aucune ligne datée n'est lue : le contrôle ne vise que `STATUS.md`, `ROADMAP.md`, `docs/developer/**` et le tableau des risques actifs ; preuve : le gate réussit sur les sections de sprint qui citent `develop` |
 
 ## Ordre de fusion
 
@@ -93,3 +93,11 @@ Le groupe 1 (Java 25) ne dépend pas du point 1 et peut être livré seul si le 
 ## Questions ouvertes
 
 Aucune.
+
+## Écarts constatés à l'implémentation
+
+- `STATUS.md:9` est reformulée (« ne signifie pas la clôture des audits ») et `ROADMAP.md:9` dit que le plan est basé sur `main` : les deux phrases décrivaient une promotion `develop` → `main` qui n'existe plus.
+- R-25 passe du tableau des risques actifs au tableau des risques résolus du registre (un statut `OPEN` dans le tableau actif est ce que lit le gate) ; `docs/architecture/arc42/11-risques-dette.md` ne reprend pas R-25 : rien à y aligner.
+- Le contrôle des rulesets s'arrête à la première erreur du gate : le dépôt réel échoue d'abord sur les noms de ruleset, puis sur R-25 ; les deux rouges ont été observés l'un après l'autre.
+- Le dossier durable ne peut recevoir les lignes de traçabilité qu'à l'archivage (tâche 3.2).
+- Non mesuré : l'état du ruleset GitHub (tâche 2.4), la qualification A → B en CI sans JDK 25 (tâche 1.4).
