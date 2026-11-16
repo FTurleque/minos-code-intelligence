@@ -29,10 +29,10 @@ public final class WorkerDiagnostic implements DiagnosticEntry {
     /** Frames token when the root cause has no frame. */
     static final String NO_FRAMES = "none";
 
-    private static final String TOKEN = "[A-Za-z0-9._$:]{1,200}";
-    private static final Pattern PAYLOAD = Pattern.compile(KEYWORD + " ref=([0-9a-f]{8}) types=(" + TOKEN
-            + "(?:," + TOKEN + "){0," + (InternalFailureTrace.MAX_CAUSES - 1) + "}) at=(" + TOKEN
-            + ") frames=(" + TOKEN + "(?:," + TOKEN + "){0," + (MAX_FRAMES - 1) + "})");
+    private static final String NAME_LIST_ELEMENT = "[A-Za-z0-9._$:]{1,200}";
+    private static final Pattern PAYLOAD = Pattern.compile(KEYWORD + " ref=([0-9a-f]{8}) types=(" + NAME_LIST_ELEMENT
+            + "(?:," + NAME_LIST_ELEMENT + "){0," + (InternalFailureTrace.MAX_CAUSES - 1) + "}) at=(" + NAME_LIST_ELEMENT
+            + ") frames=(" + NAME_LIST_ELEMENT + "(?:," + NAME_LIST_ELEMENT + "){0," + (MAX_FRAMES - 1) + "})");
     private static final String SURFACE = "wsl-worker";
 
     private final String reference;

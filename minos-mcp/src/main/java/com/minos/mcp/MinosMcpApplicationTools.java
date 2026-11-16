@@ -17,6 +17,10 @@ public final class MinosMcpApplicationTools {
         MinosApplication app = Objects.requireNonNull(application, "application");
         InternalFailureReporter reporter = new InternalFailureReporter(
                 "mcp", app.home(), System.getenv(), System.getProperties());
-        return new MinosMcpTools(new MinosApplicationMcpBackend(app), reporter).specifications();
+        return tools(app, reporter).specifications();
+    }
+
+    private static MinosMcpTools tools(MinosApplication app, InternalFailureReporter reporter) {
+        return new MinosMcpTools(new MinosApplicationMcpBackend(app), reporter);
     }
 }

@@ -63,8 +63,9 @@ class WslIndexWorkerDiagnosticTest {
     @Test
     void aConformingDiagnosticIsLoggedJournaledAndItsReferenceReachesThePublicFailure() throws Exception {
         try (LogCapture log = new LogCapture(WslIndexWorker.class)) {
-            IllegalStateException failure = assertThrows(IllegalStateException.class,
-                    () -> executor(output(CONFORMING, FAILED), true).execute(request()));
+            WslIndexerExecutor worker = executor(output(CONFORMING, FAILED), true);
+            IndexingExecutionRequest request = request();
+            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> worker.execute(request));
 
             assertTrue(failure.getMessage().startsWith("the WSL worker failed in distribution " + DISTRIBUTION),
                     failure.getMessage());
@@ -86,11 +87,12 @@ class WslIndexWorkerDiagnosticTest {
     }
 
     @Test
-    void theReferenceIsAddedToAPublicFailureWhoseStatusDetailIsWithheld() {
+    void theReferenceIsAddedToAPublicFailureWhoseStatusDetailIsWithheld() throws IOException {
         String sensitive = WslIndexWorker.STATUS_PREFIX + "FAILED build in /home/user/project";
+        WslIndexerExecutor worker = executor(output(CONFORMING, sensitive), false);
+        IndexingExecutionRequest request = request();
 
-        IllegalStateException failure = assertThrows(IllegalStateException.class,
-                () -> executor(output(CONFORMING, sensitive), false).execute(request()));
+        IllegalStateException failure = assertThrows(IllegalStateException.class, () -> worker.execute(request));
 
         assertTrue(failure.getMessage().endsWith("(ref 0123abcd)"), failure.getMessage());
         assertFalse(failure.getMessage().contains("/home/"), failure.getMessage());
@@ -104,8 +106,10 @@ class WslIndexWorkerDiagnosticTest {
 
         for (String bad : List.of(withPath, withBackslash, tooLong)) {
             try (LogCapture log = new LogCapture(WslIndexWorker.class)) {
+                WslIndexerExecutor worker = executor(output(bad, FAILED), true);
+                IndexingExecutionRequest request = request();
                 IllegalStateException failure = assertThrows(IllegalStateException.class,
-                        () -> executor(output(bad, FAILED), true).execute(request()));
+                        () -> worker.execute(request));
 
                 assertEquals(List.of(), log.warnings());
                 assertFalse(failure.getMessage().contains("alice"), failure.getMessage());

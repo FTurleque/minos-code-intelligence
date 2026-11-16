@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,20 +46,20 @@ public final class CliCommandSupport {
     private static final int MAX_CAUSE_DEPTH = 16;
 
     /** The reporter of the running process; the launcher binds one per run, a bare call has no journal. */
-    private static volatile InternalFailureReporter internalFailureReporter =
-            InternalFailureReporter.withoutJournal("cli");
+    private static final AtomicReference<InternalFailureReporter> INTERNAL_FAILURE_REPORTER =
+            new AtomicReference<>(InternalFailureReporter.withoutJournal("cli"));
 
     private CliCommandSupport() {
     }
 
     /** Binds the reporter that traces the execution failures of the commands run next (the launcher's, per run). */
     public static void useInternalFailureReporter(InternalFailureReporter reporter) {
-        internalFailureReporter = Objects.requireNonNull(reporter, "reporter");
+        INTERNAL_FAILURE_REPORTER.set(Objects.requireNonNull(reporter, "reporter"));
     }
 
     /** Drops the bound reporter: execution failures are no longer traced. */
     public static void clearInternalFailureReporter() {
-        internalFailureReporter = InternalFailureReporter.withoutJournal("cli");
+        INTERNAL_FAILURE_REPORTER.set(InternalFailureReporter.withoutJournal("cli"));
     }
 
     /**
@@ -67,7 +68,7 @@ public final class CliCommandSupport {
      * unknown project, an unreadable registry, a memory refusal), nothing is traced and the output is unchanged.
      */
     public static String traceExecutionFailure(String operation, Throwable failure) {
-        InternalFailureReporter reporter = internalFailureReporter;
+        InternalFailureReporter reporter = INTERNAL_FAILURE_REPORTER.get();
         if (!reporter.journalEnabled() || isKnownPublicError(failure)) return null;
         return REFERENCE_LINE_PREFIX + reporter.report(operation, failure).reference();
     }

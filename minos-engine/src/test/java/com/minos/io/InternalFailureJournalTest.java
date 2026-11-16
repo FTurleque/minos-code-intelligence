@@ -42,7 +42,7 @@ class InternalFailureJournalTest {
     }
 
     @Test
-    void anUnrecognisedValueWritesNothingAndIsReportedOnceWithoutBeingCopied() throws Exception {
+    void anUnrecognisedValueWritesNothingAndIsReportedOnceWithoutBeingCopied() {
         InternalFailureJournal journal = new InternalFailureJournal(temp,
                 Map.of(InternalFailureJournal.ENVIRONMENT_VARIABLE, "oui-secret-value"), new Properties());
 
