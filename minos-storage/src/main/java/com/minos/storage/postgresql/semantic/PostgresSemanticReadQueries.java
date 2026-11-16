@@ -122,6 +122,17 @@ final class PostgresSemanticReadQueries {
         }
     }
 
+    static final String DOCUMENT_PAGE_SQL = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+            + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
+            + "AND c.snapshot_id=m.snapshot_id),"
+            + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
+            + "d.content,d.checksum FROM semantic_index_meta m "
+            + "LEFT JOIN LATERAL (SELECT p.document_id,p.stable_key,p.snapshot_id,p.kind,p.source_id,p.file_id,"
+            + "p.start_line,p.end_line,p.content,p.checksum FROM semantic_documents p "
+            + "WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
+            + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
+            + "WHERE m.project_id=? ORDER BY d.stable_key";
+
     /**
      * One page of the documents of the index, with the metadata of that index and its document count, in one
      * statement that does not read the embedding column. The page asks for one row more than {@code limit} to
@@ -130,17 +141,7 @@ final class PostgresSemanticReadQueries {
      */
     static Optional<DocumentPage> documentPage(Connection connection, String projectId, UUID id,
                                                String afterStableKey, int limit) throws SQLException, IOException {
-        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
-                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
-                + "AND c.snapshot_id=m.snapshot_id),"
-                + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
-                + "d.content,d.checksum FROM semantic_index_meta m "
-                + "LEFT JOIN LATERAL (SELECT p.document_id,p.stable_key,p.snapshot_id,p.kind,p.source_id,p.file_id,"
-                + "p.start_line,p.end_line,p.content,p.checksum FROM semantic_documents p "
-                + "WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
-                + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
-                + "WHERE m.project_id=? ORDER BY d.stable_key";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(DOCUMENT_PAGE_SQL)) {
             statement.setString(1, afterStableKey);
             statement.setString(2, afterStableKey);
             statement.setInt(3, limit + 1);
@@ -168,20 +169,21 @@ final class PostgresSemanticReadQueries {
         }
     }
 
+    static final String STORED_DOCUMENT_SQL = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+            + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
+            + "AND c.snapshot_id=m.snapshot_id),"
+            + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
+            + "d.content,d.checksum,d.embedding::text FROM semantic_index_meta m "
+            + "LEFT JOIN semantic_documents d ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id "
+            + "AND d.stable_key=? WHERE m.project_id=?";
+
     /**
      * One document, its stored vector and the metadata of its index, in one statement: no row when the
      * project has no index, a row without document when the index holds none under {@code stableKey}.
      */
     static Optional<StoredDocument> storedDocument(Connection connection, String projectId, UUID id,
                                                    String stableKey) throws SQLException, IOException {
-        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
-                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
-                + "AND c.snapshot_id=m.snapshot_id),"
-                + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
-                + "d.content,d.checksum,d.embedding::text FROM semantic_index_meta m "
-                + "LEFT JOIN semantic_documents d ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id "
-                + "AND d.stable_key=? WHERE m.project_id=?";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(STORED_DOCUMENT_SQL)) {
             statement.setString(1, stableKey);
             statement.setObject(2, id);
             try (ResultSet result = statement.executeQuery()) {
@@ -201,6 +203,15 @@ final class PostgresSemanticReadQueries {
         }
     }
 
+    static final String VECTOR_PAGE_SQL = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+            + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
+            + "AND c.snapshot_id=m.snapshot_id),"
+            + "d.stable_key,d.kind,d.embedding FROM semantic_index_meta m "
+            + "LEFT JOIN LATERAL (SELECT p.stable_key,p.kind,p.embedding::text AS embedding "
+            + "FROM semantic_documents p WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
+            + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
+            + "WHERE m.project_id=? ORDER BY d.stable_key";
+
     /**
      * One page of the stored vectors of the index, with the kind of each document, the metadata of that index
      * and its document count, in one statement that reads no document content. The page asks for one row more
@@ -208,15 +219,7 @@ final class PostgresSemanticReadQueries {
      */
     static Optional<VectorPage> vectorPage(Connection connection, String projectId, UUID id,
                                            String afterStableKey, int limit) throws SQLException, IOException {
-        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
-                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
-                + "AND c.snapshot_id=m.snapshot_id),"
-                + "d.stable_key,d.kind,d.embedding FROM semantic_index_meta m "
-                + "LEFT JOIN LATERAL (SELECT p.stable_key,p.kind,p.embedding::text AS embedding "
-                + "FROM semantic_documents p WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
-                + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
-                + "WHERE m.project_id=? ORDER BY d.stable_key";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(VECTOR_PAGE_SQL)) {
             statement.setString(1, afterStableKey);
             statement.setString(2, afterStableKey);
             statement.setInt(3, limit + 1);
