@@ -105,21 +105,36 @@ commande `minos semantic projection prepare` et par elle seule ; les deux routes
 toute autre méthode rend `405`, et aucune lecture ne lit de vecteur ni ne calcule (`ExplorerProjectionRoutesTest`,
 `SemanticProjectionServiceTest`).
 
-**Préparation** (`ProjectionPreparation`). Chaque étape est un parcours de l'index par `vectorPage` :
+**Préparation** (`ProjectionPreparation`). La sélection est un parcours de l'index par `vectorPage` ; les étapes
+suivantes lisent soit une copie de l'échantillon en mémoire, soit l'index à nouveau, selon la mémoire :
 
 1. *select* : parmi les documents des natures demandées, les `maxPoints` de plus petit rang sont retenus ; le rang
    d'un document est `sha256(graine ␟ stableKey)`, donc la même graine tire le même échantillon du même index ;
-2. *center* : moyenne des vecteurs retenus ;
-3. *fit* : itération de sous-espace à deux vecteurs, une passe par itération, 40 passes au plus, arrêt quand la
-   base ne bouge plus (`PrincipalAxes.TOLERANCE`) ;
-4. *project* : coordonnées des points retenus, rotation sur les deux axes principaux de la base, signe de chaque
+2. *copy* (stratégie `IN_MEMORY` seulement) : si la matrice `float` de l'échantillon (`points × dimensions × 4`
+   octets, plus la position de chaque ligne) tient dans ce qui reste du budget (`WorkingMemory.fits`, une question
+   sans effet sur la mémoire tenue ni sur le pic), un second parcours la remplit dans l'ordre où le magasin rend
+   ses pages ; un index remplacé pendant la copie refuse la préparation ;
+3. *center* : moyenne des vecteurs retenus ;
+4. *fit* : itération de sous-espace à deux vecteurs, 40 itérations au plus, arrêt quand la base ne bouge plus
+   (`PrincipalAxes.TOLERANCE`) ;
+5. *project* : coordonnées des points retenus, rotation sur les deux axes principaux de la base, signe de chaque
    axe fixé (première valeur non nulle de sa direction positive), mise à l'échelle commune dans `[-1, 1]`.
+
+En stratégie `IN_MEMORY`, l'index est lu deux fois (`passes` = 2) et *center*, *fit* et *project* parcourent la
+copie ; en stratégie `STREAMED`, chacune de ces étapes (une par itération pour *fit*) est un parcours de l'index
+(`passes` = 3 + le nombre d'itérations). `PreparationReport` porte la stratégie et le nombre d'itérations. Les
+deux stratégies calculent sur la composante arrondie en `float` et visitent les vecteurs dans le même ordre : elles
+publient les mêmes coordonnées, au bit près (`SemanticProjectionServiceTest`). Le calcul de l'arrondi est sans effet
+pour le stockage local, dont les valeurs sont déjà des `float` ; il peut déplacer au dernier chiffre une
+coordonnée préparée sous PostgreSQL.
 
 Les sommes sont faites dans l'ordre où le magasin rend ses pages et les fonctions trigonométriques par `StrictMath` : deux
 préparations identiques publient deux fichiers identiques octet pour octet (`SemanticProjectionCommandLineTest`).
 La mémoire de travail est comptée (`ProjectionPreparation.WorkingMemory`) : un lot de vecteurs, six tableaux de
-la taille d'un vecteur, et par point retenu sa clé, son rang et ses coordonnées ; au-delà du budget
-`--max-memory-mb`, la préparation échoue sans publier. L'index n'est jamais chargé entier. Non compté : la table
+la taille d'un vecteur, par point retenu sa clé, son rang et ses coordonnées, et la matrice de l'échantillon en
+stratégie `IN_MEMORY` ; au-delà du budget `--max-memory-mb`, la préparation échoue sans publier. L'index n'est
+jamais chargé entier. Le pire cas que la synchronisation construit (32 768 documents à 768 dimensions) tient dans le
+budget par défaut (`ProjectionPreparationTest`). Non compté : la table
 des empreintes des documents, lue une fois au début et une fois avant publication pour l'identité de l'index ;
 le texte des vecteurs d'une page PostgreSQL avant son décodage. Un index local au format hérité `index-v1.bin`
 échappe au budget : ses lots passent par le chargement complet ; une resynchronisation le réécrit au format

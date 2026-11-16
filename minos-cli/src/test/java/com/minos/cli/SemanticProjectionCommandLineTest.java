@@ -2,6 +2,7 @@ package com.minos.cli;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
+import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.cli.command.SemanticProjectionCommand;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -66,6 +67,11 @@ class SemanticProjectionCommandLineTest {
             assertTrue(first.output().contains("\"seed\":7"), first.output());
             assertTrue(first.output().contains("\"sampled\":false"), first.output());
             assertTrue(first.error().contains("projection: pass 1 (select)"), first.error());
+            assertTrue(first.error().contains("projection: pass 2 (copy)"), first.error());
+            assertTrue(first.output().contains("\"strategy\":\"in-memory\""), first.output());
+            assertTrue(first.output().contains("\"passes\":2"), first.output());
+            assertTrue(first.output().contains("\"iterations\":"), first.output());
+            assertTrue(first.output().contains("\"limitations\":[]"), first.output());
             assertTrue(first.error().contains("projection: published in "), first.error());
             assertFalse(first.error().contains(temp.toString()), "no absolute path on the error stream");
             assertFalse(first.output().contains(temp.toString()), "no absolute path in the report");
@@ -79,6 +85,16 @@ class SemanticProjectionCommandLineTest {
             assertTrue(readyText.output().contains("state: PRETE"), readyText.output());
             assertTrue(readyText.output().contains("seed: 7"), readyText.output());
         }
+    }
+
+    @Test
+    void aStreamedPreparationNamesTheOptionThatLiftsItsLimit() {
+        assertEquals(List.of(), SemanticProjectionCommand.limitationsOf(SemanticProjectionService.Strategy.IN_MEMORY));
+        List<String> streamed = SemanticProjectionCommand.limitationsOf(SemanticProjectionService.Strategy.STREAMED);
+
+        assertEquals(1, streamed.size());
+        assertTrue(streamed.getFirst().startsWith("SAMPLE_NOT_HELD_IN_MEMORY: "), streamed.getFirst());
+        assertTrue(streamed.getFirst().contains("--max-memory-mb"), streamed.getFirst());
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.minos.application.semantic.SemanticProjectionService.PreparationReque
 import com.minos.application.semantic.SemanticProjectionService.Progress;
 import com.minos.application.semantic.SemanticProjectionService.Refusal;
 import com.minos.application.semantic.SemanticProjectionService.RefusedException;
+import com.minos.application.semantic.SemanticProjectionService.Strategy;
 import com.minos.io.Sha256;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticProjection;
@@ -22,9 +23,13 @@ import java.util.PriorityQueue;
 
 /**
  * One computation of a projection: a reproducible sample of the documents of the selected kinds, then the two
- * principal axes of their vectors, every step being one walk of the index by pages. The index is never held:
- * what is kept grows with the number of points and with the size of one vector, and is counted against the
- * memory budget of the request.
+ * principal axes of their vectors. The selection is one walk of the index by pages. When the vectors of the sample
+ * fit in what is left of the memory budget, a second walk copies them and every later step reads that copy;
+ * otherwise each later step is one more walk of the index and the sample is never held. The memory held grows with
+ * the number of points and with the size of one vector, and is counted against the memory budget of the request.
+ *
+ * <p>Both strategies compute on the same value of every component, the vector component rounded to {@code float},
+ * and visit the vectors of the sample in the order the index presents them: they publish the same projection.</p>
  */
 final class ProjectionPreparation {
 
@@ -34,6 +39,8 @@ final class ProjectionPreparation {
     private static final long VECTOR_OVERHEAD_BYTES = 160L;
     /** Estimated bytes of one entry of the table that finds a selected document by its stable key. */
     private static final long POSITION_ENTRY_BYTES = 64L;
+    /** The largest number of components of the matrix of a sample: one Java array. */
+    private static final long MAX_MATRIX_COMPONENTS = Integer.MAX_VALUE - 8L;
 
     private final SemanticVectorStore vectors;
     private final SemanticVectorStore.IndexMetadata metadata;
@@ -55,11 +62,15 @@ final class ProjectionPreparation {
                 request.maxMemoryBytes() / 4L / vectorBytes));
         memory.reserve(pageSize * vectorBytes);
         memory.reserve(PrincipalAxes.workingBytes(metadata.dimensions()));
+        memory.reserve((long) metadata.dimensions() * Float.BYTES);
     }
 
-    /** What the computation found; the points are in stable-key order. */
+    /**
+     * What the computation found; the points are in stable-key order. {@code passes} is the number of walks of
+     * the index, {@code iterations} the number of fitting iterations of the axes.
+     */
     record Outcome(List<SemanticProjection.Point> points, int candidateCount, List<Double> explainedVariance,
-                   int passes, long peakWorkingBytes) {
+                   int passes, long peakWorkingBytes, Strategy strategy, int iterations) {
     }
 
     Outcome run() throws IOException {
@@ -70,15 +81,20 @@ final class ProjectionPreparation {
         }
         int points = sample.keys().length;
         PrincipalAxes axes = new PrincipalAxes(metadata.dimensions(), request.seed());
-        walkSample("center", sample, (position, vector) -> axes.addToMean(vector));
+        Rows copied = copyIfItFits(sample);
+        Strategy strategy = copied == null ? Strategy.STREAMED : Strategy.IN_MEMORY;
+        Rows rows = copied == null ? new StreamedRows(sample) : copied;
+        rows.each("center", (position, values, offset) -> axes.addToMean(values, offset));
         axes.endMean();
         boolean still = false;
-        for (int iteration = 0; iteration < SemanticProjectionService.MAX_ITERATIONS && !still; iteration++) {
-            walkSample("fit", sample, (position, vector) -> axes.addToIteration(vector));
+        int iterations = 0;
+        while (iterations < SemanticProjectionService.MAX_ITERATIONS && !still) {
+            rows.each("fit", (position, values, offset) -> axes.addToIteration(values, offset));
             still = axes.endIteration();
+            iterations++;
         }
         double[] coordinates = new double[2 * points];
-        walkSample("project", sample, (position, vector) -> axes.project(vector, coordinates, position));
+        rows.each("project", (position, values, offset) -> axes.project(values, offset, coordinates, position));
         double[] variance = axes.finish(coordinates, points);
         List<SemanticProjection.Point> projected = new ArrayList<>(points);
         for (int position = 0; position < points; position++) {
@@ -86,7 +102,7 @@ final class ProjectionPreparation {
                     (float) coordinates[2 * position], (float) coordinates[2 * position + 1]));
         }
         return new Outcome(projected, sample.candidateCount(), List.of(variance[0], variance[1]), passes,
-                memory.peak());
+                memory.peak(), strategy, iterations);
     }
 
     /**
@@ -128,6 +144,40 @@ final class ProjectionPreparation {
     }
 
     /**
+     * Copies the vectors of the sample into one matrix of {@code float}, in the order the index presents them,
+     * when the matrix and the position of each row fit in what is left of the budget: the question is asked
+     * without effect, so that a sample that does not fit leaves the memory held and the peak as they were. One
+     * walk of the index; the copy is refused if the index changed under it.
+     *
+     * @return the rows, or {@code null} when the sample does not fit and the steps must walk the index
+     */
+    private Rows copyIfItFits(Sample sample) throws IOException {
+        int points = sample.keys().length;
+        int dimensions = metadata.dimensions();
+        long components = (long) points * dimensions;
+        long bytes = components * Float.BYTES + (long) points * Integer.BYTES;
+        if (components > MAX_MATRIX_COMPONENTS || !memory.fits(bytes)) return null;
+        memory.reserve(bytes);
+        float[] matrix = new float[(int) components];
+        int[] positions = new int[points];
+        int[] filled = {0};
+        BitSet visited = new BitSet(points);
+        walk("copy", vector -> {
+            Integer position = sample.positions().get(vector.stableKey());
+            if (position == null) return;
+            if (visited.get(position)) throw indexChanged();
+            visited.set(position);
+            int row = filled[0]++;
+            positions[row] = position;
+            for (int index = 0; index < dimensions; index++) {
+                matrix[row * dimensions + index] = (float) vector.vector().valueAt(index);
+            }
+        });
+        if (visited.cardinality() != points) throw indexChanged();
+        return new CopiedRows(matrix, positions, dimensions);
+    }
+
+    /**
      * Walks the index and gives the visitor the vectors of the sample, each with its position in the sample. A
      * document is found by its stable key, not by its rank in the walk: the order in which a store returns its
      * pages is its own (a database sorts text by its collation), and need not be the order of the sample.
@@ -165,6 +215,53 @@ final class ProjectionPreparation {
     static RefusedException indexChanged() {
         return new RefusedException(Refusal.INDEX_CHANGED_DURING_PREPARATION,
                 "the semantic index changed while its projection was prepared; nothing was published, prepare again");
+    }
+
+    /** The vectors of the sample, one step at a time, each as the components of one row. */
+    private interface Rows {
+        void each(String phase, RowVisitor visitor) throws IOException;
+    }
+
+    @FunctionalInterface
+    private interface RowVisitor {
+        void visit(int position, float[] values, int offset);
+    }
+
+    /** Rows read again from the index at every step: one walk of the index each. */
+    private final class StreamedRows implements Rows {
+        private final Sample sample;
+        private final float[] row = new float[metadata.dimensions()];
+
+        StreamedRows(Sample sample) {
+            this.sample = sample;
+        }
+
+        @Override
+        public void each(String phase, RowVisitor visitor) throws IOException {
+            walkSample(phase, sample, (position, vector) -> {
+                for (int index = 0; index < row.length; index++) row[index] = (float) vector.valueAt(index);
+                visitor.visit(position, row, 0);
+            });
+        }
+    }
+
+    /** Rows held in one matrix, in the order of the copy: no read of the index. */
+    private final class CopiedRows implements Rows {
+        private final float[] matrix;
+        private final int[] positions;
+        private final int dimensions;
+
+        CopiedRows(float[] matrix, int[] positions, int dimensions) {
+            this.matrix = matrix;
+            this.positions = positions;
+            this.dimensions = dimensions;
+        }
+
+        @Override
+        public void each(String phase, RowVisitor visitor) {
+            for (int row = 0; row < positions.length; row++) visitor.visit(positions[row], matrix, row * dimensions);
+            progress.advanced(phase, passes, 0L);
+        }
     }
 
     @FunctionalInterface
@@ -222,6 +319,11 @@ final class ProjectionPreparation {
 
         WorkingMemory(long budget) {
             this.budget = budget;
+        }
+
+        /** Whether {@code bytes} more would still fit in the budget; changes neither the memory held nor the peak. */
+        boolean fits(long bytes) {
+            return bytes >= 0L && bytes <= budget - held;
         }
 
         void reserve(long bytes) {

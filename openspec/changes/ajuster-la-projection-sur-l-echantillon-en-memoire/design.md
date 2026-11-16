@@ -44,6 +44,10 @@ HEAD `89be3fb4`. Lecture du code seulement ; aucune préparation n'a été exéc
 | Le test `aPreparationReadsTheVectorsByBoundedPagesAndNeverLoadsTheWholeIndex` casse dès que la préparation itère en mémoire (2 parcours au lieu de 3 au moins) | `SemanticProjectionServiceTest.java:90-107` | exigence « … ne relit pas l'index à chaque itération … » | Le test est scindé : lecture par pages bornées sans chargement complet (deux stratégies), et compte des parcours par stratégie (tâche 2.2) |
 | « Mesurer sur un index réel à 768 dimensions » : 32 768 documents au plus | `findings.json` AUD-PERF-02, action | `SemanticIndexBudget.java:59-75` | Jeux de mesure bornés à ce que la synchronisation construit |
 | Stocker l'échantillon en `float` arrondit, sous PostgreSQL, des valeurs que le HEAD traite en `double` analysé du texte | action de l'audit | `PostgresSemanticReadQueries.java:337` | D4 |
+| Les 40 itérations sont toutes faites sur chaque jeu mesuré : la tolérance de `PrincipalAxes` (1e-9) n'est jamais atteinte, donc `passes` vaut 43 en flux, et le gain de la copie est de 41 lectures sur 43 | relevés « avant » (`passes` = 43 pour 25 000, 32 768 et 98 304 documents) | `PrincipalAxes.TOLERANCE` | Constat, hors périmètre (le changement ne touche pas la convergence) ; l'itération reste bornée à 40 |
+| La mémoire de travail rapportée est multipliée par 2,9 à 4,5 en stratégie en mémoire (25-54 Mo → 102-155 Mo sur les jeux mesurés) : le gain se paie en tas, dans le budget de 256 Mio | `peakWorkingBytes` des relevés | D2, D3 | Annoncé dans la doc utilisateur ; le compte de cette mémoire dans le budget des vues reste AUD-PERF-04 |
+| `PassReporter` de la commande regroupait ses lignes par numéro de passe : les étapes en mémoire, qui partagent la passe 2, auraient écrasé la phase `copy` | `SemanticProjectionCommand.java` (`PassReporter.advanced`) | Contrats d'interface (« le numéro de passe annoncé reste le nombre de parcours ») | Une ligne par phase d'une même passe ; test CLI (`pass 2 (copy)`) |
+| Le banc comptait chaque événement de progression comme une page lue ; les étapes en mémoire en annoncent sans lecture | `SemanticExplorerBenchmark.java` (progression) | tâche 3.2 | Les événements sans vecteur lu ne sont plus comptés ; deux mesures ajoutées (`iterations`, `inMemory`) et le test de fumée mis à jour (67 lignes) |
 
 ## Exigences couvertes
 
@@ -176,12 +180,12 @@ Pour que les stratégies soient égales au bit près, le chemin en flux calcule 
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › La préparation ne relit pas l'index à chaque itération quand l'échantillon tient en mémoire | Échantillon dans le budget | diagramme, D1 | 2.1, 2.3 | `SemanticProjectionServiceTest` — à étendre |
-| idem | Index remplacé pendant la copie | Transactions | 2.1, 2.3 | idem — à étendre |
-| exploration-semantique › Un échantillon plus lourd que le budget garde le parcours en flux et l'annonce | Repli annoncé | D2, Contrats | 3.1, 3.2 | idem et test du rendu CLI — à écrire |
-| idem | Budget insuffisant même en flux | Erreurs, invariant de budget | 2.1, 3.1 | idem — existant à relire, à étendre ; question de capacité sans effet — à écrire |
-| exploration-semantique › Les deux stratégies de préparation rendent les mêmes coordonnées | Égalité des projections | Invariants, D4 | 2.1, 2.3 | idem — à écrire |
-| (mesure du sprint) | — | Performance et mesure | 1.2, 4.1 | sorties du banc — manquantes |
+| exploration-semantique › La préparation ne relit pas l'index à chaque itération quand l'échantillon tient en mémoire | Échantillon dans le budget | diagramme, D1 | 2.1, 2.3 | `SemanticProjectionServiceTest#aSampleThatFitsTheBudgetIsIteratedInMemoryAfterTwoWalksOfTheIndex`, `ProjectionPreparationTest#theLargestIndexTheProductBuildsIsIteratedInMemoryUnderTheDefaultBudget` |
+| idem | Index remplacé pendant la copie | Transactions | 2.1, 2.3 | `SemanticProjectionServiceTest#anIndexReplacedWhileTheSampleIsCopiedRefusesThePreparationAndKeepsThePublishedProjection` |
+| exploration-semantique › Un échantillon plus lourd que le budget garde le parcours en flux et l'annonce | Repli annoncé | D2, Contrats | 3.1, 3.2 | `SemanticProjectionServiceTest#aSampleThatDoesNotFitTheBudgetKeepsTheStreamAndSaysWhichStrategyRan`, `SemanticProjectionCommandLineTest#aStreamedPreparationNamesTheOptionThatLiftsItsLimit` |
+| idem | Budget insuffisant même en flux | Erreurs, invariant de budget | 2.1, 3.1 | `SemanticProjectionServiceTest#aBudgetBelowTheSmallestWorkableOneIsRefusedAndPublishesNothing`, `ProjectionPreparationTest#askingWhetherBytesFitChangesNeitherTheMemoryHeldNorThePeak` |
+| exploration-semantique › Les deux stratégies de préparation rendent les mêmes coordonnées | Égalité des projections | Invariants, D4 | 2.1, 2.3 | `SemanticProjectionServiceTest#theTwoStrategiesPublishTheSamePointsCoordinatesAndVariance` |
+| (mesure du sprint) | — | Performance et mesure | 1.2, 4.1 | relevés `avant3-*`, `apres-pg25000.tsv` et `apres3-*` du dossier de notes de la session ; une exécution, poste bruité, jeux synthétiques ; référence sur la machine de référence : manuelle |
 
 ## Questions ouvertes
 
