@@ -1,7 +1,9 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.application.resolution.ProjectResolver;
+import com.minos.diagnostics.InternalFailureTrace;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
 import com.minos.output.json.DeterministicJson;
@@ -50,6 +52,7 @@ public final class MinosMcpTools implements AutoCloseable {
     public static final int MAX_RESULT_BYTES = 8 * 1024 * 1024;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
     private static final String GENERIC_TOOL_ERROR = "error: MINOS tool execution failed";
+    private static final String FAILURE_LOG_SUBJECT = "MCP tool execution failed";
     private static final String RESULT_BUDGET_ERROR =
             "error: MCP_RESULT_BUDGET_EXCEEDED; reduce limits or paginate the request";
     private static final String ARG_LIMIT = "limit";
@@ -62,6 +65,7 @@ public final class MinosMcpTools implements AutoCloseable {
     private final MinosMcpBackend backend;
     private final MinosApplication ownedApplication;
     private final int maxResultBytes;
+    private final InternalFailureReporter failureReporter;
 
     public MinosMcpTools(Path home) {
         Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
@@ -69,6 +73,8 @@ public final class MinosMcpTools implements AutoCloseable {
             this.ownedApplication = MinosApplication.open(normalizedHome);
             this.backend = new MinosApplicationMcpBackend(this.ownedApplication);
             this.maxResultBytes = MAX_RESULT_BYTES;
+            this.failureReporter = new InternalFailureReporter(
+                    "mcp", normalizedHome, System.getenv(), System.getProperties());
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
@@ -79,10 +85,19 @@ public final class MinosMcpTools implements AutoCloseable {
     }
 
     MinosMcpTools(MinosMcpBackend backend, int maxResultBytes) {
+        this(backend, maxResultBytes, InternalFailureReporter.withoutJournal("mcp"));
+    }
+
+    MinosMcpTools(MinosMcpBackend backend, InternalFailureReporter failureReporter) {
+        this(backend, MAX_RESULT_BYTES, failureReporter);
+    }
+
+    MinosMcpTools(MinosMcpBackend backend, int maxResultBytes, InternalFailureReporter failureReporter) {
         this.backend = Objects.requireNonNull(backend, "backend");
         this.ownedApplication = null;
         if (maxResultBytes < 1) throw new IllegalArgumentException("maxResultBytes must be positive");
         this.maxResultBytes = maxResultBytes;
+        this.failureReporter = Objects.requireNonNull(failureReporter, "failureReporter");
     }
 
     public List<SyncToolSpecification> specifications() {
@@ -204,8 +219,7 @@ public final class MinosMcpTools implements AutoCloseable {
                 return toolError("error: " + PublicErrorMessages.sanitize(
                         memoryRefusal.getMessage(), SnapshotMemoryExhaustedException.MESSAGE_PREFIX));
             }
-            logInternalFailure(toolName, exception);
-            return toolError(GENERIC_TOOL_ERROR);
+            return toolError(internalFailure(toolName, exception));
         }
     }
 
@@ -237,29 +251,26 @@ public final class MinosMcpTools implements AutoCloseable {
                 .build();
     }
 
-    private static String clientError(String toolName, IllegalArgumentException exception) {
-        if (exception.getCause() != null) {
-            logInternalFailure(toolName, exception);
-            return GENERIC_TOOL_ERROR;
-        }
+    private String clientError(String toolName, IllegalArgumentException exception) {
+        if (exception.getCause() != null) return internalFailure(toolName, exception);
         String message = exception.getMessage();
         if (message == null || message.isBlank()) return "error: invalid MCP argument";
         String detail = message.replace('\r', ' ').replace('\n', ' ').trim();
         if (detail.length() > MAX_CLIENT_ERROR_CHARS) {
             detail = detail.substring(0, MAX_CLIENT_ERROR_CHARS);
         }
-        if (PublicErrorMessages.looksSensitive(detail)) {
-            logInternalFailure(toolName, exception);
-            return GENERIC_TOOL_ERROR;
-        }
+        if (PublicErrorMessages.looksSensitive(detail)) return internalFailure(toolName, exception);
         return detail.startsWith("error:") ? detail : "error: " + detail;
     }
 
-    /** The operator's only trace of an opaque failure: tool and classes, never the message nor an argument. */
-    private static void logInternalFailure(String toolName, Exception exception) {
-        LOGGER.log(System.Logger.Level.WARNING,
-                "MCP tool execution failed (tool=" + toolName + ", type=" + exception.getClass().getName()
-                        + ", rootCause=" + rootCauseType(exception) + ")");
+    /**
+     * Traces an opaque failure and returns the error the client receives: the generic text and the reference that ties
+     * it to the stderr line and, when the private journal is on, to its entry. Never the message nor an argument.
+     */
+    private String internalFailure(String toolName, Exception exception) {
+        InternalFailureTrace trace = failureReporter.report(toolName, exception);
+        LOGGER.log(System.Logger.Level.WARNING, trace.line(FAILURE_LOG_SUBJECT, "tool", toolName));
+        return GENERIC_TOOL_ERROR + " (ref " + trace.reference() + ")";
     }
 
     /** The memory refusal of a snapshot view carried by {@code failure} or one of its causes, or {@code null}. */
@@ -271,14 +282,6 @@ public final class MinosMcpTools implements AutoCloseable {
             current = current.getCause();
         }
         return null;
-    }
-
-    private static String rootCauseType(Throwable failure) {
-        Throwable root = failure;
-        for (int depth = 0; depth < MAX_CAUSE_DEPTH && root.getCause() != null && root.getCause() != root; depth++) {
-            root = root.getCause();
-        }
-        return root.getClass().getName();
     }
 
     private static MinosMcpBackend.SearchRequest searchRequest(Map<String, Object> args) {
