@@ -31,6 +31,7 @@ import com.minos.output.SymbolOutputFormat;
 import com.minos.output.SymbolResultRenderer;
 import com.minos.output.json.DeterministicJson;
 import com.minos.program.analysis.SecurityAnalysisService;
+import com.minos.diagnostics.UsageException;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -206,7 +207,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         ArchitectureResultRenderer.GraphFormat graphFormat = switch (format) {
             case "mermaid" -> ArchitectureResultRenderer.GraphFormat.MERMAID;
             case "dot" -> ArchitectureResultRenderer.GraphFormat.DOT;
-            default -> throw new IllegalArgumentException("unsupported architecture graph format: " + format);
+            default -> throw new UsageException("unsupported architecture graph format: " + format);
         };
         return ArchitectureResultRenderer.renderGraph(view, moduleId, graphFormat);
     }
@@ -329,7 +330,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         try {
             return UUID.fromString(value);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("workspaceId must be a UUID");
+            throw new UsageException("workspaceId must be a UUID");
         }
     }
 
@@ -363,7 +364,8 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         try {
             return SymbolKind.valueOf(value.toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("unsupported symbol kind: " + value, exception);
+            // Fixed message: it names the argument and never echoes the value the client sent.
+            throw new UsageException("unsupported value for MCP argument kind");
         }
     }
 

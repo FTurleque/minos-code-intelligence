@@ -24,6 +24,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Utiliser MINOS depuis Java | [API Java locale](java-api.md) |
 | Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
 | Diagnostiquer un problème | [Dépannage](troubleshooting.md) |
+| Retrouver la cause d'une erreur interne opaque | [Diagnostiquer un échec interne](diagnostic-d-un-echec-interne.md) |
 | Développer MINOS depuis les sources | [Installation depuis les sources](installation.md) |
 
 ### Je veux juste voir mon graphe maintenant
