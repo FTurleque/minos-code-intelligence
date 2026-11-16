@@ -272,14 +272,12 @@ class FileSemanticVectorStoreWalkedReadsTest {
         rankedIndexOf(root);
         FileSemanticVectorStore narrow = new FileSemanticVectorStore(root, NARROW);
         SemanticVector twoDimensions = SemanticVector.fromArray("q", new double[] {1.0, 0.0});
+        SemanticVector threeDimensions = SemanticVector.fromArray("q", new double[] {1.0, 0.0, 0.0});
 
         assertThrows(IllegalArgumentException.class, () -> narrow.search(PROJECT, twoDimensions, 20, -1.0));
-        assertThrows(IllegalArgumentException.class, () -> narrow.search(PROJECT,
-                SemanticVector.fromArray("q", new double[] {1.0, 0.0, 0.0}), 0, -1.0));
-        assertThrows(IllegalArgumentException.class, () -> narrow.search(PROJECT,
-                SemanticVector.fromArray("q", new double[] {1.0, 0.0, 0.0}), 20, 2.0));
-        assertEquals(List.of(), narrow.search("project-absent",
-                SemanticVector.fromArray("q", new double[] {1.0, 0.0, 0.0}), 20, -1.0));
+        assertThrows(IllegalArgumentException.class, () -> narrow.search(PROJECT, threeDimensions, 0, -1.0));
+        assertThrows(IllegalArgumentException.class, () -> narrow.search(PROJECT, threeDimensions, 20, 2.0));
+        assertEquals(List.of(), narrow.search("project-absent", threeDimensions, 20, -1.0));
         assertEquals(0L, narrow.cacheStats().misses());
     }
 
