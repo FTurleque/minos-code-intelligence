@@ -151,11 +151,27 @@ tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_
 | Méthode d'écriture (`PUT`, `PATCH`, `DELETE`) | `405` : aucune route n'écrit |
 | Toute méthode autre que `GET` sur la projection d'un projet | `405` : aucune requête ne prépare ni ne modifie une projection |
 | Curseur de liste émis pour un index remplacé depuis | `409` : la lecture reprend à la première page |
-| Plus de 4 requêtes d'API simultanées, ou requête de plus de 30 s | `503` |
+| Plus de 4 requêtes d'API simultanées | `503` de code `BUSY` |
+| Requête de plus de 30 s | `503` de code `TIMEOUT` : la surface libère aussitôt la place de la requête, même si la lecture sous-jacente ne s'interrompt pas |
+| Plus de 8 lectures abandonnées qui n'ont pas rendu la main | `503` de code `BUSY`, sans appeler de service, jusqu'à ce qu'une de ces lectures se termine |
+| Segment de chemin `.` ou `..` (même encodé en `%2E`) | `400` de code `INVALID_REQUEST`, avant tout appel de service |
+| Échec interne | `500` de code `INTERNAL_ERROR`, message terminé par `(ref <référence>)` |
 | Connexion depuis une autre machine | refusée : l'écoute est limitée à `127.0.0.1` et `::1` |
 
 Aucune option n'élargit l'écoute. Aucune réponse, erreur ni ligne de journal ne contient la racine absolue d'un
-projet. Le contenu indexé est affiché comme texte, jamais interprété comme HTML ; la page ne charge aucune
+projet.
+
+**Lignes de la commande.** La sortie d'erreur de `minos explorer serve` porte, avec le préfixe `explorer: ` :
+`refused request: <raison>` (`host`, `origin` ou `token`) à la première requête refusée de chaque raison, puis au plus
+une ligne `refused requests: <raison> (<n> since the previous line)` par raison et par minute ; `request failed (route=…,
+type=…, rootCause=…, at=…, ref=…)` pour un échec interne, avec la même référence que la réponse `500` (jamais le
+message de l'exception, l'adresse, un paramètre ni le jeton) ; `abandoned reads still running: <n> (limit <m>)` quand
+des lectures abandonnées bloquent la surface. Une erreur d'argument que le contrat ne prévoit pas (un défaut interne)
+est un `500`, non un `400`. Avec `MINOS_DIAGNOSTIC_LOG=enabled`, la pile d'un échec interne est écrite dans le journal
+privé ([Diagnostiquer un échec interne](diagnostic-d-un-echec-interne.md)) ; en Docker, `MINOS_HOME` est en lecture
+seule et ce journal n'existe pas.
+
+Le contenu indexé est affiché comme texte, jamais interprété comme HTML ; la page ne charge aucune
 ressource d'un autre site.
 
 Le jeton protège d'une page web tierce et d'un autre processus qui ne le connaît pas. Il ne protège pas d'un

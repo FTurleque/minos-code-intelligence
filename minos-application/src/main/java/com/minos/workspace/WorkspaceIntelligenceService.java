@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.minos.domain.Preconditions.requireArgument;
 import static com.minos.domain.Preconditions.requireText;
 
 /** M12 multi-repository intelligence over workspaces and active knowledge snapshots. */
@@ -43,7 +44,7 @@ public final class WorkspaceIntelligenceService {
     }
 
     public WorkspaceView createWorkspace(String name) throws IOException {
-        requireText(name, "name");
+        requireArgument(name, "name");
         return workspace(registry.createWorkspaceWithResult(name).workspace());
     }
 
@@ -80,7 +81,7 @@ public final class WorkspaceIntelligenceService {
      * this name.</p>
      */
     public WorkspaceLookup getWorkspaceTolerantly(String workspaceIdentifier) throws IOException {
-        requireText(workspaceIdentifier, "workspaceIdentifier");
+        requireArgument(workspaceIdentifier, "workspaceIdentifier");
         ProjectRegistry.WorkspaceInventory inventory = registry.workspaceInventory();
         Optional<UUID> id = uuid(workspaceIdentifier);
         if (id.isPresent()) {
@@ -165,7 +166,7 @@ public final class WorkspaceIntelligenceService {
     }
 
     private RegisteredWorkspace resolveWorkspace(String identifier) throws IOException {
-        requireText(identifier, "workspaceIdentifier");
+        requireArgument(identifier, "workspaceIdentifier");
         Optional<UUID> uuid = uuid(identifier);
         if (uuid.isPresent()) return registry.findWorkspace(uuid.orElseThrow())
                 .orElseThrow(() -> new UsageException("Unknown workspace: " + identifier));

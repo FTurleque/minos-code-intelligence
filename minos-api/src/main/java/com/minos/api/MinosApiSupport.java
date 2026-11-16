@@ -146,6 +146,8 @@ final class MinosApiSupport {
         } catch (IOException exception) {
             throw publicFailure(ErrorCode.IO_FAILURE, bootstrapFailureMessage, exception);
         } catch (IllegalArgumentException exception) {
+            // A configuration value is the usual cause, and it is kept an invalid request; the class stays visible.
+            LOGGER.log(Level.WARNING, diagnosticSummary(ErrorCode.INVALID_REQUEST, exception));
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception);
         } catch (IllegalStateException exception) {
             throw publicFailure(ErrorCode.UNAVAILABLE, exception);

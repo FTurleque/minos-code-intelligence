@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.minos.domain.Preconditions.requireText;
+import static com.minos.domain.Preconditions.requireArgument;
 
 /**
  * Public, provider-independent Java contract for consuming MINOS Code Intelligence.
@@ -165,7 +165,7 @@ public interface MinosApi extends AutoCloseable {
             String snapshotId
     ) {
         public IndexImportRequest {
-            requireText(providerId, "providerId");
+            requireArgument(providerId, "providerId");
         }
     }
 
@@ -202,9 +202,9 @@ public interface MinosApi extends AutoCloseable {
             int limit
     ) {
         public RelationshipQuery {
-            requireText(anchorType, "anchorType");
-            requireText(anchorId, "anchorId");
-            requireText(direction, "direction");
+            requireArgument(anchorType, "anchorType");
+            requireArgument(anchorId, "anchorId");
+            requireArgument(direction, "direction");
             kinds = kinds == null ? Set.of() : Set.copyOf(kinds);
             resolutionStatus = blankToNull(resolutionStatus);
             nature = blankToNull(nature);
@@ -222,7 +222,7 @@ public interface MinosApi extends AutoCloseable {
 
     record ImpactQuery(String symbolId, int maxDepth, int maxResults) {
         public ImpactQuery {
-            requireText(symbolId, "symbolId");
+            requireArgument(symbolId, "symbolId");
             if (maxDepth < 1 || maxDepth > 32) {
                 throw new UsageException("maxDepth must be between 1 and 32");
             }

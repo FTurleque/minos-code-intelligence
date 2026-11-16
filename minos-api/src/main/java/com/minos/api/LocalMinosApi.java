@@ -46,7 +46,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static com.minos.domain.Preconditions.requireText;
+import static com.minos.domain.Preconditions.requireArgument;
 
 /**
  * Local M11 implementation backed by the already-qualified MINOS services.
@@ -171,7 +171,7 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
     @Override
     public List<UsageDto> findUsages(String projectIdentifier, String symbolId, int limit) throws MinosApiException {
         return execute(() -> {
-            requireText(symbolId, "symbolId");
+            requireArgument(symbolId, "symbolId");
             requireLimit(limit, "limit");
             return symbolQuery.findUsages(projectIdentifier, symbolId, limit).stream()
                     .map(LocalMinosApi::usage)

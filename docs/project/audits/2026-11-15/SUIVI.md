@@ -50,11 +50,11 @@ Ordre : `solder-…`, `refuser-…`, `separer-…`, `aligner-…`, `borner-…` 
 
 | Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
 |---|---|---|---|
-| AUD-QUA-02 | `tracer-les-echecs-internes-des-surfaces` (MCP, CLI, API Java, worker WSL) ; `fiabiliser-la-surface-de-l-explorateur` (explorateur) | Spécifié | Journal privé non supporté en conteneur (données en lecture seule) ; ligne stderr enrichie partout. Le journal est un fichier privé par échec sous `logs/internal-failures/`, borné à 200 entrées, écrit par les primitives existantes. Les surfaces passent par une façade de `minos-application` (`InternalFailureReporter`) : tables A11 et pom de l'explorateur inchangés. Côté CLI, seuls le cadre commun et le lanceur sont couverts. |
-| AUD-QUA-01 | `distinguer-l-erreur-d-usage-de-l-echec-interne` (MCP, API Java) ; `fiabiliser-…` (explorateur) | Spécifié | `UsageException` dans `minos-domain`, sous-classe non finale d'`IllegalArgumentException` (89 clauses `catch` existantes). `DocumentNotFoundException` en hérite : un document inconnu reste `INVALID_REQUEST`. Un genre de symbole inconnu change de réponse côté MCP. `IndexChangedException` et `RefusedException` sont exclues de la trace. |
-| AUD-SEC-02 | `fiabiliser-la-surface-de-l-explorateur` | Spécifié | `minos-mcp`, `minos-postgres` et `minos-ollama` n'ont pas de rotation non plus ; lot limité à l'explorateur et pgAdmin. |
-| AUD-SEC-03 | idem | Spécifié | Un `statement_timeout` toucherait la fabrique de connexions partagée : libération du créneau à l'abandon et borne des lectures abandonnées. |
-| AUD-SEC-04 | idem | Spécifié | Seuls `.` et `..` sont refusés ; une clé de document contient `/`. L'IAE de `URLDecoder` sur un échappement cassé est enveloppée. |
+| AUD-QUA-02 | `tracer-les-echecs-internes-des-surfaces` (MCP, CLI, API Java, worker WSL) ; `fiabiliser-la-surface-de-l-explorateur` (explorateur) | Implémenté en local (branches `feat/tracer-les-echecs-internes-des-surfaces`, `fix/fiabiliser-la-surface-de-l-explorateur`), non publié ; ADR SEC-0084 ; reste manuel : preuve sur une vraie distribution WSL | Journal privé non supporté en conteneur (données en lecture seule) ; ligne stderr enrichie partout. Le journal est un fichier privé par échec sous `logs/internal-failures/`, borné à 200 entrées, écrit par les primitives existantes. Les surfaces passent par une façade de `minos-application` (`InternalFailureReporter`) : tables A11 et pom de l'explorateur inchangés. Côté CLI, seuls le cadre commun et le lanceur sont couverts. |
+| AUD-QUA-01 | `distinguer-l-erreur-d-usage-de-l-echec-interne` (MCP, API Java) ; `fiabiliser-…` (explorateur) | Implémenté en local (branche `fix/distinguer-l-erreur-d-usage-de-l-echec-interne` et `fix/fiabiliser-la-surface-de-l-explorateur`), non publié | `UsageException` dans `minos-domain`, sous-classe non finale d'`IllegalArgumentException` (89 clauses `catch` existantes). `DocumentNotFoundException` en hérite : un document inconnu reste `INVALID_REQUEST`. Un genre de symbole inconnu change de réponse côté MCP. `IndexChangedException` et `RefusedException` sont exclues de la trace. |
+| AUD-SEC-02 | `fiabiliser-la-surface-de-l-explorateur` | Implémenté en local, non publié ; reste manuel : rotation observée sur un conteneur (tâche 4.3) | `minos-mcp`, `minos-postgres` et `minos-ollama` n'ont pas de rotation non plus ; lot limité à l'explorateur et pgAdmin. |
+| AUD-SEC-03 | idem | Implémenté en local, non publié ; borne des lectures abandonnées portée à 8 (la valeur 4 égalait les créneaux) ; lecture PostgreSQL réellement bloquée non observée | Un `statement_timeout` toucherait la fabrique de connexions partagée : libération du créneau à l'abandon et borne des lectures abandonnées. |
+| AUD-SEC-04 | idem | Implémenté en local, non publié | Seuls `.` et `..` sont refusés ; une clé de document contient `/`. L'IAE de `URLDecoder` sur un échappement cassé est enveloppée. |
 
 Ordre : `tracer-…`, `distinguer-…`, `fiabiliser-…` (exige les deux premiers).
 
@@ -151,7 +151,7 @@ Aucun numéro n'est réservé : chaque ADR prend le prochain numéro libre de `d
 | Domaine | Sujet | Changement qui le planifie |
 |---|---|---|
 | SEC | Filtres Git à la matérialisation d'un dépôt distant | `couvrir-le-clone-distant-par-l-ouverture-de-confiance` |
-| SEC | Journal de diagnostic privé et opt-in des échecs internes | `tracer-les-echecs-internes-des-surfaces` |
+| SEC | Journal de diagnostic privé et opt-in des échecs internes | `tracer-les-echecs-internes-des-surfaces` (écrit : SEC-0084) |
 | DATA | ADR consolidé qui remplace DATA-0081 (parts du tas des caches, vue hors cache, zone de travail) | premier changement implémenté du sprint 5 |
 | ARCH | Adaptateurs embarqués par l'application et façade réduite | `cabler-…` (`Proposed`), `injecter-…` (`Accepted`) |
 | ARCH | Langue des constantes des contrats publics | `trancher-la-langue-du-contrat-de-l-explorateur` |

@@ -369,4 +369,52 @@ class ExplorerRoutesTest {
         }
         return files;
     }
+
+    /** The documented invalid inputs of the contract: each is a 400 that names what to correct, never a 500. */
+    @Test
+    void everyInvalidInputOfTheContractIsA400AndNeverAnInternalFailure() throws Exception {
+        String tooLongKey = "k".repeat(9_000);
+        Map<String, String> table = new LinkedHashMap<>();
+        table.put("limit=abc", documents + "?limit=abc");
+        table.put("limit=0", documents + "?limit=0");
+        table.put("limit above the bound", documents + "?limit=5000");
+        table.put("unknown parameter", documents + "?order=desc");
+        table.put("parameter given twice", documents + "?limit=1&limit=2");
+        table.put("unknown kind", documents + "?kind=MODULE");
+        table.put("malformed cursor", documents + "?cursor=not-a-cursor");
+        table.put("blank filter", documents + "?filePrefix=");
+        table.put("broken escape in a parameter", documents + "?kind=%zz");
+        table.put("broken escape in the path", "/api/v1/projects/%zz/documents");
+        table.put("empty segment", documents + "//");
+        table.put("document key beyond its bound", documents + "/" + tooLongKey);
+
+        for (Map.Entry<String, String> invalid : table.entrySet()) {
+            RawHttp.Response response = RawHttp.get(port, invalid.getValue(), bearer);
+
+            assertEquals(400, response.status(), invalid.getKey() + ": " + response.body());
+            // A broken escape is refused by the HTTP server of the JDK itself, before the surface: its own 400 page.
+            if (!invalid.getKey().startsWith("broken escape")) {
+                assertTrue(response.body().contains("\"code\":\"INVALID_REQUEST\""),
+                        invalid.getKey() + ": " + response.body());
+            }
+        }
+        Map<String, String> json = new LinkedHashMap<>(bearer);
+        json.put("Content-Type", "application/json");
+        String search = "/api/v1/projects/" + fixture.projectId + "/search";
+        Map<String, String> bodies = new LinkedHashMap<>();
+        bodies.put("not JSON", "query=x");
+        bodies.put("unknown member", "{\"query\":\"x\",\"extra\":1}");
+        bodies.put("member of the wrong type", "{\"query\":5}");
+        bodies.put("blank query", "{\"query\":\"  \"}");
+        bodies.put("limit out of range", "{\"query\":\"x\",\"limit\":100000}");
+        bodies.put("unknown mode", "{\"query\":\"x\",\"mode\":\"fuzzy\"}");
+        for (Map.Entry<String, String> invalid : bodies.entrySet()) {
+            RawHttp.Response response = RawHttp.send(port, "POST", search, json, invalid.getValue());
+
+            assertEquals(400, response.status(), invalid.getKey() + ": " + response.body());
+        }
+        RawHttp.Response tooBig = RawHttp.send(port, "POST", search, json, "x".repeat(ExplorerServer.MAX_BODY_BYTES + 1));
+        assertEquals(400, tooBig.status());
+        assertTrue(log.stream().noneMatch(line -> line.startsWith("request failed")), log.toString());
+    }
 }
