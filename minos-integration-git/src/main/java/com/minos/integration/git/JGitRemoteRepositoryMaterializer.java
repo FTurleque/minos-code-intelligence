@@ -11,6 +11,7 @@ import com.minos.io.StaleScratchReclamation;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.submodule.SubmoduleWalk.IgnoreSubmoduleMode;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Repository;
@@ -107,12 +108,16 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             Duration lockTimeout,
             DirectoryPublisher publisher
     ) throws IOException {
-        this(minosHome, cachePolicy, gitClient, secretResolver, clock, lockTimeout, publisher, null);
+        this(minosHome, cachePolicy, gitClient, secretResolver, clock, lockTimeout, new Seams(publisher, null));
+    }
+
+    /** Test seams of the materializer: the publication of the clone and the owner a repository must have. */
+    record Seams(DirectoryPublisher publisher, Supplier<UserPrincipal> expectedOwner) {
     }
 
     /**
-     * Test seam: the owner a materialized repository must have. {@code null} means the owner the system gives a
-     * file this process creates.
+     * Test seam: the owner a materialized repository must have is {@link Seams#expectedOwner()}; {@code null}
+     * means the owner the system gives a file this process creates.
      */
     JGitRemoteRepositoryMaterializer(
             Path minosHome,
@@ -121,11 +126,10 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             SecretResolver secretResolver,
             Clock clock,
             Duration lockTimeout,
-            DirectoryPublisher publisher,
-            Supplier<UserPrincipal> expectedOwner
+            Seams seams
     ) throws IOException {
-        this.opening = new TrustedRepositoryOpening(expectedOwner);
-        this.publisher = Objects.requireNonNull(publisher, "publisher");
+        this.opening = new TrustedRepositoryOpening(seams.expectedOwner());
+        this.publisher = Objects.requireNonNull(seams.publisher(), "publisher");
         this.lockTimeout = Objects.requireNonNull(lockTimeout, "lockTimeout");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         Path remoteRoot = home.resolve("remote-cache");
@@ -302,7 +306,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         return projectRoot;
     }
 
-    private void validateCheckout(Path repositoryRoot, RemoteRepositoryRequest request) throws Exception {
+    private void validateCheckout(Path repositoryRoot, RemoteRepositoryRequest request)
+            throws IOException, GitAPIException {
         TrustedRepositoryOpening.Opened opened = opening.openExact(repositoryRoot);
         try (Repository repository = opened.repository(); Git git = new Git(repository)) {
             String head = Objects.requireNonNull(

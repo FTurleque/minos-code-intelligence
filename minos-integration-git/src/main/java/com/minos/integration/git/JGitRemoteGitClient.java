@@ -3,6 +3,7 @@ package com.minos.integration.git;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.remote.RemoteRepositoryRequest.RemoteHost;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.dircache.DirCacheCheckout;
 import org.eclipse.jgit.lib.Constants;
@@ -58,7 +59,7 @@ final class JGitRemoteGitClient implements JGitRemoteRepositoryMaterializer.Remo
             char[] secret,
             JGitRemoteRepositoryMaterializer.CloneBudget budget,
             TransportConfigCallback transportConfig
-    ) throws Exception {
+    ) throws IOException, GitAPIException {
         CloneProgressMonitor monitor = new CloneProgressMonitor(budget);
         var command = Git.cloneRepository()
                 .setURI(uri)

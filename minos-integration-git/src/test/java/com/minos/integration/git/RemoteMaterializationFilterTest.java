@@ -256,8 +256,8 @@ class RemoteMaterializationFilterTest {
                 name -> Optional.empty(),
                 Clock.fixed(Instant.parse("2026-07-29T00:00:00Z"), ZoneOffset.UTC),
                 JGitRemoteRepositoryMaterializer.LOCK_ACQUIRE_TIMEOUT,
-                JGitRemoteRepositoryMaterializer.DirectoryPublisher.ATOMIC,
-                expectedOwner);
+                new JGitRemoteRepositoryMaterializer.Seams(
+                        JGitRemoteRepositoryMaterializer.DirectoryPublisher.ATOMIC, expectedOwner));
     }
 
     private static RemoteRepositoryRequest request(String commit) {
