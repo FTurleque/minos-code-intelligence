@@ -93,6 +93,39 @@ class GitIntelligenceTrustTest {
     }
 
     @Test
+    void aTrapFilterOfASubmoduleIsNotExecutedAndTheLimitIsDeclared(@TempDir Path temp) throws Exception {
+        Path root = repositoryWithSmudgedFile(temp.resolve("parent"));
+        Path submodule = repositoryWithSmudgedFile(temp.resolve("sub-source"));
+        Path witness = temp.resolve("witness-submodule");
+        declareFilter(submodule, witness);
+        Files.writeString(submodule.resolve(".gitattributes"), ATTRIBUTE_LINE);
+        // The submodule working copy lives inside the parent, with its own git dir and a .gitmodules entry.
+        copyTree(submodule, root.resolve("lib"));
+        Files.writeString(root.resolve(".gitmodules"), "[submodule \"lib\"]\n\tpath = lib\n\turl = ../sub-source\n");
+        try (Git git = Git.open(root.toFile())) {
+            git.add().addFilepattern("lib").addFilepattern(".gitmodules").call();
+            git.commit().setMessage("add submodule").setAuthor("Dev", "dev@example.com")
+                    .setCommitter("Dev", "dev@example.com").call();
+        }
+        Files.setLastModifiedTime(
+                root.resolve("lib").resolve(TRACKED), FileTime.fromMillis(System.currentTimeMillis() + 120_000));
+
+        RepositoryView view = new GitIntelligenceService().inspect(root);
+
+        assertFalse(Files.exists(witness), "le filtre d'un sous-module a été exécuté");
+        assertTrue(view.limitations().contains("SUBMODULES_NOT_ANALYSED"), view.limitations().toString());
+    }
+
+    @Test
+    void aRepositoryWithoutSubmodulesDoesNotDeclareTheSubmoduleLimit(@TempDir Path temp) throws Exception {
+        Path root = repositoryWithSmudgedFile(temp.resolve("repo"));
+
+        RepositoryView view = new GitIntelligenceService().inspect(root);
+
+        assertFalse(view.limitations().contains("SUBMODULES_NOT_ANALYSED"), view.limitations().toString());
+    }
+
+    @Test
     void aTrapOfTheMainRepositoryIsNotExecutedFromALinkedWorktree(@TempDir Path temp) throws Exception {
         Path main = repositoryWithSmudgedFile(temp.resolve("main"));
         Path witness = temp.resolve("witness-worktree");
@@ -252,6 +285,19 @@ class GitIntelligenceTrustTest {
         }
         Files.setLastModifiedTime(root.resolve(TRACKED), FileTime.fromMillis(System.currentTimeMillis() + 60_000));
         return root;
+    }
+
+    private static void copyTree(Path source, Path target) throws IOException {
+        try (var walk = Files.walk(source)) {
+            for (Path path : (Iterable<Path>) walk::iterator) {
+                Path destination = target.resolve(source.relativize(path).toString());
+                if (Files.isDirectory(path)) {
+                    Files.createDirectories(destination);
+                } else {
+                    Files.copy(path, destination);
+                }
+            }
+        }
     }
 
     private static void declareFilter(Path root, Path witness) throws IOException {
