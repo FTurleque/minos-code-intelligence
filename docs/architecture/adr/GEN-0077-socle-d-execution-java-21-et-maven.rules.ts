@@ -159,7 +159,7 @@ export default {
 
     "workflow-java-steps-match-release": {
       description:
-        "Chaque java-version: de workflow vaut N, hors liste fermée PLUGIN_JAVA_STEPS (Java 21) et PREVIOUS_JAVA_STEPS du gate (second exécutant de check-toolchain-baseline.py, règle 5)",
+        "Chaque java-version: de workflow vaut N, hors liste fermée PLUGIN_JAVA_STEPS (Java 21) du gate (second exécutant de check-toolchain-baseline.py, règle 5)",
       severity: "error",
       async check(ctx) {
         const baseline = await baselineOf(ctx);
@@ -170,10 +170,8 @@ export default {
         const javaStep = regexOf(c.get("JAVA_STEP"), false);
         const pluginJava = stringOf(c.get("PLUGIN_JAVA"));
         const pluginSteps = stepTableOf(c.get("PLUGIN_JAVA_STEPS"));
-        const previousJava = stringOf(c.get("PREVIOUS_JAVA"));
-        const previousSteps = stepTableOf(c.get("PREVIOUS_JAVA_STEPS"));
-        if (!workflowsDir || !job || !javaStep || !pluginJava || !pluginSteps || !previousJava || !previousSteps) {
-          return missingConstant(ctx, "WORKFLOWS, JOB, JAVA_STEP, PLUGIN_JAVA(_STEPS) ou PREVIOUS_JAVA(_STEPS)");
+        if (!workflowsDir || !job || !javaStep || !pluginJava || !pluginSteps) {
+          return missingConstant(ctx, "WORKFLOWS, JOB, JAVA_STEP, PLUGIN_JAVA(_STEPS)");
         }
         const version = baseline.version;
         const files = [
@@ -184,7 +182,7 @@ export default {
           const name = file.split("/").pop() as string;
           const lines = (await ctx.readFile(file)).split(/\r?\n/);
           let current = "";
-          const counted = { plugin: new Map<string, number>(), previous: new Map<string, number>() };
+          const counted = { plugin: new Map<string, number>() };
           lines.forEach((line, index) => {
             const declared = job.exec(line);
             if (declared) {
@@ -197,8 +195,6 @@ export default {
             const key = `${name}\u0000${current}`;
             if (stated === pluginJava && pluginJava !== version && pluginSteps.has(key)) {
               counted.plugin.set(current, (counted.plugin.get(current) ?? 0) + 1);
-            } else if (stated === previousJava && previousJava !== version && previousSteps.has(key)) {
-              counted.previous.set(current, (counted.previous.get(current) ?? 0) + 1);
             } else if (stated !== version) {
               ctx.report.violation({
                 message: `Ce workflow installe Java ${stated}, alors que le POM compile pour ${version}.`,
@@ -208,19 +204,14 @@ export default {
               });
             }
           });
-          for (const [table, allowedJava, steps, label] of [
-            [counted.plugin, pluginJava, pluginSteps, "PLUGIN_JAVA_STEPS"],
-            [counted.previous, previousJava, previousSteps, "PREVIOUS_JAVA_STEPS"],
-          ] as const) {
-            for (const [jobName, count] of table) {
-              const allowed = steps.get(`${name}\u0000${jobName}`) ?? 0;
-              if (count > allowed) {
-                ctx.report.violation({
-                  message: `${file}, job \`${jobName}\` : ${count} étapes Java ${allowedJava}, la liste fermée ${label} de ${GATE} en admet ${allowed}.`,
-                  file,
-                  fix: `Retirer l'étape en trop, ou relever ${label} dans ${GATE} si c'est voulu.`,
-                });
-              }
+          for (const [jobName, count] of counted.plugin) {
+            const allowed = pluginSteps.get(`${name}\u0000${jobName}`) ?? 0;
+            if (count > allowed) {
+              ctx.report.violation({
+                message: `${file}, job \`${jobName}\` : ${count} étapes Java ${pluginJava}, la liste fermée PLUGIN_JAVA_STEPS de ${GATE} en admet ${allowed}.`,
+                file,
+                fix: `Retirer l'étape en trop, ou relever PLUGIN_JAVA_STEPS dans ${GATE} si c'est voulu.`,
+              });
             }
           }
         }

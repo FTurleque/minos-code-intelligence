@@ -181,7 +181,7 @@ def main() -> int:
             ".github/workflows/release-promotion-gate.yml",
             "docker-upgrade-qualification",
             "docker-upgrade-evidence",
-            "needs: docker-upgrade-qualification",
+            "needs: [changes, docker-upgrade-qualification]",
             "qualify-docker-upgrade.ps1",
             "check-docker-upgrade-evidence.py",
         )
