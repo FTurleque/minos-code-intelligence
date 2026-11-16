@@ -19,6 +19,8 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.submodule.SubmoduleWalk;
+import org.eclipse.jgit.submodule.SubmoduleWalk.IgnoreSubmoduleMode;
 import org.eclipse.jgit.treewalk.EmptyTreeIterator;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.TreeFilter;
@@ -214,7 +216,10 @@ public final class GitIntelligenceService implements GitIntelligence {
         String branch = detached || fullBranch == null ? null : Repository.shortenRefName(fullBranch);
         boolean shallow = repository.getDirectory() != null
                 && Files.isRegularFile(repository.getDirectory().toPath().resolve("shallow"));
-        Status status = repository.isBare() ? null : git.status().call();
+        // The status never descends into a submodule: JGit would open it itself, outside the trusted opening.
+        Status status = repository.isBare()
+                ? null
+                : git.status().setIgnoreSubmodules(IgnoreSubmoduleMode.ALL).call();
         boolean clean = status == null || status.isClean();
 
         List<String> limitations = new ArrayList<>();
@@ -237,6 +242,9 @@ public final class GitIntelligenceService implements GitIntelligence {
         }
         if (opened.filtersNotApplied()) {
             limitations.add("REPOSITORY_FILTERS_NOT_APPLIED");
+        }
+        if (!repository.isBare() && SubmoduleWalk.containsGitModulesFile(repository)) {
+            limitations.add("SUBMODULES_NOT_ANALYSED");
         }
 
         String identityBasis = remote == null ? "path:" + workTree : "remote:" + remote;
