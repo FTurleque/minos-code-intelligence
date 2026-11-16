@@ -144,6 +144,22 @@ script du rôle avant de démarrer le service ; `RemovePgAdmin` retire le conten
 les fichiers privés et le rôle (`docker/scripts/mcp-lifecycle.ps1`, actions `EnablePgAdmin` et `RemovePgAdmin`).
 Limite : hôte Windows et PostgreSQL géré seulement.
 
+### Quels services publiés bornent leur journal ?
+
+Type : flowchart · Portée : existant vérifié par le gate `check-compose-limits.py` · Exigences : changement
+`fiabiliser-la-surface-de-l-explorateur` › « Le journal des services Docker publiés sur la boucle locale est borné »
+
+```mermaid
+flowchart LR
+    X["minos-explorer"] -->|"logging: json-file, max-size 1m, max-file 2"| L["journal du conteneur"]
+    P["minos-pgadmin"] -->|"logging: json-file, max-size 1m, max-file 2"| L
+    G["check-compose-limits.py"] -. "exige driver, max-size et max-file" .-> X
+    G -.-> P
+```
+
+Les deux services sont publiés sur la boucle locale de l'hôte ; la rotation réelle d'un conteneur n'est pas observée
+par ce dépôt (aucun Docker lancé pour ce relevé).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

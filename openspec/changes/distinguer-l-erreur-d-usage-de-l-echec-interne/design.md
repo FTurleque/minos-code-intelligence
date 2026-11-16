@@ -247,15 +247,56 @@ note de version de l'API Java (`docs/user/release-notes/`) ; `CONTRIBUTING.md` s
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| surfaces-publiques › Le MCP ne rend comme erreur d'argument que l'erreur d'usage explicite | Entrée invalide de l'appelant | D1, diagramme | 2.1, 2.2 | à écrire : `MinosMcpUsageErrorTest` |
-| idem | Précondition violée dans un service | diagramme | 2.1, 2.3 | à écrire |
-| idem | Sous-classe du JDK | diagramme | 2.1, 2.3 | à écrire |
-| idem | Erreur d'usage au message sensible | « Sécurité » | 2.1 | à écrire |
-| idem | Genre de symbole inconnu | D7 | 2.1, 2.2 | à écrire |
-| surfaces-publiques › L'API Java ne classe en requête invalide que l'erreur d'usage explicite | Paramètre invalide ; Erreur d'argument interne ; Référence de projet inconnue | D1, D3 | 3.1, 3.2 | à écrire : `MinosApiUsageErrorTest` |
-| idem | Document inconnu de l'exploration sémantique | D6 | 3.1, 3.2 | à écrire ; non-régression du contrat publié |
-| surfaces-publiques › Une indisponibilité non classée de l'API Java est tracée | État illégal levé par un service ; Refus attendu du service ; Indisponibilité classée par la façade | D2 | 3.1, 3.2 | à écrire |
-| surfaces-publiques › Les erreurs d'usage de chaque surface sont tenues par une table testée | Table du MCP ; Validation oubliée | D5 | 1.2, 2.1, 3.1 | à écrire ; inventaire manquant jusqu'à 1.2 |
+| surfaces-publiques › Le MCP ne rend comme erreur d'argument que l'erreur d'usage explicite | Entrée invalide de l'appelant | D1, diagramme | 2.1, 2.2 | `MinosMcpUsageErrorTest` |
+| idem | Précondition violée dans un service | diagramme | 2.1, 2.3 | `MinosMcpUsageErrorTest` |
+| idem | Sous-classe du JDK | diagramme | 2.1, 2.3 | `MinosMcpUsageErrorTest` (`NumberFormatException`, `InvalidPathException`, `PatternSyntaxException`) |
+| idem | Erreur d'usage au message sensible | « Sécurité » | 2.1 | `MinosMcpUsageErrorTest` |
+| idem | Genre de symbole inconnu | D7 | 2.1, 2.2 | `MinosMcpUsageErrorTest` (table) |
+| surfaces-publiques › L'API Java ne classe en requête invalide que l'erreur d'usage explicite | Paramètre invalide ; Erreur d'argument interne ; Référence de projet inconnue | D1, D3 | 3.1, 3.2 | `MinosApiUsageErrorTest` |
+| idem | Document inconnu de l'exploration sémantique | D6 | 3.1, 3.2 | `MinosApiUsageErrorTest` ; tests du contrat de `SemanticExplorationApi` inchangés |
+| surfaces-publiques › Une indisponibilité non classée de l'API Java est tracée | État illégal levé par un service ; Refus attendu du service ; Indisponibilité classée par la façade | D2 | 3.1, 3.2 | `MinosApiUsageErrorTest` ; `RefusedException` : preuve manquante côté API (inatteignable) |
+| surfaces-publiques › Les erreurs d'usage de chaque surface sont tenues par une table testée | Table du MCP ; Validation oubliée | D5 | 1.2, 2.1, 3.1 | `MinosMcpUsageErrorTest` (table du MCP) ; **table de l'API limitée aux cas de `MinosApiUsageErrorTest`** : pas de table paramétrée par méthode de façade (preuve partielle) |
+
+## Inventaire des validations atteintes (tâche 1.2, relevé à l'implémentation)
+
+Relevé par lecture du code au HEAD de l'implémentation ; les numéros de ligne cités plus haut dans cette conception
+dataient de `89be3fb4` (la capture du MCP est en `MinosMcpTools.java:210`, `clientError` en `:254`, `execute` de l'API en
+`MinosApiSupport.java:93`).
+
+| Surface | Sites convertis en `UsageException` | Réponse qui change |
+|---|---|---|
+| MCP, helpers de `MinosMcpTools` | 12 : `required`, `optionalString`, `bounded`, entiers (3), `minimumScore` (2), booléen, `stringValue`, format du graphe, argument inconnu | aucune (déjà rendus comme erreurs d'usage) |
+| MCP, `MinosApplicationMcpBackend` | `parseUuid`, `parseKind` (sans cause, message fixe qui nomme `kind`), format du graphe | `kind` inconnu : erreur générique → erreur d'usage (D7) |
+| Services relayés par des outils MCP | `ImpactAnalysisService` (2), `ArchitectureIntelligenceService` (3), `RuntimeIntelligenceService` (6), `HybridContextBuilder` (5), `HybridSearchService` (4), `SemanticSearchService` (4), `SecurityAnalysisService` (3), `ProgramGraphService` (1), `CodeSearchCriteria` (4), `ImpactAnalysisRequest` (3), `HostedWorkspaceService` (4) | aucune |
+| API Java, façades | `MinosApiSupport.required`, `LocalMinosApi` (3, dont l'énumération inconnue sans cause), `LocalMinosTeamApi` (2, dont le rôle inconnu sans cause), records de requête (`MinosApi` 3, `AdvancedCodeIntelligenceApi` 2, `SemanticCodeIntelligenceApi` 3, `MinosMultiRepositoryApi` 2, `SemanticExplorationApi` 1) | aucune |
+| Services relayés par l'API Java | `SemanticCorpusQueryService` (15), `SemanticProjectionService` (2), `ProviderPlatformService` (2), `WorkspaceIntelligenceService` (7), `LocalProjectOperations` (1), `ProviderId`, `HostedPrincipal` (3), `HostedRetentionPolicy` (3), `HostedTenantService`, `HostedTokenService` (2), `HmacHostedIdentityProvider`, `HostedMembershipService` (2), `HostedWorkspaceService` (4) | aucune |
+| Domaine | `Preconditions.requireText`, `SymbolSearchCriteria` (3), `RelationshipSearchCriteria`, `CodeEntityRef` (2) | aucune |
+| Type typé | `DocumentNotFoundException` hérite de `UsageException` | aucune |
+
+Volontairement **non** converties (invariants internes ou états, donc défauts ou indisponibilités) : les DTO de sortie
+(`ProviderPlatformApi`, `MinosApi` `index`/`commitStatus`, `MinosMultiRepositoryApi` `workspace`), `LocalSourceReader:36`
+et `:219` (racine disparue, donnée stockée), `ProgramGraphService` constructeurs, les invariants de doublons de
+`ArchitectureIntelligenceService` et `ImpactAnalysisService:90`, les `IllegalStateException` « projet sans snapshot actif »
+(MCP : erreur générique ; API : `UNAVAILABLE` tracée), et la CLI (`SemanticProjectionService` `PrepareRequest`,
+`ActivityQuery`, `TeamCommand`). La conversion des validations déjà refusées en amont par les bornes du MCP ou du DTO
+(« préval. ») est une défense en profondeur : celles de `minos-domain` et d'`minos-application` listées ci-dessus le sont,
+`ActivityQuery` et `SemanticProjectionService.PrepareRequest` ne le sont pas.
+
+Écarts relevés à l'inventaire :
+
+- `RefusedException` n'est atteignable ni depuis l'API Java ni depuis le MCP (la CLI seule prépare une projection) : elle
+  est exclue de la trace par cohérence avec `IndexChangedException`, sans scénario réel côté API.
+- `MinosApiSupport.logFailure` écrivait déjà une ligne de classe pour tout code ; le changement la retire pour les cas
+  classés (`INVALID_REQUEST`, refus attendus), faute de quoi « aucune ligne de diagnostic » n'est pas tenable.
+- `LocalMinosTeamApi` rendait « mode équipe désactivé » par une `IllegalStateException` : la façade lève désormais
+  elle-même l'indisponibilité classée, qui n'est pas tracée.
+- `LocalSourceReader:36` (`projectRoot must be a directory`) était rendue comme erreur d'usage par le MCP et est
+  maintenant une erreur générique : c'est un état de l'environnement, pas une entrée.
+- Des messages convertis recopient encore la valeur envoyée (`unknown symbol in snapshot: <id>`, `unknown module`,
+  `unsupported architecture graph format`) : le filtre `PublicErrorMessages` des surfaces reste appliqué, et un message
+  jugé sensible rend l'erreur générique (le journal privé est limité en débit).
+- Les compact-constructeurs des records de requête de l'API s'exécutent chez l'appelant, hors de `MinosApiSupport.execute` :
+  leur conversion ne change aucune classification de façade.
 
 ## Questions ouvertes
 

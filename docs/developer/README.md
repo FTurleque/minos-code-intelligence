@@ -120,6 +120,7 @@ flowchart TB
 22. [Archgate : règles rattachées aux ADR](archgate.md)
 23. [Spécifier avec OpenSpec : le schéma detailed-uml](openspec-detailed-uml.md)
 24. [Surface d'exploration sémantique](semantic-explorer.md)
+25. [Tracer un échec interne : brancher une surface](internal-failure-trace.md)
 
 ## Build développeur
 
