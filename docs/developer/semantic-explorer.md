@@ -70,7 +70,7 @@ Préfixe `/api/v1/`. Toutes les réponses sont du JSON (`DeterministicJson`), av
 nosniff`. Autorisation de chaque route : `Authorization: Bearer <jeton>`, `Host` local, `Origin` absent ou égal
 à l'origine servie, `Sec-Fetch-Site` absent, `same-origin` ou `none`.
 
-Hors de l'API, `RequestGuard` classe la requête : le `GET` de `/`, `/app.css` ou `/app.js` (`Target.PAGE_READ`)
+Hors de l'API, `RequestGuard` classe la requête : le `GET` de `/`, `/app.css`, `/map.js` ou `/app.js` (`Target.PAGE_READ`)
 est servi quel que soit `Sec-Fetch-Site`, pour qu'un lien suivi depuis une autre page ouvre la surface ; `Host`
 et `Origin` y restent contrôlés. Toute autre requête hors API (`Target.OTHER`) garde le refus des requêtes
 venues d'un autre site. Un refus hors API répond par un texte fixe (`text/plain`), identique quel que soit le
@@ -151,7 +151,7 @@ reprend à l'octet où la page précédente s'est arrêtée, tant que le fichier
 format hérité `index-v1.bin` passe par le chargement complet. `PostgresSemanticReadQueries.vectorPage` lit en une
 requête les métadonnées de l'index, son effectif et une page `stable_key`, `kind`, `embedding`.
 
-**Carte.** `app.js` dessine sur un `<canvas>` 2D, sans dépendance : couleur par nature, filtre de nature appliqué
+**Carte.** `map.js` dessine sur un `<canvas>` 2D, sans dépendance : couleur par nature, filtre de nature appliqué
 à l'affichage, résultats de recherche mis en évidence, colonne « Carte » de la table. Les points sont lus par
 pages de 5 000. Une projection `PERIMEE` n'est dessinée que sur demande.
 
@@ -188,19 +188,21 @@ démarrage, jamais un repli silencieux. Il n'existe pas d'option de ligne de com
 
 ## Page embarquée
 
-`minos-explorer/src/main/resources/com/minos/explorer/web/` : `index.html`, `app.js`, `app.css`, sans chaîne de
-build ni dépendance. `WebResources` sert cet ensemble fermé ; aucun chemin de requête n'atteint le chargeur de
+`minos-explorer/src/main/resources/com/minos/explorer/web/` : `index.html`, `map.js` (la carte 2D), `app.js` (le reste de la page), `app.css`, sans chaîne de
+build ni dépendance. Deux scripts classiques partagent la portée globale de la page : `map.js`, chargé en premier,
+ne définit que des déclarations et ne s'exécute qu'après le démarrage de `app.js`, qui fournit `$`, `api`,
+`report`, `project`, `view`, `selectedKey` et `showDetail`. `WebResources` sert cet ensemble fermé ; aucun chemin de requête n'atteint le chargeur de
 classes. La page est servie avec `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src
 'self'; connect-src 'self'; …`. `WebResourcesContentTest` refuse `innerHTML` et ses équivalents, toute URL
 externe, tout script ou style en ligne.
 
 Le script de la page est exécuté par des tests `node:test` (`minos-explorer/src/test/js/`, hors des ressources
-livrées), sans paquet npm ni `package.json`. `harness.mjs` charge le vrai `app.js` dans un contexte `node:vm` muni
+livrées), sans paquet npm ni `package.json`. `harness.mjs` charge les vrais `map.js` puis `app.js` (l'ordre des balises `<script>` de `index.html`) dans un même contexte `node:vm` muni
 d'un faux DOM qui refuse toute écriture de balisage (`innerHTML`, `outerHTML`, `insertAdjacentHTML`,
 `document.write`, `createContextualFragment`, `DOMParser`, `srcdoc`, un attribut `on*` ou `srcdoc` posé par
 `setAttribute`, y compris sous un nom calculé) et d'un contexte qui
-refuse la génération de code depuis une chaîne (`eval`, `new Function`). `app.js` n'exporte rien et n'est pas
-modifié pour les tests : ses fonctions sont des propriétés du contexte, son état se lit par une expression évaluée
+refuse la génération de code depuis une chaîne (`eval`, `new Function`). Les scripts n'exportent rien et ne sont pas
+modifiés pour les tests : ses fonctions sont des propriétés du contexte, son état se lit par une expression évaluée
 dans le même contexte.
 
 | Fichier | Ce qu'il fixe |
