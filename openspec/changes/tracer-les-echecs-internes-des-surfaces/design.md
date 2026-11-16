@@ -342,19 +342,19 @@ son entrée dans `docs/architecture/adr/README.md` et `docs/architecture/arc42/0
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| journalisation › La ligne de diagnostic d'un échec interne nomme son origine et une référence | Cause racine dans le code MINOS | D1, diagramme 1 | 1.1, 3.1 | à écrire : `InternalFailureTraceTest`, `MinosMcpInternalFailureTraceTest` |
-| idem | Message porteur d'un chemin et d'un jeton | « Sécurité » | 1.1 | à écrire |
-| idem | Aucune trame MINOS | « Modèle » | 1.1 | à écrire |
-| journalisation › Le journal de diagnostic privé est désactivé par défaut | Réglage absent ; Valeur non reconnue | D2 | 2.1 | à écrire : `InternalFailureJournalTest` |
-| journalisation › Le journal privé reçoit la pile d'un échec interne sans chemin absolu ni secret | les trois scénarios | D3 | 1.1, 2.1, 3.1 | à écrire |
-| journalisation › Le journal privé est borné en nombre d'entrées et en profondeur | Purge ; Pile très profonde | D4 | 1.1, 2.1 | à écrire |
-| journalisation › Le journal privé est écrit par les primitives d'E/S privées | Permissions ; Deux processus | D4, « Persistance », « Transactions » | 2.1 | à écrire : `InternalFailureJournalTest` |
-| idem | Le garde reste vert sans édition de sa liste | D4 | 2.1 | non-régression : `check-private-io.py` déjà vert au HEAD, doit le rester |
-| journalisation › Un journal privé indisponible ne change pas la réponse de la surface | Répertoire en lecture seule | « États », diagramme 1 | 2.1, 3.2 | à écrire ; `MinosMcpWriteProtectedHomeTest` étendu |
-| surfaces-publiques › L'erreur opaque d'un outil MCP porte la référence de sa trace | les deux scénarios | D5 | 3.1 | à écrire |
-| surfaces-publiques › Un échec d'exécution de la CLI est tracé quand le journal privé est actif | les quatre scénarios | « Contrats » | 4.1 | à écrire : `CliInternalFailureTraceTest` ; goldens |
-| surfaces-publiques › Un échec interne de l'API Java est tracé sans changer l'exception publique | les deux scénarios | « Contrats » | 4.2 | à écrire : `MinosApiInternalFailureTraceTest` |
-| indexation-java-via-wsl › Un échec interne du worker WSL transmet un diagnostic structuré et vérifié | les quatre scénarios | D7, diagramme 2 | 5.1, 5.2 | à écrire ; preuve réelle manquante jusqu'à 5.4 |
+| journalisation › La ligne de diagnostic d'un échec interne nomme son origine et une référence | Cause racine dans le code MINOS | D1, diagramme 1 | 1.1, 3.1 | `InternalFailureTraceTest`, `MinosMcpInternalFailureTraceTest`, `MinosApiInternalFailureTraceTest` |
+| idem | Message porteur d'un chemin et d'un jeton | « Sécurité » | 1.1 | `InternalFailureTraceTest`, `MinosMcpInternalFailureTraceTest` |
+| idem | Aucune trame MINOS | « Modèle » | 1.1 | `InternalFailureTraceTest`, `MinosMcpInternalFailureTraceTest` |
+| journalisation › Le journal de diagnostic privé est désactivé par défaut | Réglage absent ; Valeur non reconnue | D2 | 2.1 | `InternalFailureJournalTest` |
+| journalisation › Le journal privé reçoit la pile d'un échec interne sans chemin absolu ni secret | les trois scénarios | D3 | 1.1, 2.1, 3.1 | `InternalFailureTraceTest`, `InternalFailureJournalTest`, `MinosMcpInternalFailureTraceTest` |
+| journalisation › Le journal privé est borné en nombre d'entrées et en profondeur | Purge ; Pile très profonde | D4 | 1.1, 2.1 | `InternalFailureJournalTest`, `InternalFailureTraceTest` |
+| journalisation › Le journal privé est écrit par les primitives d'E/S privées | Permissions ; Deux processus | D4, « Persistance », « Transactions » | 2.1 | `InternalFailureJournalTest` (deux JVM filles, cent entrées) |
+| idem | Le garde reste vert sans édition de sa liste | D4 | 2.1 | `check-private-io.py` vert, `private-io-allowlist.json` inchangé |
+| journalisation › Un journal privé indisponible ne change pas la réponse de la surface | Répertoire en lecture seule | « États », diagramme 1 | 2.1, 3.2 | `InternalFailureJournalTest`, `MinosMcpInternalFailureTraceTest`, `MinosMcpWriteProtectedHomeTest` ; le dossier est rendu indisponible par un fichier à la place de `logs` (une protection d'écriture n'arrête pas son propriétaire sous POSIX) |
+| surfaces-publiques › L'erreur opaque d'un outil MCP porte la référence de sa trace | les deux scénarios | D5 | 3.1 | `MinosMcpInternalFailureTraceTest` ; dix assertions existantes adaptées |
+| surfaces-publiques › Un échec d'exécution de la CLI est tracé quand le journal privé est actif | les quatre scénarios | « Contrats » | 4.1 | `CliInternalFailureTraceTest` ; goldens de caractérisation inchangés |
+| surfaces-publiques › Un échec interne de l'API Java est tracé sans changer l'exception publique | les deux scénarios | « Contrats » | 4.2 | `MinosApiInternalFailureTraceTest` |
+| indexation-java-via-wsl › Un échec interne du worker WSL transmet un diagnostic structuré et vérifié | les quatre scénarios | D7, diagramme 2 | 5.1, 5.2 | `WslLinuxWorkerDiagnosticTest`, `WslIndexWorkerDiagnosticTest`, `WorkerDiagnosticTest` ; **preuve manquante** : aucune vraie distribution WSL (tâche 5.4, manuelle) |
 
 ## Questions ouvertes
 

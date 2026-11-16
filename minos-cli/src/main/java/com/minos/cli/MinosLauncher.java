@@ -4,6 +4,7 @@ import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.cli.support.LazyApplication;
 import com.minos.application.MinosApplication;
+import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.application.WslIndexingWorker;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.runtime.MinosVersion;
@@ -73,19 +74,30 @@ public final class MinosLauncher {
             } else if (MinosCliRunner.isIdeHandshake(arguments)) {
                 exitCode = MinosCliRunner.runIdeHandshake(arguments, out, err);
             } else {
-                exitCode = runOnHome(resolveHome(environment, properties), arguments, out, err, opener, runner);
+                Path home = resolveHome(environment, properties);
+                CliCommandSupport.useInternalFailureReporter(
+                        new InternalFailureReporter("cli", home, environment, properties));
+                exitCode = runOnHome(home, arguments, out, err, opener, runner);
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
         } catch (LazyApplication.OpenFailure openFailure) {
             err.println("error: MINOS bootstrap failed: " + failureMessage(openFailure.failure()));
+            printReference(err, CliCommandSupport.traceExecutionFailure("launch", openFailure.failure()));
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
         } catch (Exception exception) {
             err.println("error: MINOS bootstrap failed: " + failureMessage(exception));
+            printReference(err, CliCommandSupport.traceExecutionFailure("launch", exception));
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
+        } finally {
+            CliCommandSupport.clearInternalFailureReporter();
         }
         return exitCode;
+    }
+
+    private static void printReference(PrintStream err, String referenceLine) {
+        if (referenceLine != null) err.println(referenceLine);
     }
 
     /** A command that needs MINOS_HOME: the MCP route, the internal WSL worker, or a command on the application. */

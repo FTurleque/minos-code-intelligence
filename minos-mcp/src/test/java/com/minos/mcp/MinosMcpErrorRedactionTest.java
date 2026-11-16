@@ -23,7 +23,7 @@ class MinosMcpErrorRedactionTest {
 
         assertTrue(Boolean.TRUE.equals(result.isError()));
         String text = ((TextContent) result.content().getFirst()).text();
-        assertEquals("error: MINOS tool execution failed", text);
+        McpToolCalls.assertGenericToolError(text);
         assertFalse(text.contains("super-secret"));
         assertFalse(text.contains("jdbc:"));
         assertFalse(text.contains("/home/operator"));
@@ -35,8 +35,7 @@ class MinosMcpErrorRedactionTest {
                 "invalid configuration token=super-secret at /home/operator/minos"));
         var result = call(new MinosMcpTools(backend), "minos_index_status", Map.of("project", "demo"));
 
-        assertEquals("error: MINOS tool execution failed",
-                ((TextContent) result.content().getFirst()).text());
+        McpToolCalls.assertGenericToolError(((TextContent) result.content().getFirst()).text());
     }
 
     @Test
@@ -46,7 +45,7 @@ class MinosMcpErrorRedactionTest {
 
         assertTrue(Boolean.TRUE.equals(result.isError()));
         String text = ((TextContent) result.content().getFirst()).text();
-        assertEquals("error: MINOS tool execution failed", text);
+        McpToolCalls.assertGenericToolError(text);
         assertFalse(text.contains("/var/lib/minos"));
         assertFalse(text.contains("token=abc"));
     }
