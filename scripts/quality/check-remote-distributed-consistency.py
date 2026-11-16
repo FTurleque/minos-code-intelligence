@@ -93,7 +93,8 @@ def check_single_repository_opening() -> None:
                   "new FileRepositoryBuilder", "openContaining", "openExact", "FilterPolicy.EVERY_DRIVER",
                   "useJGitBuiltin")
     base = "minos-integration-git/src/main/java/com/minos/integration/git/"
-    require_facts("GitIntelligenceService.java", read(base + "GitIntelligenceService.java"), "opening.openContaining")
+    require_facts("GitIntelligenceService.java", read(base + "GitIntelligenceService.java"), "opening.openContaining",
+                  "setIgnoreSubmodules(IgnoreSubmoduleMode.ALL)", "SUBMODULES_NOT_ANALYSED")
     require_facts("JGitRemoteRepositoryMaterializer.java", read(base + "JGitRemoteRepositoryMaterializer.java"),
                   "opening.openExact", "setIgnoreSubmodules(IgnoreSubmoduleMode.ALL)")
     require_facts("JGitRemoteGitClient.java", read(base + "JGitRemoteGitClient.java"),
