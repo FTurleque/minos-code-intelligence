@@ -1,7 +1,9 @@
 package com.minos.application;
 
 import com.minos.application.semantic.HybridContextBuilder.ContextRequest;
+import com.minos.application.semantic.HybridSearchService.HybridRequest;
 import com.minos.application.semantic.SemanticCorpusQueryService;
+import com.minos.application.semantic.SemanticSearchService.SearchRequest;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.diagnostics.UsageException;
 import com.minos.domain.SymbolSearchCriteria;
@@ -30,6 +32,30 @@ class UsageGuardsTest {
         assertThrows(UsageException.class, () -> new CodeSearchCriteria(symbols, 1, 1, 99_999, 1, 1_024, false));
         assertThrows(UsageException.class, () -> new CodeSearchCriteria(symbols, 1, 1, 1, 999, 1_024, false));
         assertThrows(UsageException.class, () -> new CodeSearchCriteria(symbols, 1, 1, 1, 1, 1, false));
+    }
+
+    @Test
+    void aSearchRequestOutOfBoundsIsAUsageError() {
+        assertThrows(UsageException.class, () -> new SearchRequest(null, 5, 0.0));
+        assertThrows(UsageException.class, () -> new SearchRequest(" ", 5, 0.0));
+        assertThrows(UsageException.class, () -> new SearchRequest("q".repeat(70_000), 5, 0.0));
+        assertThrows(UsageException.class, () -> new SearchRequest("q", 0, 0.0));
+        assertThrows(UsageException.class, () -> new SearchRequest("q", 1_001, 0.0));
+        assertThrows(UsageException.class, () -> new SearchRequest("q", 5, Double.NaN));
+        assertThrows(UsageException.class, () -> new SearchRequest("q", 5, -2.0));
+        assertThrows(UsageException.class, () -> new SearchRequest("q", 5, 2.0));
+    }
+
+    @Test
+    void aHybridRequestOutOfBoundsIsAUsageError() {
+        assertThrows(UsageException.class, () -> new HybridRequest(null, 5, 0.0));
+        assertThrows(UsageException.class, () -> new HybridRequest(" ", 5, 0.0));
+        assertThrows(UsageException.class, () -> new HybridRequest("q".repeat(70_000), 5, 0.0));
+        assertThrows(UsageException.class, () -> new HybridRequest("q", 0, 0.0));
+        assertThrows(UsageException.class, () -> new HybridRequest("q", 501, 0.0));
+        assertThrows(UsageException.class, () -> new HybridRequest("q", 5, Double.NaN));
+        assertThrows(UsageException.class, () -> new HybridRequest("q", 5, -0.5));
+        assertThrows(UsageException.class, () -> new HybridRequest("q", 5, 1.5));
     }
 
     @Test
