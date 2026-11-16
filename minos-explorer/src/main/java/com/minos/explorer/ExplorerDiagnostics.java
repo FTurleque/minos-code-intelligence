@@ -25,6 +25,8 @@ final class ExplorerDiagnostics {
     private final Consumer<String> log;
     private final InternalFailureReporter reporter;
     private final LongSupplier nanos;
+    private static final String EXCHANGE_KEY = "exchange";
+
     private final Map<String, Limit> limits = new HashMap<>();
 
     /** What is known of one repeated event: when its line was last written and how many were counted since. */
@@ -39,11 +41,6 @@ final class ExplorerDiagnostics {
         this.nanos = Objects.requireNonNull(nanos, "nanos");
     }
 
-    /** A line that is not a repeated event (the start of the surface). */
-    void info(String line) {
-        log.accept(line);
-    }
-
     /**
      * Writes the line of an internal failure of the route named {@code route} (a fixed label, never the address) and
      * offers its stack to the private journal.
@@ -54,6 +51,35 @@ final class ExplorerDiagnostics {
         InternalFailureTrace trace = reporter.report(route, failure);
         log.accept(trace.line("request failed", "route", route));
         return trace.reference();
+    }
+
+    /**
+     * A failure of the exchange itself (a connection cut while the answer is written, an unexpected exception outside
+     * the API): the first of a window is written as an internal failure, with its reference and private entry; the
+     * next ones are counted and summarised by the first line of the next window, so that a client that opens and cuts
+     * connections cannot make the journal turn.
+     */
+    void exchangeFailure(Throwable failure) {
+        long skipped;
+        synchronized (this) {
+            long now = nanos.getAsLong();
+            Limit limit = limits.get(EXCHANGE_KEY);
+            if (limit == null) {
+                limit = new Limit();
+                limits.put(EXCHANGE_KEY, limit);
+                limit.lastLineNanos = now;
+                skipped = 0;
+            } else if (now - limit.lastLineNanos >= WINDOW.toNanos()) {
+                skipped = limit.counted;
+                limit.counted = 0;
+                limit.lastLineNanos = now;
+            } else {
+                limit.counted++;
+                return;
+            }
+        }
+        if (skipped > 0) log.accept("request failures outside a route: " + skipped + " since the previous line");
+        internalFailure("serve", failure);
     }
 
     /** A request refused for {@code reason} (host, origin or token): the first of a window is written at once. */

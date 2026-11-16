@@ -18,9 +18,10 @@ Contract of docker/compose-mcp.prod.yaml and docker/compose-mcp.connected.yaml (
   ``strconv.ParseFloat: parsing ""``); negative and empty values are refused. A host-specific CPU cap
   is the operator's choice, through ``MINOS_<ROLE>_CPUS`` in the runtime .env;
 * ``memswap_limit`` repeats ``mem_limit`` (no swap);
-* a service published on the loopback of the host (``minos-explorer``, ``minos-pgadmin``) bounds its journal: a
-  ``logging`` key with the ``json-file`` driver, ``max-size`` and ``max-file`` (a refused request, even limited, writes a
-  line, and Docker's default driver keeps them without end);
+* a service that publishes a port (a ``ports:`` key; ``minos-explorer`` and ``minos-pgadmin`` are named as well, so a
+  service renamed or stripped of its port does not escape) bounds its journal: a ``logging`` key with the ``json-file``
+  driver, ``max-size`` (with its unit) and ``max-file`` (a refused request, even limited, writes a line, and Docker's
+  default driver keeps them without end); comment lines are ignored;
 * every service pulls its ceilings from one of those blocks with ``<<: *limits-<role>`` and never
   spells a ceiling itself (no second definition inside a service, no ``deploy`` resources);
 * the two files carry identical blocks, and give a service they share the same role;
@@ -81,9 +82,11 @@ FORBIDDEN_IN_SERVICE = re.compile(r"^\s+(cpus|mem_limit|memswap_limit|pids_limit
 LOGGED_SERVICES = ("minos-explorer", "minos-pgadmin")
 LOGGING_HEADER = re.compile(r"^    logging:\s*(?P<inline>.*)$")
 SERVICE_KEY = re.compile(r"^    [A-Za-z_][A-Za-z0-9_.-]*:")
-LOG_DRIVER = re.compile(r"driver:\s*[\"']?(?P<value>[A-Za-z0-9_-]+)[\"']?")
-LOG_MAX_SIZE = re.compile(r"max-size:\s*[\"']?(?P<value>[1-9][0-9]*[kKmMgG]?)[\"']?")
-LOG_MAX_FILE = re.compile(r"max-file:\s*[\"']?(?P<value>[1-9][0-9]*)[\"']?")
+VALUE_END = r"[\"']?\s*(?=[,}\n]|$)"
+LOG_DRIVER = re.compile(r"driver:\s*[\"']?(?P<value>[A-Za-z0-9_-]+)" + VALUE_END)
+LOG_MAX_SIZE = re.compile(r"max-size:\s*[\"']?(?P<value>[1-9][0-9]*[kKmMgG])" + VALUE_END)
+LOG_MAX_FILE = re.compile(r"max-file:\s*[\"']?(?P<value>[1-9][0-9]*)" + VALUE_END)
+PORTS_KEY = re.compile(r"^    ports:")
 BLOCK_HEADER = re.compile(r"^x-limits-(?P<role>[a-z]+): &limits-(?P=role)\s*$")
 VALUE = re.compile(r'^  (?P<key>[a-z_]+): "\$\{(?P<var>MINOS_[A-Z_]+):-(?P<default>[^}]*)\}"\s*$')
 SERVICE_HEADER = re.compile(r"^  (?P<name>[a-z][a-z0-9-]*):\s*$")
@@ -107,6 +110,8 @@ def journal_failures(relative: str, service: str, lines: list[str]) -> list[str]
     """What is missing from the ``logging`` key of a service whose journal must be bounded, naming the key."""
     section: list[str] | None = None
     for line in lines:
+        if line.lstrip().startswith("#"):
+            continue
         header = LOGGING_HEADER.match(line)
         if header:
             section = [header.group("inline")]
@@ -124,7 +129,7 @@ def journal_failures(relative: str, service: str, lines: list[str]) -> list[str]
         failures.append(f"{relative}: service {service}: logging.driver must be json-file "
                         f"(found {driver.group('value') if driver else 'none'}): another driver has no size bound here")
     if not LOG_MAX_SIZE.search(text):
-        failures.append(f"{relative}: service {service}: logging.options.max-size is missing or not a size")
+        failures.append(f"{relative}: service {service}: logging.options.max-size is missing or has no size unit")
     if not LOG_MAX_FILE.search(text):
         failures.append(f"{relative}: service {service}: logging.options.max-file is missing or not a count")
     return failures
@@ -195,9 +200,10 @@ def parse(path: Path, root: Path):
             failures.append(f"{relative}: service {service} has no `<<: *limits-<role>`: no CPU, memory or PID ceiling")
         elif role not in blocks:
             failures.append(f"{relative}: service {service} merges *limits-{role}, which is not defined")
-    for service in LOGGED_SERVICES:
-        if service in service_lines:
-            failures += journal_failures(relative, service, service_lines[service])
+    for service, lines in service_lines.items():
+        published = any(PORTS_KEY.match(line) for line in lines)
+        if published or service in LOGGED_SERVICES:
+            failures += journal_failures(relative, service, lines)
     if not services:
         failures.append(f"{relative}: no service found")
     return failures, blocks, services

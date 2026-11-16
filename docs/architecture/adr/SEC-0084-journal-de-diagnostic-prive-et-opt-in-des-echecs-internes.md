@@ -69,6 +69,11 @@ actif, elles restent vraies tant qu'aucun échec interne ne survient, et sur éc
 (`minos-domain`). Le journal lui-même (`InternalFailureJournal`) vit dans `minos-engine`, `com.minos.io`. Les tables A11
 et le pom de chaque surface sont inchangés.
 
+**Surfaces tracées.** Le serveur MCP, l'API Java, la CLI (cadre commun et lanceur), le worker WSL et l'explorateur
+(`minos explorer serve`, qui lie le journal par `InternalFailureReporter` et rend sa réponse `500` avec la référence).
+Seul l'échec interne est tracé : une erreur d'usage (`UsageException`, document inconnu compris), un refus attendu (index
+remplacé pendant la lecture, projet inconnu, registre illisible) ne l'est pas.
+
 **Worker WSL.** Le journal n'est pas écrit dans la distribution (son stderr est jeté, le réglage n'y entre pas). Le
 worker émet, avant sa ligne de statut, une ligne `DIAGNOSTIC` du protocole `minos-wsl-worker-v1` (référence, classes,
 origine, quelques trames ; ni message ni chemin) que l'installation Windows n'accepte que si elle suit une grammaire
@@ -88,6 +93,10 @@ est une décision séparée de `distribution-docker`.
 - Tenir le journal éteint sans réglage `enabled`, et ne jamais recopier la valeur du réglage.
 - Rendre la même réponse avec et sans journal, y compris quand il est indisponible.
 - Valider une ligne de diagnostic du worker contre sa grammaire fermée avant de la journaliser ou de la rendre.
+
+- Ne rendre à l'appelant un message d'argument que pour une `UsageException` (`minos-domain`) ; toute autre
+  `IllegalArgumentException` levée pendant l'appel (MCP, API Java, explorateur) est un défaut interne : réponse opaque
+  (MCP, explorateur) ou `EXECUTION_FAILURE` (API Java), et trace.
 
 ### Don't
 

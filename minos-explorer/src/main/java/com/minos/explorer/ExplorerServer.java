@@ -102,7 +102,9 @@ final class ExplorerServer implements AutoCloseable {
         this.connections = new ThreadPoolExecutor(CONNECTION_THREADS, CONNECTION_THREADS, 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(CONNECTION_QUEUE), threads("minos-explorer-http"),
                 new ThreadPoolExecutor.CallerRunsPolicy());
-        // Active reads and abandoned reads that have not returned: each is bounded, so they never wait in a queue.
+        // Active reads and abandoned reads that have not returned: each is bounded, so a task does not wait in the queue
+        // except when several requests are admitted at the bound together (the bound is approximate: a task that finds
+        // no thread is refused as busy).
         this.workers = new ThreadPoolExecutor(MAX_CONCURRENT_API_CALLS + MAX_ABANDONED_READS,
                 MAX_CONCURRENT_API_CALLS + MAX_ABANDONED_READS, 0L,
                 TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(MAX_CONCURRENT_API_CALLS),
@@ -234,7 +236,7 @@ final class ExplorerServer implements AutoCloseable {
             }
         } catch (IOException | RuntimeException failure) {
             // The exchange is closed by the try-with-resources; nothing of the failure reaches the client.
-            diagnostics.internalFailure("serve", failure);
+            diagnostics.exchangeFailure(failure);
         }
     }
 

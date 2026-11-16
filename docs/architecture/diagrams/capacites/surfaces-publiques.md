@@ -99,9 +99,10 @@ flowchart TD
     E["exception levée pendant l'appel"] --> R{"ResolutionException ?"}
     R -- oui --> P["message public de référence"]
     R -- non --> U{"UsageException ?"}
-    U -- oui --> S{"cause présente ou message sensible ?"}
+    U -- oui --> S{"MCP : cause présente ou message sensible ?"}
     S -- non --> A["erreur d'usage : message rendu (MCP), INVALID_REQUEST (API)"]
     S -- oui --> I
+    U -- "oui, API" --> A
     U -- non --> X{"IndexChangedException ou RefusedException ?"}
     X -- oui --> N["UNAVAILABLE (API), message public, aucune ligne"]
     X -- non --> I["échec interne : erreur opaque (MCP), EXECUTION_FAILURE ou UNAVAILABLE (API), ligne de diagnostic"]

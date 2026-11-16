@@ -123,6 +123,18 @@ class MinosMcpUsageErrorTest {
     }
 
     @Test
+    void aUsageErrorThatCarriesACauseIsTheOpaqueError() {
+        UsageException withCause = new UsageException("limit must be positive");
+        withCause.initCause(new IllegalStateException("stored data is corrupt"));
+        MinosMcpTools tools = new MinosMcpTools(stub(withCause));
+
+        String text = McpToolCalls.text(McpToolCalls.call(tools, "minos_index_status", Map.of("project", "p")));
+
+        McpToolCalls.assertGenericToolError(text);
+        assertFalse(text.contains("limit must be positive"), text);
+    }
+
+    @Test
     void aUsageErrorWhoseMessageCarriesAnAbsolutePathIsTheOpaqueError() {
         MinosMcpTools tools = new MinosMcpTools(stub(new UsageException("cannot find C:\\Users\\alice\\project")));
 

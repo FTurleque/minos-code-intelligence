@@ -83,6 +83,24 @@ class ExplorerDiagnosticsTest {
                 "abandoned reads still running: 8 (limit 8); 5 requests refused since the previous line"), log);
     }
 
+    @Test
+    void failuresOfTheExchangeAreOneLineThenOneSummaryPerWindow() {
+        ExplorerDiagnostics diagnostics = new ExplorerDiagnostics(log::add,
+                InternalFailureReporter.withoutJournal("explorer"), nanos::get);
+
+        for (int index = 0; index < 500; index++) diagnostics.exchangeFailure(new java.io.IOException("cut"));
+
+        assertEquals(1, log.size(), log.toString());
+        assertTrue(log.get(0).startsWith("request failed (route=serve, type=java.io.IOException"), log.get(0));
+
+        nanos.addAndGet(ExplorerDiagnostics.WINDOW.toNanos());
+        diagnostics.exchangeFailure(new java.io.IOException("cut"));
+
+        assertEquals(3, log.size(), log.toString());
+        assertEquals("request failures outside a route: 499 since the previous line", log.get(1));
+        assertTrue(log.get(2).startsWith("request failed (route=serve, "), log.get(2));
+    }
+
     // --- on real sockets
 
     @Test

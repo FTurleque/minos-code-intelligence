@@ -10,9 +10,10 @@ package com.minos.diagnostics;
  * {@code catch (IllegalArgumentException ...)} still applies. It is not final: a typed usage error (an unknown
  * document) extends it.</p>
  *
- * <p>The message is never empty (a blank one is replaced by {@link #DEFAULT_MESSAGE}), names the argument and never
- * copies a value that could be a path or a secret; a surface still passes it through {@link PublicErrorMessages}.
- * There is no cause: a cause marks an error as internal.</p>
+ * <p>The message is never empty (a blank one is replaced by {@link #DEFAULT_MESSAGE}) and names the argument. It
+ * avoids copying a value that could be a path or a secret, and a surface passes it through
+ * {@link PublicErrorMessages} anyway: a message judged sensitive is answered by the opaque error. There is no cause: a
+ * cause marks an error as internal.</p>
  */
 public class UsageException extends IllegalArgumentException {
 

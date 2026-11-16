@@ -4,7 +4,7 @@ import com.minos.diagnostics.UsageException;
 import java.util.List;
 import java.util.Objects;
 
-import static com.minos.domain.Preconditions.requireText;
+import static com.minos.domain.Preconditions.requireArgument;
 
 /** Additive, provider-independent public M19 contract. Existing MinosApi v1 remains unchanged. */
 public interface AdvancedCodeIntelligenceApi {
@@ -34,7 +34,7 @@ public interface AdvancedCodeIntelligenceApi {
 
     record AdvancedImpactQuery(String symbolId, int maxDepth, int maxResults) {
         public AdvancedImpactQuery {
-            requireText(symbolId, "symbolId");
+            requireArgument(symbolId, "symbolId");
             requireRange(maxDepth, 1, 32, "maxDepth");
             requireRange(maxResults, 1, 10_000, "maxResults");
         }

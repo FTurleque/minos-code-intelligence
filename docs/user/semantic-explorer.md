@@ -169,7 +169,9 @@ message de l'exception, l'adresse, un paramètre ni le jeton) ; `abandoned reads
 des lectures abandonnées bloquent la surface. Une erreur d'argument que le contrat ne prévoit pas (un défaut interne)
 est un `500`, non un `400`. Avec `MINOS_DIAGNOSTIC_LOG=enabled`, la pile d'un échec interne est écrite dans le journal
 privé ([Diagnostiquer un échec interne](diagnostic-d-un-echec-interne.md)) ; en Docker, `MINOS_HOME` est en lecture
-seule et ce journal n'existe pas. Le contenu indexé est affiché comme texte, jamais interprété comme HTML ; la page ne charge aucune
+seule et ce journal n'existe pas.
+
+Le contenu indexé est affiché comme texte, jamais interprété comme HTML ; la page ne charge aucune
 ressource d'un autre site.
 
 Le jeton protège d'une page web tierce et d'un autre processus qui ne le connaît pas. Il ne protège pas d'un
