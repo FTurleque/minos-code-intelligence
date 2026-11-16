@@ -223,6 +223,7 @@ dans le même contexte.
 | `smoke.test.mjs` | refus sans jeton ; jeton retiré de l'adresse et envoyé par l'en-tête `Authorization` seulement |
 | `sinks.test.mjs` | liste, en-tête, détail, voisins, recherche, textes et survol de la carte, bandeau rendus en texte avec `<script>alert(1)</script>` |
 | `map.test.mjs` | point désigné (jeux à graine fixe, jusqu'à 100 000 points, égalités, rayon de 8 px), filtre de nature, bornes et point fixe du zoom, suite des requêtes de points, tracé sur le faux canevas, compteurs de rafale (table `CURRENT`) |
+| `map-grid.test.mjs` | point désigné par la grille identique au parcours complet (100 000 points, zooms de 0,5 à 200), points examinés par recherche, liste filtrée calculée une fois par filtre, grille refaite à la relecture de la carte, survol traité une fois par image, clic immédiat |
 | `labels.test.mjs` | table des constantes du contrat confrontée aux libellés, fonctions pures, affichage d'une erreur d'API |
 | `clipboard.test.mjs` | échec de « Copier la référence » signalé dans le bandeau, sans rejet non traité |
 
@@ -230,6 +231,14 @@ Lancer : `python scripts/quality/check-explorer-front.py` (Node 20 ou plus dans 
 `node --test minos-explorer/src/test/js/map.test.mjs`. Les compteurs de `map.test.mjs` sont des caractérisations
 du comportement actuel, pas des seuils : une optimisation de la carte change la table `CURRENT` dans le même commit.
 Ces tests ne prouvent rien d'un vrai navigateur (rendu, durées, événements réels).
+
+Carte : les points reçus sont rangés dans une grille régulière sur le carré de -1 à 1 (environ deux points par
+cellule, au plus 1 024 cellules de côté), construite une fois par couple (points, filtre de nature). Le survol et le
+clic ne lisent que les cellules qui couvrent le rayon de capture de 8 px et rendent le même point que le parcours de
+tous les points (le plus proche, le plus petit indice à distance égale). Un mouvement du pointeur enregistre sa
+position ; l'image suivante cherche le point et dessine au plus une fois, le clic cherche à sa propre position sans
+attendre. Le dessin reste linéaire en nombre de points. `map-bench.mjs` (`node minos-explorer/src/test/js/map-bench.mjs`)
+mesure les recherches sous Node sur des jeux synthétiques : les durées ne valent pas mesure dans un navigateur.
 
 ## Tests
 

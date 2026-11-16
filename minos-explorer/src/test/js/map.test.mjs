@@ -11,7 +11,7 @@ const CURRENT = {
   captureRadiusPixels: 8,
   zoom: { minimum: 0.5, maximum: 200 },
   mapPage: 5000,
-  burst: { moves: 50, pointLookups: 50, framesRequested: 1 }
+  burst: { moves: 50, pointLookups: 1, framesRequested: 1 }
 };
 
 const HALF = Math.max(10, Math.min(CURRENT.canvas.width, CURRENT.canvas.height) / 2 - 12);
@@ -199,7 +199,7 @@ test("a drawing clears the canvas, draws each plain point once and frames the se
   assert.deepEqual(framed.map(call => [call[1] + 6, call[2] + 6, call[5]]), [[400 + 0.5 * HALF, 300 - 0.5 * HALF, 2]]);
 });
 
-test("a burst of pointer moves without a frame looks a point up per move and requests one drawing", async () => {
+test("a burst of pointer moves without a frame is looked up once, by the frame, which draws once", async () => {
   const page = createPage({ hash: "#token=" + TOKEN, api: routes([["GET", /^projects$/, { body: { projects: [] } }]]) });
   await settle();
   const points = pointSet(9, 2000);
@@ -215,8 +215,9 @@ test("a burst of pointer moves without a frame looks a point up per move and req
     page.$("mapCanvas").dispatch("pointermove", { clientX: 400 + point.x * HALF, clientY: 300 - point.y * HALF });
   }
 
-  assert.equal(lookups, CURRENT.burst.pointLookups);
+  assert.equal(lookups, 0, "no lookup before the frame");
   assert.equal(page.log.frames - framesBefore, CURRENT.burst.framesRequested);
   assert.equal(page.flushFrames(), 1);
+  assert.equal(lookups, CURRENT.burst.pointLookups);
   assert.ok(page.canvas.calls.some(call => call[0] === "clearRect"));
 });

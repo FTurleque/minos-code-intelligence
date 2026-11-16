@@ -26,7 +26,7 @@
 ## 5. Clôture
 
 - [x] 5.1 AUD-PERF-02 — Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve. **Fait** : matrice du design mise à jour.
-- [x] 5.2 AUD-PERF-02 — Mettre à jour `docs/architecture/diagrams/capacites/exploration-semantique.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`. **Fait** : vue V5 et écart E12 du dossier de capacité ; les lignes de traçabilité des trois exigences ajoutées entrent au dossier à l'archivage.
+- [x] 5.2 AUD-PERF-02 — Mettre à jour `docs/architecture/diagrams/capacites/exploration-semantique.md` ; vérifier par `python scripts/docs/check-capability-dossiers.py`. **Fait** : vue V5 et écart E13 du dossier de capacité ; les lignes de traçabilité des trois exigences ajoutées entrent au dossier à l'archivage.
 - [x] 5.3 AUD-PERF-02 — Valider les spécifications ; vérifier par `openspec validate --all --strict`. **Fait** : `openspec validate --all --strict`.
 - [x] 5.4 AUD-PERF-02 — Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP, `docs/user`, `docs/developer`, arc42, SUIVI de l'audit) ; vérifier que chacun est fait ou nommé comme reste. **Fait** : `docs/user/semantic-explorer.md`, `docs/developer/semantic-explorer.md`, dossier de capacité mis à jour ; le repère de durée provisoire de `docs/user/semantic-explorer.md` reste, annoté comme antérieur à la stratégie en mémoire (aucune mesure d'un index construit par la synchronisation) ; STATUS et ROADMAP : rien à changer ; reste : ligne `AUD-PERF-02` du SUIVI (mise à jour ici, à confirmer par le propriétaire).
 

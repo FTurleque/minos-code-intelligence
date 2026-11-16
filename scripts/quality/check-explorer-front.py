@@ -230,7 +230,7 @@ def cases() -> list[Case]:
          lambda t: replace(t / app, "  if (!value) return \"—\";", "  if (!value) return \"—\";\n  eval(\"0\");"),
          {}, 1, hostile_list),
         ("capture radius changed",
-         lambda t: replace(t / app, "let bestDistance = 64;", "let bestDistance = 100;"), {}, 1, radius),
+         lambda t: replace(t / app, "const MAP_CAPTURE_PIXELS = 8;", "const MAP_CAPTURE_PIXELS = 10;"), {}, 1, radius),
         ("contract constant without a label",
          lambda t: replace(t / labels, "  indexStates: [\"DISABLED\",", "  indexStates: [\"UNKNOWN_STATE\", \"DISABLED\","),
          {}, 1, constant),
