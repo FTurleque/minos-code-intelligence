@@ -1,12 +1,14 @@
 package com.minos.explorer;
 
+import com.minos.diagnostics.UsageException;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * Strict reader of the only JSON the surface accepts: one flat object whose values are strings, numbers,
  * booleans or {@code null}. No nesting, no duplicate key, nothing after the object. Anything else is refused
- * with {@link IllegalArgumentException}, whose message never repeats the input.
+ * with a {@link UsageException}, whose message never repeats the input.
  */
 final class JsonObjectReader {
 
@@ -22,11 +24,11 @@ final class JsonObjectReader {
 
     /** The members of the object: a {@link String}, a {@link Double}, a {@link Boolean} or {@code null} each. */
     static Map<String, Object> read(String text) {
-        if (text == null) throw new IllegalArgumentException(INVALID);
+        if (text == null) throw new UsageException(INVALID);
         JsonObjectReader reader = new JsonObjectReader(text);
         Map<String, Object> members = reader.parseMembers();
         reader.skipWhitespace();
-        if (reader.position != text.length()) throw new IllegalArgumentException(INVALID);
+        if (reader.position != text.length()) throw new UsageException(INVALID);
         return members;
     }
 
@@ -45,12 +47,12 @@ final class JsonObjectReader {
             skipWhitespace();
             expect(':');
             skipWhitespace();
-            if (members.size() == MAX_MEMBERS || members.containsKey(key)) throw new IllegalArgumentException(INVALID);
+            if (members.size() == MAX_MEMBERS || members.containsKey(key)) throw new UsageException(INVALID);
             members.put(key, readValue());
             skipWhitespace();
             char next = next();
             if (next == '}') return members;
-            if (next != ',') throw new IllegalArgumentException(INVALID);
+            if (next != ',') throw new UsageException(INVALID);
         }
     }
 
@@ -64,7 +66,7 @@ final class JsonObjectReader {
     }
 
     private Object readLiteral(String word, Object value) {
-        if (!text.startsWith(word, position)) throw new IllegalArgumentException(INVALID);
+        if (!text.startsWith(word, position)) throw new UsageException(INVALID);
         position += word.length();
         return value;
     }
@@ -74,10 +76,10 @@ final class JsonObjectReader {
         while (position < text.length() && "+-0123456789.eE".indexOf(text.charAt(position)) >= 0) position++;
         String digits = text.substring(start, position);
         if (!digits.matches("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?")) {
-            throw new IllegalArgumentException(INVALID);
+            throw new UsageException(INVALID);
         }
         double parsed = Double.parseDouble(digits);
-        if (!Double.isFinite(parsed)) throw new IllegalArgumentException(INVALID);
+        if (!Double.isFinite(parsed)) throw new UsageException(INVALID);
         return parsed;
     }
 
@@ -87,7 +89,7 @@ final class JsonObjectReader {
         while (true) {
             char current = next();
             if (current == '"') return value.toString();
-            if (current < 0x20) throw new IllegalArgumentException(INVALID);
+            if (current < 0x20) throw new UsageException(INVALID);
             if (current != '\\') {
                 value.append(current);
                 continue;
@@ -99,17 +101,17 @@ final class JsonObjectReader {
             } else if (escaped == 'u') {
                 value.append(readUnicodeEscape());
             } else {
-                throw new IllegalArgumentException(INVALID);
+                throw new UsageException(INVALID);
             }
         }
     }
 
     private char readUnicodeEscape() {
-        if (position + 4 > text.length()) throw new IllegalArgumentException(INVALID);
+        if (position + 4 > text.length()) throw new UsageException(INVALID);
         int code = 0;
         for (int index = 0; index < 4; index++) {
             int digit = Character.digit(text.charAt(position++), 16);
-            if (digit < 0) throw new IllegalArgumentException(INVALID);
+            if (digit < 0) throw new UsageException(INVALID);
             code = code * 16 + digit;
         }
         return (char) code;
@@ -120,7 +122,7 @@ final class JsonObjectReader {
     }
 
     private char peek() {
-        if (position >= text.length()) throw new IllegalArgumentException(INVALID);
+        if (position >= text.length()) throw new UsageException(INVALID);
         return text.charAt(position);
     }
 
@@ -131,6 +133,6 @@ final class JsonObjectReader {
     }
 
     private void expect(char expected) {
-        if (next() != expected) throw new IllegalArgumentException(INVALID);
+        if (next() != expected) throw new UsageException(INVALID);
     }
 }

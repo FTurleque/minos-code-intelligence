@@ -174,6 +174,7 @@ La vue permet d’identifier où se concentre l’activité récente sans conclu
 ## Commits et merges
 
 Le service analyse les chemins modifiés par commit. Les merges sont comparés au premier parent ; le commit racine est comparé à un arbre vide.
+- **Sous-modules.** L'état du dépôt (`clean`) ignore les sous-modules : JGit ouvrirait sinon leur dépôt lui-même, hors de l'ouverture de confiance. Un dépôt qui déclare des sous-modules (`.gitmodules`) porte `SUBMODULES_NOT_ANALYSED` ; une modification à l'intérieur d'un sous-module n'est pas reportée dans `clean`.
 
 ## Remote
 
@@ -193,6 +194,7 @@ HISTORY_SCAN_LIMIT
 FILES_TRUNCATED
 REPOSITORY_ABOVE_PROJECT_ROOT
 REPOSITORY_FILTERS_NOT_APPLIED
+SUBMODULES_NOT_ANALYSED
 ```
 
 Exemples workspace :

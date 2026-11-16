@@ -47,7 +47,7 @@ Limites :
 | Requête | `query` | `MINOS_QUERY_IMAGE` | JRE 21, `minos.jar`, notices ; **aucun** JDK, compilateur C, Rust, Go, .NET, Node, `pip`/`npm`, ni outil de provider | `minos-mcp` (persistant), `minos-bootstrap`, `minos-data-bootstrap`, `minos-ollama-bootstrap` |
 | Administration | `admin` | `MINOS_IMAGE` | l'image provider-complete décrite plus bas | `minos-admin`, `minos-tools-bootstrap`, `minos-provider-probe` |
 
-Règle de classement : un service qui lance un provider, copie les outils embarqués ou sonde les toolchains utilise l'image d'administration ; tout autre utilise l'image de requête. Chaque service des fichiers compose porte, au-dessus de sa ligne `image:`, la raison de son classement ; un test de contrat (`M29DockerQueryImageContractTest`) refuse un service non classé ou mal classé, et une cible `query` qui copierait une toolchain ou installerait un paquet.
+Règle de classement : un service qui administre le runtime, copie les outils embarqués ou sonde les toolchains utilise l'image d'administration (aucun service Docker n'y lance un provider pour indexer : l'indexation y est refusée faute de bac à sable OS) ; tout autre utilise l'image de requête. Chaque service des fichiers compose porte, au-dessus de sa ligne `image:`, la raison de son classement ; un test de contrat (`M29DockerQueryImageContractTest`) refuse un service non classé ou mal classé, et une cible `query` qui copierait une toolchain ou installerait un paquet.
 
 L'image de requête porte le nom de l'image d'administration suivi de `-query` (`minos-code-intelligence:<tag>` et `minos-code-intelligence:<tag>-query`). Les deux portent l'étiquette `io.minos.image.plane` (`admin` ou `query`) et la même révision. Tailles mesurées le 2026-10-13 (Docker Desktop, `linux/amd64`) : 5,83 Go pour l'image d'administration, 511 Mo pour l'image de requête, que la cible `query` construit en quelques secondes une fois le JRE de base présent.
 
@@ -140,6 +140,8 @@ Apache Maven         3.9.16
 ```
 
 Les toolchains nécessaires sont JDK 21, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
+
+L'image d'administration les embarque parce que le service `minos-provider-probe` les sonde (versions de `java`, `javac`, `mvn`, `scip-java`, des indexeurs et des toolchains) et que `tools list` et `tools verify` inventorient les providers. Aucun de ces outils n'indexe dans un conteneur : `index` est refusé dans `minos-admin` avant tout processus fils. Le lanceur `scip-java` de l'image n'est donc lancé que pour afficher sa version ; son graphe transitif reste hors de tout verrou du dépôt (R-13).
 
 Le bundle provider est initialisé dans le volume Docker nommé :
 
@@ -381,6 +383,12 @@ Compose `explorer`), qui sert la page d'[exploration de l'index sémantique](sem
 L'adresse à ouvrir, avec le jeton de la session, est écrite dans le journal du conteneur
 (`docker compose logs minos-explorer`) : ce journal contient donc le jeton jusqu'à la suppression du conteneur ;
 le jeton cesse de valoir dès que le conteneur s'arrête.
+
+Le journal Docker de `minos-explorer` et celui de `minos-pgadmin` sont **bornés** : pilote `json-file`, `max-size: 1m`,
+`max-file: 2` (deux fichiers d'un mégaoctet au plus). Les requêtes refusées sont de plus résumées par au plus une ligne
+par raison et par minute. Conséquence : la ligne de l'adresse à jeton peut sortir du journal quand il tourne ; pour en
+obtenir une nouvelle, redémarrez le service (`docker compose restart minos-explorer`). Le pilote `json-file` reste la
+configuration de `docker compose logs` ; un autre pilote du démon n'est pas borné par ce fichier.
 
 Dans le conteneur, la surface écoute sur l'interface du conteneur et non sur sa boucle locale, parce qu'un port
 publié n'atteint pas cette dernière. Ce comportement n'est activé que par la variable interne

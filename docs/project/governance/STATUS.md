@@ -6,13 +6,13 @@ Ce fichier est la synthèse autoritative de l'état produit courant. Les réconc
 
 ## Planification additionnelle — 2026-10-05
 
-Les ADR 0055–0057 sont acceptés comme direction, sans revendiquer leur implémentation. [Suivi du chantier storage/hexagonal](../roadmap/storage-hexagonal-2026-10/README.md). La présence de ce plan ne signifie ni promotion de develop vers main ni clôture des audits. Les preuves d'implémentation seront ajoutées dans le suivi des tâches.
+Les ADR 0055–0057 sont acceptés comme direction, sans revendiquer leur implémentation. [Suivi du chantier storage/hexagonal](../roadmap/storage-hexagonal-2026-10/README.md). La présence de ce plan ne signifie pas la clôture des audits. Les preuves d'implémentation seront ajoutées dans le suivi des tâches.
 
 ## Audit 2026-10-10 — sprint 1 (2026-10-10)
 
 Le sprint 1 de l'audit du 10 octobre 2026 (« remettre les dispositifs de mesure en marche », 9 constats) est **corrigé, fusionné dans `develop` et archivé** (PR #392 à #394 et #396 à #399) :
 
-- **Checks exigés par le ruleset** : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)` et `SonarCloud Code Analysis` (ruleset « Protect main & develop ») ; `Docker upgrade evidence gate` pour `main` seul. La liste attendue est versionnée dans `.github/required-checks.json` ; `scripts/quality/check-ci-wiring.py` (job `invariants`) vérifie que chaque check résout un job qui peut rendre un verdict sur une PR, et `scripts/quality/verify-ruleset.py` (à la main) mesure l'écart avec le ruleset réel (code 0 constaté le 2026-10-10).
+- **Checks exigés par le ruleset** : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `Static invariants (single run)`, `Gitleaks`, `IntelliJ plugin (gate)` et `SonarCloud Code Analysis` (ruleset « Protect main ») ; `Docker upgrade evidence gate` pour `main` seul. La liste attendue est versionnée dans `.github/required-checks.json` ; `scripts/quality/check-ci-wiring.py` (job `invariants`) vérifie que chaque check résout un job qui peut rendre un verdict sur une PR, et `scripts/quality/verify-ruleset.py` (à la main) mesure l'écart avec le ruleset réel (code 0 constaté le 2026-10-10).
 - **Auto-tests de gates** : `check-jacoco.py --self-test` et l'auto-test du garde de jalons sont rejoués dans `invariants` ; `check-ci-wiring.py` refuse tout auto-test qui n'y serait pas câblé.
 - **Confinement** : `-Dminos.sandbox.tests.required=true` sur les deux jobs `verify` ; un bubblewrap, un cgroup v2 ou un AppContainer indisponible fait échouer le job de son système au lieu d'être sauté en silence. Les tests propres à une plateforme sont comptés comme sautés ailleurs.
 - **Plugin IntelliJ** : workflow exécuté sur toute PR, portée calculée (`scripts/ci/plugin-gate.py`) et gate agrégatrice toujours rendue ; la portée inclut les rendus JSON de `minos-application`, le domaine et les goldens de caractérisation.
@@ -166,7 +166,7 @@ Les sept changements du sprint 1 de l'audit du 15 novembre 2026 (« remettre la 
 - **Auto-tests de gates** : tout gate a un auto-test câblé dans `invariants` ; les gates littéraux le tirent du pilote commun `scripts/quality/literal_gate.py`, les gates encore sans auto-test forment une liste fermée décroissante.
 - **Couverture** : scopes JaCoCo nominatifs `explorer-surface`, `wsl-lane` et `semantic-projection`, planchers de classe pour la garde HTTP de l'explorateur et `QueryViewMemoryBudget`.
 - **Banc** : `benchmarks/scalability` mesure la projection 2D et les routes de l'explorateur, refus attendus déclarés au-delà du budget de décodage local ; la référence complète sur la machine de référence, PostgreSQL compris, reste à produire.
-- **Front de l'explorateur** : `app.js` est exécuté sous Node par des tests (faux DOM, puits de balisage refusés) et contrôlé par `check-explorer-front.py` avant toute fusion.
+- **Front de l'explorateur** : `map.js` et `app.js` sont exécutés sous Node par des tests (faux DOM, puits de balisage refusés) et contrôlé par `check-explorer-front.py` avant toute fusion.
 - **Tests** : un test propre à une plateforme est compté sauté (`check-test-platform-guards.py`) ; les preuves de verrou échouent quand leur processus détenteur ne démarre pas ou quand le bail n'est plus tenu.
 
 Restes manuels : remise à niveau des fins de ligne d'un clone existant, référence complète du banc. Détail et preuves : [`docs/project/audits/2026-11-15/SUIVI.md`](../audits/2026-11-15/SUIVI.md).

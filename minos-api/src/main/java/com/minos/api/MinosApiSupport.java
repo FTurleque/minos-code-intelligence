@@ -3,14 +3,21 @@ package com.minos.api;
 import com.minos.api.MinosApi.ErrorCode;
 import com.minos.api.MinosApi.MinosApiException;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosHome;
+import com.minos.application.diagnostics.InternalFailureReporter;
+import com.minos.application.semantic.SemanticCorpusQueryService;
+import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.application.resolution.ProjectResolver;
+import com.minos.diagnostics.InternalFailureTrace;
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Shared argument checks and failure translation for the local MINOS API facades.
@@ -40,7 +47,38 @@ final class MinosApiSupport {
     /** Fixed, path-free replacement for an internal diagnostic that fails the public policy. */
     private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
 
+    private static final String TRACED_FAILURE_SUBJECT = "MINOS API call failed internally";
+
+    /** Null until a home is opened by path or the first traced failure resolves the process home. */
+    private static final AtomicReference<InternalFailureReporter> FAILURE_REPORTER = new AtomicReference<>();
+
     private MinosApiSupport() {
+    }
+
+    /** Traces the internal failures of the facades under {@code home} from now on. */
+    static void bindFailureReporter(Path home) {
+        FAILURE_REPORTER.set(new InternalFailureReporter(
+                "api", Objects.requireNonNull(home, "home"), System.getenv(), System.getProperties()));
+    }
+
+    /** Replaces the reporter, for deterministic tests. */
+    static void useFailureReporter(InternalFailureReporter reporter) {
+        FAILURE_REPORTER.set(reporter);
+    }
+
+    private static InternalFailureReporter failureReporter() {
+        InternalFailureReporter bound = FAILURE_REPORTER.get();
+        if (bound != null) return bound;
+        synchronized (MinosApiSupport.class) {
+            if (FAILURE_REPORTER.get() == null) {
+                try {
+                    bindFailureReporter(MinosHome.resolve(System.getenv(), System.getProperties()));
+                } catch (IllegalStateException noHome) {
+                    FAILURE_REPORTER.set(InternalFailureReporter.withoutJournal("api"));
+                }
+            }
+            return FAILURE_REPORTER.get();
+        }
     }
 
     @FunctionalInterface
@@ -67,13 +105,16 @@ final class MinosApiSupport {
             throw publicFailure(ErrorCode.ACCESS_DENIED, exception);
         } catch (ProjectResolver.ResolutionException exception) {
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception.publicMessage(), exception);
-        } catch (IllegalArgumentException exception) {
+        } catch (UsageException exception) {
+            // The one argument error raised on purpose for the caller (an unknown document included).
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception);
         } catch (IllegalStateException exception) {
             throw publicFailure(ErrorCode.UNAVAILABLE, exception);
         } catch (IOException exception) {
             throw publicFailure(ErrorCode.IO_FAILURE, exception);
         } catch (Exception exception) {
+            // Any other failure, a precondition violated inside a service (IllegalArgumentException) included, is a
+            // defect and not advice to the caller.
             throw publicFailure(ErrorCode.EXECUTION_FAILURE, exception);
         }
     }
@@ -100,10 +141,13 @@ final class MinosApiSupport {
             ApplicationOpener opener
     ) throws MinosApiException {
         try {
-            return opener.open(Objects.requireNonNull(home, "home"));
+            bindFailureReporter(Objects.requireNonNull(home, "home"));
+            return opener.open(home);
         } catch (IOException exception) {
             throw publicFailure(ErrorCode.IO_FAILURE, bootstrapFailureMessage, exception);
         } catch (IllegalArgumentException exception) {
+            // A configuration value is the usual cause, and it is kept an invalid request; the class stays visible.
+            LOGGER.log(Level.WARNING, diagnosticSummary(ErrorCode.INVALID_REQUEST, exception));
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception);
         } catch (IllegalStateException exception) {
             throw publicFailure(ErrorCode.UNAVAILABLE, exception);
@@ -114,7 +158,7 @@ final class MinosApiSupport {
 
     static <T> T required(T value, String field) {
         if (value == null) {
-            throw new IllegalArgumentException(field + " must not be null");
+            throw new UsageException(field + " must not be null");
         }
         return value;
     }
@@ -183,7 +227,27 @@ final class MinosApiSupport {
      * values may contain credentials, absolute paths or other private deployment details.
      */
     private static void logFailure(ErrorCode code, Exception exception) {
+        if (isTraced(code, exception)) {
+            // An execution or I/O failure is internal: the line names the origin and a reference, and the private
+            // journal, when enabled, keeps the stack under that reference. The caller still gets no cause.
+            InternalFailureTrace trace = failureReporter().report(code.name(), exception);
+            LOGGER.log(Level.WARNING, trace.line(TRACED_FAILURE_SUBJECT, "code", code.name()));
+            return;
+        }
+        if (code == ErrorCode.INVALID_REQUEST || isExpectedUnavailability(exception)) return;
         LOGGER.log(Level.WARNING, diagnosticSummary(code, exception));
+    }
+
+    /** An execution or I/O failure, and an unavailability that is not a refusal the service expects. */
+    private static boolean isTraced(ErrorCode code, Exception exception) {
+        return code == ErrorCode.EXECUTION_FAILURE || code == ErrorCode.IO_FAILURE
+                || (code == ErrorCode.UNAVAILABLE && !isExpectedUnavailability(exception));
+    }
+
+    /** The index replaced during a read and a refused preparation: unavailability the caller is told, not a defect. */
+    private static boolean isExpectedUnavailability(Exception exception) {
+        return exception instanceof SemanticCorpusQueryService.IndexChangedException
+                || exception instanceof SemanticProjectionService.RefusedException;
     }
 
     /** Package-private for deterministic tests of the no-secret logging invariant. */

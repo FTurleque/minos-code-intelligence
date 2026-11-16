@@ -8,10 +8,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class M29DockerAdministrationContractTest {
@@ -325,6 +327,142 @@ class M29DockerAdministrationContractTest {
         assertTrue(missing.isEmpty(),
                 "connected profile omits base profile services " + missing
                         + " -- the base Docker workflow runs them against whichever compose file is active");
+    }
+
+    // The administration plane runs no provider: SEC-0074 refuses indexing there before any child process. The
+    // comments of the shipped files say what the plane does, and the probe service, whose comment is true, is
+    // not concerned.
+    private static final List<String> COMPOSE_FILES =
+            List.of("docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml");
+    private static final String DOCKERFILE = "docker/Dockerfile.mcp.release";
+    private static final String INDEXING_REFUSED = "indexing is refused";
+    private static final Pattern PROVIDER_LAUNCH_CLAIM = Pattern.compile("(?i)\\blaunch(?:es)?\\b.*\\bproviders?\\b");
+    private static final Pattern DEPENDENCY_PLANE_CLAIM = Pattern.compile(
+            "(?is)\\b(?:indexing|dependency\\s+resolution)\\b[^.;]*\\bhandled\\s+by\\b[^.;]*\\badmin\\s+plane");
+    private static final String LAUNCHER_COMMENT = "Build a standalone scip-java launcher";
+    private static final String ADMIN_COMMENT_ABOVE_IMAGE = "(?m)^ {4}# Administration image: .*$\\n( {4}image:)";
+
+    @Test
+    void theShippedFilesDoNotPresentTheAdministrationPlaneAsLaunchingProviders() throws Exception {
+        List<String> violations = new ArrayList<>();
+        for (String file : COMPOSE_FILES) {
+            violations.addAll(administrationServiceViolations(file, normalizedText(repoRoot().resolve(file))));
+        }
+        violations.addAll(launcherCommentViolations(DOCKERFILE, normalizedText(repoRoot().resolve(DOCKERFILE))));
+        assertTrue(violations.isEmpty(), "the administration plane runs no provider, yet: " + violations);
+    }
+
+    @Test
+    void aCommentThatAnnouncesTheLaunchOfProvidersIsRefusedAndNamedByFileAndLine() throws Exception {
+        for (String file : COMPOSE_FILES) {
+            String compose = normalizedText(repoRoot().resolve(file));
+            String claim = "    # Administration image: indexing and tools list/verify launch the providers and their toolchains.";
+            String mutated = compose.replaceFirst(ADMIN_COMMENT_ABOVE_IMAGE, claim + "\n$1");
+            assertTrue(Pattern.compile(ADMIN_COMMENT_ABOVE_IMAGE).matcher(compose).find(),
+                    file + ": the comment above image: of minos-admin was not found");
+            List<String> violations = administrationServiceViolations(file, mutated);
+            assertTrue(violations.size() == 2 && violations.get(0).startsWith(file + ":")
+                            && violations.get(0).contains("launches providers"),
+                    "expected a violation naming " + file + " and its line, found " + violations);
+            String silent = compose.replaceFirst(ADMIN_COMMENT_ABOVE_IMAGE,
+                    "    # Administration image: indexing is refused here.\n$1");
+            assertTrue(administrationServiceViolations(file, silent).isEmpty(), file);
+        }
+    }
+
+    @Test
+    void theProbeServiceIsNotConcernedByTheAdministrationServiceRule() throws Exception {
+        for (String file : COMPOSE_FILES) {
+            String compose = normalizedText(repoRoot().resolve(file));
+            assertTrue(compose.contains("\n  minos-provider-probe:\n"), file + ": the probe service is missing");
+            String mutated = compose.replaceFirst("(?m)^ {4}# Administration image: probes .*$",
+                    "    # Administration image: launches the providers to probe them.");
+            assertNotEquals(compose, mutated, file + ": the comment of the probe service was not found");
+            assertTrue(administrationServiceViolations(file, mutated).stream()
+                            .noneMatch(violation -> violation.contains("launches providers")),
+                    file);
+        }
+    }
+
+    @Test
+    void theLauncherCommentOfTheDockerfileDoesNotSayTheAdministrationPlaneIndexes() throws Exception {
+        String dockerfile = normalizedText(repoRoot().resolve(DOCKERFILE));
+        assertTrue(dockerfile.contains(LAUNCHER_COMMENT), "the scip-java launcher passage is missing");
+        String claim = """
+                # Project dependency resolution for the real Maven build is a separate indexing concern handled by
+                # the ephemeral admin plane; the persistent MCP query plane remains networkless.
+                """;
+        String mutated = dockerfile.replaceFirst("(?m)^# is therefore recorded in provider evidence[^\\n]*\\n", "$0" + claim);
+        List<String> violations = launcherCommentViolations(DOCKERFILE, mutated);
+        assertTrue(violations.stream().anyMatch(v -> v.startsWith(DOCKERFILE + ":") && v.contains("administration plane indexes")),
+                "expected a violation naming the Dockerfile and its line, found " + violations);
+    }
+
+    private static List<String> administrationServiceViolations(String file, String compose) {
+        List<String> violations = new ArrayList<>();
+        String[] lines = compose.split("\n", -1);
+        int start = -1;
+        for (int i = 0; i < lines.length && start < 0; i++) {
+            if (lines[i].equals("  minos-admin:")) {
+                start = i;
+            }
+        }
+        if (start < 0) {
+            violations.add(file + ": the service minos-admin is missing");
+            return violations;
+        }
+        int end = lines.length;
+        for (int i = start + 1; i < lines.length; i++) {
+            if (SERVICE_KEY.matcher(lines[i]).matches()
+                    || (!lines[i].isBlank() && !lines[i].startsWith(" ") && !lines[i].startsWith("#"))) {
+                end = i;
+                break;
+            }
+        }
+        boolean refused = false;
+        for (int i = start + 1; i < end; i++) {
+            String comment = lines[i].trim();
+            if (!comment.startsWith("#")) {
+                continue;
+            }
+            if (PROVIDER_LAUNCH_CLAIM.matcher(comment).find()) {
+                violations.add(file + ":" + (i + 1) + ": the comment of minos-admin says it launches providers");
+            }
+            refused |= comment.toLowerCase(Locale.ROOT).contains(INDEXING_REFUSED);
+        }
+        if (!refused) {
+            violations.add(file + ":" + (start + 1) + ": the comments of minos-admin do not say that " + INDEXING_REFUSED);
+        }
+        return violations;
+    }
+
+    private static List<String> launcherCommentViolations(String file, String dockerfile) {
+        List<String> violations = new ArrayList<>();
+        String[] lines = dockerfile.split("\n", -1);
+        int start = -1;
+        for (int i = 0; i < lines.length && start < 0; i++) {
+            if (lines[i].contains(LAUNCHER_COMMENT)) {
+                start = i;
+            }
+        }
+        if (start < 0) {
+            violations.add(file + ": the scip-java launcher passage is missing");
+            return violations;
+        }
+        StringBuilder block = new StringBuilder();
+        for (int i = start; i < lines.length && lines[i].startsWith("#"); i++) {
+            block.append(lines[i]).append('\n');
+        }
+        Matcher claim = DEPENDENCY_PLANE_CLAIM.matcher(block);
+        if (claim.find()) {
+            int line = start + 1 + (int) block.substring(0, claim.start()).chars().filter(c -> c == '\n').count();
+            violations.add(file + ":" + line + ": the launcher passage says the administration plane indexes");
+        }
+        String flat = block.toString().toLowerCase(Locale.ROOT).replace("# ", "").replaceAll("\\s+", " ");
+        if (!flat.contains(INDEXING_REFUSED)) {
+            violations.add(file + ":" + (start + 1) + ": the launcher passage does not say that " + INDEXING_REFUSED);
+        }
+        return violations;
     }
 
     // Service keys are the two-space-indented mapping keys inside `services:`, stopping at the

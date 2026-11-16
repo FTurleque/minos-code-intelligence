@@ -203,11 +203,12 @@ jobs:
       - name: Twin script functions gate self-test
         run: python scripts/quality/test_check_twin_script_functions.py -v
 
-      - name: CI wiring, ruleset comparison and plugin gate self-tests
+      - name: CI wiring, ruleset comparison, plugin gate and Docker gate self-tests
         run: |
           python scripts/quality/test_check_ci_wiring.py -v
           python scripts/quality/test_verify_ruleset.py -v
           python scripts/ci/test_plugin_gate.py -v
+          python scripts/ci/test_docker_gate.py -v
 
       - name: JaCoCo gate self-test (decision logic on synthetic reports; the gate itself runs in the verify jobs)
         run: python scripts/quality/check-jacoco.py --self-test
@@ -581,7 +582,11 @@ jobs:
           name: jacoco-modules-Windows
           path: coverage-reports/windows
 
-      - name: SonarCloud CI-based analysis
+      # The token reaches the analysis step alone (AUD-DEP-05). The candidate is built by the step before it, which
+      # has no secret: the plugins and annotation processors a pull request declares run there. The analysis step
+      # still runs the wrapper on the pull request's tree (Maven reads its POMs): check-workflow-pins.py lists it,
+      # with its reason, and refuses any lifecycle phase in it.
+      - name: Check that the analysis token is available
         shell: bash
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -592,6 +597,14 @@ jobs:
             echo "pull requests or to forks: for Dependabot, add SONAR_TOKEN to the Dependabot secrets of the repository." >&2
             exit 1
           fi
+
+      # `install` puts the artifacts of the modules in the local Maven repository of the runner: the scanner goal,
+      # run alone in the next step, resolves the modules of the reactor from there.
+      - name: Build the candidate without any secret
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
           # Puts every downloaded report inside its module, where the scanner looks for it.
           place_reports() {
             local source="$1" directory="$2" count=0 report module
@@ -618,8 +631,19 @@ jobs:
           if [ "$windows_modules" -eq 0 ]; then
             echo "::warning::No Windows JaCoCo report: Windows-only code will count as uncovered."
           fi
+          echo "linux_modules=$linux_modules" >> "$GITHUB_OUTPUT"
           chmod +x mvnw
-          ./mvnw -B -ntp -DskipTests -Djacoco.skip=true test-compile \
+          ./mvnw -B -ntp -DskipTests -Djacoco.skip=true install
+
+      - name: SonarCloud CI-based analysis
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          LINUX_MODULES: ${{ steps.build.outputs.linux_modules }}
+        run: |
+          set -euo pipefail
+          linux_modules="$LINUX_MODULES"
+          ./mvnw -B -ntp -DskipTests -Djacoco.skip=true \
             org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
             -Dsonar.projectKey=FTurleque_atlas \
             -Dsonar.organization=fturleque \
@@ -633,3 +657,10 @@ jobs:
             echo "The scanner imported coverage for $importing_modules module(s), fewer than the $linux_modules with a report." >&2
             exit 1
           fi
+
+      # The artifacts of the candidate stay out of the Maven cache that setup-java saves at the end of the job: a
+      # pull request does not feed the cache that later builds restore.
+      - name: Remove the candidate's artifacts from the Maven repository
+        if: always()
+        shell: bash
+        run: rm -rf "$HOME/.m2/repository/com/minos"

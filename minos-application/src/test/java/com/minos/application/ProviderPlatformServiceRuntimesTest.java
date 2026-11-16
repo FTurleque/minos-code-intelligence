@@ -47,6 +47,16 @@ class ProviderPlatformServiceRuntimesTest {
     }
 
     @Test
+    void inspectingABlankOrUnknownProviderIsAUsageError() {
+        ProviderPlatformService service = new ProviderPlatformService(List.of(), new RecordingRuntimes());
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.minos.diagnostics.UsageException.class,
+                () -> service.inspect(" "));
+        org.junit.jupiter.api.Assertions.assertThrows(com.minos.diagnostics.UsageException.class,
+                () -> service.inspect("no-such-provider"));
+    }
+
+    @Test
     void installRuntimeInstallsThroughTheManagerAndReturnsItsSummary() throws Exception {
         RecordingRuntimes runtimes = new RecordingRuntimes();
         ProviderPlatformService service = new ProviderPlatformService(List.of(), runtimes);

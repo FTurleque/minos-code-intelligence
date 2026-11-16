@@ -1,7 +1,9 @@
 package com.minos.explorer;
 
+import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.application.semantic.SemanticCorpusQueryService;
 import com.minos.application.semantic.SemanticProjectionService;
+import com.minos.diagnostics.UsageException;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -33,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 /**
  * The HTTP listener of the exploration surface, on the HTTP server of the JDK. It serves the embedded page and
@@ -43,6 +47,8 @@ final class ExplorerServer implements AutoCloseable {
 
     static final int MAX_BODY_BYTES = 512 * 1024;
     static final int MAX_CONCURRENT_API_CALLS = 4;
+    /** Reads abandoned at the deadline that have not returned yet; at this bound a new API request is refused as busy. */
+    static final int MAX_ABANDONED_READS = 8;
     static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
     static final int MAX_REQUEST_READ_SECONDS = 10;
     static final int MAX_RESPONSE_WRITE_SECONDS = 60;
@@ -54,7 +60,7 @@ final class ExplorerServer implements AutoCloseable {
 
     private static final String API_ROOT = "/api/";
     /** The page and its two resources: the only reads served to a navigation coming from another site. */
-    private static final Set<String> LINK_OPENED_PATHS = Set.of("/", "/app.css", "/app.js");
+    private static final Set<String> LINK_OPENED_PATHS = Set.of("/", "/app.css", "/map.js", "/app.js");
     private static final String REFUSED_PAGE_TEXT = """
             MINOS explorer : requête refusée.
             Ouvrez l'adresse imprimée par « minos explorer serve » en la collant dans la barre d'adresse \
@@ -69,11 +75,12 @@ final class ExplorerServer implements AutoCloseable {
     private final ExecutorService connections;
     private final ExecutorService workers;
     private final Semaphore apiCalls = new Semaphore(MAX_CONCURRENT_API_CALLS);
+    private final AtomicInteger abandonedReads = new AtomicInteger();
     private final Calls api;
     private final RequestGuard guard;
     private final SessionToken token;
     private final Duration requestTimeout;
-    private final Consumer<String> log;
+    private final ExplorerDiagnostics diagnostics;
     private final int port;
     private boolean closed;
 
@@ -81,21 +88,25 @@ final class ExplorerServer implements AutoCloseable {
     @FunctionalInterface
     interface Calls {
         ExplorerApi.Answer answer(String method, List<String> segments, Map<String, String> parameters,
-                                  ExplorerApi.Body body, Consumer<Exception> failures);
+                                  ExplorerApi.Body body, Function<Exception, String> failures);
     }
 
     private ExplorerServer(Calls api, SessionToken token, HttpServer first, Duration requestTimeout,
-                           Consumer<String> log) {
+                           ExplorerDiagnostics diagnostics) {
         this.api = api;
         this.token = token;
         this.port = first.getAddress().getPort();
         this.guard = RequestGuard.forPort(port, token);
         this.requestTimeout = requestTimeout;
-        this.log = log;
+        this.diagnostics = diagnostics;
         this.connections = new ThreadPoolExecutor(CONNECTION_THREADS, CONNECTION_THREADS, 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(CONNECTION_QUEUE), threads("minos-explorer-http"),
                 new ThreadPoolExecutor.CallerRunsPolicy());
-        this.workers = new ThreadPoolExecutor(MAX_CONCURRENT_API_CALLS, MAX_CONCURRENT_API_CALLS, 0L,
+        // Active reads and abandoned reads that have not returned: each is bounded, so a task does not wait in the queue
+        // except when several requests are admitted at the bound together (the bound is approximate: a task that finds
+        // no thread is refused as busy).
+        this.workers = new ThreadPoolExecutor(MAX_CONCURRENT_API_CALLS + MAX_ABANDONED_READS,
+                MAX_CONCURRENT_API_CALLS + MAX_ABANDONED_READS, 0L,
                 TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(MAX_CONCURRENT_API_CALLS),
                 threads("minos-explorer-read"));
     }
@@ -107,18 +118,36 @@ final class ExplorerServer implements AutoCloseable {
     static ExplorerServer start(SemanticCorpusQueryService corpus, SemanticProjectionService projection,
                                 int requestedPort, ListeningPolicy.Scope scope, Duration requestTimeout,
                                 Consumer<String> log) throws IOException {
-        return start(new ExplorerApi(corpus, projection)::answer, requestedPort, scope, requestTimeout, log);
+        return start(corpus, projection, requestedPort, scope, requestTimeout, log,
+                InternalFailureReporter.withoutJournal("explorer"));
+    }
+
+    /** As above, with the reporter that writes the private diagnostic journal when it is switched on. */
+    static ExplorerServer start(SemanticCorpusQueryService corpus, SemanticProjectionService projection,
+                                int requestedPort, ListeningPolicy.Scope scope, Duration requestTimeout,
+                                Consumer<String> log, InternalFailureReporter reporter) throws IOException {
+        return start(new ExplorerApi(corpus, projection)::answer, requestedPort, scope, requestTimeout, log, reporter,
+                System::nanoTime);
     }
 
     static ExplorerServer start(Calls api, int requestedPort, ListeningPolicy.Scope scope,
                                 Duration requestTimeout, Consumer<String> log) throws IOException {
+        return start(api, requestedPort, scope, requestTimeout, log, InternalFailureReporter.withoutJournal("explorer"),
+                System::nanoTime);
+    }
+
+    /** The full form: the reporter of internal failures and the clock of the repeated-event windows are injected. */
+    static ExplorerServer start(Calls api, int requestedPort, ListeningPolicy.Scope scope,
+                                Duration requestTimeout, Consumer<String> log, InternalFailureReporter reporter,
+                                LongSupplier nanos) throws IOException {
         Objects.requireNonNull(api, "api");
         Objects.requireNonNull(log, "log");
         boundConnectionTimes();
         List<InetAddress> addresses = ListeningPolicy.addresses(scope);
         HttpServer first = HttpServer.create(new InetSocketAddress(addresses.getFirst(), requestedPort), BACKLOG);
         ExplorerServer server = new ExplorerServer(api, SessionToken.generate(), first,
-                Objects.requireNonNull(requestTimeout, "requestTimeout"), log);
+                Objects.requireNonNull(requestTimeout, "requestTimeout"),
+                new ExplorerDiagnostics(log, Objects.requireNonNull(reporter, "reporter"), nanos));
         server.listen(first);
         for (InetAddress address : addresses.subList(1, addresses.size())) {
             if (!ListeningPolicy.hostHasAddress(address)) {
@@ -163,6 +192,11 @@ final class ExplorerServer implements AutoCloseable {
         return port;
     }
 
+    /** Reads abandoned at their deadline whose task has not returned yet. */
+    int abandonedReads() {
+        return abandonedReads.get();
+    }
+
     /** The addresses the surface is bound to. */
     List<InetSocketAddress> boundAddresses() {
         return listeners.stream().map(HttpServer::getAddress).toList();
@@ -193,7 +227,7 @@ final class ExplorerServer implements AutoCloseable {
             Optional<RequestGuard.Refusal> refusal = guard.check(targetOf(exchange, path), request.getFirst("Host"),
                     request.getFirst("Origin"), request.getFirst("Sec-Fetch-Site"), request.getFirst("Authorization"));
             if (refusal.isPresent()) {
-                log.accept("refused request: " + refusal.orElseThrow().name().toLowerCase(Locale.ROOT));
+                diagnostics.refusal(refusal.orElseThrow().name().toLowerCase(Locale.ROOT));
                 refuse(exchange, refusal.orElseThrow().status(), apiRequest);
             } else if (apiRequest) {
                 answer(exchange, path);
@@ -202,7 +236,7 @@ final class ExplorerServer implements AutoCloseable {
             }
         } catch (IOException | RuntimeException failure) {
             // The exchange is closed by the try-with-resources; nothing of the failure reaches the client.
-            log.accept("request failed: " + failure.getClass().getSimpleName());
+            diagnostics.exchangeFailure(failure);
         }
     }
 
@@ -256,7 +290,7 @@ final class ExplorerServer implements AutoCloseable {
             }
             segments = segments(path.substring(ExplorerContract.API_PREFIX.length()));
             parameters = parameters(exchange.getRequestURI().getRawQuery());
-        } catch (IllegalArgumentException malformed) {
+        } catch (UsageException malformed) {
             return ExplorerApi.Answer.error(400, "INVALID_REQUEST", "the request address is not valid");
         }
         if ("POST".equals(method)) {
@@ -265,17 +299,26 @@ final class ExplorerServer implements AutoCloseable {
                 return ExplorerApi.Answer.error(415, "UNSUPPORTED_MEDIA_TYPE", "the body must be application/json");
             }
         }
+        int stuck = abandonedReads.get();
+        if (stuck >= MAX_ABANDONED_READS) {
+            // Reads that ignored their interruption still hold their threads: refuse rather than pile up more.
+            diagnostics.abandonedReads(stuck, MAX_ABANDONED_READS);
+            return ExplorerApi.Answer.error(503, "BUSY", "too many requests at once; retry");
+        }
         if (!apiCalls.tryAcquire()) {
             return ExplorerApi.Answer.error(503, "BUSY", "too many requests at once; retry");
         }
+        String route = routeLabel(segments);
+        Read read = new Read();
         Future<ExplorerApi.Answer> pending;
         try {
             pending = workers.submit(() -> {
+                if (!read.start()) return null;
                 try {
                     return api.answer(method, segments, parameters, () -> body(exchange),
-                            failure -> log.accept("request failed: " + failure.getClass().getSimpleName()));
+                            failure -> diagnostics.internalFailure(route, failure));
                 } finally {
-                    apiCalls.release();
+                    read.finished();
                 }
             });
         } catch (RejectedExecutionException stopping) {
@@ -286,14 +329,88 @@ final class ExplorerServer implements AutoCloseable {
             return pending.get(requestTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException slow) {
             pending.cancel(true);
-            return ExplorerApi.Answer.error(503, "TIMEOUT", "the request took too long and was abandoned; retry");
+            if (read.abandon()) {
+                return ExplorerApi.Answer.error(503, "TIMEOUT", "the request took too long and was abandoned; retry");
+            }
+            return completedOrInternal(pending, route);
         } catch (InterruptedException interrupted) {
             pending.cancel(true);
+            read.abandon();
             Thread.currentThread().interrupt();
             return ExplorerApi.Answer.error(503, "BUSY", "the surface is stopping");
         } catch (ExecutionException failed) {
-            log.accept("request failed: " + failed.getCause().getClass().getSimpleName());
-            return ExplorerApi.Answer.error(500, "INTERNAL_ERROR", ExplorerApi.INTERNAL_ERROR);
+            return internalError(route, failed.getCause());
+        }
+    }
+
+    /** The answer of a read that finished just as its deadline passed. */
+    private ExplorerApi.Answer completedOrInternal(Future<ExplorerApi.Answer> pending, String route) {
+        try {
+            ExplorerApi.Answer answer = pending.get();
+            return answer != null ? answer
+                    : ExplorerApi.Answer.error(503, "TIMEOUT", "the request took too long and was abandoned; retry");
+        } catch (ExecutionException failed) {
+            return internalError(route, failed.getCause());
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return ExplorerApi.Answer.error(503, "BUSY", "the surface is stopping");
+        } catch (java.util.concurrent.CancellationException cancelled) {
+            return ExplorerApi.Answer.error(503, "TIMEOUT", "the request took too long and was abandoned; retry");
+        }
+    }
+
+    private ExplorerApi.Answer internalError(String route, Throwable failure) {
+        return ExplorerApi.Answer.error(500, "INTERNAL_ERROR",
+                ExplorerApi.INTERNAL_ERROR + " (ref " + diagnostics.internalFailure(route, failure) + ")");
+    }
+
+    private static String routeLabel(List<String> segments) {
+        ExplorerApi.Route route = ExplorerApi.Route.matching(segments);
+        return route == null ? "api" : route.name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * One API call that holds a concurrency slot. The slot is given back once: by the task when it ends, or by the
+     * exchange thread at the deadline, whichever comes first; a read abandoned at the deadline is counted until its
+     * task returns, so that reads which ignore their interruption cannot pile up without limit.
+     */
+    private final class Read {
+        private static final int QUEUED = 0;
+        private static final int RUNNING = 1;
+        private static final int ABANDONED = 2;
+        private static final int DONE = 3;
+        private static final int CANCELLED = 4;
+
+        private final AtomicInteger state = new AtomicInteger(QUEUED);
+
+        /** The task begins; false when the deadline already took it back before it started. */
+        boolean start() {
+            return state.compareAndSet(QUEUED, RUNNING);
+        }
+
+        /** The task ends, normally or not. */
+        void finished() {
+            if (state.compareAndSet(RUNNING, DONE)) {
+                apiCalls.release();
+            } else {
+                state.set(DONE);
+                abandonedReads.decrementAndGet();
+            }
+        }
+
+        /** The deadline passed: true when this call took the slot back, false when the task had just finished. */
+        boolean abandon() {
+            if (state.compareAndSet(QUEUED, CANCELLED)) {
+                apiCalls.release();
+                return true;
+            }
+            abandonedReads.incrementAndGet();
+            if (state.compareAndSet(RUNNING, ABANDONED)) {
+                apiCalls.release();
+                return true;
+            }
+            abandonedReads.decrementAndGet();
+            return false;
         }
     }
 
@@ -301,23 +418,39 @@ final class ExplorerServer implements AutoCloseable {
         try (InputStream input = exchange.getRequestBody()) {
             byte[] bytes = input.readNBytes(MAX_BODY_BYTES + 1);
             if (bytes.length > MAX_BODY_BYTES) {
-                throw new IllegalArgumentException("the request body exceeds " + MAX_BODY_BYTES + " bytes");
+                throw new UsageException("the request body exceeds " + MAX_BODY_BYTES + " bytes");
             }
             return new String(bytes, StandardCharsets.UTF_8);
         }
     }
 
-    /** The decoded segments of a path; an empty segment, a dot segment or a broken escape is refused. */
+    /**
+     * The decoded segments of a path. An empty segment, a segment that decodes to {@code .} or {@code ..} (whatever its
+     * encoding) and a broken escape are refused as usage errors. A decoded {@code /} or {@code \} is accepted: a document
+     * key contains {@code /} and travels as one encoded segment, and no route maps a segment to a file path.
+     */
     static List<String> segments(String rawPath) {
         List<String> segments = new ArrayList<>();
         for (String raw : rawPath.split("/", -1)) {
-            String decoded = URLDecoder.decode(raw.replace("+", "%2B"), StandardCharsets.UTF_8);
+            String decoded = decode(raw.replace("+", "%2B"));
             if (decoded.isEmpty() || decoded.indexOf('\0') >= 0) {
-                throw new IllegalArgumentException("empty path segment");
+                throw new UsageException("empty path segment");
+            }
+            if (".".equals(decoded) || "..".equals(decoded)) {
+                throw new UsageException("dot path segment");
             }
             segments.add(decoded);
         }
         return segments;
+    }
+
+    /** {@link URLDecoder#decode}, whose {@link IllegalArgumentException} on a broken escape is the caller's error. */
+    private static String decode(String raw) {
+        try {
+            return URLDecoder.decode(raw, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException broken) {
+            throw new UsageException("invalid percent escape");
+        }
     }
 
     /** The decoded parameters of a query; a parameter given twice or without name is refused. */
@@ -326,10 +459,10 @@ final class ExplorerServer implements AutoCloseable {
         if (rawQuery == null || rawQuery.isEmpty()) return parameters;
         for (String pair : rawQuery.split("&", -1)) {
             int equals = pair.indexOf('=');
-            String name = URLDecoder.decode(equals < 0 ? pair : pair.substring(0, equals), StandardCharsets.UTF_8);
-            String value = equals < 0 ? "" : URLDecoder.decode(pair.substring(equals + 1), StandardCharsets.UTF_8);
+            String name = decode(equals < 0 ? pair : pair.substring(0, equals));
+            String value = equals < 0 ? "" : decode(pair.substring(equals + 1));
             if (name.isEmpty() || parameters.putIfAbsent(name, value) != null) {
-                throw new IllegalArgumentException("invalid query parameter");
+                throw new UsageException("invalid query parameter");
             }
         }
         return parameters;

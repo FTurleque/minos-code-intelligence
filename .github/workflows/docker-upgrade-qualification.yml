@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       previous_ref:
-        description: 'Previous MINOS commit/ref to install as candidate A; blank uses the merge-base with origin/main, then first-parent fallback.'
+        description: 'Previous MINOS commit/ref to install as candidate A; blank uses the merge-base with origin/main, then first-parent fallback. The runner installs Java 21 only: a candidate A built for another Java fails before any build.'
         required: false
         default: ''
         type: string
@@ -51,16 +51,6 @@ jobs:
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Candidate A (the previous commit, or `main` in a promotion) may still be built for the previous Java
-      # baseline: its own Maven Enforcer refuses Java 21. qualify-docker-upgrade.ps1 builds each candidate with
-      # the JDK its POM names and finds this one through JAVA_HOME_25_X64. The step after it selects Java 21.
-      # Remove this step, and its entry in check-toolchain-baseline.py, once no candidate A is built for Java 25.
-      - name: Set up the previous Java baseline for candidate A
-        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
-        with:
-          distribution: temurin
-          java-version: '25'
 
       - name: Set up Java 21
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
