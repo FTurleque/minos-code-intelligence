@@ -1,5 +1,7 @@
 package com.minos.hosted;
 
+import com.minos.diagnostics.UsageException;
+
 /** Explicit, operator-applied hosted retention policy. No implicit eviction is permitted. */
 public record HostedRetentionPolicy(
         int maxAuditEvents,
@@ -13,13 +15,13 @@ public record HostedRetentionPolicy(
 
     public HostedRetentionPolicy {
         if (maxAuditEvents < MIN_AUDIT_EVENTS || maxAuditEvents > MAX_AUDIT_EVENTS) {
-            throw new IllegalArgumentException("maxAuditEvents must be between 100 and 100000");
+            throw new UsageException("maxAuditEvents must be between 100 and 100000");
         }
         if (auditRetentionDays < MIN_RETENTION_DAYS || auditRetentionDays > MAX_RETENTION_DAYS) {
-            throw new IllegalArgumentException("auditRetentionDays must be between 1 and 3650");
+            throw new UsageException("auditRetentionDays must be between 1 and 3650");
         }
         if (archivedWorkspaceRetentionDays < MIN_RETENTION_DAYS || archivedWorkspaceRetentionDays > MAX_RETENTION_DAYS) {
-            throw new IllegalArgumentException("archivedWorkspaceRetentionDays must be between 1 and 3650");
+            throw new UsageException("archivedWorkspaceRetentionDays must be between 1 and 3650");
         }
     }
 

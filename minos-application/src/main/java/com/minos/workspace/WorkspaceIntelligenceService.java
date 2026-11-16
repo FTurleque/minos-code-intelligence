@@ -11,6 +11,7 @@ import com.minos.registry.RegisteredWorkspace;
 import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -89,18 +90,18 @@ public final class WorkspaceIntelligenceService {
             if (found.isPresent()) return new WorkspaceLookup(workspace(found.orElseThrow()), List.of(), inventory.unreadableProjects());
             List<DegradedEntry> own = inventory.unreadableWorkspaces().stream().filter(degraded -> entry.equals(degraded.entry())).toList();
             if (!own.isEmpty()) throw UnreadableRegistryException.of(own, "this workspace cannot be read");
-            throw new IllegalArgumentException("Unknown workspace: " + workspaceIdentifier);
+            throw new UsageException("Unknown workspace: " + workspaceIdentifier);
         }
         List<RegisteredWorkspace> matches = inventory.workspaces().stream()
                 .filter(candidate -> candidate.name().equals(workspaceIdentifier)).toList();
-        if (matches.size() > 1) throw new IllegalArgumentException("Ambiguous workspace name: " + workspaceIdentifier);
+        if (matches.size() > 1) throw new UsageException("Ambiguous workspace name: " + workspaceIdentifier);
         if (matches.size() == 1) {
             return new WorkspaceLookup(workspace(matches.getFirst()), inventory.unreadableWorkspaces(), inventory.unreadableProjects());
         }
         if (!inventory.unreadableWorkspaces().isEmpty()) {
             throw UnreadableRegistryException.of(inventory.unreadableWorkspaces(), "it cannot be told whether this workspace exists");
         }
-        throw new IllegalArgumentException("Unknown workspace: " + workspaceIdentifier);
+        throw new UsageException("Unknown workspace: " + workspaceIdentifier);
     }
 
     public WorkspaceReport analyze(String workspaceIdentifier, int maxRelationships) throws IOException {
@@ -167,10 +168,10 @@ public final class WorkspaceIntelligenceService {
         requireText(identifier, "workspaceIdentifier");
         Optional<UUID> uuid = uuid(identifier);
         if (uuid.isPresent()) return registry.findWorkspace(uuid.orElseThrow())
-                .orElseThrow(() -> new IllegalArgumentException("Unknown workspace: " + identifier));
+                .orElseThrow(() -> new UsageException("Unknown workspace: " + identifier));
         List<RegisteredWorkspace> matches = registry.listWorkspaces().stream().filter(workspace -> workspace.name().equals(identifier)).toList();
-        if (matches.isEmpty()) throw new IllegalArgumentException("Unknown workspace: " + identifier);
-        if (matches.size() > 1) throw new IllegalArgumentException("Ambiguous workspace name: " + identifier);
+        if (matches.isEmpty()) throw new UsageException("Unknown workspace: " + identifier);
+        if (matches.size() > 1) throw new UsageException("Ambiguous workspace name: " + identifier);
         return matches.getFirst();
     }
 
@@ -183,7 +184,7 @@ public final class WorkspaceIntelligenceService {
                 workspace.createdAt().toString(), workspace.updatedAt().toString());
     }
 
-    private static void requireLimit(int value) { if (value < 1 || value > MAX_RELATIONSHIPS) throw new IllegalArgumentException("maxRelationships must be between 1 and " + MAX_RELATIONSHIPS); }
+    private static void requireLimit(int value) { if (value < 1 || value > MAX_RELATIONSHIPS) throw new UsageException("maxRelationships must be between 1 and " + MAX_RELATIONSHIPS); }
 
     public record WorkspaceView(String id, String name, List<String> projectIds, String createdAt, String updatedAt) {
         public WorkspaceView { projectIds = projectIds == null ? List.of() : List.copyOf(projectIds); }

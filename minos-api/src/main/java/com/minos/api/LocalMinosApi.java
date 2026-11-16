@@ -33,6 +33,7 @@ import com.minos.impact.ProjectImpactQuery;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -491,18 +492,18 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
             if (nullable) {
                 return null;
             }
-            throw new IllegalArgumentException(field + " must not be blank");
+            throw new UsageException(field + " must not be blank");
         }
         try {
             return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("unsupported " + field + ": " + value, exception);
+            throw new UsageException("unsupported " + field + ": " + value);
         }
     }
 
     private static void requireLimit(int value, String field) {
         if (value < 1 || value > 10_000) {
-            throw new IllegalArgumentException(field + " must be between 1 and 10000");
+            throw new UsageException(field + " must be between 1 and 10000");
         }
     }
 

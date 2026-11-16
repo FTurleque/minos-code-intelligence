@@ -1,5 +1,6 @@
 package com.minos.api;
 
+import com.minos.diagnostics.UsageException;
 import java.util.List;
 import java.util.Objects;
 
@@ -29,7 +30,7 @@ public interface SemanticCodeIntelligenceApi {
             requireText(query, "query");
             requireRange(limit, 1, 1000, "limit");
             if (!Double.isFinite(minimumScore) || minimumScore < -1.0 || minimumScore > 1.0) {
-                throw new IllegalArgumentException("minimumScore must be between -1 and 1");
+                throw new UsageException("minimumScore must be between -1 and 1");
             }
         }
     }
@@ -39,7 +40,7 @@ public interface SemanticCodeIntelligenceApi {
             requireText(query, "query");
             requireRange(limit, 1, 500, "limit");
             if (!Double.isFinite(minimumScore) || minimumScore < 0.0 || minimumScore > 1.0) {
-                throw new IllegalArgumentException("minimumScore must be between 0 and 1");
+                throw new UsageException("minimumScore must be between 0 and 1");
             }
         }
     }
@@ -195,7 +196,7 @@ public interface SemanticCodeIntelligenceApi {
 
     private static void requireRange(int value, int minimum, int maximum, String name) {
         if (value < minimum || value > maximum) {
-            throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
+            throw new UsageException(name + " must be between " + minimum + " and " + maximum);
         }
     }
 

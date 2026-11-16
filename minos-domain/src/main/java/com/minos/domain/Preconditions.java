@@ -1,5 +1,7 @@
 package com.minos.domain;
 
+import com.minos.diagnostics.UsageException;
+
 /**
  * Validations d'arguments partagées par tous les modules MINOS (Q13).
  *
@@ -23,7 +25,7 @@ public final class Preconditions {
      */
     public static String requireText(String value, String name) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
+            throw new UsageException(name + " must not be blank");
         }
         return value;
     }
