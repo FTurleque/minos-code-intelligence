@@ -108,19 +108,19 @@ Le job de verdict est le seul dont le nom est exigé ; il s'exécute dans tous l
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Le gate de preuve Docker rend un verdict sur toute pull request | Pull request hors portée | D2, diagramme | 2.1, 2.2 | `test_docker_gate.py` — à écrire |
-| idem | Pull request concernée dont la qualification échoue | D2 | 2.1, 2.2 | idem — à écrire |
-| idem | Saut injustifié | D2 | 2.1, 2.2 | idem — à écrire |
-| idem | Calcul de portée en échec | D2 | 2.1, 2.2 | idem — à écrire |
-| idem | Check exigé toujours joignable | D2 (E1) | 2.3 | `check-ci-wiring.py` ; run CI d'une PR documentaire — manquante jusqu'à 2.4 |
-| controles-de-fusion › Un job exigé qui attend d'autres jobs s'exécute quel que soit leur résultat | Job exigé sans la condition | D7 (E6) | 2.3 | `test_check_ci_wiring.py` — cas à écrire |
-| idem | Dépôt réel | D7 | 2.3 | `check-ci-wiring.py` |
-| idem | Job exigé sans dépendance | D7 | 2.3 | `test_check_ci_wiring.py` — cas à écrire |
-| controles-de-fusion › Une pull request n'échappe à la qualification Docker que par une liste fermée de chemins | Documentation seule | D3 | 2.1, 2.2 | `test_docker_gate.py` — à écrire |
-| idem | Un fichier de l'image parmi des documents | D3 | 2.1, 2.2 | idem — à écrire |
-| idem | Chemin absent de la liste | D3 | 2.1, 2.2 | idem — à écrire |
-| idem | Base introuvable ou déclenchement manuel | D3, D4 | 2.1, 2.2 | idem — à écrire |
-| idem | Liste élargie à un chemin de l'image | D3 | 2.1, 2.2 | idem — à écrire |
+| controles-de-fusion › Le gate de preuve Docker rend un verdict sur toute pull request | Pull request hors portée | D2, diagramme | 2.1, 2.2 | `test_docker_gate.py#VerdictTest.test_a_pull_request_out_of_scope_with_a_skipped_qualification_passes_for_that_reason` (rouge : le test ne se charge pas sans le script, `FileNotFoundError`) |
+| idem | Pull request concernée dont la qualification échoue | D2 | 2.1, 2.2 | `VerdictTest.test_a_concerned_pull_request_whose_qualification_fails_or_is_cancelled_fails` |
+| idem | Saut injustifié | D2 | 2.1, 2.2 | `VerdictTest.test_a_skip_that_the_scope_does_not_justify_fails` |
+| idem | Calcul de portée en échec | D2 | 2.1, 2.2 | `VerdictTest.test_a_scope_computation_that_did_not_succeed_fails_whatever_it_said`, `…test_an_empty_scope_is_treated_as_in_scope` |
+| idem | Check exigé toujours joignable | D2 (E1) | 2.3 | `check-ci-wiring.py` (8 contextes résolus) ; run CI d'une PR documentaire — **manquante** (tâche 2.4) |
+| controles-de-fusion › Un job exigé qui attend d'autres jobs s'exécute quel que soit leur résultat | Job exigé sans la condition | D7 (E6) | 2.3 | `test_check_ci_wiring.py#RequiredJobWithNeedsTest.test_a_required_job_with_needs_and_without_the_condition_is_refused` (rouge observé : 6 échecs avant la règle) |
+| idem | Dépôt réel | D7 | 2.3 | `check-ci-wiring.py` ; `RequiredJobWithNeedsTest.test_the_required_jobs_of_the_repository_that_wait_carry_the_condition` |
+| idem | Job exigé sans dépendance | D7 | 2.3 | `RequiredJobWithNeedsTest.test_a_required_job_without_needs_is_not_concerned` |
+| controles-de-fusion › Une pull request n'échappe à la qualification Docker que par une liste fermée de chemins | Documentation seule | D3 | 2.1, 2.2 | `ScopeTest.test_documentation_alone_is_out_of_scope`, `ChangedFilesTest.test_a_pull_request_that_only_changes_documents_is_out_of_scope` |
+| idem | Un fichier de l'image parmi des documents | D3 | 2.1, 2.2 | `ScopeTest.test_a_file_of_the_image_among_documents_puts_the_pull_request_in_scope`, `ChangedFilesTest.test_a_file_of_the_image_among_documents_is_in_scope` |
+| idem | Chemin absent de la liste | D3 | 2.1, 2.2 | `ScopeTest.test_a_path_the_list_does_not_name_is_in_scope`, `ChangedFilesTest.test_an_unknown_directory_is_in_scope` |
+| idem | Base introuvable ou déclenchement manuel | D3, D4 | 2.1, 2.2 | `ChangedFilesTest.test_an_empty_base_an_unknown_base_and_a_git_failure_are_in_scope`, `…test_a_manual_dispatch_is_in_scope` |
+| idem | Liste élargie à un chemin de l'image | D3 | 2.1, 2.2 | `ExclusionListTest.test_a_list_widened_to_a_path_of_the_image_is_refused_by_entry`, `…test_a_pattern_that_covers_a_pom_or_a_main_source_is_refused_by_entry` |
 
 ## Questions ouvertes
 
@@ -130,3 +130,13 @@ Le job de verdict est le seul dont le nom est exigé ; il s'exécute dans tous l
 ## Ordre de fusion
 
 Après `solder-les-restes-de-java-25-et-de-develop` (même fichier `release-promotion-gate.yml`) et après `separer-le-jeton-sonarcloud-de-la-compilation-de-la-pr` (même `check-workflow-pins.py`, autre table). Le job `changes` ajouté ici ne pose aucun `secrets.` dans son `env:`.
+
+## Écarts constatés à l'implémentation
+
+- **Décisions non prises, recommandations appliquées** : D1 (borner par portée) et la liste d'exclusion de D3 sont appliquées telles que le design les propose, sans la mesure de durée (1.1) ni la décision du propriétaire (1.2). Si le propriétaire retient « garder sur toute PR », ce changement se réduit par `/opsx:update` aux groupes 1 et 3.
+- **D5** : la lecture du diff n'est pas recopiée : `docker-gate.py` charge `changed_files` de `plugin-gate.py` par `importlib` (le gate des fonctions recopiées ne lit que les `.ps1`). `plugin-gate.py` est inchangé.
+- Un diff vide est « concerné » (aucun fichier ne prouve l'absence d'effet), en plus des cas du design.
+- **D6 / groupe 3 non faits** : l'entrée `DOCKER_LOGIN_KEPT` de `release-promotion-gate.yml` reste telle quelle ; elle exige la liste des images tirées sur un run réel (3.1) et, pour Dependabot, des secrets du dépôt (3.2).
+- Le verdict n'évalue pas la preuve : le pas suivant, `check-docker-upgrade-evidence.py`, ne s'exécute que si la portée n'est pas `false`. Le littéral exigé par `check-audit-remediation-v2.py` devient `needs: [changes, docker-upgrade-qualification]`.
+- Un check exigé qui déclare `needs:` sans `if:` à `always()` est refusé (règle 8 de `check-ci-wiring.py`) ; les deux jobs concernés du dépôt la portent.
+- Non mesuré : la durée de la qualification, tout run de CI (2.4), l'état du ruleset GitHub.
