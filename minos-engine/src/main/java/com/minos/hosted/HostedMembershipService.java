@@ -1,5 +1,6 @@
 package com.minos.hosted;
 
+import com.minos.diagnostics.UsageException;
 import java.io.IOException;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -80,7 +81,7 @@ final class HostedMembershipService {
         String safePrincipal = HostedPrincipal.safeId(principalId, "principalId");
         int existing = indexOf(context.state().members(), safePrincipal);
         if (existing < 0) {
-            throw new IllegalArgumentException("tenant member not found");
+            throw new UsageException("tenant member not found");
         }
         if (!context.principal().role().canGovern(context.state().members().get(existing).role())) {
             throw authorization.deny(context, "MEMBER_REVOKE", "PRINCIPAL", safePrincipal);
@@ -112,7 +113,7 @@ final class HostedMembershipService {
 
     private static void requireOwner(List<HostedPrincipal> members) {
         if (members.stream().noneMatch(value -> value.role() == HostedRole.OWNER)) {
-            throw new IllegalArgumentException("cannot remove or demote the last tenant owner");
+            throw new UsageException("cannot remove or demote the last tenant owner");
         }
     }
 }

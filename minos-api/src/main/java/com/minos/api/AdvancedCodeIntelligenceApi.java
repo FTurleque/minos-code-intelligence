@@ -1,5 +1,6 @@
 package com.minos.api;
 
+import com.minos.diagnostics.UsageException;
 import java.util.List;
 import java.util.Objects;
 
@@ -41,7 +42,7 @@ public interface AdvancedCodeIntelligenceApi {
 
     record SecurityQuery(String sourceNodeId, int maxDepth, int maxResults) {
         public SecurityQuery {
-            if (sourceNodeId != null && sourceNodeId.isBlank()) throw new IllegalArgumentException("sourceNodeId must be null or non-blank");
+            if (sourceNodeId != null && sourceNodeId.isBlank()) throw new UsageException("sourceNodeId must be null or non-blank");
             requireRange(maxDepth, 1, 32, "maxDepth");
             requireRange(maxResults, 1, 1000, "maxResults");
         }
@@ -161,7 +162,7 @@ public interface AdvancedCodeIntelligenceApi {
 
     private static void requireRange(int value, int minimum, int maximum, String name) {
         if (value < minimum || value > maximum) {
-            throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
+            throw new UsageException(name + " must be between " + minimum + " and " + maximum);
         }
     }
 

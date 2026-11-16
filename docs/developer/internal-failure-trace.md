@@ -43,3 +43,23 @@ de ligne.
 par surface branchée (`MinosMcpInternalFailureTraceTest`, `CliInternalFailureTraceTest`,
 `MinosApiInternalFailureTraceTest`, `WslLinuxWorkerDiagnosticTest`, `WslIndexWorkerDiagnosticTest`). Capturer les
 journaux par `LogCapture` (`minos-engine`, `com.minos.testsupport`).
+
+## Erreur d'usage ou échec interne : `UsageException`
+
+Une surface (MCP, API Java) ne rend un message d'argument à son appelant que pour une `UsageException`
+(`minos-domain`, `com.minos.diagnostics`), sous-classe non finale d'`IllegalArgumentException` : toute autre
+`IllegalArgumentException` levée pendant l'appel, sous-classes du JDK comprises (`NumberFormatException`,
+`InvalidPathException`, `PatternSyntaxException`), est un défaut interne, rendu opaque et tracé comme ci-dessus.
+
+- Lever `UsageException` dans la validation d'une entrée de l'appelant : message non vide, qui nomme l'argument, **sans
+  cause** (une cause fait traiter l'erreur comme interne) et sans recopier une valeur qui pourrait être un chemin ou un
+  secret. Les surfaces filtrent encore le message par `PublicErrorMessages`.
+- Lever une `IllegalArgumentException` simple pour un invariant interne : c'est un défaut, jamais un conseil à l'appelant.
+- Une erreur d'usage typée hérite de `UsageException` (`DocumentNotFoundException`) ; un refus attendu qui n'est pas une
+  erreur d'argument reste une `IllegalStateException` dédiée (`IndexChangedException`), que l'API Java rend `UNAVAILABLE`
+  sans la tracer.
+- Un `catch (IllegalArgumentException …)` existant reste valide : le type est un sous-type.
+
+Une validation atteignable depuis un outil ou une méthode publique et restée en `IllegalArgumentException` simple devient
+une erreur générique côté MCP et `EXECUTION_FAILURE` côté API : les tests `MinosMcpUsageErrorTest` et
+`MinosApiUsageErrorTest` tiennent la table des entrées invalides documentées.

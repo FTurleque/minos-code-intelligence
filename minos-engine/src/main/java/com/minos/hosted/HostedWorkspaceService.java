@@ -1,5 +1,6 @@
 package com.minos.hosted;
 
+import com.minos.diagnostics.UsageException;
 import java.io.IOException;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -51,7 +52,7 @@ final class HostedWorkspaceService {
         }
         String safeName = HostedPrincipal.text(name, "workspace name", 256);
         if (context.state().workspaces().stream().anyMatch(value -> value.name().equalsIgnoreCase(safeName))) {
-            throw new IllegalArgumentException("workspace name already exists in tenant");
+            throw new UsageException("workspace name already exists in tenant");
         }
         var now = clock.instant();
         SharedWorkspace created = new SharedWorkspace(
@@ -118,7 +119,7 @@ final class HostedWorkspaceService {
         SharedWorkspace workspace = requireActiveWorkspace(context.state(), workspaceId);
         bindingVerifier.requireSnapshot(projectId, snapshotId);
         if (workspace.bindings().stream().anyMatch(value -> value.projectId().equals(projectId))) {
-            throw new IllegalArgumentException("project is already bound to workspace");
+            throw new UsageException("project is already bound to workspace");
         }
         HostedProjectBinding binding = new HostedProjectBinding(
                 projectId, snapshotId, clock.instant(), context.claims().principalId());
@@ -152,7 +153,7 @@ final class HostedWorkspaceService {
                 .filter(value -> !value.projectId().equals(projectId))
                 .toList();
         if (bindings.size() == workspace.bindings().size()) {
-            throw new IllegalArgumentException("project binding not found");
+            throw new UsageException("project binding not found");
         }
         SharedWorkspace updated = new SharedWorkspace(
                 workspace.workspaceId(), workspace.tenantId(), workspace.name(), workspace.status(),
@@ -174,7 +175,7 @@ final class HostedWorkspaceService {
         return state.workspaces().stream()
                 .filter(value -> value.workspaceId().equals(workspaceId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new UsageException(
                         "workspace not found in authenticated tenant"));
     }
 

@@ -10,6 +10,7 @@ import com.minos.application.team.TeamRetentionPolicy;
 import com.minos.application.team.TeamRole;
 import com.minos.application.team.TeamTenant;
 import com.minos.application.team.TeamWorkspace;
+import com.minos.diagnostics.UsageException;
 
 import java.time.Duration;
 import java.util.List;
@@ -104,13 +105,15 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
         });
     }
 
-    private TeamControlPlane teamControlPlane() {
-        return service.orElseThrow(() -> new IllegalStateException("MINOS team mode is disabled"));
+    private TeamControlPlane teamControlPlane() throws MinosApi.MinosApiException {
+        // Classified by the facade itself: an expected unavailability, not an internal failure to trace.
+        return service.orElseThrow(() -> new MinosApi.MinosApiException(
+                MinosApi.ErrorCode.UNAVAILABLE, "MINOS team mode is disabled"));
     }
     private static TeamRole role(String value) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("role must not be blank");
+        if (value == null || value.isBlank()) throw new UsageException("role must not be blank");
         try { return TeamRole.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT)); }
-        catch (IllegalArgumentException exception) { throw new IllegalArgumentException("unsupported hosted role: " + value, exception); }
+        catch (IllegalArgumentException exception) { throw new UsageException("unsupported hosted role: " + value); }
     }
     private static TenantDto tenantDto(TeamTenant value) {
         return new TenantDto(value.tenantId(), value.name(), value.keyId(), value.version(), value.createdAt().toString(),

@@ -5,9 +5,12 @@ import com.minos.api.MinosApi.MinosApiException;
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosHome;
 import com.minos.application.diagnostics.InternalFailureReporter;
+import com.minos.application.semantic.SemanticCorpusQueryService;
+import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.InternalFailureTrace;
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.lang.System.Logger.Level;
@@ -101,8 +104,12 @@ final class MinosApiSupport {
             throw publicFailure(ErrorCode.ACCESS_DENIED, exception);
         } catch (ProjectResolver.ResolutionException exception) {
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception.publicMessage(), exception);
-        } catch (IllegalArgumentException exception) {
+        } catch (UsageException exception) {
+            // The one argument error raised on purpose for the caller (an unknown document included).
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception);
+        } catch (IllegalArgumentException exception) {
+            // A precondition violated inside a service is a defect, not advice to the caller.
+            throw publicFailure(ErrorCode.EXECUTION_FAILURE, exception);
         } catch (IllegalStateException exception) {
             throw publicFailure(ErrorCode.UNAVAILABLE, exception);
         } catch (IOException exception) {
@@ -150,7 +157,7 @@ final class MinosApiSupport {
 
     static <T> T required(T value, String field) {
         if (value == null) {
-            throw new IllegalArgumentException(field + " must not be null");
+            throw new UsageException(field + " must not be null");
         }
         return value;
     }
@@ -219,14 +226,27 @@ final class MinosApiSupport {
      * values may contain credentials, absolute paths or other private deployment details.
      */
     private static void logFailure(ErrorCode code, Exception exception) {
-        if (code == ErrorCode.EXECUTION_FAILURE || code == ErrorCode.IO_FAILURE) {
+        if (isTraced(code, exception)) {
             // An execution or I/O failure is internal: the line names the origin and a reference, and the private
             // journal, when enabled, keeps the stack under that reference. The caller still gets no cause.
             InternalFailureTrace trace = failureReporter().report(code.name(), exception);
             LOGGER.log(Level.WARNING, trace.line(TRACED_FAILURE_SUBJECT, "code", code.name()));
             return;
         }
+        if (code == ErrorCode.INVALID_REQUEST || isExpectedUnavailability(exception)) return;
         LOGGER.log(Level.WARNING, diagnosticSummary(code, exception));
+    }
+
+    /** An execution or I/O failure, and an unavailability that is not a refusal the service expects. */
+    private static boolean isTraced(ErrorCode code, Exception exception) {
+        return code == ErrorCode.EXECUTION_FAILURE || code == ErrorCode.IO_FAILURE
+                || (code == ErrorCode.UNAVAILABLE && !isExpectedUnavailability(exception));
+    }
+
+    /** The index replaced during a read and a refused preparation: unavailability the caller is told, not a defect. */
+    private static boolean isExpectedUnavailability(Exception exception) {
+        return exception instanceof SemanticCorpusQueryService.IndexChangedException
+                || exception instanceof SemanticProjectionService.RefusedException;
     }
 
     /** Package-private for deterministic tests of the no-secret logging invariant. */

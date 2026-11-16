@@ -236,7 +236,7 @@ class MinosMcpToolsTest {
     @Test
     void returnsApplicationFailuresAsRecoverableToolErrors() {
         RecordingBackend backend = new RecordingBackend();
-        backend.statusFailure = new IllegalArgumentException("invalid input");
+        backend.statusFailure = new com.minos.diagnostics.UsageException("invalid input");
         MinosMcpTools tools = new MinosMcpTools(backend);
         var result = spec(tools.specifications(), "minos_index_status").callHandler().apply(null,
                 CallToolRequest.builder("minos_index_status").arguments(Map.of("project", "missing")).build());

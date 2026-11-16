@@ -82,7 +82,7 @@ class MinosApiInternalFailureTraceTest {
         try (LogCapture log = new LogCapture(MinosApiSupport.class)) {
             MinosApiException failure = assertThrows(MinosApiException.class,
                     () -> MinosApiSupport.execute(() -> {
-                        throw new IllegalArgumentException("limit must be positive");
+                        throw new com.minos.diagnostics.UsageException("limit must be positive");
                     }));
 
             assertEquals(ErrorCode.INVALID_REQUEST, failure.code());

@@ -8,6 +8,7 @@ import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
 import com.minos.output.json.DeterministicJson;
 import com.minos.domain.registry.UnreadableRegistryException;
+import com.minos.diagnostics.UsageException;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
@@ -207,7 +208,9 @@ public final class MinosMcpTools implements AutoCloseable {
         } catch (UnreadableRegistryException exception) {
             // Its message only counts the unreadable entries and names the consequence: no path, no file content.
             return toolError("error: " + PublicErrorMessages.sanitize(exception.getMessage(), "registry entries are unreadable"));
-        } catch (IllegalArgumentException exception) {
+        } catch (UsageException exception) {
+            // Only an error that the caller can correct, raised on purpose, is reported as an argument error: any
+            // other IllegalArgumentException is a defect inside a service and takes the internal route below.
             return toolError(clientError(toolName, exception));
         } catch (Exception exception) {
             if (exception instanceof McpClientFailure failure) {
@@ -251,7 +254,7 @@ public final class MinosMcpTools implements AutoCloseable {
                 .build();
     }
 
-    private String clientError(String toolName, IllegalArgumentException exception) {
+    private String clientError(String toolName, UsageException exception) {
         if (exception.getCause() != null) return internalFailure(toolName, exception);
         String message = exception.getMessage();
         if (message == null || message.isBlank()) return "error: invalid MCP argument";
@@ -316,7 +319,7 @@ public final class MinosMcpTools implements AutoCloseable {
         String format = stringValue(args.get("format"), "json", "format", McpArgumentBounds.SMALL_TOKEN_MAX_UTF8_BYTES)
                 .toLowerCase(Locale.ROOT);
         if (!ARCHITECTURE_GRAPH_FORMATS.contains(format)) {
-            throw new IllegalArgumentException("unsupported architecture graph format: " + format);
+            throw new UsageException("unsupported architecture graph format: " + format);
         }
         return new MinosMcpBackend.ArchitectureGraphRequest(requiredProject(args), optionalModule(args), format);
     }
@@ -403,7 +406,7 @@ public final class MinosMcpTools implements AutoCloseable {
     private static String required(Map<String, Object> args, String key, int maxUtf8Bytes) {
         Object value = args.get(key);
         if (!(value instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("missing required MCP argument: " + key);
+            throw new UsageException("missing required MCP argument: " + key);
         }
         return bounded(key, text, maxUtf8Bytes);
     }
@@ -412,7 +415,7 @@ public final class MinosMcpTools implements AutoCloseable {
         Object value = args.get(key);
         if (value == null) return null;
         if (!(value instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("MCP argument " + key + " must be a non-blank string");
+            throw new UsageException("MCP argument " + key + " must be a non-blank string");
         }
         return bounded(key, text, maxUtf8Bytes);
     }
@@ -424,7 +427,7 @@ public final class MinosMcpTools implements AutoCloseable {
      */
     private static String bounded(String key, String text, int maxUtf8Bytes) {
         if (exceedsUtf8Budget(text, maxUtf8Bytes)) {
-            throw new IllegalArgumentException(
+            throw new UsageException(
                     "MCP argument " + key + " exceeds UTF-8 byte limit: " + maxUtf8Bytes);
         }
         return text;
@@ -433,12 +436,12 @@ public final class MinosMcpTools implements AutoCloseable {
     private static Integer optionalInteger(Map<String, Object> args, String key, int minimum, int maximum) {
         Object value = args.get(key);
         if (value == null) return null;
-        if (!(value instanceof Number number)) throw new IllegalArgumentException("MCP argument " + key + " must be an integer");
+        if (!(value instanceof Number number)) throw new UsageException("MCP argument " + key + " must be an integer");
         double raw = number.doubleValue();
         int parsed = number.intValue();
-        if (!Double.isFinite(raw) || raw != parsed) throw new IllegalArgumentException("MCP argument " + key + " must be an integer");
+        if (!Double.isFinite(raw) || raw != parsed) throw new UsageException("MCP argument " + key + " must be an integer");
         if (parsed < minimum || parsed > maximum) {
-            throw new IllegalArgumentException("MCP argument " + key + " must be between " + minimum + " and " + maximum);
+            throw new UsageException("MCP argument " + key + " must be between " + minimum + " and " + maximum);
         }
         return parsed;
     }
@@ -446,10 +449,10 @@ public final class MinosMcpTools implements AutoCloseable {
     private static Double optionalDouble(Map<String, Object> args, String key, double minimum, double maximum) {
         Object value = args.get(key);
         if (value == null) return null;
-        if (!(value instanceof Number number)) throw new IllegalArgumentException("MCP argument " + key + " must be numeric");
+        if (!(value instanceof Number number)) throw new UsageException("MCP argument " + key + " must be numeric");
         double parsed = number.doubleValue();
         if (!Double.isFinite(parsed) || parsed < minimum || parsed > maximum) {
-            throw new IllegalArgumentException("MCP argument " + key + " must be between " + minimum + " and " + maximum);
+            throw new UsageException("MCP argument " + key + " must be between " + minimum + " and " + maximum);
         }
         return parsed;
     }
@@ -457,14 +460,14 @@ public final class MinosMcpTools implements AutoCloseable {
     private static boolean optionalBoolean(Map<String, Object> args, String key, boolean defaultValue) {
         Object value = args.get(key);
         if (value == null) return defaultValue;
-        if (!(value instanceof Boolean flag)) throw new IllegalArgumentException("MCP argument " + key + " must be a boolean");
+        if (!(value instanceof Boolean flag)) throw new UsageException("MCP argument " + key + " must be a boolean");
         return flag;
     }
 
     private static String stringValue(Object value, String defaultValue, String key, int maxUtf8Bytes) {
         if (value == null) return defaultValue;
         if (!(value instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("MCP argument " + key + " must be a non-blank string");
+            throw new UsageException("MCP argument " + key + " must be a non-blank string");
         }
         return bounded(key, text, maxUtf8Bytes);
     }
@@ -481,7 +484,7 @@ public final class MinosMcpTools implements AutoCloseable {
                 .ifPresent(key -> {
                     String shown = key.length() > MAX_ARGUMENT_NAME_CHARS
                             ? key.substring(0, MAX_ARGUMENT_NAME_CHARS) + "..." : key;
-                    throw new IllegalArgumentException("unknown MCP argument: " + shown);
+                    throw new UsageException("unknown MCP argument: " + shown);
                 });
     }
 

@@ -14,6 +14,7 @@ import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.cache.WeightedLruCache;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -241,7 +242,7 @@ public final class SemanticCorpusQueryService {
     public Neighbors neighbors(String projectReference, String stableKey, int limit) throws IOException {
         requireStableKey(stableKey);
         if (limit < 1 || limit > MAX_NEIGHBORS) {
-            throw new IllegalArgumentException("limit must be between 1 and " + MAX_NEIGHBORS);
+            throw new UsageException("limit must be between 1 and " + MAX_NEIGHBORS);
         }
         RegisteredProject project = projects.resolve(projectReference);
         String projectId = project.id().toString();
@@ -384,7 +385,7 @@ public final class SemanticCorpusQueryService {
         try {
             return SemanticDocumentKind.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException unknown) {
-            throw new IllegalArgumentException("kind must be SYMBOL, CHUNK or FILE");
+            throw new UsageException("kind must be SYMBOL, CHUNK or FILE");
         }
     }
 
@@ -419,17 +420,17 @@ public final class SemanticCorpusQueryService {
     }
 
     private static void requireStableKey(String stableKey) {
-        if (stableKey == null || stableKey.isBlank()) throw new IllegalArgumentException("stableKey must not be blank");
+        if (stableKey == null || stableKey.isBlank()) throw new UsageException("stableKey must not be blank");
         if (stableKey.getBytes(StandardCharsets.UTF_8).length > MAX_STABLE_KEY_UTF8_BYTES) {
-            throw new IllegalArgumentException("stableKey exceeds " + MAX_STABLE_KEY_UTF8_BYTES + " UTF-8 bytes");
+            throw new UsageException("stableKey exceeds " + MAX_STABLE_KEY_UTF8_BYTES + " UTF-8 bytes");
         }
     }
 
     private static String requireFilter(String value, String name) {
         if (value == null) return null;
-        if (value.isBlank()) throw new IllegalArgumentException(name + " must be absent or non-blank");
+        if (value.isBlank()) throw new UsageException(name + " must be absent or non-blank");
         if (value.getBytes(StandardCharsets.UTF_8).length > MAX_FILTER_UTF8_BYTES) {
-            throw new IllegalArgumentException(name + " exceeds " + MAX_FILTER_UTF8_BYTES + " UTF-8 bytes");
+            throw new UsageException(name + " exceeds " + MAX_FILTER_UTF8_BYTES + " UTF-8 bytes");
         }
         return value;
     }
@@ -444,7 +445,7 @@ public final class SemanticCorpusQueryService {
     }
 
     /** The index holds no document under the requested stable key. */
-    public static final class DocumentNotFoundException extends IllegalArgumentException {
+    public static final class DocumentNotFoundException extends UsageException {
         private static final long serialVersionUID = 1L;
 
         public DocumentNotFoundException() {
@@ -504,10 +505,10 @@ public final class SemanticCorpusQueryService {
                                    String language, String filePrefix) {
         public DocumentsRequest {
             if (limit < 1 || limit > MAX_PAGE_SIZE) {
-                throw new IllegalArgumentException("limit must be between 1 and " + MAX_PAGE_SIZE);
+                throw new UsageException("limit must be between 1 and " + MAX_PAGE_SIZE);
             }
             if (cursor != null && (cursor.isBlank() || cursor.length() > MAX_CURSOR_CHARACTERS)) {
-                throw new IllegalArgumentException("cursor is not valid");
+                throw new UsageException("cursor is not valid");
             }
             module = requireFilter(module, "module");
             language = requireFilter(language, "language");
@@ -580,7 +581,7 @@ public final class SemanticCorpusQueryService {
             try {
                 return valueOf(value.toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException unknown) {
-                throw new IllegalArgumentException("mode must be semantic or hybrid");
+                throw new UsageException("mode must be semantic or hybrid");
             }
         }
     }
@@ -600,18 +601,18 @@ public final class SemanticCorpusQueryService {
                                 SemanticDocumentKind kind, String module, String language, String filePrefix) {
         public SearchRequest {
             Objects.requireNonNull(mode, "mode");
-            if (query == null || query.isBlank()) throw new IllegalArgumentException("query must not be blank");
+            if (query == null || query.isBlank()) throw new UsageException("query must not be blank");
             if (query.getBytes(StandardCharsets.UTF_8).length > SemanticSearchService.MAX_QUERY_UTF8_BYTES) {
-                throw new IllegalArgumentException(
+                throw new UsageException(
                         "query exceeds " + SemanticSearchService.MAX_QUERY_UTF8_BYTES + " UTF-8 bytes");
             }
             int maximum = mode == SearchMode.SEMANTIC ? SemanticSearchService.MAX_RESULTS : HybridSearchService.MAX_RESULTS;
             if (limit < 1 || limit > maximum) {
-                throw new IllegalArgumentException("limit must be between 1 and " + maximum);
+                throw new UsageException("limit must be between 1 and " + maximum);
             }
             double lowest = mode == SearchMode.SEMANTIC ? -1.0 : 0.0;
             if (!Double.isFinite(minimumScore) || minimumScore < lowest || minimumScore > 1.0) {
-                throw new IllegalArgumentException(
+                throw new UsageException(
                         "minimumScore must be between " + (mode == SearchMode.SEMANTIC ? "-1" : "0") + " and 1");
             }
             module = requireFilter(module, "module");
@@ -689,10 +690,10 @@ public final class SemanticCorpusQueryService {
             try {
                 decoded = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
             } catch (IllegalArgumentException invalid) {
-                throw new IllegalArgumentException("cursor is not valid");
+                throw new UsageException("cursor is not valid");
             }
             if (decoded.length() <= TOKEN_LENGTH || decoded.substring(TOKEN_LENGTH).isBlank()) {
-                throw new IllegalArgumentException("cursor is not valid");
+                throw new UsageException("cursor is not valid");
             }
             return new Cursor(decoded.substring(0, TOKEN_LENGTH), decoded.substring(TOKEN_LENGTH));
         }
