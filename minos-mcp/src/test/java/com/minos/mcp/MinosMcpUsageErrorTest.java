@@ -52,6 +52,10 @@ class MinosMcpUsageErrorTest {
                     arguments("project", "p", "query", "q", "minimumScore", "high"), "must be numeric"),
             new Invalid("score out of range", "minos_semantic_search",
                     arguments("project", "p", "query", "q", "minimumScore", 7), "must be between"),
+            new Invalid("optional text left blank", "minos_find_symbols",
+                    arguments("project", "p", "query", "q", "qualifiedName", " "), "must be a non-blank string"),
+            new Invalid("graph format of the wrong type", "minos_architecture_graph",
+                    arguments("project", "p", "format", 12), "must be a non-blank string"),
             new Invalid("project of the wrong type", "minos_index_status", arguments("project", 12),
                     "missing required MCP argument: project"));
 

@@ -101,6 +101,16 @@ class RuntimeIntelligenceServiceTest {
     }
 
     @Test
+    void aLimitOutOfBoundsIsAUsageError(@TempDir Path root) throws Exception {
+        Fixture fixture = fixture(root);
+
+        assertThrows(com.minos.diagnostics.UsageException.class,
+                () -> fixture.service().listSessions("runtime-fixture", 0));
+        assertThrows(com.minos.diagnostics.UsageException.class,
+                () -> fixture.service().report("runtime-fixture", "run-1", 0));
+    }
+
+    @Test
     void rejectsProjectAndSnapshotMisalignmentAndStaleSessionQueries(@TempDir Path root) throws Exception {
         Fixture fixture = fixture(root);
         RuntimeObservationEnvelopeCodec codec = new RuntimeObservationEnvelopeCodec();

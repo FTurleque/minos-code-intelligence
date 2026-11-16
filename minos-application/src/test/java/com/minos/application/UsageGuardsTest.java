@@ -1,6 +1,7 @@
 package com.minos.application;
 
 import com.minos.application.semantic.HybridContextBuilder.ContextRequest;
+import com.minos.application.semantic.SemanticCorpusQueryService;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.diagnostics.UsageException;
 import com.minos.domain.SymbolSearchCriteria;
@@ -29,6 +30,12 @@ class UsageGuardsTest {
         assertThrows(UsageException.class, () -> new CodeSearchCriteria(symbols, 1, 1, 99_999, 1, 1_024, false));
         assertThrows(UsageException.class, () -> new CodeSearchCriteria(symbols, 1, 1, 1, 999, 1_024, false));
         assertThrows(UsageException.class, () -> new CodeSearchCriteria(symbols, 1, 1, 1, 1, 1, false));
+    }
+
+    @Test
+    void anUnknownKindOrSearchModeIsAUsageError() {
+        assertThrows(UsageException.class, () -> SemanticCorpusQueryService.parseKind("folder"));
+        assertThrows(UsageException.class, () -> SemanticCorpusQueryService.SearchMode.parse("keyword"));
     }
 
     @Test
