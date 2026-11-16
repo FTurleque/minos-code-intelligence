@@ -70,6 +70,46 @@ def check_remote_repository_sources() -> None:
            'setProperty("credential', "System.out", "System.err", "LOGGER", "logger")
 
 
+OPENING_FILE = "minos-integration-git/src/main/java/com/minos/integration/git/TrustedRepositoryOpening.java"
+GIT_MAIN_SOURCES = "minos-integration-git/src/main/java"
+
+
+# Other ways to open or create a JGit repository, matched across whitespace and line breaks.
+OPENING_PATTERNS = (
+    (r"\bGit\s*\.\s*(?:open|init|wrap)\s*\(", "Git.init("),
+    (r"\bnew\s+(?:FileRepository|RepositoryBuilder)\b", "new FileRepository("),
+    (r"(?<![A-Za-z])RepositoryCache(?![A-Za-z])", "RepositoryCache"),
+)
+
+
+def check_single_repository_opening() -> None:
+    """A repository analysed or materialized by the Git adapter is opened by the trusted opening and nowhere else.
+
+    The trusted opening checks the owner and sets every filter driver aside (SEC-0083). Every other main source of
+    the module is read, so a file added later is covered; the opening itself is the one exemption, and it must
+    still build the repository and expose both policies.
+    """
+    require_facts("TrustedRepositoryOpening.java", read(OPENING_FILE),
+                  "new FileRepositoryBuilder", "openContaining", "openExact", "FilterPolicy.EVERY_DRIVER",
+                  "useJGitBuiltin")
+    base = "minos-integration-git/src/main/java/com/minos/integration/git/"
+    require_facts("GitIntelligenceService.java", read(base + "GitIntelligenceService.java"), "opening.openContaining",
+                  "setIgnoreSubmodules(IgnoreSubmoduleMode.ALL)", "SUBMODULES_NOT_ANALYSED")
+    require_facts("JGitRemoteRepositoryMaterializer.java", read(base + "JGitRemoteRepositoryMaterializer.java"),
+                  "opening.openExact", "setIgnoreSubmodules(IgnoreSubmoduleMode.ALL)")
+    require_facts("JGitRemoteGitClient.java", read(base + "JGitRemoteGitClient.java"),
+                  "setNoCheckout(true)", "opening.openExact")
+    for path in sorted((ROOT / GIT_MAIN_SOURCES).rglob("*.java")):
+        relative = path.relative_to(ROOT).as_posix()
+        if relative != OPENING_FILE:
+            text = read(relative)
+            forbid(relative, text, "Git.open(", "new FileRepositoryBuilder")
+            for pattern, witness in OPENING_PATTERNS:
+                literal_gate.forbid_pattern(
+                    relative, text, pattern,
+                    f"{relative}: a repository is opened outside the trusted opening: {witness}", witness)
+
+
 def check_distributed_worker_sources() -> None:
     """Verified worker artifacts: manifest, bundle store, isolated worker and the coordinator that checks both."""
     manifest = read("minos-engine/src/main/java/com/minos/remote/DistributedArtifactManifest.java")
@@ -242,6 +282,7 @@ def check_documents() -> None:
 def evaluate() -> str:
     """Assert the facts of the gate; return its success message."""
     check_remote_repository_sources()
+    check_single_repository_opening()
     check_distributed_worker_sources()
     check_remote_indexing_wiring()
     check_tests()
