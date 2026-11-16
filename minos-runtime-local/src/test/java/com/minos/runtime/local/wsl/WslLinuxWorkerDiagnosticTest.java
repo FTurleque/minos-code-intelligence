@@ -39,13 +39,12 @@ class WslLinuxWorkerDiagnosticTest {
     @TempDir Path temp;
     private Path home;
     private Path exchange;
-    private Path project;
 
     @BeforeEach
     void layout() throws IOException {
         home = Files.createDirectories(temp.resolve("distribution-home"));
         exchange = Files.createDirectories(temp.resolve("exchange"));
-        project = Files.createDirectories(temp.resolve("project"));
+        Files.createDirectories(temp.resolve("project"));
     }
 
     @Test

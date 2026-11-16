@@ -52,7 +52,7 @@ class CliInternalFailureTraceTest {
     }
 
     @Test
-    void withoutTheSettingTheOutputIsUnchangedAndNothingIsWritten() throws Exception {
+    void withoutTheSettingTheOutputIsUnchangedAndNothingIsWritten() {
         Launch launch = launch(false, failingCommand(new IllegalStateException("boom")));
 
         assertEquals(1, launch.exit());

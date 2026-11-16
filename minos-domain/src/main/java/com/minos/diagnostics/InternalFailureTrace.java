@@ -215,7 +215,7 @@ public final class InternalFailureTrace implements DiagnosticEntry {
     private static String label(String value, String fallbackName) {
         if (value == null || value.isBlank() || value.length() > MAX_OPERATION_CHARS
                 || !PLAIN_LABEL.matcher(value).matches() || PublicErrorMessages.looksSensitive(value)) {
-            return "surface".equals(fallbackName) ? "unknown" : UNNAMED_OPERATION;
+            return "surface".equals(fallbackName) ? UNKNOWN_ORIGIN : UNNAMED_OPERATION;
         }
         return value;
     }

@@ -17,6 +17,7 @@ import java.lang.System.Logger.Level;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Shared argument checks and failure translation for the local MINOS API facades.
@@ -49,34 +50,34 @@ final class MinosApiSupport {
     private static final String TRACED_FAILURE_SUBJECT = "MINOS API call failed internally";
 
     /** Null until a home is opened by path or the first traced failure resolves the process home. */
-    private static volatile InternalFailureReporter failureReporter;
+    private static final AtomicReference<InternalFailureReporter> FAILURE_REPORTER = new AtomicReference<>();
 
     private MinosApiSupport() {
     }
 
     /** Traces the internal failures of the facades under {@code home} from now on. */
     static void bindFailureReporter(Path home) {
-        failureReporter = new InternalFailureReporter(
-                "api", Objects.requireNonNull(home, "home"), System.getenv(), System.getProperties());
+        FAILURE_REPORTER.set(new InternalFailureReporter(
+                "api", Objects.requireNonNull(home, "home"), System.getenv(), System.getProperties()));
     }
 
     /** Replaces the reporter, for deterministic tests. */
     static void useFailureReporter(InternalFailureReporter reporter) {
-        failureReporter = reporter;
+        FAILURE_REPORTER.set(reporter);
     }
 
     private static InternalFailureReporter failureReporter() {
-        InternalFailureReporter bound = failureReporter;
+        InternalFailureReporter bound = FAILURE_REPORTER.get();
         if (bound != null) return bound;
         synchronized (MinosApiSupport.class) {
-            if (failureReporter == null) {
+            if (FAILURE_REPORTER.get() == null) {
                 try {
                     bindFailureReporter(MinosHome.resolve(System.getenv(), System.getProperties()));
                 } catch (IllegalStateException noHome) {
-                    failureReporter = InternalFailureReporter.withoutJournal("api");
+                    FAILURE_REPORTER.set(InternalFailureReporter.withoutJournal("api"));
                 }
             }
-            return failureReporter;
+            return FAILURE_REPORTER.get();
         }
     }
 
@@ -141,9 +142,8 @@ final class MinosApiSupport {
             ApplicationOpener opener
     ) throws MinosApiException {
         try {
-            MinosApplication opened = opener.open(Objects.requireNonNull(home, "home"));
-            bindFailureReporter(home);
-            return opened;
+            bindFailureReporter(Objects.requireNonNull(home, "home"));
+            return opener.open(home);
         } catch (IOException exception) {
             throw publicFailure(ErrorCode.IO_FAILURE, bootstrapFailureMessage, exception);
         } catch (IllegalArgumentException exception) {
