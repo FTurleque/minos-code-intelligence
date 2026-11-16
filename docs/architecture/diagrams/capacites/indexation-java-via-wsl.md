@@ -216,6 +216,25 @@ run, et supprime l'échange privé côté Windows (`WslIndexWorker.java:197-230`
 répertoire de run de la distribution dans tous les cas (`WslLinuxWorker.java:117-121`) : la distribution ne garde
 ni promotion ni rétention.
 
+### Par où passe le diagnostic d'un échec du worker WSL ?
+
+Type : flowchart · Portée : existant vérifié par tests unitaires des deux côtés (aucune vraie distribution) · Exigences :
+changement `tracer-les-echecs-internes-des-surfaces` › « Un échec interne du worker WSL transmet un diagnostic structuré
+et vérifié » (décision [SEC-0084](../../adr/SEC-0084-journal-de-diagnostic-prive-et-opt-in-des-echecs-internes.md))
+
+```mermaid
+flowchart LR
+    W["WslLinuxWorker (distribution)"] -->|"stdout : DIAGNOSTIC puis FAILED"| X["wsl.exe"]
+    X --> I["WslIndexWorker (Windows)"]
+    I --> G{"ligne conforme à la grammaire de WorkerDiagnostic ?"}
+    G -- oui --> L["ligne stderr + journal privé de l'installation"]
+    G -- non --> D["ligne ignorée"]
+    I --> S["échec public : distribution + référence"]
+```
+
+Le stderr du worker reste jeté ; le diagnostic voyage par le canal déjà lu, après validation stricte. Aucun journal n'est
+écrit dans la distribution. La preuve sur une vraie distribution reste manuelle.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

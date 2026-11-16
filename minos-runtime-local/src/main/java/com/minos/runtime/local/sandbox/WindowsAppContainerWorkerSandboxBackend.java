@@ -36,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.UnaryOperator;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /**
@@ -761,24 +762,39 @@ public final class WindowsAppContainerWorkerSandboxBackend implements OsEnforced
      * sandbox beyond the toolchain it is supposed to name.
      */
     private static boolean isOverBroadGrant(Path directory) {
+        return isOverBroadGrant(directory, System::getenv);
+    }
+
+    /** The guard with an injectable environment reader, so the answer is testable without touching the JVM's. */
+    static boolean isOverBroadGrant(Path directory, UnaryOperator<String> environment) {
         if (directory.getNameCount() < 2) return true;
         for (String key : OVER_BROAD_GRANT_KEYS) {
-            String raw = System.getenv(key);
+            String raw = environment.apply(key);
             if (raw == null || raw.isBlank()) continue;
             try {
                 if (Path.of(raw).toAbsolutePath().normalize().startsWith(directory)) return true;
-            } catch (RuntimeException ignored) {
-                // An unparseable broad location cannot be compared and constrains nothing.
+            } catch (InvalidPathException ignored) {
+                // A broad location that cannot be parsed cannot be compared: the grant is refused, and the
+                // value of the variable is not reported.
+                return true;
             }
         }
         return false;
     }
 
     private static boolean isWindowsSystemRoot(Path value) {
-        String systemRoot = System.getenv("SystemRoot");
+        return isWindowsSystemRoot(value, System::getenv);
+    }
+
+    /** True when {@code value} is under the system root, or when the system root cannot be parsed (fail closed). */
+    static boolean isWindowsSystemRoot(Path value, UnaryOperator<String> environment) {
+        String systemRoot = environment.apply("SystemRoot");
         if (systemRoot == null || systemRoot.isBlank()) return false;
-        Path root = Path.of(systemRoot).toAbsolutePath().normalize();
-        return value.startsWith(root);
+        try {
+            return value.startsWith(Path.of(systemRoot).toAbsolutePath().normalize());
+        } catch (InvalidPathException ignored) {
+            return true;
+        }
     }
 
     private static void addWriteRoot(Set<Path> roots, Path value) {

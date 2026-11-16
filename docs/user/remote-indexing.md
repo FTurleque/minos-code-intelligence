@@ -144,6 +144,7 @@ Le backend natif ne fournit qu'une isolation de processus et de workspace. Il re
 - HTTPS `github.com` / `gitlab.com` uniquement ;
 - pas de GitHub/GitLab Enterprise, SSH, submodules ou ref non épinglée ;
 - checkout exact et propre obligatoire ;
+- aucun pilote de filtre Git (`filter.*`) n'est exécuté pendant le clone, l'extraction ni la revalidation du cache, quelle que soit la configuration qui le déclare : le contenu indexé est le contenu brut des objets Git (aux conversions de fins de ligne de `core.autocrlf` près), donc un fichier suivi par git-lfs est indexé sur son pointeur et non sur son contenu ;
 - cache source et cache artefact locaux, reconstructibles et bornés ;
 - `.gitignore`, `.minosignore`, hard ignores et budgets appliqués à la workspace du provider ;
 - symlinks rejetés ;

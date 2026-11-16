@@ -203,6 +203,54 @@ stateDiagram-v2
 `PERIMEE` est calculé à chaque lecture, jamais stocké. Une préparation en cours ou en échec n'est pas un état
 lu : une lecture n'écrit rien et ne sonde aucun verrou (écart E6).
 
+### Que devient une requête d'API qui dépasse le délai ?
+
+Type : sequenceDiagram · Portée : existant vérifié par tests (`ExplorerAbandonedReadsTest`, 50 exécutions) · Exigences :
+changement `fiabiliser-la-surface-de-l-explorateur` › « Une requête de l'explorateur abandonnée au délai libère son
+créneau », « Les lectures abandonnées encore en cours sont bornées et dites »
+
+```mermaid
+sequenceDiagram
+    participant N as Navigateur
+    participant S as ExplorerServer
+    participant W as "fil de lecture"
+    participant D as ExplorerDiagnostics
+    N->>S: GET /api/v1/…
+    alt lectures abandonnées à la borne
+        S->>D: "abandoned reads still running (limité)"
+        S-->>N: 503 BUSY
+    else place disponible
+        S->>W: tâche soumise, créneau pris
+        alt réponse dans le délai
+            W-->>S: réponse, créneau rendu par la tâche
+            S-->>N: 200
+        else délai dépassé
+            S->>W: cancel(true)
+            S->>S: créneau rendu, lecture comptée abandonnée
+            S-->>N: 503 TIMEOUT
+            W-->>S: fin tardive : place abandonnée rendue, résultat jeté
+        end
+    end
+```
+
+Le créneau est rendu par celui qui constate l'abandon ; la lecture qui traîne ne compte plus que dans la borne des
+lectures abandonnées.
+
+### Par quels états passe une lecture ?
+
+Type : stateDiagram-v2 · Portée : existant vérifié par tests (`ExplorerAbandonedReadsTest`) · Exigences : idem
+
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE: créneau pris
+    ACTIVE --> TERMINEE: réponse dans le délai
+    ACTIVE --> ABANDONNEE: délai dépassé
+    ABANDONNEE --> TERMINEE: la tâche rend la main
+    TERMINEE --> [*]
+```
+
+`ABANDONNEE` est borné (8 lectures) et visible dans le journal de la surface.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

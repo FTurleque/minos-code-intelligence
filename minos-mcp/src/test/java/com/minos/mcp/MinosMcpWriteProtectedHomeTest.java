@@ -1,6 +1,9 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.diagnostics.InternalFailureReporter;
+import com.minos.io.InternalFailureJournal;
+import com.minos.testsupport.LogCapture;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ResolutionStatus;
@@ -29,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -139,5 +143,53 @@ class MinosMcpWriteProtectedHomeTest {
                 assertEquals(before, protectedHome.state(), "listing the sessions must not write anything");
             }
         }
+    }
+
+    /**
+     * With the private diagnostic journal switched on, a failing tool still answers the opaque error, the directory
+     * is left as found and the unavailability is said once: the journal is never a state of a read-only home.
+     */
+    @Test
+    void anEnabledJournalOnAWriteProtectedHomeLeavesTheAnswersAndTheDirectoryUnchanged() throws Exception {
+        Path home = temp.resolve("home");
+        try (MinosApplication application = MinosApplication.open(home)) {
+            seed(application);
+            // A file where the journal directory would be: refused on every platform, as a read-only mount refuses it.
+            Files.writeString(home.resolve("logs"), "not a directory");
+            MinosMcpTools tools = new MinosMcpTools(
+                    failingBackend(new IllegalStateException("boom")),
+                    new InternalFailureReporter("mcp", home,
+                            Map.of(InternalFailureJournal.ENVIRONMENT_VARIABLE, "enabled"), new Properties()));
+
+            try (WriteProtectedTree protectedHome = WriteProtectedTree.protect(home);
+                 LogCapture journal = new LogCapture(InternalFailureJournal.class)) {
+                Map<String, String> before = protectedHome.state();
+
+                for (int call = 0; call < 2; call++) {
+                    var result = McpToolCalls.call(tools, "minos_index_status", Map.of("project", "fixture"));
+                    McpToolCalls.assertGenericToolError(McpToolCalls.text(result));
+                }
+
+                assertEquals(1, journal.warnings().size(), journal.warnings().toString());
+                assertEquals(before, protectedHome.state(), "the journal must not open, harden or create anything");
+            }
+        }
+    }
+
+    private static MinosMcpBackend failingBackend(Throwable failure) {
+        return (MinosMcpBackend) java.lang.reflect.Proxy.newProxyInstance(
+                MinosMcpBackend.class.getClassLoader(),
+                new Class<?>[]{MinosMcpBackend.class},
+                (proxy, method, arguments) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return switch (method.getName()) {
+                            case "toString" -> "failing-mcp-backend";
+                            case "hashCode" -> System.identityHashCode(proxy);
+                            case "equals" -> proxy == arguments[0];
+                            default -> null;
+                        };
+                    }
+                    throw failure;
+                });
     }
 }

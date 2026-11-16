@@ -1,5 +1,6 @@
 package com.minos.domain;
 
+import com.minos.diagnostics.UsageException;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
@@ -22,7 +23,7 @@ public record RelationshipSearchCriteria(
                 ? Set.of()
                 : Set.copyOf(EnumSet.copyOf(kinds));
         if (limit < 1) {
-            throw new IllegalArgumentException("limit must be greater than zero");
+            throw new UsageException("limit must be greater than zero");
         }
     }
 

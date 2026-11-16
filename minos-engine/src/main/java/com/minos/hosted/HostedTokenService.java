@@ -1,5 +1,6 @@
 package com.minos.hosted;
 
+import com.minos.diagnostics.UsageException;
 import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.time.Clock;
@@ -44,7 +45,7 @@ final class HostedTokenService {
         HostedPrincipal targetMember = context.state().members().stream()
                 .filter(member -> member.principalId().equals(target))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("token target is not a tenant member"));
+                .orElseThrow(() -> new UsageException("token target is not a tenant member"));
         if (!context.principal().role().canGovern(targetMember.role())) {
             throw authorization.deny(context, "TOKEN_ISSUE", "PRINCIPAL", target);
         }
@@ -79,7 +80,7 @@ final class HostedTokenService {
                 "KEY_ROTATE", "TENANT", "key");
         String safeNewKeyId = HostedPrincipal.safeId(newKeyId, "newKeyId");
         if (context.state().keyId().equals(safeNewKeyId)) {
-            throw new IllegalArgumentException("new keyId matches current keyId");
+            throw new UsageException("new keyId matches current keyId");
         }
         requireKeys(context.state().tenantId(), safeNewKeyId);
 

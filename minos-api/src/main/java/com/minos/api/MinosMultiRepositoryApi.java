@@ -1,5 +1,6 @@
 package com.minos.api;
 
+import com.minos.diagnostics.UsageException;
 import java.time.Instant;
 import java.util.List;
 
@@ -101,7 +102,7 @@ public interface MinosMultiRepositoryApi extends MinosApi {
 
         public GitActivityQuery {
             if (since == null) {
-                throw new IllegalArgumentException("since must not be null");
+                throw new UsageException("since must not be null");
             }
             requireRange(maxCommits, 1, 10_000, "maxCommits");
             requireRange(maxFiles, 1, 10_000, "maxFiles");
@@ -282,7 +283,7 @@ public interface MinosMultiRepositoryApi extends MinosApi {
 
     private static void requireRange(int value, int minimum, int maximum, String field) {
         if (value < minimum || value > maximum) {
-            throw new IllegalArgumentException(field + " must be between " + minimum + " and " + maximum);
+            throw new UsageException(field + " must be between " + minimum + " and " + maximum);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.minos.query;
 
+import com.minos.diagnostics.UsageException;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.store.CodeKnowledgeReader;
 
@@ -25,7 +26,7 @@ public final class ModuleFilterGuard {
         Objects.requireNonNull(store, "store");
         Objects.requireNonNull(criteria, "criteria");
         if (criteria.moduleId() != null && store.lacksModuleAttribution(projectId)) {
-            throw new IllegalArgumentException(REFUSAL);
+            throw new UsageException(REFUSAL);
         }
     }
 }

@@ -16,6 +16,7 @@ import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotReadView;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.time.Clock;
@@ -107,7 +108,7 @@ public final class RuntimeIntelligenceService {
     }
 
     public List<SessionView> listSessions(String projectReference, int limit) throws IOException {
-        if (limit < 1 || limit > MAX_SESSION_RESULTS) throw new IllegalArgumentException("session limit must be between 1 and " + MAX_SESSION_RESULTS);
+        if (limit < 1 || limit > MAX_SESSION_RESULTS) throw new UsageException("session limit must be between 1 and " + MAX_SESSION_RESULTS);
         RegisteredProject project = projects.resolve(projectReference);
         String activeSnapshotId = activeSnapshot(project).snapshotId();
         return store.list(project.id(), null, limit).stream()
@@ -117,7 +118,7 @@ public final class RuntimeIntelligenceService {
 
     public RuntimeReport report(String projectReference, String sessionId, int hotPathLimit) throws IOException {
         if (hotPathLimit < 1 || hotPathLimit > MAX_HOT_PATHS) {
-            throw new IllegalArgumentException("hot path limit must be between 1 and " + MAX_HOT_PATHS);
+            throw new UsageException("hot path limit must be between 1 and " + MAX_HOT_PATHS);
         }
         RegisteredProject project = projects.resolve(projectReference);
         CodeKnowledgeSnapshot snapshot = activeSnapshot(project);
@@ -178,13 +179,13 @@ public final class RuntimeIntelligenceService {
             int callLimit
     ) throws IOException {
         requireText(symbolId, "symbolId");
-        if (callLimit < 1 || callLimit > MAX_HOT_PATHS) throw new IllegalArgumentException("call limit is invalid");
+        if (callLimit < 1 || callLimit > MAX_HOT_PATHS) throw new UsageException("call limit is invalid");
         RegisteredProject project = projects.resolve(projectReference);
         // AUD-PERF-13: lookup through the index of the active view, in constant time, without scanning the symbols.
         SnapshotReadView view = activeReadView(project);
         CodeKnowledgeSnapshot snapshot = view.snapshot();
         Symbol symbol = view.reader().findSymbolById(project.id().toString(), symbolId)
-                .orElseThrow(() -> new IllegalArgumentException("unknown symbol in active snapshot: " + symbolId));
+                .orElseThrow(() -> new UsageException("unknown symbol in active snapshot: " + symbolId));
         List<CorrelatedRuntimeSession> selected = selectSessions(project.id(), snapshot.snapshotId(), sessionId);
         long executionHits = 0;
         long totalDuration = 0;
@@ -228,7 +229,7 @@ public final class RuntimeIntelligenceService {
     private List<CorrelatedRuntimeSession> selectSessions(UUID projectId, String snapshotId, String sessionId) throws IOException {
         if (sessionId != null && !sessionId.isBlank()) {
             CorrelatedRuntimeSession selected = store.find(projectId, sessionId)
-                    .orElseThrow(() -> new IllegalArgumentException("unknown runtime session: " + sessionId));
+                    .orElseThrow(() -> new UsageException("unknown runtime session: " + sessionId));
             requireSnapshotAlignment(selected, snapshotId);
             return List.of(selected);
         }
@@ -237,7 +238,7 @@ public final class RuntimeIntelligenceService {
 
     private static void requireSnapshotAlignment(CorrelatedRuntimeSession session, String activeSnapshotId) {
         if (!activeSnapshotId.equals(session.session().snapshotId())) {
-            throw new IllegalArgumentException("runtime session is aligned to non-active snapshot "
+            throw new UsageException("runtime session is aligned to non-active snapshot "
                     + session.session().snapshotId() + "; active snapshot is " + activeSnapshotId);
         }
     }

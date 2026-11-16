@@ -45,6 +45,19 @@ Non exécuté : aucun de ces comportements n'a été observé par un test ; le t
 | E5. Rediriger `clean` et `smudge` ne suffit pas quand le pilote porte `useJGitBuiltin = true` | `GitIntelligenceService.java:337-338` | `TreeWalk.java:1602-1611` | La redirection écrit aussi `useJGitBuiltin = false` sur chaque pilote redirigé, dans les deux politiques (D2) |
 | E6. Le scénario « entrée du cache d'un autre compte » n'est pas testable : `validateCheckout` est statique et privée | `JGitRemoteRepositoryMaterializer.java:282` | `GitIntelligenceService.java:93` (constructeur de test à propriétaire attendu) | Le matérialiseur reçoit, par un constructeur de portée paquet, le fournisseur de propriétaire attendu qu'il transmet à l'ouverture (D2) |
 
+## Comportement observé et écarts constatés à l'implémentation
+
+Observé par `RemoteMaterializationFilterTest` (JVM fille au répertoire personnel redirigé), avant puis après la correction :
+
+- À l'extraction par `CloneCommand`, la commande `smudge` d'un pilote de la configuration de l'utilisateur s'exécute (témoin créé) ; une fois le clone fait sans extraction et les pilotes redirigés, elle ne s'exécute plus. Le jeu de pilotes à rediriger est celui de `Config.getSubsections("filter")` de la configuration effective : un pilote déclaré seulement par l'utilisateur est redirigé.
+- Un pilote qui porte `useJGitBuiltin = true` avec un filtre intégré enregistré le remplace : la redirection écrit donc `useJGitBuiltin = false` (écart E5 confirmé).
+- À la revalidation, `status()` exécutait le filtre `clean` de l'utilisateur sur une entrée du cache dont la date a changé ; l'ouverture de confiance en politique « distant » l'évite. Une entrée d'un autre compte était acceptée avant ; elle est refusée.
+- Écart E7 : sur un poste où `core.autocrlf` est vrai (configuration système), l'extraction convertit les fins de ligne ; ce n'est pas un filtre, la revalidation l'applique à l'identique, et le test normalise les fins de ligne avant de comparer au contenu brut.
+- Écart E8 : l'extraction utilise `DirCacheCheckout` comme `CloneCommand` (et non `ResetCommand`) pour garder le moniteur de budget du clone.
+- Écart E9 : la garde du gate est exprimée par des faits `forbid` par fichier (le gate lit tous les `*.java` de `src/main` du module), ce que `--self-test` mute seul ; aucune table de mutations n'est ajoutée.
+- Revue de sécurité indépendante (agent `minos-security-reviewer`) : le commit est analysé avant la prise du verrou d'index à l'extraction ; la revalidation demande l'état en ignorant les sous-modules (`IgnoreSubmoduleMode.ALL`) ; le gate interdit aussi `Git.init(`, `Git.wrap(`, `new FileRepository`, `new RepositoryBuilder` et `RepositoryCache`, y compris sur plusieurs lignes. Les autres constats, hors périmètre de ce changement, sont transmis au propriétaire hors dépôt.
+- Non exécuté : le contrôle d'un dépôt appartenant à un vrai second compte (simulé par le fournisseur de propriétaire attendu) ; le rapport JaCoCo agrégé.
+
 ## Exigences couvertes
 
 - `analyse-git › La matérialisation d'un dépôt distant n'exécute aucun pilote de filtre` : D1, D2, « Traitements et interactions ».
@@ -133,7 +146,7 @@ Le dépôt n'est jamais extrait avant que ses pilotes soient redirigés ; la rev
 
 ## Décisions
 
-### D1 — Filtres à la matérialisation d'un dépôt distant — **en attente du propriétaire** (ADR `SEC-<prochain numéro libre>` à écrire)
+### D1 — Filtres à la matérialisation d'un dépôt distant — option B retenue le 2026-11-15 (recommandation, à confirmer par le propriétaire ; ADR `SEC-0083`, `Proposed`)
 
 [Proposition] Deux options réelles :
 
@@ -142,7 +155,7 @@ Le dépôt n'est jamais extrait avant que ses pilotes soient redirigés ; la rev
 
 Recommandation : **B**. Un dépôt distant est désigné par une requête, pas par un répertoire que l'utilisateur a déjà cloné lui-même ; l'indexation de code n'a pas besoin des objets que produit un filtre (binaires LFS) ; la règle 1 (fail-closed) et la règle 8 (pas de sortie réseau décidée par un contenu non fiable) vont dans ce sens. Si le propriétaire retient A, seule l'exigence « La matérialisation d'un dépôt distant n'exécute aucun pilote de filtre » est remplacée par son inverse (pilote de l'utilisateur appliqué, pilote du dépôt jamais), et les tâches 2.1 à 2.3 s'inversent ; les deux autres exigences et le gate restent.
 
-Décision structurante (modèle de confiance, inversion coûteuse pour les utilisateurs de LFS) : ADR `SEC-<prochain numéro libre>` (prochain numéro libre à la date de rédaction, à relire dans `docs/architecture/adr/README.md` au moment de l'écrire), tâche 1.1.
+Décision structurante (modèle de confiance, inversion coûteuse pour les utilisateurs de LFS) : ADR `SEC-0083`, tâche 1.2.
 
 ### D2 — Une ouverture de confiance, deux politiques de filtres
 
@@ -182,14 +195,14 @@ Décision structurante (modèle de confiance, inversion coûteuse pour les utili
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| analyse-git › La matérialisation d'un dépôt distant n'exécute aucun pilote de filtre | Pilote de la configuration de l'utilisateur choisi par le dépôt distant | D1, D2, D3, diagramme | 2.1, 2.2 | `RemoteMaterializationFilterTest` — à écrire |
+| analyse-git › La matérialisation d'un dépôt distant n'exécute aucun pilote de filtre | Pilote de la configuration de l'utilisateur choisi par le dépôt distant | D1, D2, D3, diagramme | 2.1, 2.2 | `RemoteMaterializationFilterTest#aUserSmudgeFilterIsNotRunWhenARemoteRepositoryIsCloned` — écrit |
 | idem | Dépôt distant sans filtre | D3 | 2.2 | `JGitRemoteRepositoryMaterializerTest` (existant) |
-| analyse-git › La revalidation d'une extraction distante passe par l'ouverture de confiance | Revalidation d'une entrée du cache à filtre piégé | D2 | 2.1, 2.3 | `RemoteMaterializationFilterTest` — à écrire |
-| idem | Entrée du cache appartenant à un autre compte | D2 (E6) | 2.1, 2.3 | `RemoteMaterializationFilterTest` — à écrire (propriétaire attendu injecté au matérialiseur) |
+| analyse-git › La revalidation d'une extraction distante passe par l'ouverture de confiance | Revalidation d'une entrée du cache à filtre piégé | D2 | 2.1, 2.3 | `RemoteMaterializationFilterTest#aCachedEntryIsRevalidatedWithoutRunningAUserFilter` — écrit |
+| idem | Entrée du cache appartenant à un autre compte | D2 (E6) | 2.1, 2.3 | `RemoteMaterializationFilterTest#anEntryOfAnotherAccountIsRefusedAtRevalidation` — écrit (propriétaire attendu injecté au matérialiseur) |
 | idem | Extraction dont le HEAD ne correspond pas | D2 | 2.3 | `JGitRemoteRepositoryMaterializerTest` (existant) |
-| analyse-git › La matérialisation d'un dépôt distant n'exécute aucun pilote de filtre | Pilote déclaré avec un filtre intégré | D2 (E5) | 2.1, 2.2 | `RemoteMaterializationFilterTest` — à écrire |
-| analyse-git › Aucun dépôt analysé n'est ouvert hors de l'ouverture de confiance | Ouverture directe réintroduite | D4 | 3.1, 3.2 | cas de `--self-test` du gate — à écrire |
-| idem | Type d'ouverture exempté | D4 | 3.1, 3.2 | idem — à écrire |
+| analyse-git › La matérialisation d'un dépôt distant n'exécute aucun pilote de filtre | Pilote déclaré avec un filtre intégré | D2 (E5) | 2.1, 2.2 | `RemoteMaterializationFilterTest#aDriverThatAsksForABuiltInFilterIsNotRunEither` — écrit |
+| analyse-git › Aucun dépôt analysé n'est ouvert hors de l'ouverture de confiance | Ouverture directe réintroduite | D4 | 3.1, 3.2 | faits `forbid` du gate, mutés par `--self-test` — écrit |
+| idem | Type d'ouverture exempté | D4 | 3.1, 3.2 | fait `require` sur `TrustedRepositoryOpening.java` (le type exempté doit exister et porter l'ouverture) — écrit |
 | idem | Dépôt réel | D4 | 3.2 | `check-remote-distributed-consistency.py` |
 
 ## Questions ouvertes

@@ -53,6 +53,8 @@
 | [SEC-0079](../adr/SEC-0079-indexation-java-depuis-windows-par-wsl2.md) | Indexation Java depuis Windows par WSL2 : indexation locale, providers routés de l'orchestration unique, artefact v3 vérifié | Accepted | 2026-11-07 | Complète SEC-0074 |
 | [SEC-0080](../adr/SEC-0080-forcage-nominatif-d-une-dependance-du-verrou-de-scip-java.md) | Forçage nominatif d'une dépendance du verrou de scip-java | Accepted | 2026-11-10 | Complète BE-0065 |
 | [ARCH-0082](../adr/ARCH-0082-surface-http-locale-optionnelle-de-consultation.md) | Exposer l'exploration sémantique par une surface HTTP locale, optionnelle et en lecture seule | Accepted | 2026-11-13 | Mise en œuvre par le changement OpenSpec `explorer-l-index-semantique-dans-un-navigateur` (module `minos-explorer`) ; service Docker non qualifié |
+| [SEC-0083](../adr/SEC-0083-filtres-git-a-la-materialisation-d-un-depot-distant.md) | Filtres Git à la matérialisation d'un dépôt distant | Proposed | 2026-11-15 | Complète la décision du 2026-10-13 sur les filtres de l'analyse locale |
+| [SEC-0084](../adr/SEC-0084-journal-de-diagnostic-prive-et-opt-in-des-echecs-internes.md) | Journal de diagnostic privé et opt-in des échecs internes : ligne stderr corrélée, pile dans un fichier privé par échec, façade de `minos-application` | Accepted | 2026-11-15 | Changement OpenSpec `tracer-les-echecs-internes-des-surfaces` (audit AUD-QUA-02) |
 
 ## ADR archivés
 

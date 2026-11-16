@@ -17,6 +17,7 @@ import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.diagnostics.UsageException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -112,7 +113,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     static Path requireRegularArtifact(Path indexFile) {
         Path artifact = Objects.requireNonNull(indexFile, "indexFile").toAbsolutePath().normalize();
         if (Files.isSymbolicLink(artifact) || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("SCIP artifact must be an existing regular file: " + leafName(artifact));
+            throw new UsageException("SCIP artifact must be an existing regular file: " + leafName(artifact));
         }
         return artifact;
     }

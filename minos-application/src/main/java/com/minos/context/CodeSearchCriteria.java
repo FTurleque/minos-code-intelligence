@@ -1,6 +1,7 @@
 package com.minos.context;
 
 import com.minos.domain.SymbolSearchCriteria;
+import com.minos.diagnostics.UsageException;
 
 import java.util.Objects;
 
@@ -25,16 +26,16 @@ public record CodeSearchCriteria(
     public CodeSearchCriteria {
         Objects.requireNonNull(symbols, "symbols");
         if (maxDepth < 0 || maxDepth > MAX_DEPTH) {
-            throw new IllegalArgumentException("maxDepth must be between 0 and " + MAX_DEPTH);
+            throw new UsageException("maxDepth must be between 0 and " + MAX_DEPTH);
         }
         validateCount(usagesPerSymbol, "usagesPerSymbol");
         validateCount(relationshipsPerNode, "relationshipsPerNode");
         if (contextLines < 0 || contextLines > MAX_CONTEXT_LINES) {
-            throw new IllegalArgumentException(
+            throw new UsageException(
                     "contextLines must be between 0 and " + MAX_CONTEXT_LINES);
         }
         if (maxTokens < MIN_TOKEN_BUDGET || maxTokens > MAX_TOKEN_BUDGET) {
-            throw new IllegalArgumentException(
+            throw new UsageException(
                     "maxTokens must be between " + MIN_TOKEN_BUDGET
                             + " and " + MAX_TOKEN_BUDGET);
         }
@@ -42,7 +43,7 @@ public record CodeSearchCriteria(
 
     private static void validateCount(int value, String name) {
         if (value < 0 || value > MAX_ITEMS_PER_NODE) {
-            throw new IllegalArgumentException(
+            throw new UsageException(
                     name + " must be between 0 and " + MAX_ITEMS_PER_NODE);
         }
     }
