@@ -1,6 +1,7 @@
 package com.minos.explorer;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.diagnostics.InternalFailureReporter;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -79,9 +80,11 @@ public final class ExplorerSession {
             say(error, "error: " + refused.getMessage());
             return USAGE_ERROR;
         }
+        InternalFailureReporter reporter = new InternalFailureReporter(
+                "explorer", application.home(), environment, System.getProperties());
         try (ExplorerServer server = ExplorerServer.start(application.semanticCorpusQueryService(),
                 application.semanticProjectionService(), port, scope,
-                ExplorerServer.DEFAULT_REQUEST_TIMEOUT, line -> say(error, "explorer: " + line))) {
+                ExplorerServer.DEFAULT_REQUEST_TIMEOUT, line -> say(error, "explorer: " + line), reporter)) {
             say(error, "MINOS explorer is listening on port " + server.port() + " ("
                     + (scope == ListeningPolicy.Scope.LOOPBACK ? "loopback only" : "container interface")
                     + "), read-only. Stop it with Ctrl+C.");

@@ -50,12 +50,16 @@ class TreeTest(unittest.TestCase):
 
     # The closed list of Docker Hub logins seen by the test: none in a temporary tree, the real one for the repository.
     docker_login_kept: dict | None = {}
+    # The same for the steps that receive a secret and run repository code.
+    secret_steps_kept: dict | None = {}
 
     def setUp(self):
-        if self.docker_login_kept is not None:
-            patcher = mock.patch.object(gate, "DOCKER_LOGIN_KEPT", self.docker_login_kept)
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        for name, value in (("DOCKER_LOGIN_KEPT", self.docker_login_kept),
+                            ("SECRET_WITH_REPOSITORY_CODE_KEPT", self.secret_steps_kept)):
+            if value is not None:
+                patcher = mock.patch.object(gate, name, value)
+                patcher.start()
+                self.addCleanup(patcher.stop)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
@@ -334,6 +338,7 @@ class WholeGateTest(TreeTest):
 class RepositoryTest(TreeTest):
 
     docker_login_kept = None
+    secret_steps_kept = None
 
     def copy_repository(self) -> None:
         shutil.rmtree(self.root / gate.WORKFLOWS)
@@ -429,6 +434,35 @@ class RepositoryTest(TreeTest):
         failures = self.failures()
         self.assertEqual(1, len(failures), failures)
         self.assertIn("job 'verify' runs repository code in the step that logs out of Docker Hub", failures[0])
+
+    def test_the_analysis_is_the_only_step_that_receives_a_secret_and_runs_repository_code(self):
+        self.assertEqual({("pr-ci.yml", "sonar", "SonarCloud CI-based analysis")},
+                         set(gate.SECRET_WITH_REPOSITORY_CODE_KEPT))
+        self.assertEqual([], gate.check(REPOSITORY)[0])
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(0, gate.main(["--root", str(REPOSITORY)]))
+        self.assertIn("secret + repository code kept: pr-ci.yml job 'sonar' step 'SonarCloud CI-based analysis': "
+                      "The analysis is a Maven goal", stdout.getvalue())
+
+    def test_the_token_moved_to_the_job_is_named(self):
+        self.copy_repository()
+        self.mutate("pr-ci.yml", "    name: SonarCloud analysis (Linux and Windows coverage)\n",
+                    "    name: SonarCloud analysis (Linux and Windows coverage)\n    env:\n"
+                    "      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n")
+        failures = self.failures()
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("pr-ci.yml", failures[0])
+        self.assertIn("job env: references secrets.SONAR_TOKEN", failures[0])
+
+    def test_the_build_step_of_the_analysis_job_receives_no_secret(self):
+        self.copy_repository()
+        self.mutate("pr-ci.yml", "      - name: Build the candidate without any secret\n",
+                    "      - name: Build the candidate without any secret\n        env:\n"
+                    "          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n")
+        failures = self.failures()
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("step 'Build the candidate without any secret'", failures[0])
 
 
 CHECKOUT_STEP = f"      - name: Checkout\n        uses: actions/checkout@{SHA} # v7\n"
@@ -699,6 +733,108 @@ class ReleaseAttestationTest(TreeTest):
             failures = gate.find_release_attestation_violations(name, mutated)
             self.assertEqual(1, len(failures), name)
             self.assertIn(f"job '{job}' publishes release assets without attesting", failures[0])
+
+
+ANALYSIS = "SonarCloud analysis"
+
+
+def pull_request_workflow(step_env: str = "", script: str = "./mvnw -B -ntp test-compile", job_env: str = "",
+                          workflow_env: str = "", on: str = "pull_request", step_name: str = ANALYSIS) -> str:
+    """A workflow whose job `sonar` has one step; each argument is a block written where its name says."""
+    return (f"name: x\non:\n  {on}:\n    branches: [main]\n{workflow_env}"
+            f"jobs:\n  sonar:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n{job_env}    steps:\n"
+            f"      - name: {step_name}\n{step_env}        run: |\n          {script}\n")
+
+
+SONAR_TOKEN_ENV = "        env:\n          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n"
+
+
+class SecretWithRepositoryCodeTest(TreeTest):
+    """AUD-DEP-05: a secret does not reach the code of a pull request."""
+
+    def violations(self, text: str, kept: dict | None = None) -> tuple[list[str], set]:
+        with mock.patch.object(gate, "SECRET_WITH_REPOSITORY_CODE_KEPT", kept or {}):
+            return gate.find_secret_violations("pr-ci.yml", text)
+
+    def test_the_analysis_token_given_to_a_compilation_is_refused(self):
+        failures, _kept = self.violations(pull_request_workflow(SONAR_TOKEN_ENV))
+        self.assertEqual(1, len(failures), failures)
+        for expected in ("pr-ci.yml:", "job 'sonar'", f"step '{ANALYSIS}'", "SONAR_TOKEN",
+                         "SECRET_WITH_REPOSITORY_CODE_KEPT"):
+            self.assertIn(expected, failures[0])
+
+    def test_a_step_outside_the_list_that_receives_a_secret_and_runs_a_script_of_the_repository_is_refused(self):
+        for script in ("python3 scripts/quality/check-x.py", "./scripts/dev/start.sh", "bash scripts\\dev\\start.sh"):
+            with self.subTest(script=script):
+                failures, _kept = self.violations(pull_request_workflow(SONAR_TOKEN_ENV, script=script))
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(f"step '{ANALYSIS}'", failures[0])
+
+    def test_a_step_that_receives_a_secret_and_runs_no_repository_code_is_accepted(self):
+        text = pull_request_workflow(SONAR_TOKEN_ENV, script='test -n "$SONAR_TOKEN" || exit 1')
+        self.assertEqual(([], set()), self.violations(text))
+
+    def test_a_step_without_a_secret_may_run_the_wrapper(self):
+        self.assertEqual(([], set()), self.violations(pull_request_workflow(script="./mvnw -B -ntp test-compile")))
+
+    def test_a_listed_step_may_run_a_maven_goal_without_a_phase(self):
+        kept = {("pr-ci.yml", "sonar", ANALYSIS): "The goal runs on the candidate tree."}
+        text = pull_request_workflow(SONAR_TOKEN_ENV, script="./mvnw -B -ntp -DskipTests org.example:scanner:1.0:sonar")
+        self.assertEqual(([], {("pr-ci.yml", "sonar", ANALYSIS)}), self.violations(text, kept))
+
+    def test_a_listed_step_that_runs_a_maven_phase_is_refused(self):
+        kept = {("pr-ci.yml", "sonar", ANALYSIS): "The goal runs on the candidate tree."}
+        for phase in ("compile", "test-compile", "test", "package", "verify", "install"):
+            with self.subTest(phase=phase):
+                text = pull_request_workflow(
+                    SONAR_TOKEN_ENV, script=f"./mvnw -B -ntp -DskipTests {phase} \\\n            org.example:scanner:1.0:sonar")
+                failures, _used = self.violations(text, kept)
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(f"runs the Maven phase '{phase}'", failures[0])
+
+    def test_a_listed_step_that_no_longer_receives_the_secret_is_a_stale_entry(self):
+        kept = {("pr-ci.yml", "sonar", ANALYSIS): "The goal runs on the candidate tree."}
+        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", pull_request_workflow())
+        with mock.patch.object(gate, "SECRET_WITH_REPOSITORY_CODE_KEPT", kept):
+            failures = self.failures()
+        self.assertEqual([f".github/workflows/pr-ci.yml: job 'sonar' step '{ANALYSIS}' is listed in "
+                          "SECRET_WITH_REPOSITORY_CODE_KEPT but no longer receives a secret and runs repository code "
+                          "-- remove the entry."], failures)
+
+    def test_a_secret_raised_to_the_job_or_to_the_workflow_is_refused(self):
+        job_env = "    env:\n      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n"
+        workflow_env = "env:\n  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n"
+        for level, text in (("job", pull_request_workflow(job_env=job_env)),
+                            ("workflow", pull_request_workflow(workflow_env=workflow_env))):
+            with self.subTest(level=level):
+                failures, _kept = self.violations(text)
+                self.assertEqual(1, len(failures), failures)
+                for expected in ("pr-ci.yml:", f"{level} env:", "SONAR_TOKEN"):
+                    self.assertIn(expected, failures[0])
+
+    def test_the_docker_hub_identifier_may_stay_in_the_job_env(self):
+        job_env = "    env:\n      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}\n"
+        self.assertEqual(([], set()), self.violations(pull_request_workflow(job_env=job_env)))
+        job_env += "      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}\n"
+        failures, _kept = self.violations(pull_request_workflow(job_env=job_env))
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("DOCKERHUB_TOKEN", failures[0])
+
+    def test_a_workflow_that_no_pull_request_starts_is_not_concerned(self):
+        for on in ("workflow_dispatch", "schedule"):
+            with self.subTest(on=on):
+                text = pull_request_workflow(SONAR_TOKEN_ENV, on=on,
+                                             job_env="    env:\n      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n")
+                self.write(f"{gate.WORKFLOWS}/pr-ci.yml", text)
+                self.assertEqual([], self.failures())
+        self.write(f"{gate.WORKFLOWS}/pr-ci.yml", pull_request_workflow(SONAR_TOKEN_ENV))
+        self.assertEqual(1, len(self.failures()))
+
+    def test_a_trigger_written_inline_is_read_too(self):
+        text = ("on: [push, pull_request]\njobs:\n  sonar:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n"
+                "    steps:\n      - name: A\n        env:\n          T: ${{ secrets.T }}\n        run: ./mvnw -B test\n")
+        self.assertEqual(1, len(self.violations(text)[0]))
+
 
 
 if __name__ == "__main__":

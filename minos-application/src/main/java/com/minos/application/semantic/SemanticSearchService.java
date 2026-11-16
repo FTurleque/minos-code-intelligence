@@ -5,6 +5,7 @@ import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.cache.WeightedLruCache;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -132,14 +133,14 @@ public final class SemanticSearchService {
 
     public record SearchRequest(String query, int limit, double minimumScore) {
         public SearchRequest {
-            if (query == null || query.isBlank()) throw new IllegalArgumentException("query must not be blank");
+            if (query == null || query.isBlank()) throw new UsageException("query must not be blank");
             int queryBytes = query.getBytes(StandardCharsets.UTF_8).length;
             if (queryBytes > MAX_QUERY_UTF8_BYTES) {
-                throw new IllegalArgumentException("query exceeds UTF-8 byte limit: " + queryBytes + "/" + MAX_QUERY_UTF8_BYTES);
+                throw new UsageException("query exceeds UTF-8 byte limit: " + queryBytes + "/" + MAX_QUERY_UTF8_BYTES);
             }
-            if (limit < 1 || limit > MAX_RESULTS) throw new IllegalArgumentException("limit must be between 1 and " + MAX_RESULTS);
+            if (limit < 1 || limit > MAX_RESULTS) throw new UsageException("limit must be between 1 and " + MAX_RESULTS);
             if (!Double.isFinite(minimumScore) || minimumScore < -1.0 || minimumScore > 1.0) {
-                throw new IllegalArgumentException("minimumScore must be between -1 and 1");
+                throw new UsageException("minimumScore must be between -1 and 1");
             }
         }
 

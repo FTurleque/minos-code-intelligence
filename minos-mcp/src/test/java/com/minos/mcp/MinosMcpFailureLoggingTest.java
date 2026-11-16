@@ -12,7 +12,6 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -31,7 +30,7 @@ class MinosMcpFailureLoggingTest {
 
         List<LogRecord> records = capture(() -> {
             var result = McpToolCalls.call(tools, "minos_index_status", Map.of("project", "client-supplied-name"));
-            assertEquals("error: MINOS tool execution failed", McpToolCalls.text(result));
+            McpToolCalls.assertGenericToolError(McpToolCalls.text(result));
         });
 
         LogRecord entry = records.stream()

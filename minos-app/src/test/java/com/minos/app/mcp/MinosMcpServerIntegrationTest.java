@@ -128,7 +128,7 @@ class MinosMcpServerIntegrationTest {
             Map<String, Object> withPathKey = new LinkedHashMap<>(valid);
             withPathKey.put(leakedPath, 1);
             String pathKeyText = refused(client, withPathKey);
-            assertEquals("error: MINOS tool execution failed", pathKeyText);
+            assertTrue(pathKeyText.matches("error: MINOS tool execution failed \\(ref [0-9a-f]{8}\\)"), pathKeyText);
 
             String journal = String.join("\n", serverStderr);
             assertFalse(journal.contains(leakedPath), "ni la valeur ni une clé à forme de chemin dans le journal");

@@ -234,7 +234,9 @@ d'une page hostile ou d'un jeton périmé).
 
 ### D3 — Créneau rendu à l'abandon, lectures abandonnées bornées
 
-[Proposition] `MAX_ABANDONED_READS = 4` ; fils de lecture = créneaux + borne. Alternatives écartées : rendre le
+[Proposition, corrigée à l'implémentation] `MAX_ABANDONED_READS = 8` ; fils de lecture = créneaux + borne. La valeur 4 de la
+première rédaction égalait le nombre de créneaux : le scénario « autant de requêtes que de créneaux abandonnées, puis une requête
+normale reçoit 200 » et le scénario de la borne ne pouvaient pas être vrais ensemble ; la borne doit dépasser les créneaux. Alternatives écartées : rendre le
 créneau sans borne (les fils s'empilent sans limite) ; fils virtuels (une lecture bloquée sur un verrou ou du calcul
 n'est pas libérée pour autant, et la mémoire n'est pas bornée).
 
@@ -309,14 +311,27 @@ skill `minos-incident-triage` (lire les lignes de la surface).
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › Un échec interne de l'explorateur laisse une ligne de diagnostic avec sa cause racine | Exception enveloppée ; Aucune donnée de requête ; Échec hors d'une route | D1 | 1.1, 1.2 | à écrire : `ExplorerDiagnosticsTest` |
-| idem | Journal privé inactif ; Journal privé actif | D7 | 1.1, 1.2 | à écrire : `ExplorerDiagnosticsTest` |
-| exploration-semantique › L'explorateur ne rend 400 que pour une erreur d'usage explicite | Paramètre invalide ; Erreur d'argument levée par un service ; Les erreurs d'usage du contrat restent des 400 | « Erreurs et reprise » | 2.1, 2.2, 2.3 | à étendre : `ExplorerRoutesTest`, `ExplorerProjectionRoutesTest` |
-| exploration-semantique › Les refus de l'explorateur sont journalisés avec limitation | les trois scénarios | D2 | 1.1, 1.3 | à écrire : `ExplorerDiagnosticsTest` |
-| exploration-semantique › Une requête de l'explorateur abandonnée au délai libère son créneau | Lectures qui ignorent l'interruption | D3, diagramme 1 | 3.1, 3.2 | à étendre : `ExplorerServerTest` |
-| exploration-semantique › Les lectures abandonnées encore en cours sont bornées et dites | les trois scénarios | D3, diagramme 2 | 3.1, 3.2 | à étendre : `ExplorerServerTest` |
-| exploration-semantique › Un segment de chemin point ou point-point est refusé | les deux scénarios | D5 | 2.4 | à étendre : `ExplorerUnitsTest` |
-| distribution-docker › Le journal des services Docker publiés sur la boucle locale est borné | les trois scénarios | D6 | 4.1, 4.2 | à étendre : `test_check_compose_limits.py` ; effet réel manquant jusqu'à 4.3 |
+| exploration-semantique › Un échec interne de l'explorateur laisse une ligne de diagnostic avec sa cause racine | Exception enveloppée ; Aucune donnée de requête ; Échec hors d'une route | D1 | 1.1, 1.2 | `ExplorerDiagnosticsTest` |
+| idem | Journal privé inactif ; Journal privé actif | D7 | 1.1, 1.2 | `ExplorerDiagnosticsTest` (arborescence d'un `MINOS_HOME` factice ; l'index réel n'y est pas relevé) |
+| exploration-semantique › L'explorateur ne rend 400 que pour une erreur d'usage explicite | Paramètre invalide ; Erreur d'argument levée par un service ; Les erreurs d'usage du contrat restent des 400 | « Erreurs et reprise » | 2.1, 2.2, 2.3 | `ExplorerRoutesTest` (table), `ExplorerDiagnosticsTest` (IAE simple et `InvalidPathException` → 500) ; `ExplorerProjectionRoutesTest` non étendu |
+| exploration-semantique › Les refus de l'explorateur sont journalisés avec limitation | les trois scénarios | D2 | 1.1, 1.3 | `ExplorerDiagnosticsTest` (horloge injectée ; mille requêtes sur sockets) |
+| exploration-semantique › Une requête de l'explorateur abandonnée au délai libère son créneau | Lectures qui ignorent l'interruption | D3, diagramme 1 | 3.1, 3.2 | `ExplorerAbandonedReadsTest` (50 exécutions sans échec sous Windows) |
+| exploration-semantique › Les lectures abandonnées encore en cours sont bornées et dites | les trois scénarios | D3, diagramme 2 | 3.1, 3.2 | `ExplorerAbandonedReadsTest` ; **preuve manquante** : lecture PostgreSQL réellement bloquée |
+| exploration-semantique › Un segment de chemin point ou point-point est refusé | les deux scénarios | D5 | 2.4 | `ExplorerUnitsTest`, `ExplorerServerTest` |
+| distribution-docker › Le journal des services Docker publiés sur la boucle locale est borné | les trois scénarios | D6 | 4.1, 4.2 | `test_check_compose_limits.py`, `check-compose-limits.py` ; **effet réel manquant** : aucune rotation observée sur un conteneur (4.3, manuelle) |
+
+## Écarts relevés à l'implémentation
+
+- `failures` de `ExplorerApi.answer` et de `ExplorerServer.Calls` est une `Function<Exception, String>` qui rend la
+  référence, et non plus un `Consumer<Exception>` : la réponse `500` doit porter la référence que le journal écrit.
+- La route des lignes d'échec est le nom de l'énumération `ExplorerApi.Route` en minuscules (`documents`, `document`,
+  `neighbors`, `projection`, `projection_points`, `search`, `projects`), `api` hors route reconnue, `serve` pour un échec
+  de l'échange lui-même : le motif `projects/{project}/…` n'est pas un libellé sûr pour la ligne de diagnostic.
+- Le `400` d'une adresse que le serveur HTTP du JDK refuse lui-même (`%zz` dans le chemin ou la requête) est la page du JDK,
+  non le JSON de la surface : le contrat de l'adresse cassée n'est tenu par la surface que pour ce qui lui parvient.
+- Les tests du créneau et de la borne sont dans `ExplorerAbandonedReadsTest`, et non dans `ExplorerServerTest`.
+- Les premières lignes `refused request: <raison>` ne changent pas : les assertions de `ExplorerServerTest` (`:103`, `:219`)
+  restent valides ; seule la ligne `request failed` (`:393`) est adaptée.
 
 ## Questions ouvertes
 

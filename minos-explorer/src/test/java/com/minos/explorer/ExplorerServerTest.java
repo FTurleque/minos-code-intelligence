@@ -390,7 +390,9 @@ class ExplorerServerTest {
         assertEquals(500, failed.status());
         assertFalse(failed.body().contains("secret"), failed.body());
         assertTrue(failed.body().contains("\"code\":\"INTERNAL_ERROR\""), failed.body());
-        assertTrue(log.contains("request failed: IllegalStateException"), log.toString());
+        assertTrue(log.stream().anyMatch(line -> line.startsWith("request failed (route=projects, "
+                + "type=java.lang.IllegalStateException, rootCause=java.lang.IllegalStateException, at=")), log.toString());
+        assertTrue(failed.body().contains("(ref "), failed.body());
         assertTrue(log.stream().noneMatch(line -> line.contains("secret")), log.toString());
     }
 
@@ -487,5 +489,23 @@ class ExplorerServerTest {
             }
         }
         return addresses;
+    }
+
+    @Test
+    void aDotSegmentIsRefusedBeforeAnyServiceCallWhateverItsEncoding() throws Exception {
+        for (String path : List.of("/api/v1/projects/../documents", "/api/v1/projects/%2E%2E/documents",
+                "/api/v1/projects/./documents", "/api/v1/projects/%2e/documents")) {
+            RawHttp.Response refused = RawHttp.get(port, path, bearer());
+
+            assertEquals(400, refused.status(), path);
+            assertTrue(refused.body().contains("\"code\":\"INVALID_REQUEST\""), refused.body());
+            assertFalse(refused.body().contains(".."), "the message does not copy the address: " + refused.body());
+        }
+        assertEquals(0, calls.get(), "no service call for a dot segment");
+
+        RawHttp.Response named = RawHttp.get(port, "/api/v1/projects/mon.projet/documents/file%3Asrc%2Fa..b%2FA.java", bearer());
+
+        assertEquals(200, named.status());
+        assertEquals(1, calls.get());
     }
 }

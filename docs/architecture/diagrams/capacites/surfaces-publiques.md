@@ -72,8 +72,8 @@ sequenceDiagram
     else mode équipe désactivé ou jeton absent
       T-->>C: isError, message fixe
     else autre échec
-      T->>T: journal WARNING (outil, classes, sans message ni arguments)
-      T-->>C: isError, error: MINOS tool execution failed
+      T->>T: journal WARNING (outil, classes, origine, référence, sans message ni arguments)
+      T-->>C: isError, error: MINOS tool execution failed (ref ...)
     else succès
       alt résultat au-delà du budget
         T-->>C: isError, budget de résultat dépassé
@@ -87,6 +87,29 @@ sequenceDiagram
 `MinosMcpTools.execute` (`minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java:172-203`) refuse d'abord tout
 argument hors schéma (la validation du SDK est désactivée parce qu'elle recopierait la clé sans borne), puis
 classe l'échec. Le serveur lit au plus 1 Mio par message entrant et n'écrit sur stdout que le protocole.
+
+### Comment une erreur d'argument est-elle classée ?
+
+Type : flowchart · Portée : existant vérifié par tests (`MinosMcpUsageErrorTest`, `MinosApiUsageErrorTest`) · Exigences :
+changement `distinguer-l-erreur-d-usage-de-l-echec-interne` › « Le MCP ne rend comme erreur d'argument que l'erreur
+d'usage explicite », « L'API Java ne classe en requête invalide que l'erreur d'usage explicite »
+
+```mermaid
+flowchart TD
+    E["exception levée pendant l'appel"] --> R{"ResolutionException ?"}
+    R -- oui --> P["message public de référence"]
+    R -- non --> U{"UsageException ?"}
+    U -- oui --> S{"MCP : cause présente ou message sensible ?"}
+    S -- non --> A["erreur d'usage : message rendu (MCP), INVALID_REQUEST (API)"]
+    S -- oui --> I
+    U -- "oui, API" --> A
+    U -- non --> X{"IndexChangedException ou RefusedException ?"}
+    X -- oui --> N["UNAVAILABLE (API), message public, aucune ligne"]
+    X -- non --> I["échec interne : erreur opaque (MCP), EXECUTION_FAILURE ou UNAVAILABLE (API), ligne de diagnostic"]
+```
+
+Seule l'erreur voulue publique (`UsageException`, document inconnu compris) atteint « message rendu ». Une
+`IllegalArgumentException` simple, sous-classes du JDK comprises, est un défaut interne.
 
 ## Traçabilité
 

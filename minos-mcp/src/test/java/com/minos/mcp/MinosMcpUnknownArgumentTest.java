@@ -20,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MinosMcpUnknownArgumentTest {
 
-    private static final String GENERIC_ERROR = "error: MINOS tool execution failed";
 
     @Test
     void everyToolRefusesAnUnknownKeyWithoutRunningItsOperation() {
@@ -87,7 +86,7 @@ class MinosMcpUnknownArgumentTest {
 
             String text = McpToolCalls.text(McpToolCalls.call(tools, "minos_impact", arguments));
 
-            assertEquals(GENERIC_ERROR, text, key);
+            McpToolCalls.assertGenericToolError(text);
         }
     }
 

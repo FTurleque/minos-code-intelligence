@@ -12,6 +12,7 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.IncomingRelationships;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SnapshotReadView;
+import com.minos.diagnostics.UsageException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -122,10 +123,10 @@ public final class ImpactAnalysisService {
     private static Symbol requireLocalRoot(Function<String, Symbol> symbolsById, String symbolId) {
         Symbol root = symbolsById.apply(symbolId);
         if (root == null) {
-            throw new IllegalArgumentException("unknown symbol in snapshot: " + symbolId);
+            throw new UsageException("unknown symbol in snapshot: " + symbolId);
         }
         if (root.external() || root.generated()) {
-            throw new IllegalArgumentException(
+            throw new UsageException(
                     "impact root must be a local non-generated symbol: " + symbolId);
         }
         return root;
