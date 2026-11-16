@@ -44,8 +44,8 @@ http://127.0.0.1:51234/#token=…
   serveur et la page le retire de la barre d'adresse dès son chargement. Il vaut pour cette exécution seulement :
   relancer la commande en crée un autre.
 - Sans ce jeton, la page affiche « Accès refusé ». Rouvrez l'adresse imprimée par la commande.
-- L'adresse s'ouvre aussi par un lien cliqué dans une autre page ou une autre application : la page et ses deux
-  ressources (`app.css`, `app.js`) ne portent aucune donnée. Toute requête d'API venue d'un autre site reste
+- L'adresse s'ouvre aussi par un lien cliqué dans une autre page ou une autre application : la page et ses trois
+  ressources (`app.css`, `map.js`, `app.js`) ne portent aucune donnée. Toute requête d'API venue d'un autre site reste
   refusée.
 
 Codes de sortie : `0` arrêt demandé, `1` port indisponible, `2` erreur d'usage ou démarrage refusé.
