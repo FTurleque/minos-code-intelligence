@@ -149,6 +149,25 @@ class FileSemanticVectorStoreWalkedReadsTest {
     }
 
     @Test
+    void aFileWithBytesAfterItsLastDocumentIsRefusedByTheReadingsThatReachItsEnd() throws Exception {
+        Path root = temp.resolve("semantic");
+        rankedIndexOf(root);
+        Path file = root.resolve(PROJECT).resolve("index-v2.bin");
+        byte[] bytes = Files.readAllBytes(file);
+        Files.write(file, Arrays.copyOf(bytes, bytes.length + 1));
+        FileSemanticVectorStore narrow = new FileSemanticVectorStore(root, NARROW);
+        SemanticVector query = SemanticVector.fromArray("query", new double[] {1.0, 0.0, 0.0});
+
+        IOException lastPage = assertThrows(IOException.class, () -> narrow.documentPage(PROJECT, "doc-450", 100));
+        IOException ranking = assertThrows(IOException.class, () -> narrow.search(PROJECT, query, 20, -1.0));
+
+        assertEquals("unexpected trailing semantic index data", lastPage.getMessage());
+        assertEquals("unexpected trailing semantic index data", ranking.getMessage());
+        assertEquals(20, narrow.documentPage(PROJECT, null, 20).orElseThrow().documents().size(),
+                "a page that stops before the end does not read the tail");
+    }
+
+    @Test
     void aStoredDocumentIsReadAloneWithItsVectorAndTheMetadataOfItsIndex() throws Exception {
         Path root = temp.resolve("semantic");
         FileSemanticVectorStore wide = indexOf(root, DOCUMENTS);

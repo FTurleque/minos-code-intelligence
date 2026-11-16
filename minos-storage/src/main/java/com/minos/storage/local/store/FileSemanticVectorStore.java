@@ -292,6 +292,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             requireUnchanged(stamp, file);
             EntryWalk walk = EntryWalk.resumedOrStarted(reader, resume, projectId);
             List<SemanticDocument> documents = walk.readDocuments(afterStableKey, limit);
+            if (!walk.hasMore()) reader.requireEnd();
             rememberResumePoint(documentResumePoints, projectId, walk.hasMore() && !documents.isEmpty()
                     ? Optional.of(walk.resumePoint(stamp, documents.getLast().stableKey()))
                     : Optional.empty());
@@ -371,10 +372,11 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
      * already weighs more than the ceiling.
      */
     private boolean cacheMayHold(String projectId, Path file) throws IOException {
+        FileStamp refused;
         synchronized (cacheRefusals) {
-            FileStamp refused = cacheRefusals.get(projectId);
-            if (refused != null && refused.equals(FileStamp.of(file))) return false;
+            refused = cacheRefusals.get(projectId);
         }
+        if (refused != null && refused.equals(FileStamp.of(file))) return false;
         IndexMetadata metadata = metadata(projectId).orElseThrow(() -> new IOException("semantic index vanished"));
         long perDocument = (long) metadata.dimensions() * Double.BYTES + MINIMUM_DOCUMENT_WEIGHT_BYTES;
         return (long) metadata.documentCount() * perDocument <= maxCacheWeightBytes;
@@ -415,6 +417,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                     top.add(candidate);
                 }
             }
+            reader.requireEnd();
             List<ScoredKey> ranked = new ArrayList<>(top);
             ranked.sort(bestFirst);
             return new Ranking(header.metadata(), ranked);
@@ -756,6 +759,15 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private void removeCached(String projectId, boolean eviction) {
         synchronized (cacheLock) {
             if (cache.remove(projectId) != null && eviction) invalidationEvictions++;
+        }
+        synchronized (resumePoints) {
+            resumePoints.remove(projectId);
+        }
+        synchronized (documentResumePoints) {
+            documentResumePoints.remove(projectId);
+        }
+        synchronized (cacheRefusals) {
+            cacheRefusals.remove(projectId);
         }
     }
 
