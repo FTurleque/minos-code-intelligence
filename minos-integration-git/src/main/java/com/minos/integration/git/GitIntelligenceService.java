@@ -222,30 +222,8 @@ public final class GitIntelligenceService implements GitIntelligence {
                 : git.status().setIgnoreSubmodules(IgnoreSubmoduleMode.ALL).call();
         boolean clean = status == null || status.isClean();
 
-        List<String> limitations = new ArrayList<>();
-        if (remote == null) {
-            limitations.add("NO_ORIGIN_REMOTE");
-        } else if (disclosed == null) {
-            limitations.add("ORIGIN_REMOTE_NOT_DISCLOSED");
-        }
-        if (detached) {
-            limitations.add("DETACHED_HEAD");
-        }
-        if (shallow) {
-            limitations.add("SHALLOW_HISTORY");
-        }
-        if (head == null) {
-            limitations.add("UNBORN_HEAD");
-        }
-        if (!workTree.equals(opened.root())) {
-            limitations.add("REPOSITORY_ABOVE_PROJECT_ROOT");
-        }
-        if (opened.filtersNotApplied()) {
-            limitations.add("REPOSITORY_FILTERS_NOT_APPLIED");
-        }
-        if (!repository.isBare() && SubmoduleWalk.containsGitModulesFile(repository)) {
-            limitations.add("SUBMODULES_NOT_ANALYSED");
-        }
+        List<String> limitations = repositoryLimitations(
+                repository, opened, workTree, remote, disclosed, head == null, detached, shallow);
 
         String identityBasis = remote == null ? "path:" + workTree : "remote:" + remote;
         return new RepositoryView(
@@ -259,6 +237,43 @@ public final class GitIntelligenceService implements GitIntelligence {
                 clean,
                 limitations
         );
+    }
+
+    private static List<String> repositoryLimitations(
+            Repository repository,
+            TrustedRepositoryOpening.Opened opened,
+            Path workTree,
+            String remote,
+            String disclosedRemote,
+            boolean unbornHead,
+            boolean detached,
+            boolean shallow
+    ) throws IOException {
+        List<String> limitations = new ArrayList<>();
+        if (remote == null) {
+            limitations.add("NO_ORIGIN_REMOTE");
+        } else if (disclosedRemote == null) {
+            limitations.add("ORIGIN_REMOTE_NOT_DISCLOSED");
+        }
+        if (detached) {
+            limitations.add("DETACHED_HEAD");
+        }
+        if (shallow) {
+            limitations.add("SHALLOW_HISTORY");
+        }
+        if (unbornHead) {
+            limitations.add("UNBORN_HEAD");
+        }
+        if (!workTree.equals(opened.root())) {
+            limitations.add("REPOSITORY_ABOVE_PROJECT_ROOT");
+        }
+        if (opened.filtersNotApplied()) {
+            limitations.add("REPOSITORY_FILTERS_NOT_APPLIED");
+        }
+        if (!repository.isBare() && SubmoduleWalk.containsGitModulesFile(repository)) {
+            limitations.add("SUBMODULES_NOT_ANALYSED");
+        }
+        return limitations;
     }
 
     /**
