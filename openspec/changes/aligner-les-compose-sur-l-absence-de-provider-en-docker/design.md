@@ -27,6 +27,8 @@ HEAD `89be3fb4`. Lecture ; aucune image construite, aucun conteneur lancé.
 
 Non vérifié : ce que `tools list`, `tools verify` et `doctor` exécutent eux-mêmes dans le service `minos-admin` ; ce que les tests de contrat affirment sur la présence des toolchains ; la taille que ces toolchains ajoutent à l'image.
 
+Lecture de la tâche 2.1 (HEAD `c388df1b`) : `tools list` et `tools verify` appellent `AutonomousIndexOperations.providers()` (`minos-cli/src/main/java/com/minos/cli/command/ToolsCommand.java:46`), qui passe par `ProviderPlatformService.runtimes()` (`minos-cli/src/main/java/com/minos/cli/operations/LocalAutonomousIndexOperations.java:71-74`, `minos-application/src/main/java/com/minos/application/ProviderPlatformService.java:77-79`) ; la Javadoc de ce service dit que lister « inspecte chaque runtime » (`:72-74`) et le verdict `UNSUPPORTED_BY_BACKEND` ne bloque pas `verify` (`ToolsCommand.java:68-70`). **Non lu** : l'implémentation de `runtimes.list()` (ce qu'elle exécute réellement dans le conteneur) et celle de `doctor` ; la raison écrite dit donc « inventorient » et non « exécutent », et la question ouverte reste ouverte sur ces deux points.
+
 ## Écarts
 
 | Écart | Source A | Source B | Suite proposée |
@@ -62,11 +64,19 @@ Non vérifié : ce que `tools list`, `tools verify` et `doctor` exécutent eux-m
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| distribution-docker › Les fichiers de distribution Docker ne présentent pas le plan d'administration comme lançant des providers | Commentaire qui annonce le lancement des providers | D1 | 1.1, 1.2 | `M29DockerAdministrationContractTest` — cas à écrire |
-| idem | Fichiers réels | D1 (E1) | 1.2 | même test |
-| idem | Service de sonde des outils | D1 (E3) | 1.1, 1.2 | même test — cas à écrire |
-| idem | Le runtime confirme ce que disent les fichiers | D1 | 1.3 | `qualify-docker-upgrade.ps1:386-413` (existant) ; run CI de la PR — manquante jusqu'à 1.3 |
+| distribution-docker › Les fichiers de distribution Docker ne présentent pas le plan d'administration comme lançant des providers | Commentaire qui annonce le lancement des providers | D1 | 1.1, 1.2 | `M29DockerAdministrationContractTest#aCommentThatAnnouncesTheLaunchOfProvidersIsRefusedAndNamedByFileAndLine` (rouge observé : 2 échecs nommant `docker/compose-mcp.prod.yaml:71`, `docker/compose-mcp.connected.yaml:168`, `docker/Dockerfile.mcp.release:262` ; vert après 1.2 : 20 tests) |
+| idem | Fichiers réels | D1 (E1) | 1.2 | `M29DockerAdministrationContractTest#theShippedFilesDoNotPresentTheAdministrationPlaneAsLaunchingProviders`, `…#theLauncherCommentOfTheDockerfileDoesNotSayTheAdministrationPlaneIndexes` |
+| idem | Service de sonde des outils | D1 (E3) | 1.1, 1.2 | `M29DockerAdministrationContractTest#theProbeServiceIsNotConcernedByTheAdministrationServiceRule` |
+| idem | Le runtime confirme ce que disent les fichiers | D1 | 1.3 | `qualify-docker-upgrade.ps1:386-413` (existant) ; run CI de la PR — **manquante** (tâche 1.3) |
 
 ## Questions ouvertes
 
 - [Question] Ce que `tools list`, `tools verify` et `doctor` exécutent dans le service `minos-admin` (tâche 2.1) : la réponse complète la raison écrite de D2 mais ne change ni l'exigence ni les tâches du groupe 1.
+
+## Écarts constatés à l'implémentation
+
+- Le commentaire de `minos-admin` tient sur **une seule ligne** (`# Administration image: …`) : `M29DockerQueryImageContractTest` exige que la ligne juste au-dessus de `image:` commence par ce préfixe (E5), un commentaire sur deux lignes aurait cassé ce test.
+- Le test borne la règle au bloc de `minos-admin` (de sa clé au service suivant) ; la règle « lance des providers » est une expression régulière sur les lignes de commentaire (`launch … provider`), le passage du Dockerfile est jugé sur le bloc de commentaires qui contient « Build a standalone scip-java launcher ».
+- D2 appliquée dans sa branche (a) : raison écrite dans `docs/user/docker-runtime.md` (règle de classement et paragraphe des toolchains), dans le Dockerfile et dans R-13 ; le retrait éventuel reste un changement distinct, décision du propriétaire non prise (recommandation du design prise).
+- Les gates `check-compose-limits.py`, `check-image-pins.py` et `check-toolchain-baseline.py` restent verts ; aucune chaîne littérale des commentaires réécrits n'était citée par un gate ou un autre test.
+- Non mesuré : la qualification Docker A → B en CI (tâche 1.3), l'exécution réelle de `tools list/verify/doctor` dans `minos-admin`.
