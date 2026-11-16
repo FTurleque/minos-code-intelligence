@@ -9,10 +9,12 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -57,6 +59,47 @@ class PostgresSemanticDocumentReadsContractTest extends PostgresTestSupport impl
         assertEquals(5, page.metadata().dimensions());
         assertEquals("pgvector dimensions mismatch", fullLoad.getMessage());
         assertEquals("pgvector dimensions mismatch", vector.getMessage());
+    }
+
+    /** The refusal comes before any connection: a factory that is closed would fail with an I/O error instead. */
+    @Test
+    void aBlankResumeKeyIsRefusedBeforeAnyStatementIsSent() throws Exception {
+        PostgresConnectionFactory factory = createFactory("minos");
+        factory.close();
+        PostgresSemanticVectorStore closed = new PostgresSemanticVectorStore(factory);
+        String projectId = UUID.randomUUID().toString();
+
+        assertThrows(IllegalArgumentException.class, () -> closed.documentPage(projectId, " ", 10));
+        assertThrows(IllegalArgumentException.class, () -> closed.vectorPage(projectId, "", 10));
+    }
+
+    /** Two pages of one index, one on each side of a replacement, do not carry the same metadata. */
+    @Test
+    void twoPagesReadOnEachSideOfAReplacementCarryDifferentMetadata() throws Exception {
+        String projectId = UUID.randomUUID().toString();
+        SemanticVectorStore store = store();
+        List<SemanticVectorStore.IndexedDocument> before = new ArrayList<>();
+        for (int index = 0; index < 120; index++) {
+            before.add(SemanticDocumentReadsContract.indexed(projectId, "snap-1",
+                    String.format(java.util.Locale.ROOT, "doc-%03d", index), index, 0.0, 1.0));
+        }
+        store.replace(SemanticDocumentReadsContract.snapshot(projectId, "snap-1", 5L, before));
+        SemanticVectorStore.VectorPage first = store.vectorPage(projectId, null, 20).orElseThrow();
+
+        List<SemanticVectorStore.IndexedDocument> after = new ArrayList<>();
+        for (int index = 0; index < 80; index++) {
+            after.add(SemanticDocumentReadsContract.indexed(projectId, "snap-2",
+                    String.format(java.util.Locale.ROOT, "doc-%03d", index), index, 0.0, 1.0));
+        }
+        store.replace(SemanticDocumentReadsContract.snapshot(projectId, "snap-2", 6L, after));
+        SemanticVectorStore.VectorPage second = store.vectorPage(projectId, first.vectors().getLast().stableKey(), 20)
+                .orElseThrow();
+
+        assertEquals(120, first.metadata().documentCount());
+        assertEquals(80, second.metadata().documentCount());
+        assertEquals("snap-1", first.metadata().snapshotId());
+        assertEquals("snap-2", second.metadata().snapshotId());
+        assertFalse(first.metadata().equals(second.metadata()));
     }
 
     @Test
