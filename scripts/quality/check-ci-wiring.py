@@ -26,6 +26,11 @@ Four rules, all anchored on the structure of the workflows and never on a senten
    in ``GATES_WITHOUT_SELF_TEST``: a closed list that only shrinks, where an entry whose script now has a self-test
    or no longer exists is a failure.
 
+8. A job that reports a required check and declares ``needs:`` also declares a job-level ``if:`` that calls
+   ``always()`` (``if: always()`` or ``if: ${{ always() }}``, alone or in a condition): without it, a job upstream that
+   failed, was cancelled or was skipped leaves the check without a verdict, and the pull request waits for it forever
+   (AUD-DEP-03). A required job without ``needs:`` is not concerned.
+
 What this does not prove: that the ruleset configured on GitHub contains these checks (that is
 scripts/quality/verify-ruleset.py, run by hand), nor that a step runs on every event, nor that the scanner
 accepts the arguments, nor that a release really carries the plugin (that is the run of the job itself).
@@ -52,6 +57,9 @@ INVARIANTS_JOB = "invariants"
 TOP_LEVEL_KEY = re.compile(r"^[A-Za-z_\"'][^\s:]*\s*:")
 JOB_HEADER = re.compile(r"^  ([\w-]+):\s*$")
 JOB_FIELD = re.compile(r"^    (name|uses):\s*(.+?)\s*$")
+JOB_NEEDS = re.compile(r"^    needs\s*:")
+JOB_CONDITION = re.compile(r"^    if\s*:\s*(.*)$")
+ALWAYS = re.compile(r"\balways\s*\(\s*\)")
 EVENT_HEADER = re.compile(r"^  ([\w-]+):\s*(.*?)\s*$")
 INLINE_LIST = re.compile(r"\[(.*)\]")
 MATRIX_ENTRY = re.compile(r"^\s+([\w-]+):\s*\[(.*)\]\s*$")
@@ -251,7 +259,21 @@ def check_problem(root: Path, ruleset: str, branches: list[str], check: dict) ->
     if len(matches) != 1:
         return f"{label}: expected exactly one job of {workflow} to report it, found {len(matches)}"
     problem = reachability_problem(pull_request_trigger(text), workflow, branches)
+    if problem is None:
+        problem = waiting_problem(jobs_of(text)[matches[0]], matches[0], workflow)
     return f"{label}: {problem}" if problem else None
+
+
+def waiting_problem(job: dict, job_id: str, workflow: str) -> str | None:
+    """Why a required job that waits for others could stay without a verdict, or None when it always runs."""
+    lines = [line for _, line in job["lines"]]
+    if not any(JOB_NEEDS.match(line) for line in lines):
+        return None
+    conditions = [match.group(1) for line in lines if (match := JOB_CONDITION.match(line))]
+    if any(ALWAYS.search(condition) for condition in conditions):
+        return None
+    return (f"job '{job_id}' of {workflow} declares needs: without 'if: always()': a job upstream that failed, was "
+            f"cancelled or was skipped would leave this required check without a verdict")
 
 
 def check_required_checks(root: Path) -> tuple[list[str], int]:
