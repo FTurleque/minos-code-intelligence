@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -30,6 +31,9 @@ INSTALLER = "packaging/windows/minos-installer.iss.template"
 CLIENT_DETECTOR = "scripts/install/detect-mcp-clients.ps1"
 INTELLIJ_DOC = "docs/user/intellij-plugin.md"
 WINDOWS_DISTRIBUTION = "scripts/release/build-windows-distribution.ps1"
+REQUIRED_CHECKS = ".github/required-checks.json"
+DEVELOPER_DOCS = "docs/developer"
+RISK_REGISTER = "docs/architecture/risks/register.md"
 
 PUBLISHED_101_COMMIT = "f762025d66e33c40324c811079f1527d122f90f9"
 PUBLISHED_101_URL = "https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1"
@@ -202,6 +206,68 @@ STRUCTURED_MUTATIONS = {
 }
 
 
+# A ruleset is named between French quotation marks, always `Protect ...` (or `Release promotion gate ...`).
+RULESET_NAME = re.compile(r"«\s*((?:Protect|Release promotion gate)[^»]*?)\s*»")
+# The status cell (column 6) of a row of the active-risk table, when the risk is still open.
+OPEN_STATUS = re.compile(r"\bOPEN\b")
+
+
+def declared_rulesets() -> set[str]:
+    return set(json.loads(read(REQUIRED_CHECKS))["rulesets"])
+
+
+def documents_naming_rulesets() -> list[str]:
+    """The current-state documents and every developer page, relative to the repository root."""
+    developer = sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / DEVELOPER_DOCS).rglob("*.md")
+                       if "generated" not in path.parts)
+    return [STATUS, ROADMAP, *developer]
+
+
+def open_risk_rows(register: str) -> list[tuple[int, str]]:
+    """Numbered rows of the active-risk table of the register whose status column says `OPEN`."""
+    rows = []
+    for number, line in enumerate(register.splitlines(), start=1):
+        cells = [cell.strip() for cell in line.split("|")]
+        if line.startswith("| R-") and len(cells) > 7 and OPEN_STATUS.search(cells[6]):
+            rows.append((number, line))
+    return rows
+
+
+def validate_branch_model_documents() -> None:
+    """The current documents name the rulesets that `.github/required-checks.json` declares, and no open risk
+    targets a branch that is gone. Dated records (history, audits) are out of scope."""
+    declared = declared_rulesets()
+    unknown = []
+    for relative in documents_naming_rulesets():
+        unknown += [f"{relative}: « {name} »" for name in RULESET_NAME.findall(read(relative)) if name not in declared]
+    literal_gate.check("current documents name the declared rulesets", not unknown,
+                       f"{REQUIRED_CHECKS} declares {sorted(declared)}; the current documents name another ruleset: "
+                       f"{', '.join(unknown)}")
+    stale = [f"{line.split('|')[1].strip()} ({RISK_REGISTER}:{number})"
+             for number, line in open_risk_rows(read(RISK_REGISTER)) if "develop" in line]
+    literal_gate.check("no open risk names the removed branch develop", not stale,
+                       f"an open risk of the register names the removed branch develop: {', '.join(stale)}")
+
+
+def _append(text: str):
+    """A mutation that adds ``text`` as a last line."""
+    return lambda content: f"{content.rstrip()}\n{text}\n"
+
+
+# Mutations of the two structured rules above: a ruleset the repository does not declare, in each kind of document
+# the rule reads (current state, developer page), and an open risk that names `develop`.
+OLD_RULESET = "« Protect main & develop »"
+OPEN_RISK_ON_DEVELOP = "| R-99 | Promotion de develop | Faible | Faible | Faible | **OPEN** | Aucune. |"
+STRUCTURED_MUTATIONS.update({
+    "current documents name the declared rulesets": [
+        (STATUS, _append(OLD_RULESET)),
+        (ROADMAP, _append(OLD_RULESET)),
+        ("docs/developer/quality-gates.md", _append(OLD_RULESET)),
+    ],
+    "no open risk names the removed branch develop": [(RISK_REGISTER, _append(OPEN_RISK_ON_DEVELOP))],
+})
+
+
 def validate_ci_contracts() -> None:
     workflow = read(PR_WORKFLOW)
     require_sandbox_qualification_on_every_verify(workflow)
@@ -276,6 +342,7 @@ def evaluate() -> str:
         validate_release_documentation,
         validate_security_and_storage,
         validate_ci_contracts,
+        validate_branch_model_documents,
         validate_installer_contract,
         validate_intellij_launcher_path,
     )
