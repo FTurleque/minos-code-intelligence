@@ -62,13 +62,13 @@ Non mesuré : le type du jeton dans SonarCloud ; la possibilité d'un mode hors 
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Un secret n'accompagne pas la compilation du code d'une pull request | Compilation avec le jeton d'analyse | D2 | 1.1, 1.3 | `test_check_workflow_pins.py` — cas à écrire |
-| idem | Étape hors liste qui reçoit un secret et lance un script du dépôt | D2 | 1.1, 1.3 | idem — à écrire |
-| idem | Dépôt réel | D1, D2 | 1.2, 1.3, 1.4 | `check-workflow-pins.py` ; run CI de la PR — manquante jusqu'à 1.4 |
-| idem | Entrée de liste sans objet | D2 | 1.1, 1.3 | `test_check_workflow_pins.py` — à écrire |
-| idem | Secret remonté au niveau du job | D2 (E6) | 1.1, 1.3 | idem — à écrire |
-| idem | Identifiant Docker Hub au niveau du job | D2 (E6) | 1.1, 1.3 | idem — à écrire |
-| idem | Workflow sans déclencheur pull_request | D2 (E4) | 1.1, 1.3 | idem — à écrire |
+| controles-de-fusion › Un secret n'accompagne pas la compilation du code d'une pull request | Compilation avec le jeton d'analyse | D2 | 1.1, 1.3 | `test_check_workflow_pins.py#SecretWithRepositoryCodeTest.test_the_analysis_token_given_to_a_compilation_is_refused` (rouge observé : 69 erreurs avant les contrôles) |
+| idem | Étape hors liste qui reçoit un secret et lance un script du dépôt | D2 | 1.1, 1.3 | `SecretWithRepositoryCodeTest.test_a_step_outside_the_list_that_receives_a_secret_and_runs_a_script_of_the_repository_is_refused` |
+| idem | Dépôt réel | D1, D2 | 1.2, 1.3, 1.4 | `check-workflow-pins.py` (affiche la liste fermée) ; `RepositoryTest.test_the_analysis_is_the_only_step_that_receives_a_secret_and_runs_repository_code` ; run CI de la PR — **manquante** (tâche 1.4) |
+| idem | Entrée de liste sans objet | D2 | 1.1, 1.3 | `SecretWithRepositoryCodeTest.test_a_listed_step_that_no_longer_receives_the_secret_is_a_stale_entry` |
+| idem | Secret remonté au niveau du job | D2 (E6) | 1.1, 1.3 | `SecretWithRepositoryCodeTest.test_a_secret_raised_to_the_job_or_to_the_workflow_is_refused`, `RepositoryTest.test_the_token_moved_to_the_job_is_named` |
+| idem | Identifiant Docker Hub au niveau du job | D2 (E6) | 1.1, 1.3 | `SecretWithRepositoryCodeTest.test_the_docker_hub_identifier_may_stay_in_the_job_env` |
+| idem | Workflow sans déclencheur pull_request | D2 (E4) | 1.1, 1.3 | `SecretWithRepositoryCodeTest.test_a_workflow_that_no_pull_request_starts_is_not_concerned` |
 
 ## Questions ouvertes
 
@@ -78,3 +78,13 @@ Non mesuré : le type du jeton dans SonarCloud ; la possibilité d'un mode hors 
 ## Ordre de fusion
 
 Ce changement et `borner-la-qualification-docker-aux-pr-concernees` modifient tous deux `scripts/quality/check-workflow-pins.py` et son auto-test, dans des tables différentes (`SECRET_WITH_REPOSITORY_CODE_KEPT` ici, `DOCKER_LOGIN_KEPT` là). Celui-ci, sans décision du propriétaire en attente, se fusionne d'abord ; l'autre se rebase. Le contrôle (2) de D2 lit l'`env:` de job de `release-promotion-gate.yml` : si l'autre changement y ajoute un job, il n'y pose aucun `secrets.` hors `DOCKERHUB_USERNAME`.
+
+## Écarts constatés à l'implémentation
+
+- **Mesure 1.2 non faite** (PR d'essai et CI exigées) : la forme retenue est celle que D1 prévoit en l'absence de mesure, `install -DskipTests -Djacoco.skip=true` dans l'étape sans secret, `sonar` seul dans l'étape d'analyse. Le mode hors ligne (`-o`) n'est pas tenté. Le comportement de `sonar:sonar` seul après `install` n'est pas mesuré : c'est le premier point que la CI de la PR tranche (tâche 1.4).
+- **Contrôle du jeton déplacé** : une étape propre (« Check that the analysis token is available », sans code du dépôt) porte le contrôle de présence et échoue tôt, avant la construction ; l'étape de build ne reçoit rien. Le nombre de modules à rapport Linux passe de l'étape de build à l'étape d'analyse par `GITHUB_OUTPUT`, relu dans un `env:` (aucune interpolation dans le script).
+- **Résolution préalable du plugin Sonar non faite** : le but `help` du plugin n'est pas connu ; le plugin est téléchargé par l'étape d'analyse, qui porte le jeton.
+- **Purge du cache** : une dernière étape (`if: always()`) retire `~/.m2/repository/com/minos` ; elle ne reçoit aucun secret.
+- **Table non vide d'emblée** : `SECRET_WITH_REPOSITORY_CODE_KEPT` porte l'étape d'analyse dès l'écriture du gate ; le rouge sur le dépôt réel a été observé par la règle « phase du cycle de vie » (étape listée qui lançait `test-compile`), pas par l'absence d'entrée.
+- Le gate affiche la liste fermée à chaque succès (scénario « Dépôt réel »).
+- Non mesuré : le type du jeton (tâche 2.1), toute exécution de la CI.
