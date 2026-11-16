@@ -18,6 +18,9 @@ Contract of docker/compose-mcp.prod.yaml and docker/compose-mcp.connected.yaml (
   ``strconv.ParseFloat: parsing ""``); negative and empty values are refused. A host-specific CPU cap
   is the operator's choice, through ``MINOS_<ROLE>_CPUS`` in the runtime .env;
 * ``memswap_limit`` repeats ``mem_limit`` (no swap);
+* a service published on the loopback of the host (``minos-explorer``, ``minos-pgadmin``) bounds its journal: a
+  ``logging`` key with the ``json-file`` driver, ``max-size`` and ``max-file`` (a refused request, even limited, writes a
+  line, and Docker's default driver keeps them without end);
 * every service pulls its ceilings from one of those blocks with ``<<: *limits-<role>`` and never
   spells a ceiling itself (no second definition inside a service, no ``deploy`` resources);
 * the two files carry identical blocks, and give a service they share the same role;
@@ -75,6 +78,12 @@ POSITIVE_DEFAULT = {
 }
 CI_STEPS = ("scripts/quality/check-compose-limits.py", "scripts/quality/test_check_compose_limits.py")
 FORBIDDEN_IN_SERVICE = re.compile(r"^\s+(cpus|mem_limit|memswap_limit|pids_limit|mem_reservation|cpu_shares|deploy):")
+LOGGED_SERVICES = ("minos-explorer", "minos-pgadmin")
+LOGGING_HEADER = re.compile(r"^    logging:\s*(?P<inline>.*)$")
+SERVICE_KEY = re.compile(r"^    [A-Za-z_][A-Za-z0-9_.-]*:")
+LOG_DRIVER = re.compile(r"driver:\s*[\"']?(?P<value>[A-Za-z0-9_-]+)[\"']?")
+LOG_MAX_SIZE = re.compile(r"max-size:\s*[\"']?(?P<value>[1-9][0-9]*[kKmMgG]?)[\"']?")
+LOG_MAX_FILE = re.compile(r"max-file:\s*[\"']?(?P<value>[1-9][0-9]*)[\"']?")
 BLOCK_HEADER = re.compile(r"^x-limits-(?P<role>[a-z]+): &limits-(?P=role)\s*$")
 VALUE = re.compile(r'^  (?P<key>[a-z_]+): "\$\{(?P<var>MINOS_[A-Z_]+):-(?P<default>[^}]*)\}"\s*$')
 SERVICE_HEADER = re.compile(r"^  (?P<name>[a-z][a-z0-9-]*):\s*$")
@@ -92,6 +101,33 @@ def top_level_sections(text: str) -> dict[str, list[str]]:
         elif current is not None:
             sections[current].append(line)
     return sections
+
+
+def journal_failures(relative: str, service: str, lines: list[str]) -> list[str]:
+    """What is missing from the ``logging`` key of a service whose journal must be bounded, naming the key."""
+    section: list[str] | None = None
+    for line in lines:
+        header = LOGGING_HEADER.match(line)
+        if header:
+            section = [header.group("inline")]
+        elif section is not None and SERVICE_KEY.match(line):
+            break
+        elif section is not None:
+            section.append(line)
+    if section is None:
+        return [f"{relative}: service {service}: no `logging` key; its journal grows without bound "
+                f"(declare driver json-file with max-size and max-file)"]
+    text = "\n".join(section)
+    failures = []
+    driver = LOG_DRIVER.search(text)
+    if not driver or driver.group("value") != "json-file":
+        failures.append(f"{relative}: service {service}: logging.driver must be json-file "
+                        f"(found {driver.group('value') if driver else 'none'}): another driver has no size bound here")
+    if not LOG_MAX_SIZE.search(text):
+        failures.append(f"{relative}: service {service}: logging.options.max-size is missing or not a size")
+    if not LOG_MAX_FILE.search(text):
+        failures.append(f"{relative}: service {service}: logging.options.max-file is missing or not a count")
+    return failures
 
 
 def parse(path: Path, root: Path):
@@ -133,6 +169,7 @@ def parse(path: Path, root: Path):
         blocks[role] = values
 
     services: dict[str, str | None] = {}
+    service_lines: dict[str, list[str]] = {}
     body = sections.get("services:", [])
     name: str | None = None
     for line in body:
@@ -140,9 +177,11 @@ def parse(path: Path, root: Path):
         if header:
             name = header.group("name")
             services[name] = None
+            service_lines[name] = []
             continue
         if name is None:
             continue
+        service_lines[name].append(line)
         merge = MERGE.match(line)
         if merge:
             if services[name] is not None:
@@ -156,6 +195,9 @@ def parse(path: Path, root: Path):
             failures.append(f"{relative}: service {service} has no `<<: *limits-<role>`: no CPU, memory or PID ceiling")
         elif role not in blocks:
             failures.append(f"{relative}: service {service} merges *limits-{role}, which is not defined")
+    for service in LOGGED_SERVICES:
+        if service in service_lines:
+            failures += journal_failures(relative, service, service_lines[service])
     if not services:
         failures.append(f"{relative}: no service found")
     return failures, blocks, services

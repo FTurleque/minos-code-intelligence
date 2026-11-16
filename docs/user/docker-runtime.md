@@ -382,6 +382,12 @@ L'adresse à ouvrir, avec le jeton de la session, est écrite dans le journal du
 (`docker compose logs minos-explorer`) : ce journal contient donc le jeton jusqu'à la suppression du conteneur ;
 le jeton cesse de valoir dès que le conteneur s'arrête.
 
+Le journal Docker de `minos-explorer` et celui de `minos-pgadmin` sont **bornés** : pilote `json-file`, `max-size: 1m`,
+`max-file: 2` (deux fichiers d'un mégaoctet au plus). Les requêtes refusées sont de plus résumées par au plus une ligne
+par raison et par minute. Conséquence : la ligne de l'adresse à jeton peut sortir du journal quand il tourne ; pour en
+obtenir une nouvelle, redémarrez le service (`docker compose restart minos-explorer`). Le pilote `json-file` reste la
+configuration de `docker compose logs` ; un autre pilote du démon n'est pas borné par ce fichier.
+
 Dans le conteneur, la surface écoute sur l'interface du conteneur et non sur sa boucle locale, parce qu'un port
 publié n'atteint pas cette dernière. Ce comportement n'est activé que par la variable interne
 `MINOS_EXPLORER_CONTAINER_LISTEN`, posée par le Compose et refusée hors d'un conteneur ; le jeton, le contrôle de

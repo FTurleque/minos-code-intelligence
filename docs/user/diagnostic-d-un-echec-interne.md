@@ -59,7 +59,8 @@ illisible, erreur d'usage) ne laissent rien. Pour effacer le journal, supprimez 
 - **Distribution WSL** : aucun journal n'y est écrit. Le worker transmet une ligne de diagnostic structurée (références,
   classes, origine ; aucun message, aucun chemin) que l'installation Windows valide avant de la journaliser ; toute ligne
   non conforme est ignorée.
-- **Explorateur** : voir [`semantic-explorer.md`](semantic-explorer.md) pour la trace de ses échecs.
+- **Explorateur** : sa ligne `request failed (route=…, …, ref=…)` et la référence de sa réponse `500` suivent la même
+  forme ; voir [`semantic-explorer.md`](semantic-explorer.md). Le journal privé n'y existe pas en Docker.
 
 ## Retrouver la trace d'une réponse
 

@@ -234,6 +234,64 @@ class CheckComposeLimitsTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode, result.stdout)
         self.assertIn("gate_cli", result.stderr)
 
+    # ---- bounded journal of the services published on the loopback of the host ----
+    LOGGING = ("    logging:\n      driver: json-file\n      options:\n"
+               "        max-size: \"1m\"\n        max-file: \"2\"\n")
+
+    def published_service(self, name: str, logging: str) -> dict[str, str]:
+        service = (f"  {name}:\n    <<: *limits-query\n    image: \"${{MINOS_IMAGE}}\"\n{logging}")
+        return {"docker/compose-mcp.connected.yaml": GOOD.replace("\nvolumes:", f"{service}\nvolumes:")}
+
+    def test_published_services_with_a_bounded_journal_pass(self):
+        files = self.published_service("minos-explorer", self.LOGGING)
+        self.assertEqual([], self.run_gate(files))
+        both = {"docker/compose-mcp.connected.yaml": files["docker/compose-mcp.connected.yaml"].replace(
+            "\nvolumes:", "  minos-pgadmin:\n    <<: *limits-query\n    image: \"${MINOS_IMAGE}\"\n"
+            + self.LOGGING + "\nvolumes:")}
+        self.assertEqual([], self.run_gate(both))
+
+    def test_a_published_service_without_logging_is_refused_by_name(self):
+        for name in ("minos-explorer", "minos-pgadmin"):
+            with self.subTest(service=name):
+                failures = self.run_gate(self.published_service(name, ""))
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(name, failures[0])
+                self.assertIn("no `logging` key", failures[0])
+
+    def test_a_max_size_without_a_max_file_is_refused_naming_the_key(self):
+        logging = "    logging:\n      driver: json-file\n      options:\n        max-size: \"1m\"\n"
+        failures = self.run_gate(self.published_service("minos-explorer", logging))
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("minos-explorer", failures[0])
+        self.assertIn("max-file", failures[0])
+
+    def test_a_max_file_without_a_max_size_is_refused_naming_the_key(self):
+        logging = "    logging:\n      driver: json-file\n      options:\n        max-file: \"2\"\n"
+        failures = self.run_gate(self.published_service("minos-pgadmin", logging))
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("max-size", failures[0])
+
+    def test_a_driver_other_than_json_file_without_a_size_is_refused(self):
+        logging = "    logging:\n      driver: syslog\n"
+        failures = self.run_gate(self.published_service("minos-explorer", logging))
+        self.assertTrue(any("json-file" in failure for failure in failures), failures)
+        self.assertTrue(any("max-size" in failure for failure in failures), failures)
+
+    def test_a_flow_style_logging_key_is_read_too(self):
+        logging = "    logging: { driver: json-file, options: { max-size: \"1m\", max-file: \"2\" } }\n"
+        self.assertEqual([], self.run_gate(self.published_service("minos-explorer", logging)))
+
+    def test_a_logging_key_of_another_service_is_not_borrowed(self):
+        files = self.published_service("minos-explorer", "")
+        content = files["docker/compose-mcp.connected.yaml"].replace(
+            "\nvolumes:", "  minos-other:\n    <<: *limits-query\n    image: \"x\"\n" + self.LOGGING + "\nvolumes:")
+        failures = self.run_gate({"docker/compose-mcp.connected.yaml": content})
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("minos-explorer", failures[0])
+
+    def test_a_service_that_is_not_published_needs_no_journal_bound(self):
+        self.assertEqual([], self.run_gate({"docker/compose-mcp.prod.yaml": GOOD}))
+
     def test_the_real_repository_is_bounded_and_wired(self):
         failures, inspected = gate.check(gate.DEFAULT_ROOT)
         self.assertEqual([], failures)
