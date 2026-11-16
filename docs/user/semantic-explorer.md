@@ -44,8 +44,8 @@ http://127.0.0.1:51234/#token=…
   serveur et la page le retire de la barre d'adresse dès son chargement. Il vaut pour cette exécution seulement :
   relancer la commande en crée un autre.
 - Sans ce jeton, la page affiche « Accès refusé ». Rouvrez l'adresse imprimée par la commande.
-- L'adresse s'ouvre aussi par un lien cliqué dans une autre page ou une autre application : la page et ses deux
-  ressources (`app.css`, `app.js`) ne portent aucune donnée. Toute requête d'API venue d'un autre site reste
+- L'adresse s'ouvre aussi par un lien cliqué dans une autre page ou une autre application : la page et ses trois
+  ressources (`app.css`, `map.js`, `app.js`) ne portent aucune donnée. Toute requête d'API venue d'un autre site reste
   refusée.
 
 Codes de sortie : `0` arrêt demandé, `1` port indisponible, `2` erreur d'usage ou démarrage refusé.
@@ -98,6 +98,15 @@ préparation interrompue ne laisse aucune projection partielle, et la projection
 | `--max-memory-mb <n>` | 256 | budget de mémoire de travail ; dépassé, la commande échoue sans rien publier |
 | `--format text\|json` | `text` | forme du rapport |
 
+Deux stratégies de calcul. Quand les vecteurs de l'échantillon tiennent dans ce qui reste du budget
+`--max-memory-mb`, `prepare` lit l'index deux fois (sélection, puis copie de l'échantillon en mémoire) et fait
+toutes les itérations sur cette copie : le rapport annonce `"strategy":"in-memory"` et `"passes":2`. Sinon, il
+relit l'index à chaque étape (4 à 43 lectures) et le rapport annonce `"strategy":"streamed"` avec une
+limitation qui nomme `--max-memory-mb` : la commande ne dépasse jamais le budget pour économiser des lectures.
+Les deux stratégies publient la même projection ; `iterations` donne le nombre d'itérations d'ajustement. Un
+échantillon plus grand demande plus de mémoire : pour 100 000 points à 768 dimensions, il faut compter près de
+300 Mio, que le budget par défaut ne contient pas.
+
 Codes de sortie des deux commandes : `0` succès (quel que soit l'état lu par `status`), `1` échec (projet
 inconnu, index non `READY`, budget dépassé, index modifié pendant la préparation, autre préparation en cours),
 `2` erreur d'usage.
@@ -132,10 +141,18 @@ rafraîchit pas d'elle-même après une préparation : refermez puis rouvrez « 
 fichier dérivé sous `MINOS_HOME/semantic-projections/`, supprimable sans perte.
 
 Les valeurs par défaut de `prepare` (100 000 points, 256 Mio, 40 itérations au plus) et le repère de durée (30 s
-pour 25 000 documents à 256 dimensions sur stockage local) sont **provisoires** : ils reposent sur des mesures
+pour 25 000 documents à 256 dimensions sur stockage local) sont **provisoires** (le repère de durée précède la stratégie en mémoire) : ils reposent sur des mesures
 faites sous Windows sur des index `local-hash` synthétiques. Aucune mesure n'existe sur un index réel, sur
 PostgreSQL à 100 000 documents, sous Linux ni avec un modèle d'embeddings appris. La carte a été parcourue sous
 Windows dans Chrome seulement.
+
+Stockage local et taille de l'index : la liste lit le fichier d'index sans le charger en mémoire, et le détail
+le parcourt jusqu'au document demandé ; les voisins et la recherche classent les vecteurs du fichier sans
+retenir l'index quand il est trop lourd pour le cache de 256 Mio du stockage local. Un index que ce cache tient
+est lu une fois puis gardé : le premier détail, avant ce chargement, parcourt le fichier. Sur des jeux
+synthétiques `local-hash` à 768 dimensions (32 768 documents, contenu de 2 000 caractères), mesurés sous
+Windows sur un seul poste et bruités, la liste passe d'environ 760 à 11 ms et le détail d'environ 690 à 47 ms ;
+aucune mesure n'existe sur un index réel. La taille maximale reste celle que l'indexation construit.
 
 Avec le provider `local-hash`, un badge permanent rappelle que l'index est une référence déterministe (hachage de
 tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL`).

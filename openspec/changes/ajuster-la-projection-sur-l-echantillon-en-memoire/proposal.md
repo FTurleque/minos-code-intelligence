@@ -52,7 +52,7 @@ Aucune.
 
 ## Impact
 
-- **Modules du reactor** : `minos-application` (package `com.minos.application.semantic`) ; `minos-cli` pour le champ additif du rapport.
+- **Modules du reactor** : `minos-application` (package `com.minos.application.semantic`) ; `minos-cli` pour les champs additifs du rapport (`strategy`, `iterations`, `limitations`) ; `minos-explorer` (sources de test : deux mesures de plus du banc).
 - **Surfaces publiques** (CLI, API Java, MCP, IntelliJ, NEXUS) : CLI — deux champs **additifs** dans le rapport JSON de `semantic projection prepare` (stratégie suivie, itérations d'ajustement) et, en repli, une limitation nommée. API Java — le `record` public `SemanticProjectionService.PreparationReport` (`SemanticProjectionService.java:224-226`) gagne deux composants : additif pour qui le lit, à adapter pour qui le construit (tests). MCP, plugin et NEXUS : aucun.
 - **ADR** : aucun (pas de choix durable entre modules ni de format persisté ; la méthode ne change pas).
 - **Gates à rejouer** : `python .claude/scripts/run_gates.py --fast` ; `scripts/architecture/check-module-boundaries.py` ; `scripts/quality/check-comment-language.py` ; goldens de `minos-app/src/test/resources/characterization/` si l'un d'eux porte le rapport de préparation ; scope JaCoCo nominatif de la projection s'il existe à la date de l'implémentation (AUD-TST-01).

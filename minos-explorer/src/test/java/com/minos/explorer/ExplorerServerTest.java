@@ -128,7 +128,7 @@ class ExplorerServerTest {
             assertEquals(200, page.status(), site);
             assertTrue(page.body().startsWith("<!DOCTYPE html>"), site);
             assertFalse(page.body().contains(token), "the page never holds the token");
-            for (String resource : List.of("/app.css", "/app.js")) {
+            for (String resource : List.of("/app.css", "/map.js", "/app.js")) {
                 assertEquals(200, RawHttp.get(port, resource, Map.of("Sec-Fetch-Site", site)).status(), resource);
             }
         }
@@ -157,11 +157,11 @@ class ExplorerServerTest {
         assertEquals(403, RawHttp.get(port, "/api/v1/projects", crossSite).status());
         assertEquals(403, RawHttp.send(port, "POST", "/", crossSite, "").status(), "a navigation is a GET");
         assertEquals(403, RawHttp.send(port, "HEAD", "/", crossSite, null).status());
-        assertEquals(403, RawHttp.get(port, "/absent.js", crossSite).status(), "only the three resources");
-        assertEquals(403, RawHttp.get(port, "/index.html", crossSite).status(), "only the three resources");
+        assertEquals(403, RawHttp.get(port, "/absent.js", crossSite).status(), "only the four resources");
+        assertEquals(403, RawHttp.get(port, "/index.html", crossSite).status(), "only the four resources");
         assertEquals(200, RawHttp.get(port, "/index.html", Map.of()).status());
         assertEquals(403, RawHttp.send(port, "get", "/", crossSite, null).status(), "the method is GET, exactly");
-        for (String almostApi : List.of("/api", "/API/v1/projects", "/app.js/", "/./", "/app.js;x")) {
+        for (String almostApi : List.of("/api", "/API/v1/projects", "/app.js/", "/map.js/", "/./", "/app.js;x")) {
             assertEquals(403, RawHttp.get(port, almostApi, crossSiteWithToken).status(), almostApi);
         }
         RawHttp.Response refusedApi = RawHttp.get(port, "/api/v1/projects", crossSiteWithToken);
@@ -251,7 +251,7 @@ class ExplorerServerTest {
         for (String path : WebResources.paths()) {
             assertEquals(200, RawHttp.get(port, path, Map.of()).status(), path);
         }
-        for (String path : List.of("/app.js.map", "/../pom.xml", "/%2e%2e/%2e%2e/pom.xml", "/com/minos/explorer/web/app.js",
+        for (String path : List.of("/app.js.map", "/map.js.map", "/../pom.xml", "/%2e%2e/%2e%2e/pom.xml", "/com/minos/explorer/web/app.js",
                 "/favicon.ico")) {
             RawHttp.Response absent = RawHttp.get(port, path, Map.of());
             assertEquals(404, absent.status(), path);

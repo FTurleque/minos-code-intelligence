@@ -7,7 +7,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public final class PostgresSchemaMigrator {
-    static final int CURRENT_VERSION = 5;
+    static final int CURRENT_VERSION = 6;
 
     private final PostgresConnectionFactory connections;
 
@@ -55,17 +55,23 @@ public final class PostgresSchemaMigrator {
                     if (version > CURRENT_VERSION) {
                         throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
                     }
-                    if (version < 1) applyV1(statement);
-                    if (version < 2) applyV2(statement);
-                    if (version < 3) applyV3(statement);
-                    if (version < 4) applyV4(statement);
-                    if (version < 5) applyV5(statement);
+                    applyMigrationsAfter(version, statement);
                     return null;
                 }
             });
         } catch (SQLException exception) {
             throw new IOException("unable to initialize MINOS PostgreSQL backend", exception);
         }
+    }
+
+    /** Applies, in order, every migration above {@code version}, inside the caller's transaction. */
+    private static void applyMigrationsAfter(int version, Statement statement) throws SQLException {
+        if (version < 1) applyV1(statement);
+        if (version < 2) applyV2(statement);
+        if (version < 3) applyV3(statement);
+        if (version < 4) applyV4(statement);
+        if (version < 5) applyV5(statement);
+        if (version < 6) applyV6(statement);
     }
 
     private static int currentVersion(Statement statement) throws SQLException {
@@ -134,5 +140,19 @@ public final class PostgresSchemaMigrator {
     private static void applyV5(Statement s) throws SQLException {
         s.execute("ALTER TABLE project_index_state ADD COLUMN IF NOT EXISTS resumable_run_id uuid NULL");
         s.execute("INSERT INTO schema_version(version) VALUES (5) ON CONFLICT(version) DO NOTHING");
+    }
+
+    /**
+     * The number of documents of each semantic index, kept by every write of the index so that no read counts
+     * rows. An existing index gets the number of rows it holds; the column is then required, so that a write
+     * that forgets it fails instead of leaving an index without a count.
+     */
+    private static void applyV6(Statement s) throws SQLException {
+        s.execute("ALTER TABLE semantic_index_meta ADD COLUMN IF NOT EXISTS document_count integer NULL "
+                + "CHECK (document_count >= 0)");
+        s.execute("UPDATE semantic_index_meta m SET document_count = (SELECT COUNT(*) FROM semantic_documents d "
+                + "WHERE d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id) WHERE m.document_count IS NULL");
+        s.execute("ALTER TABLE semantic_index_meta ALTER COLUMN document_count SET NOT NULL");
+        s.execute("INSERT INTO schema_version(version) VALUES (6) ON CONFLICT(version) DO NOTHING");
     }
 }
