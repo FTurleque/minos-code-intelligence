@@ -95,15 +95,124 @@ class SemanticProjectionServiceTest {
 
         SemanticProjectionService.PreparationReport report = service.prepare(projectId,
                 ProjectionFixture.request(2_500, 42L), (phase, pass, vectorsRead) -> phases.add(phase));
+        Attempt streamed = smallestWorkableBudget(2_500, 42L);
 
         assertEquals(0, fixture.vectors.fullLoads);
-        assertTrue(fixture.vectors.vectorPages >= 3 * report.passes(), "every pass walks the index by pages");
+        assertTrue(fixture.vectors.vectorPages >= 3 * report.passes(), "every walk reads the index by pages");
         assertTrue(fixture.vectors.largestPage <= SemanticVectorStore.MAX_VECTOR_PAGE_SIZE);
         assertEquals(2_500, report.pointCount());
         assertEquals(2_500, report.documentCount());
-        assertTrue(report.passes() >= 3 && report.passes() <= SemanticProjectionService.MAX_ITERATIONS + 3);
         assertTrue(report.peakWorkingBytes() > 0 && report.peakWorkingBytes() <= 64L * 1024L * 1024L);
-        assertTrue(phases.contains("select") && phases.contains("fit") && phases.contains("project"), phases.toString());
+        assertTrue(phases.containsAll(List.of("select", "copy", "center", "fit", "project")), phases.toString());
+        assertEquals(0, fixture.vectors.fullLoads);
+        assertTrue(streamed.report().peakWorkingBytes() <= streamed.budget());
+    }
+
+    @Test
+    void aSampleThatFitsTheBudgetIsIteratedInMemoryAfterTwoWalksOfTheIndex() throws Exception {
+        fixture.index(2_000);
+        fixture.vectors.refuseFullLoad = true;
+
+        SemanticProjectionService.PreparationReport report = service.prepare(projectId,
+                ProjectionFixture.request(500, 42L), SemanticProjectionService.Progress.NONE);
+
+        assertEquals(2, fixture.vectors.walks, "selection, then copy of the sample: no other walk");
+        assertEquals(2, report.passes());
+        assertEquals(SemanticProjectionService.Strategy.IN_MEMORY, report.strategy());
+        assertTrue(report.iterations() >= 1 && report.iterations() <= SemanticProjectionService.MAX_ITERATIONS);
+        assertEquals(500, report.pointCount());
+        assertTrue(report.peakWorkingBytes() <= 64L * 1024L * 1024L);
+    }
+
+    @Test
+    void aSampleThatDoesNotFitTheBudgetKeepsTheStreamAndSaysWhichStrategyRan() throws Exception {
+        fixture.index(2_000);
+
+        Attempt attempt = smallestWorkableBudget(500, 42L);
+        SemanticProjectionService.PreparationReport report = attempt.report();
+
+        assertEquals(SemanticProjectionService.Strategy.STREAMED, report.strategy());
+        assertTrue(report.peakWorkingBytes() <= attempt.budget(), "the budget is never exceeded to save reads");
+        assertEquals(500, report.pointCount());
+        assertTrue(report.passes() >= 3 && report.passes() <= SemanticProjectionService.MAX_ITERATIONS + 3,
+                "one walk for the selection, then one per step");
+        assertEquals(report.iterations() + 3, report.passes(), "selection, centering, projection and each fit");
+        assertEquals(1, fixture.projections.publications);
+    }
+
+    @Test
+    void aBudgetBelowTheSmallestWorkableOneIsRefusedAndPublishesNothing() throws Exception {
+        fixture.index(2_000);
+        Attempt attempt = smallestWorkableBudget(500, 42L);
+        int publications = fixture.projections.publications;
+
+        SemanticProjectionService.RefusedException refused = assertThrows(
+                SemanticProjectionService.RefusedException.class,
+                () -> service.prepare(projectId, new SemanticProjectionService.PreparationRequest(500, 42L,
+                        Set.of(SemanticDocumentKind.CHUNK), attempt.budget() - 8L * 1024L),
+                        SemanticProjectionService.Progress.NONE));
+
+        assertEquals(Refusal.MEMORY_BUDGET_EXCEEDED, refused.refusal());
+        assertTrue(refused.getMessage().contains("--max-memory-mb"), refused.getMessage());
+        assertEquals(publications, fixture.projections.publications);
+    }
+
+    @Test
+    void theTwoStrategiesPublishTheSamePointsCoordinatesAndVariance() throws Exception {
+        fixture.index(2_000);
+
+        service.prepare(projectId, ProjectionFixture.request(500, 42L), SemanticProjectionService.Progress.NONE);
+        SemanticProjection inMemory = fixture.projections.read(projectId).orElseThrow();
+        Attempt attempt = smallestWorkableBudget(500, 42L);
+        SemanticProjection streamed = fixture.projections.read(projectId).orElseThrow();
+
+        assertEquals(SemanticProjectionService.Strategy.STREAMED, attempt.report().strategy());
+        assertEquals(inMemory.points(), streamed.points());
+        assertEquals(inMemory.explainedVariance(), streamed.explainedVariance());
+        assertEquals(inMemory.candidateCount(), streamed.candidateCount());
+        assertEquals(inMemory.documentCount(), streamed.documentCount());
+    }
+
+    @Test
+    void anIndexReplacedWhileTheSampleIsCopiedRefusesThePreparationAndKeepsThePublishedProjection() throws Exception {
+        fixture.index(2_000);
+        service.prepare(projectId, ProjectionFixture.request(500, 42L), SemanticProjectionService.Progress.NONE);
+        SemanticProjection published = fixture.projections.read(projectId).orElseThrow();
+        boolean[] replaced = {false};
+        int walksBefore = fixture.vectors.walks;
+        fixture.vectors.afterVectorPage = () -> {
+            if (fixture.vectors.walks == walksBefore + 2 && !replaced[0]) {
+                replaced[0] = true;
+                fixture.index("snapshot-2", 2_000, "other ");
+            }
+        };
+
+        SemanticProjectionService.RefusedException refused = assertThrows(
+                SemanticProjectionService.RefusedException.class,
+                () -> service.prepare(projectId, ProjectionFixture.request(500, 42L),
+                        SemanticProjectionService.Progress.NONE));
+
+        assertTrue(replaced[0], "the index was replaced during the second walk, the copy");
+        assertEquals(Refusal.INDEX_CHANGED_DURING_PREPARATION, refused.refusal());
+        assertEquals(published, fixture.projections.read(projectId).orElseThrow());
+        assertEquals(1, fixture.projections.publications);
+    }
+
+    /** What the smallest memory budget, searched by steps of 8 KiB, that lets a preparation succeed produced. */
+    private record Attempt(long budget, SemanticProjectionService.PreparationReport report) {
+    }
+
+    private Attempt smallestWorkableBudget(int maxPoints, long seed) throws Exception {
+        for (long budget = 64L * 1024L; budget <= 64L * 1024L * 1024L; budget += 8L * 1024L) {
+            try {
+                return new Attempt(budget, service.prepare(projectId, new SemanticProjectionService.PreparationRequest(
+                        maxPoints, seed, Set.of(SemanticDocumentKind.CHUNK), budget),
+                        SemanticProjectionService.Progress.NONE));
+            } catch (SemanticProjectionService.RefusedException refused) {
+                assertEquals(Refusal.MEMORY_BUDGET_EXCEEDED, refused.refusal());
+            }
+        }
+        throw new AssertionError("no budget up to 64 MiB lets the preparation succeed");
     }
 
     @Test

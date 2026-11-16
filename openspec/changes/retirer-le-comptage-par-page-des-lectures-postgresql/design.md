@@ -49,6 +49,10 @@ HEAD `89be3fb4`. Aucune commande n'a été exécutée contre un PostgreSQL : tou
 | Un test « remplacement entre deux pages → préparation refusée » sur PostgreSQL n'a pas de module possible : la préparation est dans `minos-application`, le support PostgreSQL de test dans `minos-storage` | critère de l'exigence | `minos-application/pom.xml:23-35` | Dans `minos-storage`, prouver que deux pages lues de part et d'autre d'un remplacement portent des métadonnées différentes ; le refus qui en découle est celui de `SemanticProjectionServiceTest.java:199-211` |
 | L'exigence de migration recouvre des garanties générales déjà spécifiées | exploration-semantique › La migration du schéma PostgreSQL reprend le nombre de documents de chaque index sémantique | persistance-snapshots › Une base PostgreSQL peuplée migre jusqu'à la version courante sans perte ; › Une migration rejouée laisse le schéma à la version courante | L'exigence ajoutée ne porte que sur la reprise du compte ; transaction, rejeu et refus d'un schéma plus récent restent ceux de `persistance-snapshots` |
 | `embedding::text` est cité dans la preuve sans action | `findings.json` AUD-PERF-01 | `PostgresSemanticReadQueries.java:215` | Hors périmètre ; repris seulement si la mesure le désigne |
+| Un runtime antérieur déjà ouvert sur la base au moment de la migration n'a pas de colonne `document_count` dans ses requêtes d'écriture : sa prochaine écriture d'un index sémantique échoue sur la contrainte `NOT NULL`, sans message dédié ; un runtime démarré après est refusé par le contrôle de version | `PostgresSchemaMigrator.java` (`CURRENT_VERSION`, refus d'un schéma plus récent) | revue d'architecture | Conséquence de D1, déjà consignée au retour arrière ; mentionnée dans `docs/user/production-installation.md` |
+| `documents`, `checksums` et `load` calculent encore le compte à partir des lignes lues, les trois lectures de page utilisent la colonne : les deux sources ne sont jamais comparées | `PostgresSemanticReadQueries.java` | revue d'architecture | Acceptable : la comparaison des métadonnées de page à page de `ProjectionPreparation.walk` détecte un écart ; la tenue du compte est gardée par `PostgresSemanticDifferentialSyncTest` |
+| `PostgresSchemaUpgradeFromV1Test` fixe aussi la liste des versions (`List.of(1, 2, 3, 4, 5)`) ; la spécification ne nommait que `PostgresSchemaUpgradeFromV4Test` | `PostgresSchemaUpgradeFromV1Test.java:34` | tâche 2.4 | Adapté dans la même tâche |
+| Le plan lu au HEAD montre que le `COUNT` de la page est un `SubPlan` rejoué pour chaque ligne rendue (`Aggregate`, `loops=201` pour une page de 200 sur 3 000 documents, 13 467 blocs lus), et non une seule fois par page : le coût de la préparation croît comme le carré du nombre de documents | `perf-index/perf01-plan-avant.txt` (plan lu par `EXPLAIN (ANALYZE) EXECUTE`) | calcul de l'audit (4,3·10^8 visites à 100 000 documents) | Confirme la forme du calcul ; mesuré : préparation 2 098 s → 163 s sur 25 000 documents synthétiques |
 
 ## Exigences couvertes
 
@@ -188,14 +192,14 @@ Ni l'un ni l'autre n'est demandé par l'action de l'audit ; ils se décident sur
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › Une page PostgreSQL de l'index sémantique ne recompte pas les documents | Plan d'une requête de page | D1, diagramme | 2.1, 2.2, 2.4 | `PostgresSemanticPagePlanTest` — à écrire |
-| idem | Compte après une synchronisation différentielle | Persistance et intégrité | 2.3, 2.4 | `PostgresSemanticDifferentialSyncTest` — à étendre |
-| idem | Index remplacé entre deux pages | Sécurité et isolation | 2.5 | cas PostgreSQL de métadonnées différentes — à écrire ; refus de la préparation : `SemanticProjectionServiceTest.java:199-211` (existant) |
-| exploration-semantique › Une page suivante PostgreSQL est bornée par la clé stable dans l'index | Plan générique forcé | D2 | 3.1, 3.2 | `PostgresSemanticPagePlanTest` — à écrire |
-| idem | Borne absente sur une page suivante | Contrats d'interface | 3.2 | `PostgresSemanticDocumentReadsContractTest` — caractérisation d'un refus existant, à étendre |
-| exploration-semantique › La migration du schéma PostgreSQL reprend le nombre de documents de chaque index sémantique | Migration d'un index existant | Compatibilité | 2.2, 2.4 | `PostgresSchemaUpgradeFromV4Test` — à étendre |
-| idem | Migration rejouée | Transactions | 2.4 | `PostgresSchemaUpgradeFromV4Test` — à étendre |
-| (mesure du sprint) | — | Performance et mesure | 1.2, 4.1 | sorties du banc — manquantes |
+| exploration-semantique › Une page PostgreSQL de l'index sémantique ne recompte pas les documents | Plan d'une requête de page | D1, diagramme | 2.1, 2.2, 2.4 | `PostgresSemanticPagePlanTest#noPlanOfAReadStatementCountsTheRowsOfTheIndex`, `#everyPageAnnouncesTheCountOfTheIndex` |
+| idem | Compte après une synchronisation différentielle | Persistance et intégrité | 2.3, 2.4 | `PostgresSemanticDifferentialSyncTest` (assertion `assertAnnouncedCountIsTheRowCount`) |
+| idem | Index remplacé entre deux pages | Sécurité et isolation | 2.5 | `PostgresSemanticDocumentReadsContractTest#twoPagesReadOnEachSideOfAReplacementCarryDifferentMetadata` ; refus de la préparation : `SemanticProjectionServiceTest.java:199-211` (existant) |
+| exploration-semantique › Une page suivante PostgreSQL est bornée par la clé stable dans l'index | Plan générique forcé | D2 | 3.1, 3.2 | `PostgresSemanticPagePlanTest#aPageThatFollowsAKeyIsBoundedByTheKeyInTheIndexEvenInAGenericPlan` |
+| idem | Borne absente sur une page suivante | Contrats d'interface | 3.2 | `PostgresSemanticDocumentReadsContractTest#aBlankResumeKeyIsRefusedBeforeAnyStatementIsSent` |
+| exploration-semantique › La migration du schéma PostgreSQL reprend le nombre de documents de chaque index sémantique | Migration d'un index existant | Compatibilité | 2.2, 2.4 | `PostgresSchemaUpgradeFromV4Test#aV4DatabaseRecordsTheDocumentCountOfItsSemanticIndexWithoutResynchronizing` |
+| idem | Migration rejouée | Transactions | 2.4 | `PostgresSchemaUpgradeFromV4Test#theMigrationReplayedKeepsTheDocumentCountAndTheVersions` |
+| (mesure du sprint) | — | Performance et mesure | 1.2, 4.1 | relevés `avant-pg25000.tsv` et `apres-pg25000.tsv` du dossier de notes de la session ; une exécution, poste bruité, jeu synthétique ; référence sur la machine de référence : manuelle |
 
 ## Questions ouvertes
 

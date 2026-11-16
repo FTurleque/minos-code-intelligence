@@ -4,6 +4,7 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.SemanticCorpusQueryService;
 import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.diagnostics.UsageException;
 import com.minos.output.json.DeterministicJson;
 
 import java.io.IOException;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * The read-only API of the exploration surface, without any HTTP plumbing: a method, the decoded path segments
@@ -101,12 +103,12 @@ final class ExplorerApi {
     }
 
     /**
-     * Serves one request. A usage error names what to correct; an internal failure answers an opaque
-     * {@code 500} and is reported to {@code failures}, which receives the exception itself and decides what
-     * may be logged.
+     * Serves one request. A usage error ({@link UsageException}) names what to correct; any other failure,
+     * an argument error raised inside a service included, answers an opaque {@code 500} that carries the reference
+     * returned by {@code failures}, which receives the exception itself and decides what may be logged.
      */
     Answer answer(String method, List<String> segments, Map<String, String> parameters, Body body,
-                  java.util.function.Consumer<Exception> failures) {
+                  Function<Exception, String> failures) {
         Route route = Route.matching(segments);
         if (route == null) return Answer.error(404, "NOT_FOUND", "no such route in /api/v" + ExplorerContract.VERSION);
         if (!route.method().equals(method)) {
@@ -130,12 +132,11 @@ final class ExplorerApi {
         } catch (ProjectResolver.ResolutionException unresolved) {
             boolean invalid = unresolved.code() == ProjectResolver.ErrorCode.INVALID_PROJECT_REFERENCE;
             return Answer.error(invalid ? 400 : 404, unresolved.code().name(), unresolved.publicMessage());
-        } catch (IllegalArgumentException usage) {
+        } catch (UsageException usage) {
             return Answer.error(400, "INVALID_REQUEST",
                     PublicErrorMessages.sanitize(usage.getMessage(), "invalid request"));
         } catch (IOException | RuntimeException internal) {
-            failures.accept(internal);
-            return Answer.error(500, "INTERNAL_ERROR", INTERNAL_ERROR);
+            return Answer.error(500, "INTERNAL_ERROR", INTERNAL_ERROR + " (ref " + failures.apply(internal) + ")");
         }
     }
 
@@ -216,7 +217,7 @@ final class ExplorerApi {
         requireOnly(parameters, Set.of());
         Map<String, Object> members = JsonObjectReader.read(body.read());
         for (String member : members.keySet()) {
-            if (!SEARCH_MEMBERS.contains(member)) throw new IllegalArgumentException("unknown search member");
+            if (!SEARCH_MEMBERS.contains(member)) throw new UsageException("unknown search member");
         }
         SemanticCorpusQueryService.SearchMode mode =
                 SemanticCorpusQueryService.SearchMode.parse(text(members, "mode"));
@@ -333,7 +334,7 @@ final class ExplorerApi {
 
     private static void requireOnly(Map<String, String> parameters, Set<String> accepted) {
         for (String name : parameters.keySet()) {
-            if (!accepted.contains(name)) throw new IllegalArgumentException("unknown query parameter");
+            if (!accepted.contains(name)) throw new UsageException("unknown query parameter");
         }
     }
 
@@ -342,7 +343,7 @@ final class ExplorerApi {
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException invalid) {
-            throw new IllegalArgumentException(name + " must be an integer");
+            throw new UsageException(name + " must be an integer");
         }
     }
 
@@ -350,7 +351,7 @@ final class ExplorerApi {
         Object value = members.get(name);
         if (value == null) return null;
         if (value instanceof String string) return string;
-        throw new IllegalArgumentException(name + " must be a string");
+        throw new UsageException(name + " must be a string");
     }
 
     private static double number(Map<String, Object> members, String name, double defaultValue, boolean integral) {
@@ -358,7 +359,7 @@ final class ExplorerApi {
         if (value == null) return defaultValue;
         if (!(value instanceof Double number) || (integral && (number != Math.rint(number)
                 || number < Integer.MIN_VALUE || number > Integer.MAX_VALUE))) {
-            throw new IllegalArgumentException(name + " must be " + (integral ? "an integer" : "a number"));
+            throw new UsageException(name + " must be " + (integral ? "an integer" : "a number"));
         }
         return number;
     }

@@ -15,6 +15,7 @@ import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.cache.WeightedLruCache;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -329,7 +330,7 @@ public final class ProgramGraphService {
     }
 
     private static void requireBound(int value, int minimum, int maximum, String name) {
-        if (value < minimum || value > maximum) throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
+        if (value < minimum || value > maximum) throw new UsageException(name + " must be between " + minimum + " and " + maximum);
     }
 
     public record CacheStats(long hits, long misses, long providerKeyNanos, long analysisNanos,

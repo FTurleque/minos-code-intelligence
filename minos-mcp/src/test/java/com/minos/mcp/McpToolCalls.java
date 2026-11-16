@@ -24,6 +24,11 @@ final class McpToolCalls {
         return ((TextContent) result.content().getFirst()).text();
     }
 
+    /** The opaque error of a failed tool: the generic text, then the reference of its trace, and nothing else. */
+    static void assertGenericToolError(String text) {
+        org.junit.jupiter.api.Assertions.assertTrue(text.matches("error: MINOS tool execution failed \\(ref [0-9a-f]{8}\\)"), text);
+    }
+
     static boolean isError(CallToolResult result) {
         return Boolean.TRUE.equals(result.isError());
     }

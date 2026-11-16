@@ -1,5 +1,6 @@
 package com.minos.domain;
 
+import com.minos.diagnostics.UsageException;
 import java.nio.charset.StandardCharsets;
 
 /** Backend-independent structured symbol-search criteria. */
@@ -17,9 +18,9 @@ public record SymbolSearchCriteria(
         qualifiedName = bounded(blankToNull(qualifiedName), "qualifiedName");
         moduleId = bounded(blankToNull(moduleId), "moduleId");
         if (text == null && qualifiedName == null && kind == null && moduleId == null) {
-            throw new IllegalArgumentException("at least one symbol search criterion is required");
+            throw new UsageException("at least one symbol search criterion is required");
         }
-        if (limit < 1) throw new IllegalArgumentException("limit must be greater than zero");
+        if (limit < 1) throw new UsageException("limit must be greater than zero");
     }
 
     public static SymbolSearchCriteria lexical(String text, int limit) {
@@ -34,7 +35,7 @@ public record SymbolSearchCriteria(
 
     private static String bounded(String value, String field) {
         if (value != null && value.getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_UTF8_BYTES) {
-            throw new IllegalArgumentException(field + " exceeds UTF-8 byte limit: " + MAX_TEXT_UTF8_BYTES);
+            throw new UsageException(field + " exceeds UTF-8 byte limit: " + MAX_TEXT_UTF8_BYTES);
         }
         return value;
     }

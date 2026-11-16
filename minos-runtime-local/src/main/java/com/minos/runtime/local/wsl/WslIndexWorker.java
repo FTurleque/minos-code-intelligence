@@ -1,8 +1,10 @@
 package com.minos.runtime.local.wsl;
 
 import com.minos.diagnostics.PublicErrorMessages;
+import com.minos.diagnostics.WorkerDiagnostic;
 import com.minos.io.DurableAtomicFile;
 import com.minos.io.FileTreeOperations;
+import com.minos.io.InternalFailureJournal;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.StaleScratchReclamation;
 import com.minos.remote.DistributedArtifactManifest;
@@ -59,6 +61,8 @@ public final class WslIndexWorker implements Worker {
     static final List<String> SCOPE_COMMAND = List.of("systemd-run", "--user", "--scope", "-p", "Delegate=yes",
             "--quiet");
     private static final Duration STOP_TIMEOUT = Duration.ofSeconds(30);
+    private static final String DIAGNOSTIC_PREFIX = STATUS_PREFIX + WorkerDiagnostic.KEYWORD + " ";
+    private static final System.Logger LOGGER = System.getLogger(WslIndexWorker.class.getName());
 
     private final Path wslExecutable;
     private final String distribution;
@@ -68,6 +72,7 @@ public final class WslIndexWorker implements Worker {
     private final String mainClass;
     private final Duration timeout;
     private final Function<Path, String> distributionPaths;
+    private final InternalFailureJournal journal;
 
     /**
      * What is launched for one run: the system {@code wsl.exe}, the distribution, the installation jar and its entry
@@ -106,12 +111,19 @@ public final class WslIndexWorker implements Worker {
         this(launch, runner, minosHome, path -> WslPaths.toDistribution(path.toString()));
     }
 
+    WslIndexWorker(Launch launch, WslCommandRunner runner, Path minosHome, Function<Path, String> distributionPaths) {
+        this(launch, runner, minosHome, distributionPaths,
+                new InternalFailureJournal(minosHome, System.getenv(), System.getProperties()));
+    }
+
     /**
      * Test seam: the mapping of a Windows path of this host to its path in the distribution is supplied, so that
      * the route can be exercised with a fake distribution on any host.
      */
-    WslIndexWorker(Launch launch, WslCommandRunner runner, Path minosHome, Function<Path, String> distributionPaths) {
+    WslIndexWorker(Launch launch, WslCommandRunner runner, Path minosHome, Function<Path, String> distributionPaths,
+                   InternalFailureJournal journal) {
         Objects.requireNonNull(launch, "launch");
+        this.journal = Objects.requireNonNull(journal, "journal");
         this.distributionPaths = Objects.requireNonNull(distributionPaths, "distributionPaths");
         this.wslExecutable = launch.wslExecutable();
         this.distribution = launch.distribution();
@@ -163,8 +175,9 @@ public final class WslIndexWorker implements Worker {
             Optional<String> status = statusLine(result.stdout());
             if (result.exitCode() != 0 || !status.map("OK"::equals).orElse(false)
                     || !Files.isRegularFile(bundle, LinkOption.NOFOLLOW_LINKS)) {
+                String detail = publicDetail(status.orElse("no status line"));
                 throw new IllegalStateException("the WSL worker failed in distribution " + distribution + ": "
-                        + publicDetail(status.orElse("no status line")));
+                        + detail + referenceSuffix(detail, traceWorkerFailure(result.stdout())));
             }
             Path owned = exchangeRoot.resolve(BUNDLE_PREFIX + UUID.randomUUID() + ".zip");
             DurableAtomicFile.replace(bundle, owned, "WSL worker bundle");
@@ -229,15 +242,44 @@ public final class WslIndexWorker implements Worker {
         }
     }
 
-    /** The last status line of the worker, without its protocol prefix. */
+    /** The last status line of the worker, without its protocol prefix; a diagnostic line is never a status. */
     static Optional<String> statusLine(byte[] stdout) {
         List<String> statuses = new ArrayList<>();
         for (String line : new String(stdout, StandardCharsets.UTF_8).split("\\R")) {
-            if (line.startsWith(STATUS_PREFIX)) {
+            if (line.startsWith(STATUS_PREFIX) && !line.startsWith(DIAGNOSTIC_PREFIX)) {
                 statuses.add(line.substring(STATUS_PREFIX.length()).strip());
             }
         }
         return statuses.isEmpty() ? Optional.empty() : Optional.of(statuses.getLast());
+    }
+
+    /**
+     * The last diagnostic line of the worker that follows the grammar of {@link WorkerDiagnostic}; any other line,
+     * whatever it claims, is ignored and nothing of it is logged or rendered.
+     */
+    static Optional<WorkerDiagnostic> diagnosticLine(byte[] stdout) {
+        Optional<WorkerDiagnostic> last = Optional.empty();
+        for (String line : new String(stdout, StandardCharsets.UTF_8).split("\\R")) {
+            if (!line.startsWith(DIAGNOSTIC_PREFIX)) continue;
+            Optional<WorkerDiagnostic> parsed = WorkerDiagnostic.parse(line.substring(STATUS_PREFIX.length()).strip());
+            if (parsed.isPresent()) last = parsed;
+        }
+        return last;
+    }
+
+    /** Writes the stderr line of the worker's diagnostic and offers it to the private journal; returns its reference. */
+    private Optional<String> traceWorkerFailure(byte[] stdout) {
+        Optional<WorkerDiagnostic> diagnostic = diagnosticLine(stdout);
+        diagnostic.ifPresent(found -> {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    found.line("MINOS WSL worker failed internally", "distribution", distribution));
+            journal.append(found);
+        });
+        return diagnostic.map(WorkerDiagnostic::reference);
+    }
+
+    private static String referenceSuffix(String detail, Optional<String> reference) {
+        return reference.filter(value -> !detail.contains(value)).map(value -> " (ref " + value + ")").orElse("");
     }
 
     /** A worker detail that names a local path or a credential is withheld. */

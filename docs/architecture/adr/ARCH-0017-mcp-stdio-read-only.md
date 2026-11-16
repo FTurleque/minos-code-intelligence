@@ -53,6 +53,13 @@ Les IDE, agents et orchestrateurs peuvent utiliser MINOS comme fournisseur de Co
 - Règle Archgate `ARCH-0017-mcp-stdio-read-only.rules.ts` / `mcp-stdout-reserved-for-transport` : refuse tout `System.out` (ou `System.setOut`, `FileDescriptor.out`) de `minos-mcp/src/main/java` hors des arguments de `new StdioServerTransportProvider(...)` ; contrôle propre à Archgate, aucun gate Python ne le fait.
 - Revue : tout tool `minos_*` nouveau ou modifié est en lecture seule, délègue à un service existant et borne sa réponse.
 
+## Mise en œuvre
+
+Le journal de diagnostic privé et opt-in des échecs internes ([SEC-0084](SEC-0084-journal-de-diagnostic-prive-et-opt-in-des-echecs-internes.md))
+n'est pas un état de la consultation : il n'est écrit qu'après un échec interne, réglage actif, dans
+`MINOS_HOME/logs/internal-failures/`, par la façade `InternalFailureReporter` de `minos-application`. Le code de
+`minos-mcp/src/main` n'écrit rien lui-même, comme l'impose la règle `mcp-no-process-or-file-write`.
+
 ## Preuves
 
 Voir [`../../project/history/milestones/m10/DECISION_M10.md`](../../project/history/milestones/m10/DECISION_M10.md) et [`../../project/history/milestones/m10/MCP_SERVER.md`](../../project/history/milestones/m10/MCP_SERVER.md).

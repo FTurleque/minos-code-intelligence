@@ -1,5 +1,6 @@
 package com.minos.api;
 
+import com.minos.diagnostics.UsageException;
 import java.util.List;
 import java.util.Objects;
 
@@ -71,7 +72,7 @@ public interface SemanticExplorationApi {
                              String filePrefix) {
         public DocumentPageQuery {
             if (limit < 1 || limit > MAX_PAGE_SIZE) {
-                throw new IllegalArgumentException("limit must be between 1 and " + MAX_PAGE_SIZE);
+                throw new UsageException("limit must be between 1 and " + MAX_PAGE_SIZE);
             }
         }
 

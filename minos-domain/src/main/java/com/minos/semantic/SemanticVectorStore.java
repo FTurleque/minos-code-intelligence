@@ -180,6 +180,15 @@ public interface SemanticVectorStore {
         }
     }
 
+    /** Refuses a ranking request out of bounds; shared by every implementation of {@link #search}. */
+    static void requireSearchBounds(SemanticVector query, int limit, double minimumScore) {
+        Objects.requireNonNull(query, "query");
+        if (limit < 1 || limit > 1_000) throw new IllegalArgumentException("limit must be between 1 and 1000");
+        if (!Double.isFinite(minimumScore) || minimumScore < -1.0 || minimumScore > 1.0) {
+            throw new IllegalArgumentException("minimumScore must be between -1 and 1");
+        }
+    }
+
     /** Stable diagnostic identifier for the vector ranking engine. */
     default String searchEngine() { return "exact-linear"; }
 
@@ -188,11 +197,7 @@ public interface SemanticVectorStore {
      * historical exact cosine scan; database backends may push ranking into their vector engine.
      */
     default List<VectorHit> search(String projectId, SemanticVector query, int limit, double minimumScore) throws IOException {
-        Objects.requireNonNull(query, "query");
-        if (limit < 1 || limit > 1_000) throw new IllegalArgumentException("limit must be between 1 and 1000");
-        if (!Double.isFinite(minimumScore) || minimumScore < -1.0 || minimumScore > 1.0) {
-            throw new IllegalArgumentException("minimumScore must be between -1 and 1");
-        }
+        requireSearchBounds(query, limit, minimumScore);
         Optional<IndexSnapshot> loaded = load(projectId);
         if (loaded.isEmpty()) return List.of();
         IndexSnapshot index = loaded.orElseThrow();

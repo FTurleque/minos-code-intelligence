@@ -139,19 +139,28 @@ final class PostgresSemanticWriteQueries {
         }
     }
 
+    /**
+     * The metadata row of the index, with the number of documents it holds: counted once, in the transaction
+     * that has just written the documents, so that no read has to count them.
+     */
     private static void upsertMetadata(Connection connection, UUID projectId, IndexSnapshot snapshot)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO semantic_index_meta(project_id,snapshot_id,provider_id,model_id,dimensions,built_at) "
-                        + "VALUES (?,?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET "
+                "INSERT INTO semantic_index_meta(project_id,snapshot_id,provider_id,model_id,dimensions,built_at,"
+                        + "document_count) VALUES (?,?,?,?,?,?,"
+                        + "(SELECT COUNT(*) FROM semantic_documents WHERE project_id=? AND snapshot_id=?)) "
+                        + "ON CONFLICT(project_id) DO UPDATE SET "
                         + "snapshot_id=EXCLUDED.snapshot_id,provider_id=EXCLUDED.provider_id,"
-                        + "model_id=EXCLUDED.model_id,dimensions=EXCLUDED.dimensions,built_at=EXCLUDED.built_at")) {
+                        + "model_id=EXCLUDED.model_id,dimensions=EXCLUDED.dimensions,built_at=EXCLUDED.built_at,"
+                        + "document_count=EXCLUDED.document_count")) {
             statement.setObject(1, projectId);
             statement.setString(2, snapshot.snapshotId());
             statement.setString(3, snapshot.providerId());
             statement.setString(4, snapshot.modelId());
             statement.setInt(5, snapshot.dimensions());
             statement.setLong(6, snapshot.builtAtEpochMilli());
+            statement.setObject(7, projectId);
+            statement.setString(8, snapshot.snapshotId());
             statement.executeUpdate();
         }
     }

@@ -55,7 +55,7 @@ Aucune.
 
 ## Impact
 
-- **Modules du reactor** : `minos-storage` (package `com.minos.storage.local.store`). `minos-domain` et `minos-application` ne changent pas.
+- **Modules du reactor** : `minos-storage` (package `com.minos.storage.local.store`) ; `minos-domain` gagne la méthode statique `SemanticVectorStore.requireSearchBounds`, qui factorise les refus de `search` entre le chemin par défaut et le parcours (aucun contrat modifié) ; `minos-application` ne change pas. Le banc (`minos-explorer` en test, `benchmarks/scalability/`) gagne l'option de remplissage du contenu et perd `expectRefusal` du jeu local de 100 000 documents.
 - **Surfaces publiques** (CLI, API Java, MCP, IntelliJ, NEXUS) : aucune modification de contrat ; l'explorateur rend les mêmes réponses.
 - **ADR** : aucun (pas de format persisté ni de contrat modifié).
 - **Gates à rejouer** : `scripts/remediation/check-mne.py` et `scripts/quality/check-semantic-retrieval-consistency.py` (ils affirment des chaînes littérales de `FileSemanticVectorStore.java`), `scripts/architecture/check-private-io.py` (lectures par les primitives confinées), `scripts/quality/check-comment-language.py`, `python .claude/scripts/run_gates.py --fast` ; scope JaCoCo `semantic-vector-store`.

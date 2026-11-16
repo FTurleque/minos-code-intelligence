@@ -5,6 +5,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticProjection;
 import com.minos.semantic.SemanticProjectionStore;
 import com.minos.semantic.SemanticVectorStore;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.util.List;
@@ -86,7 +87,8 @@ public final class SemanticProjectionService {
             preparation.publish(projection);
             return new PreparationReport(projectId, projection.points().size(), projection.candidateCount(),
                     projection.documentCount(), projection.sampled(), projection.explainedVariance(),
-                    outcome.passes(), (System.nanoTime() - started) / 1_000_000L, outcome.peakWorkingBytes());
+                    outcome.passes(), (System.nanoTime() - started) / 1_000_000L, outcome.peakWorkingBytes(),
+                    outcome.strategy(), outcome.iterations());
         } catch (SemanticProjectionStore.PreparationInProgressException busy) {
             throw new RefusedException(Refusal.PREPARATION_IN_PROGRESS,
                     "another preparation of the projection of this project is running; wait for it to end");
@@ -111,9 +113,9 @@ public final class SemanticProjectionService {
      */
     public Points points(String projectReference, int offset, int limit) throws IOException {
         if (limit < 1 || limit > MAX_POINTS_PAGE) {
-            throw new IllegalArgumentException("limit must be between 1 and " + MAX_POINTS_PAGE);
+            throw new UsageException("limit must be between 1 and " + MAX_POINTS_PAGE);
         }
-        if (offset < 0) throw new IllegalArgumentException("offset must not be negative");
+        if (offset < 0) throw new UsageException("offset must not be negative");
         Reading reading = read(projectReference);
         if (reading.projection().isEmpty()) return new Points(reading.status(), offset, 0, List.of());
         List<SemanticProjection.Point> all = reading.projection().orElseThrow().points();
@@ -220,12 +222,24 @@ public final class SemanticProjectionService {
         void advanced(String phase, int pass, long vectorsRead);
     }
 
-    /** What a preparation did. No path and no content. */
+    /**
+     * How a preparation reads the vectors of its sample: {@link #IN_MEMORY} copies them once and iterates on the
+     * copy ({@code passes} is then 2), {@link #STREAMED} reads the index again at every step because the sample
+     * does not fit the memory budget ({@code passes} is then 4 to 43). Both publish the same projection.
+     */
+    public enum Strategy { IN_MEMORY, STREAMED }
+
+    /**
+     * What a preparation did. No path and no content. {@code passes} is the number of walks of the index,
+     * {@code iterations} the number of fitting iterations of the axes.
+     */
     public record PreparationReport(String projectId, int pointCount, int candidateCount, int documentCount,
                                     boolean sampled, List<Double> explainedVariance, int passes,
-                                    long durationMillis, long peakWorkingBytes) {
+                                    long durationMillis, long peakWorkingBytes, Strategy strategy,
+                                    int iterations) {
         public PreparationReport {
             explainedVariance = List.copyOf(Objects.requireNonNull(explainedVariance, "explainedVariance"));
+            Objects.requireNonNull(strategy, "strategy");
         }
     }
 

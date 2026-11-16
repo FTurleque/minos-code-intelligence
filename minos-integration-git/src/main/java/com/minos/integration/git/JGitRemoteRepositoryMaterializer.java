@@ -11,7 +11,10 @@ import com.minos.io.StaleScratchReclamation;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.submodule.SubmoduleWalk.IgnoreSubmoduleMode;
 import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.Repository;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -20,6 +23,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.UserPrincipal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,6 +35,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 
 /**
  * JGit HTTPS materializer with immutable revision checks, active-use leases and a bounded local cache.
@@ -61,6 +66,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private final SharedCacheLeaseRegistry leases;
     private final Duration lockTimeout;
     private final DirectoryPublisher publisher;
+    private final TrustedRepositoryOpening opening;
 
     public JGitRemoteRepositoryMaterializer(Path minosHome) throws IOException {
         this(minosHome, RemoteRepositoryCachePolicy.DEFAULT);
@@ -102,7 +108,28 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             Duration lockTimeout,
             DirectoryPublisher publisher
     ) throws IOException {
-        this.publisher = Objects.requireNonNull(publisher, "publisher");
+        this(minosHome, cachePolicy, gitClient, secretResolver, clock, lockTimeout, new Seams(publisher, null));
+    }
+
+    /** Test seams of the materializer: the publication of the clone and the owner a repository must have. */
+    record Seams(DirectoryPublisher publisher, Supplier<UserPrincipal> expectedOwner) {
+    }
+
+    /**
+     * Test seam: the owner a materialized repository must have is {@link Seams#expectedOwner()}; {@code null}
+     * means the owner the system gives a file this process creates.
+     */
+    JGitRemoteRepositoryMaterializer(
+            Path minosHome,
+            RemoteRepositoryCachePolicy cachePolicy,
+            RemoteGitClient gitClient,
+            SecretResolver secretResolver,
+            Clock clock,
+            Duration lockTimeout,
+            Seams seams
+    ) throws IOException {
+        this.opening = new TrustedRepositoryOpening(seams.expectedOwner());
+        this.publisher = Objects.requireNonNull(seams.publisher(), "publisher");
         this.lockTimeout = Objects.requireNonNull(lockTimeout, "lockTimeout");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         Path remoteRoot = home.resolve("remote-cache");
@@ -279,13 +306,16 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         return projectRoot;
     }
 
-    private static void validateCheckout(Path repositoryRoot, RemoteRepositoryRequest request) throws Exception {
-        try (Git git = Git.open(repositoryRoot.toFile())) {
+    private void validateCheckout(Path repositoryRoot, RemoteRepositoryRequest request)
+            throws IOException, GitAPIException {
+        TrustedRepositoryOpening.Opened opened = opening.openExact(repositoryRoot);
+        try (Repository repository = opened.repository(); Git git = new Git(repository)) {
             String head = Objects.requireNonNull(
-                    git.getRepository().resolve(Constants.HEAD), "materialized repository has no HEAD").getName();
+                    repository.resolve(Constants.HEAD), "materialized repository has no HEAD").getName();
             if (!request.expectedCommit().equals(head)) throw new IOException("remote ref resolved to an unexpected commit");
-            if (!git.status().call().isClean()) throw new IOException("materialized remote checkout is not clean");
-            String origin = git.getRepository().getConfig().getString("remote", "origin", "url");
+            boolean clean = git.status().setIgnoreSubmodules(IgnoreSubmoduleMode.ALL).call().isClean();
+            if (!clean) throw new IOException("materialized remote checkout is not clean");
+            String origin = repository.getConfig().getString("remote", "origin", "url");
             if (!request.canonicalRepositoryUri().equals(origin)) {
                 throw new IOException("materialized remote origin does not match the canonical repository URI");
             }

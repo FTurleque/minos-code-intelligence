@@ -179,7 +179,7 @@ class ExplorerUnitsTest {
 
     @Test
     void theEmbeddedPageIsAClosedSetOfResources() throws Exception {
-        assertEquals(java.util.Set.of("/", "/index.html", "/app.js", "/app.css"), WebResources.paths());
+        assertEquals(java.util.Set.of("/", "/index.html", "/map.js", "/app.js", "/app.css"), WebResources.paths());
         assertEquals("text/html; charset=utf-8", WebResources.find("/").orElseThrow().mediaType());
         assertEquals(Optional.empty(), WebResources.find("/pom.xml"));
         WebResources.Resource page = WebResources.find("/").orElseThrow();
@@ -190,5 +190,25 @@ class ExplorerUnitsTest {
         assertEquals(Optional.empty(), WebResources.find("/../web/app.js"));
         assertEquals("1", ExplorerContract.VERSION);
         assertEquals("/api/v1/", ExplorerContract.API_PREFIX);
+    }
+
+    @Test
+    void dotSegmentsAreRefusedUnderEveryEncodingAndOtherDotsAreKept() {
+        for (String refused : List.of(".", "..", "%2E", "%2E%2E", "%2e%2e", "p/./documents", "p/../documents")) {
+            assertThrows(com.minos.diagnostics.UsageException.class, () -> ExplorerServer.segments(refused), refused);
+        }
+        assertEquals(List.of("mon.projet"), ExplorerServer.segments("mon.projet"));
+        assertEquals(List.of("a..b"), ExplorerServer.segments("a..b"));
+        assertEquals(List.of("..."), ExplorerServer.segments("..."));
+        assertEquals(List.of("file:src/A+b.java"), ExplorerServer.segments("file%3Asrc%2FA%2Bb.java"));
+        assertEquals(List.of("a/b"), ExplorerServer.segments("a%2Fb"), "a decoded slash is accepted: a document key holds one");
+    }
+
+    @Test
+    void aBrokenEscapeIsAUsageErrorNotTheRawExceptionOfTheJdk() {
+        for (String broken : List.of("%zz", "a%2", "%")) {
+            assertThrows(com.minos.diagnostics.UsageException.class, () -> ExplorerServer.segments(broken), broken);
+            assertThrows(com.minos.diagnostics.UsageException.class, () -> ExplorerServer.parameters("q=" + broken), broken);
+        }
     }
 }

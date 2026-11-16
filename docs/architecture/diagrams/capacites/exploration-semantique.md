@@ -161,9 +161,15 @@ sequenceDiagram
     else index READY
         P->>J: bail exclusif du projet
         P->>V: métadonnées et empreintes des documents (identité)
-        loop une passe par étape : select, center, fit (40 au plus), project
-            P->>V: vectorPage(après clé, lot borné)
-            P->>P: échantillon ou accumulation PCA, mémoire comptée
+        P->>V: sélection de l'échantillon : vectorPage par lots bornés (un parcours)
+        alt les vecteurs de l'échantillon tiennent dans le budget
+            P->>V: copie de l'échantillon : vectorPage par lots bornés (un parcours)
+            P->>P: center, fit (40 au plus), project sur la copie, sans lecture de l'index
+        else l'échantillon ne tient pas
+            loop une passe par étape : center, fit (40 au plus), project
+                P->>V: vectorPage(après clé, lot borné)
+                P->>P: accumulation PCA, mémoire comptée
+            end
         end
         alt budget dépassé, index remplacé ou aucun document des natures
             P-->>C: refus, rien n'est publié, projection précédente intacte
@@ -173,7 +179,7 @@ sequenceDiagram
                 P-->>C: refus INDEX_CHANGED_DURING_PREPARATION
             else identité stable
                 P->>J: publication atomique
-                P-->>C: rapport (points, échantillonnage, variance, durée)
+                P-->>C: rapport (points, échantillonnage, variance, durée, stratégie, itérations)
             end
         end
     end
@@ -203,6 +209,54 @@ stateDiagram-v2
 `PERIMEE` est calculé à chaque lecture, jamais stocké. Une préparation en cours ou en échec n'est pas un état
 lu : une lecture n'écrit rien et ne sonde aucun verrou (écart E6).
 
+### Que devient une requête d'API qui dépasse le délai ?
+
+Type : sequenceDiagram · Portée : existant vérifié par tests (`ExplorerAbandonedReadsTest`, 50 exécutions) · Exigences :
+changement `fiabiliser-la-surface-de-l-explorateur` › « Une requête de l'explorateur abandonnée au délai libère son
+créneau », « Les lectures abandonnées encore en cours sont bornées et dites »
+
+```mermaid
+sequenceDiagram
+    participant N as Navigateur
+    participant S as ExplorerServer
+    participant W as "fil de lecture"
+    participant D as ExplorerDiagnostics
+    N->>S: GET /api/v1/…
+    alt lectures abandonnées à la borne
+        S->>D: "abandoned reads still running (limité)"
+        S-->>N: 503 BUSY
+    else place disponible
+        S->>W: tâche soumise, créneau pris
+        alt réponse dans le délai
+            W-->>S: réponse, créneau rendu par la tâche
+            S-->>N: 200
+        else délai dépassé
+            S->>W: cancel(true)
+            S->>S: créneau rendu, lecture comptée abandonnée
+            S-->>N: 503 TIMEOUT
+            W-->>S: fin tardive : place abandonnée rendue, résultat jeté
+        end
+    end
+```
+
+Le créneau est rendu par celui qui constate l'abandon ; la lecture qui traîne ne compte plus que dans la borne des
+lectures abandonnées.
+
+### Par quels états passe une lecture ?
+
+Type : stateDiagram-v2 · Portée : existant vérifié par tests (`ExplorerAbandonedReadsTest`) · Exigences : idem
+
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE: créneau pris
+    ACTIVE --> TERMINEE: réponse dans le délai
+    ACTIVE --> ABANDONNEE: délai dépassé
+    ABANDONNEE --> TERMINEE: la tâche rend la main
+    TERMINEE --> [*]
+```
+
+`ABANDONNEE` est borné (8 lectures) et visible dans le journal de la surface.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -221,7 +275,7 @@ lu : une lecture n'écrit rien et ne sonde aucun verrou (écart E6).
 | Les points d'une projection annoncent méthode, sélection et échantillonnage | 1/1 | V6 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aSampleOfTwoHundredPointsOutOfAThousandDocumentsIsAnnouncedWithItsSeed`, `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#aSampledProjectionAnnouncesItsMethodItsSeedAndItsCountsWithItsPoints` | couverte |
 | La lecture d'une projection ne calcule rien | 2/2 | V6 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aProjectWithoutProjectionIsAbsentNamesTheCommandAndReadsNoVector`, `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#aProjectWithoutProjectionIsAbsentAndTheAnswerNamesTheCommandThatPreparesIt`, `minos-explorer/src/test/java/com/minos/explorer/ExplorerProjectionRoutesTest.java#anyMethodButGetOnAProjectionRouteIsRefusedAndNoProjectionIsCreatedOrChanged` | couverte |
 | Le banc de scalabilité produit une référence pour la projection et les routes de l'explorateur | 1/4 par test ; mesure sur le stockage local et deux exécutions comparables : forme des mesures et reproductibilité prouvées sur un index minuscule, référence complète et seconde exécution manuelles, sur la machine de référence ; sortie dans le dépôt refusée : contrôle du script rejoué à la main sous PowerShell 7 et 5.1 ; banc absent du build : aucun motif d'inclusion de Surefire ne le désigne | — | `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmarkSmokeTest.java#twoRunsWithTheSameSeedGiveTheSameDocumentsPassesAndVectorsRead`, `benchmarks/scalability/run-semantic-benchmark.ps1`, `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmark.java` | partielle |
-| Une mesure impossible est nommée dans le résultat | 4/4 par simulation (refus attendu des routes qui décodent l'index entier simulé par une réponse `500` de la surface) ; refus réel du magasin local à 100 000 documents : manuel, sur la machine de référence (E11) | — | `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmarkSmokeTest.java` | partielle |
+| Une mesure impossible est nommée dans le résultat | 4/4 par simulation (refus attendu des routes qui décodent l'index entier simulé par une réponse `500` de la surface) ; aucun refus réel du magasin local n'est déclaré : il ne décode plus l'index entier pour la liste, le détail, les voisins ni la recherche (E11) | — | `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmarkSmokeTest.java` | partielle |
 | Le harnais du banc sémantique est gardé par un test du build | tous | — | `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmarkSmokeTest.java#everyRouteOfTheSurfaceHasAMeasuredScenario`, `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmarkSmokeTest.java` | couverte |
 | La page de l'explorateur est exécutée par des tests et contrôlée avant toute fusion | tous ; version de Node du runner non relevée | — | `scripts/quality/check-explorer-front.py` (dépôt réel, puis cas « repository state passes », « broken syntax names the file », « PATH without Node names Node and the minimum », « installed Node under the minimum », « empty test folder » de `--self-test`), `.github/workflows/pr-ci.yml` (étapes du job `invariants`, câblage gardé par `scripts/quality/check-ci-wiring.py`) | couverte |
 | Aucun contenu indexé n'atteint un puits de balisage, prouvé par exécution | tous | V1 | `minos-explorer/src/test/js/sinks.test.mjs#list, header, detail and neighbours render hostile values as text`, `minos-explorer/src/test/js/sinks.test.mjs#search results, the map texts and the hover render hostile values as text`, `minos-explorer/src/test/js/sinks.test.mjs#the test DOM refuses markup and the context refuses code generation`, `scripts/quality/check-explorer-front.py` (cas `insertAdjacentHTML`, attribut `onclick` et `eval` de `--self-test`) | couverte |
@@ -241,7 +295,9 @@ lu : une lecture n'écrit rien et ne sonde aucun verrou (écart E6).
 | E8 | Les points sont rendus en JSON paginé, pas en binaire ; la couleur par module ou langage et la date de préparation ne sont pas proposées | `minos-explorer/src/main/java/com/minos/explorer/ExplorerApi.java` | Décision mesurée (tâche 7.1 du changement de projection) |
 | E9 | La carte n'est parcourue que dans Chrome sous Windows ; les mesures portent sur des corpus synthétiques `local-hash` sous Windows | `openspec/changes/archive/2026-11-14-projeter-l-index-semantique-en-2d/parcours-navigateur-6.7.md`, `openspec/changes/archive/2026-11-14-projeter-l-index-semantique-en-2d/mesures-6.8.md` | [Proposition] Parcours et mesures sous Linux, sur un index réel et sur PostgreSQL |
 | E10 | Le banc sémantique (`benchmarks/scalability/run-semantic-benchmark.ps1`, harnais `SemanticExplorerBenchmark`) mesure des jeux synthétiques `local-hash` écrits directement dans le magasin ; au-delà de 32 768 documents à 768 dimensions, ses jeux dépassent le budget de construction de la synchronisation (mention `beyond-build-budget`) et ne décrivent pas un index que l'utilisateur peut obtenir | `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmark.java`, `minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java` | Contrôle facultatif sur corpus réel (décision D2 du changement `mesurer-la-projection-et-l-explorateur-au-banc`) |
-| E11 | En stockage local, la liste, le détail, les voisins et la recherche sémantique (classement par défaut de `SemanticVectorStore.search`) décodent l'index entier et sont refusés au-delà de 32 768 documents à 768 dimensions ; le banc déclare ce refus attendu sur son jeu de 100 000 documents et échoue s'il disparaît | `minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java`, `minos-domain/src/main/java/com/minos/semantic/SemanticVectorStore.java`, `benchmarks/scalability/semantic.json` | Correction de AUD-PERF-03 (sprint 4 de l'audit du 2026-11-15), puis retrait de `expectRefusal` |
+| E11 | En stockage local, la liste, le détail, les voisins et la recherche sémantique ne décodent plus l'index entier quand le cache ne peut pas le tenir : la liste et le détail parcourent le fichier, le classement se fait en deux parcours sans rien retenir. Un index que le cache tient garde le chemin chargé pour les voisins et la recherche, et sert le détail depuis le cache s'il y est déjà ; son premier détail, avant tout chargement, est un parcours du fichier. Mesure sur un index constructible à contenu de 2 000 caractères : liste 764 → 11 ms (p50), détail 687 → 47 ms, voisins 1,37 → 0,66 s ; sur l'index que le cache tient, détail 8 → 37 ms avant le premier chargement. Mesures bruitées, jeux synthétiques `local-hash` ; le jeu de 100 000 documents n'est plus refusé et `expectRefusal` est retiré de `semantic.json` | `minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreWalkedReadsTest.java`, `benchmarks/scalability/semantic.json` | Index d'offsets en mémoire pour le détail, seulement si le propriétaire le juge utile sur la mesure (question ouverte du changement `paginer-l-index-semantique-local-sans-le-charger`) |
+| E12 | Le dessin de la carte parcourt tous les points affichés (une passe par nature) ; seule la recherche du point désigné est bornée par la grille. Les durées de recherche ont été relevées sous Node sur des jeux synthétiques (100 000 à 1 000 000 de points) ; le parcours dans un navigateur sur une projection préparée reste à faire | `minos-explorer/src/main/resources/com/minos/explorer/web/map.js`, `minos-explorer/src/test/js/map-bench.mjs` | [Proposition] Parcours manuel de la carte avec le relevé de l'outil de performance du navigateur (tâche 4.2 du changement `rendre-le-survol-de-la-carte-independant-du-nombre-de-points`) |
+| E13 | La préparation copie l'échantillon en mémoire quand il tient dans le budget : au budget par défaut (256 Mio) c'est le cas de tout index que la synchronisation construit, et la mémoire de travail rapportée passe de 25-54 Mo à 102-155 Mo sur les jeux mesurés ; sous un budget abaissé qui ne contient pas la matrice, le parcours en flux est conservé et annoncé (`strategy`, `limitations`). Mesure sur ce poste (jeux synthétiques `local-hash`, une exécution, bruitée) : préparation locale 25 000 documents à 768 dimensions 20,8 → 3,2 s, 98 304 à 256 dimensions 28,6 → 4,7 s (à 64 Mio, flux : 31,1 s) ; PostgreSQL 25 000 à 768 dimensions 163,5 → 10,2 s (après le retrait du comptage par page). Les 40 itérations sont toutes faites sur ces jeux : la tolérance de `PrincipalAxes` n'est jamais atteinte | `minos-application/src/main/java/com/minos/application/semantic/ProjectionPreparation.java`, `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java`, `minos-application/src/test/java/com/minos/application/semantic/ProjectionPreparationTest.java` | Convergence de l'itération : hors périmètre ; mesure sur un index réel construit par la synchronisation : manuelle |
 
 ## Questions ouvertes
 

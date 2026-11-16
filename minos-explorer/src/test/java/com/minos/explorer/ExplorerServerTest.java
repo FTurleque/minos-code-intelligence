@@ -128,7 +128,7 @@ class ExplorerServerTest {
             assertEquals(200, page.status(), site);
             assertTrue(page.body().startsWith("<!DOCTYPE html>"), site);
             assertFalse(page.body().contains(token), "the page never holds the token");
-            for (String resource : List.of("/app.css", "/app.js")) {
+            for (String resource : List.of("/app.css", "/map.js", "/app.js")) {
                 assertEquals(200, RawHttp.get(port, resource, Map.of("Sec-Fetch-Site", site)).status(), resource);
             }
         }
@@ -157,11 +157,11 @@ class ExplorerServerTest {
         assertEquals(403, RawHttp.get(port, "/api/v1/projects", crossSite).status());
         assertEquals(403, RawHttp.send(port, "POST", "/", crossSite, "").status(), "a navigation is a GET");
         assertEquals(403, RawHttp.send(port, "HEAD", "/", crossSite, null).status());
-        assertEquals(403, RawHttp.get(port, "/absent.js", crossSite).status(), "only the three resources");
-        assertEquals(403, RawHttp.get(port, "/index.html", crossSite).status(), "only the three resources");
+        assertEquals(403, RawHttp.get(port, "/absent.js", crossSite).status(), "only the four resources");
+        assertEquals(403, RawHttp.get(port, "/index.html", crossSite).status(), "only the four resources");
         assertEquals(200, RawHttp.get(port, "/index.html", Map.of()).status());
         assertEquals(403, RawHttp.send(port, "get", "/", crossSite, null).status(), "the method is GET, exactly");
-        for (String almostApi : List.of("/api", "/API/v1/projects", "/app.js/", "/./", "/app.js;x")) {
+        for (String almostApi : List.of("/api", "/API/v1/projects", "/app.js/", "/map.js/", "/./", "/app.js;x")) {
             assertEquals(403, RawHttp.get(port, almostApi, crossSiteWithToken).status(), almostApi);
         }
         RawHttp.Response refusedApi = RawHttp.get(port, "/api/v1/projects", crossSiteWithToken);
@@ -251,7 +251,7 @@ class ExplorerServerTest {
         for (String path : WebResources.paths()) {
             assertEquals(200, RawHttp.get(port, path, Map.of()).status(), path);
         }
-        for (String path : List.of("/app.js.map", "/../pom.xml", "/%2e%2e/%2e%2e/pom.xml", "/com/minos/explorer/web/app.js",
+        for (String path : List.of("/app.js.map", "/map.js.map", "/../pom.xml", "/%2e%2e/%2e%2e/pom.xml", "/com/minos/explorer/web/app.js",
                 "/favicon.ico")) {
             RawHttp.Response absent = RawHttp.get(port, path, Map.of());
             assertEquals(404, absent.status(), path);
@@ -390,7 +390,9 @@ class ExplorerServerTest {
         assertEquals(500, failed.status());
         assertFalse(failed.body().contains("secret"), failed.body());
         assertTrue(failed.body().contains("\"code\":\"INTERNAL_ERROR\""), failed.body());
-        assertTrue(log.contains("request failed: IllegalStateException"), log.toString());
+        assertTrue(log.stream().anyMatch(line -> line.startsWith("request failed (route=projects, "
+                + "type=java.lang.IllegalStateException, rootCause=java.lang.IllegalStateException, at=")), log.toString());
+        assertTrue(failed.body().contains("(ref "), failed.body());
         assertTrue(log.stream().noneMatch(line -> line.contains("secret")), log.toString());
     }
 
@@ -487,5 +489,23 @@ class ExplorerServerTest {
             }
         }
         return addresses;
+    }
+
+    @Test
+    void aDotSegmentIsRefusedBeforeAnyServiceCallWhateverItsEncoding() throws Exception {
+        for (String path : List.of("/api/v1/projects/../documents", "/api/v1/projects/%2E%2E/documents",
+                "/api/v1/projects/./documents", "/api/v1/projects/%2e/documents")) {
+            RawHttp.Response refused = RawHttp.get(port, path, bearer());
+
+            assertEquals(400, refused.status(), path);
+            assertTrue(refused.body().contains("\"code\":\"INVALID_REQUEST\""), refused.body());
+            assertFalse(refused.body().contains(".."), "the message does not copy the address: " + refused.body());
+        }
+        assertEquals(0, calls.get(), "no service call for a dot segment");
+
+        RawHttp.Response named = RawHttp.get(port, "/api/v1/projects/mon.projet/documents/file%3Asrc%2Fa..b%2FA.java", bearer());
+
+        assertEquals(200, named.status());
+        assertEquals(1, calls.get());
     }
 }
