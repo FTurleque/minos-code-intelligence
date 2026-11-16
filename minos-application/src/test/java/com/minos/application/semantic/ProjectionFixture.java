@@ -125,6 +125,8 @@ final class ProjectionFixture {
         private final Map<String, IndexSnapshot> indexes = new HashMap<>();
         int fullLoads;
         int vectorPages;
+        /** Complete walks of the index: the number of first pages asked for. */
+        int walks;
         int storedDocuments;
         int searches;
         int largestPage;
@@ -163,6 +165,7 @@ final class ProjectionFixture {
         public Optional<VectorPage> vectorPage(String projectId, String afterStableKey, int limit) {
             SemanticVectorStore.requireVectorPageBounds(afterStableKey, limit);
             vectorPages++;
+            if (afterStableKey == null) walks++;
             IndexSnapshot index = indexes.get(projectId);
             if (index == null) return Optional.empty();
             List<IndexedDocument> ordered = new ArrayList<>(index.documents());

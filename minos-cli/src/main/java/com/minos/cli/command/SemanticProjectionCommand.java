@@ -109,7 +109,19 @@ public final class SemanticProjectionCommand {
         value.put("passes", report.passes());
         value.put("durationMillis", report.durationMillis());
         value.put("peakWorkingBytes", report.peakWorkingBytes());
+        value.put("strategy", report.strategy() == SemanticProjectionService.Strategy.IN_MEMORY
+                ? "in-memory" : "streamed");
+        value.put("iterations", report.iterations());
+        value.put("limitations", limitationsOf(report.strategy()));
         return value;
+    }
+
+    /** What a preparation that reads the index again at every step tells: the cause and the option that lifts it. */
+    public static List<String> limitationsOf(SemanticProjectionService.Strategy strategy) {
+        return strategy == SemanticProjectionService.Strategy.STREAMED
+                ? List.of("SAMPLE_NOT_HELD_IN_MEMORY: the vectors of the sample did not fit the memory budget, so "
+                        + "every step read the index again; raise --max-memory-mb to iterate in memory")
+                : List.of();
     }
 
     private static Map<String, Object> status(SemanticProjectionService.Status status) {
@@ -162,7 +174,7 @@ public final class SemanticProjectionCommand {
 
         @Override
         public void advanced(String currentPhase, int currentPass, long currentVectorsRead) {
-            if (currentPass != pass) end();
+            if (currentPass != pass || (phase != null && !currentPhase.equals(phase))) end();
             if (SemanticProjectionService.PUBLISH_PHASE.equals(currentPhase)) return;
             phase = currentPhase;
             pass = currentPass;

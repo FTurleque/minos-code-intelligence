@@ -324,7 +324,8 @@ final class SemanticExplorerBenchmark {
             long[] pages = {0L};
             Map<Integer, Long> readByPass = new LinkedHashMap<>();
             SemanticProjectionService.Progress progress = (phase, pass, vectorsRead) -> {
-                if (SemanticProjectionService.PUBLISH_PHASE.equals(phase)) return;
+                // A step on the in-memory copy of the sample announces itself without reading a vector.
+                if (SemanticProjectionService.PUBLISH_PHASE.equals(phase) || vectorsRead == 0L) return;
                 pages[0]++;
                 readByPass.merge(pass, vectorsRead, Math::max);
             };
@@ -336,6 +337,9 @@ final class SemanticExplorerBenchmark {
                 emit.metric("projection", label, "documents", report.documentCount());
                 emit.metric("projection", label, "durationMillis", report.durationMillis());
                 emit.metric("projection", label, "passes", report.passes());
+                emit.metric("projection", label, "iterations", report.iterations());
+                emit.metric("projection", label, "inMemory",
+                        report.strategy() == SemanticProjectionService.Strategy.IN_MEMORY ? 1 : 0);
                 emit.metric("projection", label, "vectorPages", pages[0]);
                 emit.metric("projection", label, "vectorsRead",
                         readByPass.values().stream().mapToLong(Long::longValue).sum());

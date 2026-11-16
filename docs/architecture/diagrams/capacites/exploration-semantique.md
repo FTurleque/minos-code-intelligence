@@ -161,9 +161,15 @@ sequenceDiagram
     else index READY
         P->>J: bail exclusif du projet
         P->>V: métadonnées et empreintes des documents (identité)
-        loop une passe par étape : select, center, fit (40 au plus), project
-            P->>V: vectorPage(après clé, lot borné)
-            P->>P: échantillon ou accumulation PCA, mémoire comptée
+        P->>V: sélection de l'échantillon : vectorPage par lots bornés (un parcours)
+        alt les vecteurs de l'échantillon tiennent dans le budget
+            P->>V: copie de l'échantillon : vectorPage par lots bornés (un parcours)
+            P->>P: center, fit (40 au plus), project sur la copie, sans lecture de l'index
+        else l'échantillon ne tient pas
+            loop une passe par étape : center, fit (40 au plus), project
+                P->>V: vectorPage(après clé, lot borné)
+                P->>P: accumulation PCA, mémoire comptée
+            end
         end
         alt budget dépassé, index remplacé ou aucun document des natures
             P-->>C: refus, rien n'est publié, projection précédente intacte
@@ -173,7 +179,7 @@ sequenceDiagram
                 P-->>C: refus INDEX_CHANGED_DURING_PREPARATION
             else identité stable
                 P->>J: publication atomique
-                P-->>C: rapport (points, échantillonnage, variance, durée)
+                P-->>C: rapport (points, échantillonnage, variance, durée, stratégie, itérations)
             end
         end
     end
@@ -291,6 +297,7 @@ stateDiagram-v2
 | E10 | Le banc sémantique (`benchmarks/scalability/run-semantic-benchmark.ps1`, harnais `SemanticExplorerBenchmark`) mesure des jeux synthétiques `local-hash` écrits directement dans le magasin ; au-delà de 32 768 documents à 768 dimensions, ses jeux dépassent le budget de construction de la synchronisation (mention `beyond-build-budget`) et ne décrivent pas un index que l'utilisateur peut obtenir | `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmark.java`, `minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java` | Contrôle facultatif sur corpus réel (décision D2 du changement `mesurer-la-projection-et-l-explorateur-au-banc`) |
 | E11 | En stockage local, la liste, le détail, les voisins et la recherche sémantique ne décodent plus l'index entier quand le cache ne peut pas le tenir : la liste et le détail parcourent le fichier, le classement se fait en deux parcours sans rien retenir. Un index que le cache tient garde le chemin chargé pour les voisins et la recherche, et sert le détail depuis le cache s'il y est déjà ; son premier détail, avant tout chargement, est un parcours du fichier. Mesure sur un index constructible à contenu de 2 000 caractères : liste 764 → 11 ms (p50), détail 687 → 47 ms, voisins 1,37 → 0,66 s ; sur l'index que le cache tient, détail 8 → 37 ms avant le premier chargement. Mesures bruitées, jeux synthétiques `local-hash` ; le jeu de 100 000 documents n'est plus refusé et `expectRefusal` est retiré de `semantic.json` | `minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreWalkedReadsTest.java`, `benchmarks/scalability/semantic.json` | Index d'offsets en mémoire pour le détail, seulement si le propriétaire le juge utile sur la mesure (question ouverte du changement `paginer-l-index-semantique-local-sans-le-charger`) |
 | E12 | Le dessin de la carte parcourt tous les points affichés (une passe par nature) ; seule la recherche du point désigné est bornée par la grille. Les durées de recherche ont été relevées sous Node sur des jeux synthétiques (100 000 à 1 000 000 de points) ; le parcours dans un navigateur sur une projection préparée reste à faire | `minos-explorer/src/main/resources/com/minos/explorer/web/map.js`, `minos-explorer/src/test/js/map-bench.mjs` | [Proposition] Parcours manuel de la carte avec le relevé de l'outil de performance du navigateur (tâche 4.2 du changement `rendre-le-survol-de-la-carte-independant-du-nombre-de-points`) |
+| E13 | La préparation copie l'échantillon en mémoire quand il tient dans le budget : au budget par défaut (256 Mio) c'est le cas de tout index que la synchronisation construit, et la mémoire de travail rapportée passe de 25-54 Mo à 102-155 Mo sur les jeux mesurés ; sous un budget abaissé qui ne contient pas la matrice, le parcours en flux est conservé et annoncé (`strategy`, `limitations`). Mesure sur ce poste (jeux synthétiques `local-hash`, une exécution, bruitée) : préparation locale 25 000 documents à 768 dimensions 20,8 → 3,2 s, 98 304 à 256 dimensions 28,6 → 4,7 s (à 64 Mio, flux : 31,1 s) ; PostgreSQL 25 000 à 768 dimensions 163,5 → 10,2 s (après le retrait du comptage par page). Les 40 itérations sont toutes faites sur ces jeux : la tolérance de `PrincipalAxes` n'est jamais atteinte | `minos-application/src/main/java/com/minos/application/semantic/ProjectionPreparation.java`, `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java`, `minos-application/src/test/java/com/minos/application/semantic/ProjectionPreparationTest.java` | Convergence de l'itération : hors périmètre ; mesure sur un index réel construit par la synchronisation : manuelle |
 
 ## Questions ouvertes
 

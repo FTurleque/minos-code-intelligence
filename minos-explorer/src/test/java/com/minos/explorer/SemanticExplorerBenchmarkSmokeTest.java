@@ -35,7 +35,8 @@ class SemanticExplorerBenchmarkSmokeTest {
     /** The measures the harness emits for one local dataset, section by section, in no particular order. */
     private static final Set<String> EXPECTED_MEASURES = new TreeSet<>(List.of(
             "dataset/documents", "dataset/dimensions", "dataset/writeMillis", "dataset/beyondBuildBudget",
-            "projection/documents", "projection/durationMillis", "projection/passes", "projection/vectorPages",
+            "projection/documents", "projection/durationMillis", "projection/passes", "projection/iterations",
+            "projection/inMemory", "projection/vectorPages",
             "projection/vectorsRead", "projection/peakWorkingBytes", "projection/pointCount",
             "projection/candidateCount", "projection/sampled",
             "heap/retainedBeforeFirstCallBytes", "heap/retainedAfterListBytes", "heap/retainedAfterNeighborsBytes",

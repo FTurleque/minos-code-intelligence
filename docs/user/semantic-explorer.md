@@ -98,6 +98,15 @@ préparation interrompue ne laisse aucune projection partielle, et la projection
 | `--max-memory-mb <n>` | 256 | budget de mémoire de travail ; dépassé, la commande échoue sans rien publier |
 | `--format text\|json` | `text` | forme du rapport |
 
+Deux stratégies de calcul. Quand les vecteurs de l'échantillon tiennent dans ce qui reste du budget
+`--max-memory-mb`, `prepare` lit l'index deux fois (sélection, puis copie de l'échantillon en mémoire) et fait
+toutes les itérations sur cette copie : le rapport annonce `"strategy":"in-memory"` et `"passes":2`. Sinon, il
+relit l'index à chaque étape (4 à 43 lectures) et le rapport annonce `"strategy":"streamed"` avec une
+limitation qui nomme `--max-memory-mb` : la commande ne dépasse jamais le budget pour économiser des lectures.
+Les deux stratégies publient la même projection ; `iterations` donne le nombre d'itérations d'ajustement. Un
+échantillon plus grand demande plus de mémoire : pour 100 000 points à 768 dimensions, il faut compter près de
+300 Mio, que le budget par défaut ne contient pas.
+
 Codes de sortie des deux commandes : `0` succès (quel que soit l'état lu par `status`), `1` échec (projet
 inconnu, index non `READY`, budget dépassé, index modifié pendant la préparation, autre préparation en cours),
 `2` erreur d'usage.
@@ -132,7 +141,7 @@ rafraîchit pas d'elle-même après une préparation : refermez puis rouvrez « 
 fichier dérivé sous `MINOS_HOME/semantic-projections/`, supprimable sans perte.
 
 Les valeurs par défaut de `prepare` (100 000 points, 256 Mio, 40 itérations au plus) et le repère de durée (30 s
-pour 25 000 documents à 256 dimensions sur stockage local) sont **provisoires** : ils reposent sur des mesures
+pour 25 000 documents à 256 dimensions sur stockage local) sont **provisoires** (le repère de durée précède la stratégie en mémoire) : ils reposent sur des mesures
 faites sous Windows sur des index `local-hash` synthétiques. Aucune mesure n'existe sur un index réel, sur
 PostgreSQL à 100 000 documents, sous Linux ni avec un modèle d'embeddings appris. La carte a été parcourue sous
 Windows dans Chrome seulement.
