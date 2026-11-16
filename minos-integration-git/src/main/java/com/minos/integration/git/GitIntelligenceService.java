@@ -222,8 +222,9 @@ public final class GitIntelligenceService implements GitIntelligence {
                 : git.status().setIgnoreSubmodules(IgnoreSubmoduleMode.ALL).call();
         boolean clean = status == null || status.isClean();
 
-        List<String> limitations = repositoryLimitations(
-                repository, opened, workTree, remote, disclosed, head == null, detached, shallow);
+        List<String> limitations = new ArrayList<>(
+                historyLimitations(remote, disclosed, head == null, detached, shallow));
+        limitations.addAll(scopeLimitations(repository, opened, workTree));
 
         String identityBasis = remote == null ? "path:" + workTree : "remote:" + remote;
         return new RepositoryView(
@@ -239,16 +240,13 @@ public final class GitIntelligenceService implements GitIntelligence {
         );
     }
 
-    private static List<String> repositoryLimitations(
-            Repository repository,
-            TrustedRepositoryOpening.Opened opened,
-            Path workTree,
+    private static List<String> historyLimitations(
             String remote,
             String disclosedRemote,
             boolean unbornHead,
             boolean detached,
             boolean shallow
-    ) throws IOException {
+    ) {
         List<String> limitations = new ArrayList<>();
         if (remote == null) {
             limitations.add("NO_ORIGIN_REMOTE");
@@ -264,6 +262,15 @@ public final class GitIntelligenceService implements GitIntelligence {
         if (unbornHead) {
             limitations.add("UNBORN_HEAD");
         }
+        return limitations;
+    }
+
+    private static List<String> scopeLimitations(
+            Repository repository,
+            TrustedRepositoryOpening.Opened opened,
+            Path workTree
+    ) throws IOException {
+        List<String> limitations = new ArrayList<>();
         if (!workTree.equals(opened.root())) {
             limitations.add("REPOSITORY_ABOVE_PROJECT_ROOT");
         }
