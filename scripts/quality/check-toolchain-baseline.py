@@ -28,9 +28,8 @@ reference `N`. Rules:
 5. Every `java-version:` of a workflow is `N`. The steps of the IntelliJ plugin stay in Java 21 (its baseline
    follows IntelliJ Platform, not the product): when `N` is not 21 they are a closed list of (workflow, job)
    with the number of Java 21 steps each may hold, and Java 21 anywhere else, or any third version, is refused.
-   When `N` is 21 the plugin steps are product steps and the list has nothing to keep. One more closed list
-   names the jobs that qualify an upgrade from a candidate built for the previous baseline: they install that
-   JDK too, once, and it is the only other version accepted there.
+   When `N` is 21 the plugin steps are product steps and the list has nothing to keep. No workflow installs a
+   previous baseline: an upgrade qualification whose candidate A is built for another Java fails fail-closed.
 6. Every `FROM eclipse-temurin:` of a Dockerfile of the repository has the major `N`.
 7. `docs/developer/TOOLCHAIN_POLICY.md` states `Java: **N**, enforced as `[N,N+1)`` and dates the end of support of
    that JDK (`Java support: ... **N** ... until [at least] **YYYY-MM**`); `AGENTS.md` and
@@ -103,14 +102,6 @@ PLUGIN_JAVA_STEPS = {
     ("intellij-plugin.yml", "windows-ownership"): 1,
     ("release-windows.yml", "build"): 1,
 }
-# An A -> B upgrade qualification builds candidate A with the JDK of A. While a supported candidate A is still
-# built for the previous baseline, these jobs install it once, next to the current one. Empty this table (and
-# remove the steps) when `main` is built for the current baseline.
-PREVIOUS_JAVA = "25"
-PREVIOUS_JAVA_STEPS = {
-    ("docker-upgrade-qualification.yml", "real-docker-upgrade"): 1,
-    ("release-promotion-gate.yml", "docker-upgrade-qualification"): 1,
-}
 SKIPPED_DIRECTORIES = frozenset({".git", "target", "build", "node_modules", ".gradle", ".idea"})
 
 
@@ -174,7 +165,6 @@ def java_steps_failures(root: Path, version: str) -> tuple[list[str], int]:
     for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
         job = ""
         plugin_steps: dict[str, int] = {}
-        previous_steps: dict[str, int] = {}
         for number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), start=1):
             declared = JOB.match(line)
             if declared:
@@ -187,8 +177,6 @@ def java_steps_failures(root: Path, version: str) -> tuple[list[str], int]:
             stated = step.group("version")
             if stated == PLUGIN_JAVA != version and (workflow.name, job) in PLUGIN_JAVA_STEPS:
                 plugin_steps[job] = plugin_steps.get(job, 0) + 1
-            elif stated == PREVIOUS_JAVA != version and (workflow.name, job) in PREVIOUS_JAVA_STEPS:
-                previous_steps[job] = previous_steps.get(job, 0) + 1
             elif stated != version:
                 failures.append(f"{WORKFLOWS}/{workflow.name}:{number} installs Java {stated}, the POM compiles for {version}")
         for job, count in plugin_steps.items():
@@ -196,11 +184,6 @@ def java_steps_failures(root: Path, version: str) -> tuple[list[str], int]:
             if count > allowed:
                 failures.append(f"{WORKFLOWS}/{workflow.name} job `{job}` installs Java {PLUGIN_JAVA} in {count} steps, "
                                 f"the closed list of plugin steps allows {allowed}")
-        for job, count in previous_steps.items():
-            allowed = PREVIOUS_JAVA_STEPS[(workflow.name, job)]
-            if count > allowed:
-                failures.append(f"{WORKFLOWS}/{workflow.name} job `{job}` installs Java {PREVIOUS_JAVA} in {count} steps, "
-                                f"the closed list of upgrade qualifications allows {allowed}")
     return failures, compared
 
 

@@ -259,6 +259,17 @@ Chaque `actions/checkout` porte `persist-credentials: false` : le jeton du dép�
 
 Chaque job qui s'exécute sur un runner (`runs-on`) déclare `timeout-minutes` ; un appel de workflow réutilisable (`uses:` au niveau du job) n'a pas de runner et en est exempté. Les deux règles sont gardées par `check-workflow-pins.py`.
 
+## Jeton SonarCloud et code d'une pull request (AUD-DEP-05)
+
+Le job `sonar` de `pr-ci.yml` analyse l'arbre de la pull request. Le jeton `SONAR_TOKEN` n'est donné qu'à deux étapes, par leur `env:` propre : le contrôle de sa présence (aucun code du dépôt) et l'analyse. La compilation du candidat (`mvnw … install`, qui exécute les plugins et processeurs que la PR déclare) est une étape à part, sans secret ; `install` place les artefacts des modules dans le dépôt Maven local du runner, d'où le but `sonar`, lancé seul, résout le reactor, puis une dernière étape retire `~/.m2/repository/com/minos` pour qu'une PR n'alimente pas le cache que `setup-java` enregistre.
+
+`check-workflow-pins.py` garde cette séparation dans les workflows déclenchés par `pull_request` :
+
+- une étape dont l'`env:` référence un secret ne lance ni `mvnw` ni un script de `scripts/`, sauf entrée de la liste fermée `SECRET_WITH_REPOSITORY_CODE_KEPT` (workflow, job, étape, raison) ; une étape listée ne lance aucune phase du cycle de vie Maven ; une entrée sans objet est refusée ;
+- aucun `env:` de job ou de workflow ne référence de secret, hors `DOCKERHUB_USERNAME` (un identifiant, pas un jeton) : remonter le jeton au niveau du job le donnerait à toutes les étapes.
+
+**Risque résiduel** : l'étape d'analyse reste un but Maven lancé par `mvnw` sur l'arbre de la PR, avec le jeton dans son environnement. Maven y lit encore les POM du candidat, et un POM peut déclarer une extension de build chargée à la lecture du modèle. La séparation retire du chemin exposé les plugins et processeurs de la compilation, pas ce chemin-là ; le supprimer demande un scanner autonome (action épinglée qui n'exécute aucun code du dépôt, mais qui exige de décrire à la main les quatorze modules), non retenu dans ce lot. Un jeton d'analyse limité au projet borne le dommage ; **le type du jeton n'a pas été vérifié** (tâche manuelle : SonarCloud, secret du dépôt et secret Dependabot ; jamais la valeur dans un document). Le comportement de `sonar:sonar` lancé seul après `install` n'a pas été mesuré en CI au moment de l'écriture.
+
 ## Construction reproductible (AUD-DEP-11)
 
 Deux constructions du même commit, sur le même système, donnent le même JAR ombré. `project.build.outputTimestamp` est écrit dans le POM racine (`2026-01-01T00:00:00Z`, valeur d'un build sans Git ou de développement) et les scripts qui construisent un livrable (`build-windows-distribution.ps1`, `qualify-docker-release.sh`) passent la date du commit. Maven 3.10, celui du wrapper, fixait déjà une date par défaut ; Maven 3.9, que l'enforcer accepte, non : le POM ne dépend plus de la version de Maven. `requirePluginVersions` refuse tout plugin sans version, phases `clean`, `deploy` et `site` comprises.

@@ -175,8 +175,8 @@ def workflow(*jobs: tuple[str, str]) -> str:
         f"          distribution: temurin\n          java-version: '{version}'\n" for job, version in jobs)
 
 
-# The fixtures model a product on a Java that is neither the plugin's (21) nor the previous baseline of the upgrade
-# qualifications (PREVIOUS_JAVA), so every closed list is exercised; one test covers the product on 21.
+# The fixtures model a product on a Java other than the plugin's (21), so the closed list of plugin steps is
+# exercised; one test covers the product on 21.
 POLICY_JAVA = ("### Core\n\n- Java: **27**, enforced as `[27,28)` by Maven Enforcer.\n"
                "- Java support: Temurin **27** receives updates until at least **2031-09**.\n\n"
                "### IntelliJ plugin\n\n- Java: **21**.\n")
@@ -280,24 +280,17 @@ class JavaBaselineTest(unittest.TestCase):
         self.write(f"{gate.WORKFLOWS}/intellij-plugin.yml", workflow(("plugin", "22")))
         self.assertEqual([f"{gate.WORKFLOWS}/intellij-plugin.yml:7 installs Java 22, the POM compiles for 27"], self.failures())
 
-    def test_an_upgrade_qualification_may_install_the_previous_baseline_once(self):
-        self.assertIn(("docker-upgrade-qualification.yml", "real-docker-upgrade"), gate.PREVIOUS_JAVA_STEPS)
-        both = workflow(("real-docker-upgrade", gate.PREVIOUS_JAVA)) + (
-            "      - uses: actions/setup-java@abc # v5\n        with:\n          java-version: '27'\n")
-        self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", both)
-        self.assertEqual([], self.failures())
-
-    def test_the_previous_baseline_twice_in_an_upgrade_qualification_is_refused(self):
-        twice = workflow(("real-docker-upgrade", gate.PREVIOUS_JAVA)) + (
-            f"      - uses: actions/setup-java@abc # v5\n        with:\n          java-version: '{gate.PREVIOUS_JAVA}'\n")
-        self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", twice)
-        self.assertEqual([f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml job `real-docker-upgrade` installs Java "
-                          f"{gate.PREVIOUS_JAVA} in 2 steps, the closed list of upgrade qualifications allows 1"], self.failures())
-
-    def test_the_previous_baseline_outside_an_upgrade_qualification_is_refused(self):
-        self.write(f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml", workflow(("another-job", gate.PREVIOUS_JAVA)))
-        self.assertEqual([f"{gate.WORKFLOWS}/docker-upgrade-qualification.yml:7 installs Java {gate.PREVIOUS_JAVA}, "
-                          "the POM compiles for 27"], self.failures())
+    def test_an_upgrade_qualification_installs_no_other_java_than_the_baseline(self):
+        for name, job in (("docker-upgrade-qualification.yml", "real-docker-upgrade"),
+                          ("release-promotion-gate.yml", "docker-upgrade-qualification")):
+            with self.subTest(workflow=name):
+                self.write(f"{gate.WORKFLOWS}/{name}", workflow((job, "27")))
+                self.assertEqual([], self.failures())
+                self.write(f"{gate.WORKFLOWS}/{name}", workflow((job, "25")))
+                self.assertEqual([f"{gate.WORKFLOWS}/{name}:7 installs Java 25, the POM compiles for 27"], self.failures())
+                self.write(f"{gate.WORKFLOWS}/{name}", workflow((job, "25"), (job + "-b", "27")))
+                self.assertEqual(1, len(self.failures()), "the refusal does not depend on the job name")
+                (self.root / gate.WORKFLOWS / name).unlink()
 
     def test_a_pom_without_a_single_release_is_refused(self):
         self.write(gate.POM, "<project/>\n")
