@@ -477,7 +477,7 @@ const PROJECTION_HELP = {
 
 const map = {
   open: false, request: 0, status: null, points: [], showStale: false, highlights: new Set(),
-  scale: 1, offsetX: 0, offsetY: 0, hover: null, drag: null, frame: 0
+  scale: 1, offsetX: 0, offsetY: 0, hover: null, drag: null, frame: 0, dirty: false, pendingHover: null
 };
 
 function mapMessage(text) {
@@ -489,9 +489,109 @@ function percent(share) {
   return (share * 100).toFixed(1).replace(".", ",") + " %";
 }
 
+// The displayed points and the grid over them, rebuilt only when the points of the map or the kind filter change.
+const MAP_CAPTURE_PIXELS = 8;
+const MAP_GRID_POINTS_PER_CELL = 2;
+const MAP_GRID_MAX_SIDE = 1024;
+const mapIndex = { points: null, count: -1, kind: null, list: [], grid: null };
+
+// The points shown for the current kind filter. The list is the received array itself without filter, and one
+// filtered copy otherwise; it is computed again only when the points of the map or the filter change.
 function visiblePoints() {
   const kind = $("kind").value;
-  return kind ? map.points.filter(point => point.kind === kind) : map.points;
+  if (mapIndex.points !== map.points || mapIndex.count !== map.points.length || mapIndex.kind !== kind) {
+    mapIndex.points = map.points;
+    mapIndex.count = map.points.length;
+    mapIndex.kind = kind;
+    mapIndex.list = kind ? map.points.filter(point => point.kind === kind) : map.points;
+    mapIndex.grid = null;
+  }
+  return mapIndex.list;
+}
+
+function mapGrid() {
+  const list = visiblePoints();
+  if (mapIndex.grid === null) mapIndex.grid = buildPointGrid(list);
+  return mapIndex.grid;
+}
+
+// The cell of a coordinate of the projection (the square from -1 to 1), clamped so that a point off the square
+// belongs to an edge cell.
+// Plain arithmetic, no call to a built-in: this runs once per point when the grid is built.
+function gridCell(value, side) {
+  const scaled = (value + 1) * side / 2;
+  if (!(scaled > 0)) return 0;
+  if (scaled >= side) return side - 1;
+  return scaled | 0;
+}
+
+// A regular grid over the square of the projection, in the coordinates of the projection, so that it does not
+// depend on the zoom or the offset. `starts` and `items` list, cell after cell, the indices in `list` of the points
+// of the cell in ascending order; a point whose coordinates are not finite is in no cell.
+function buildPointGrid(list) {
+  const side = Math.max(1, Math.min(MAP_GRID_MAX_SIDE, Math.ceil(Math.sqrt(list.length / MAP_GRID_POINTS_PER_CELL))));
+  const cellOf = new Int32Array(list.length).fill(-1);
+  const starts = new Int32Array(side * side + 1);
+  for (let index = 0; index < list.length; index += 1) {
+    const point = list[index];
+    const x = point.x;
+    const y = point.y;
+    if (x - x !== 0 || y - y !== 0) continue; // NaN and the infinities are in no cell
+    const cell = gridCell(y, side) * side + gridCell(x, side);
+    cellOf[index] = cell;
+    starts[cell + 1] += 1;
+  }
+  for (let cell = 0; cell < side * side; cell += 1) starts[cell + 1] += starts[cell];
+  const items = new Int32Array(starts[side * side]);
+  const filled = starts.slice(0, side * side);
+  for (let index = 0; index < list.length; index += 1) {
+    if (cellOf[index] >= 0) items[filled[cellOf[index]]++] = index;
+  }
+  return { side: side, starts: starts, items: items, list: list };
+}
+
+// The cells that cover the disk of the capture radius around the pixel (x, y), or null for a position that is not
+// a number. The radius is widened by a rounding margin: the exact distance test decides.
+function captureCells(grid, geometry, x, y) {
+  const half = geometry.half;
+  const centreX = (x - geometry.originX) / half;
+  const centreY = (geometry.originY - y) / half;
+  if (!Number.isFinite(centreX) || !Number.isFinite(centreY)) return null;
+  const reach = MAP_CAPTURE_PIXELS / half * (1 + 1e-9) + 1e-12;
+  return {
+    first: gridCell(centreX - reach, grid.side), last: gridCell(centreX + reach, grid.side),
+    rowFirst: gridCell(centreY - reach, grid.side), rowLast: gridCell(centreY + reach, grid.side)
+  };
+}
+
+// The nearest point strictly inside the capture radius of the pixel (x, y), the lowest index on a tie, or null.
+// Only the cells that cover the disk of the radius are read; the distance is the one of a scan of every point.
+function searchPointGrid(grid, geometry, x, y) {
+  const cells = captureCells(grid, geometry, x, y);
+  if (cells === null) return null;
+  const list = grid.list;
+  let best = -1;
+  let bestDistance = MAP_CAPTURE_PIXELS * MAP_CAPTURE_PIXELS;
+  const consider = index => {
+    const point = list[index];
+    const deltaX = geometry.originX + point.x * geometry.half - x;
+    const deltaY = geometry.originY - point.y * geometry.half - y;
+    const distance = deltaX * deltaX + deltaY * deltaY;
+    if (distance < bestDistance || (distance === bestDistance && best >= 0 && index < best)) {
+      best = index;
+      bestDistance = distance;
+    }
+  };
+  if ((cells.last - cells.first + 1) * (cells.rowLast - cells.rowFirst + 1) > list.length) {
+    for (let index = 0; index < list.length; index += 1) consider(index);
+  } else {
+    for (let row = cells.rowFirst; row <= cells.rowLast; row += 1) {
+      const from = grid.starts[row * grid.side + cells.first];
+      const to = grid.starts[row * grid.side + cells.last + 1];
+      for (let slot = from; slot < to; slot += 1) consider(grid.items[slot]);
+    }
+  }
+  return best < 0 ? null : list[best];
 }
 
 function renderMapTexts() {
@@ -527,32 +627,46 @@ function renderMapTexts() {
   }
 }
 
-async function loadMap() {
-  if (!map.open || !project) return;
-  const number = ++map.request;
+function clearMap() {
   map.status = null;
   map.points = [];
   map.hover = null;
+  map.pendingHover = null;
   $("mapShowStale").hidden = true;
   mapMessage("");
   renderMapTexts();
+}
+
+// Whether the points of a projection in this state are read now; the page says why when they are not.
+function projectionReadable(status) {
+  if (status.state !== "PRETE") mapMessage(PROJECTION_HELP[status.state] || status.state);
+  if (status.state === "PERIMEE" && !map.showStale) {
+    $("mapShowStale").hidden = false;
+    return false;
+  }
+  return status.state === "PRETE" || status.state === "PERIMEE";
+}
+
+function showMapPoints(points) {
+  map.points = points;
+  mapGrid();
+  resetMapView();
+  renderMapTexts();
+  markRowsOnMap();
+  drawMap();
+}
+
+async function loadMap() {
+  if (!map.open || !project) return;
+  const number = ++map.request;
+  clearMap();
   try {
     const status = await api(projectPath() + "/projection");
     if (number !== map.request) return;
     map.status = status;
-    if (status.state !== "PRETE") mapMessage(PROJECTION_HELP[status.state] || status.state);
-    if (status.state === "PERIMEE" && !map.showStale) {
-      $("mapShowStale").hidden = false;
-      return;
-    }
-    if (status.state !== "PRETE" && status.state !== "PERIMEE") return;
+    if (!projectionReadable(status)) return;
     const points = await readMapPoints(number, status.state);
-    if (points === null) return;
-    map.points = points;
-    resetMapView();
-    renderMapTexts();
-    markRowsOnMap();
-    drawMap();
+    if (points !== null) showMapPoints(points);
   } catch (error) {
     report(error);
   }
@@ -587,25 +701,46 @@ function mapGeometry() {
     originX: width / 2 + map.offsetX, originY: height / 2 + map.offsetY };
 }
 
+// Asks for a drawing; every request before the next frame is served by one drawing.
 function drawMap() {
+  map.dirty = true;
+  requestMapFrame();
+}
+
+function requestMapFrame() {
   if (map.frame) return;
-  map.frame = window.requestAnimationFrame(() => {
-    map.frame = 0;
-    const geometry = mapGeometry();
-    const canvas = geometry.canvas;
-    if (canvas.hidden || geometry.width === 0) return;
-    const ratio = window.devicePixelRatio || 1;
-    if (canvas.width !== Math.round(geometry.width * ratio) || canvas.height !== Math.round(geometry.height * ratio)) {
-      canvas.width = Math.round(geometry.width * ratio);
-      canvas.height = Math.round(geometry.height * ratio);
-    }
-    const context = canvas.getContext("2d");
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.clearRect(0, 0, geometry.width, geometry.height);
-    const visible = visiblePoints();
-    drawPlainPoints(context, geometry, visible);
-    drawMarkedPoints(context, geometry, visible);
-  });
+  map.frame = window.requestAnimationFrame(runMapFrame);
+}
+
+// One frame: the last pointer position received since the previous frame is looked up once, then the map is
+// drawn if anything asked for it (including a changed hovered point).
+function runMapFrame() {
+  map.frame = 0;
+  if (map.pendingHover) {
+    const position = map.pendingHover;
+    map.pendingHover = null;
+    showHover(pointAt(position));
+  }
+  if (!map.dirty) return;
+  map.dirty = false;
+  paintMap();
+}
+
+function paintMap() {
+  const geometry = mapGeometry();
+  const canvas = geometry.canvas;
+  if (canvas.hidden || geometry.width === 0) return;
+  const ratio = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(geometry.width * ratio) || canvas.height !== Math.round(geometry.height * ratio)) {
+    canvas.width = Math.round(geometry.width * ratio);
+    canvas.height = Math.round(geometry.height * ratio);
+  }
+  const context = canvas.getContext("2d");
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, geometry.width, geometry.height);
+  const visible = visiblePoints();
+  drawPlainPoints(context, geometry, visible);
+  drawMarkedPoints(context, geometry, visible);
 }
 
 // The points no search ranked, one colour per kind; they are dimmed while a search highlights others.
@@ -649,15 +784,7 @@ function pointAt(event) {
   const bounds = geometry.canvas.getBoundingClientRect();
   const x = event.clientX - bounds.left;
   const y = event.clientY - bounds.top;
-  let best = null;
-  let bestDistance = 64;
-  for (const point of visiblePoints()) {
-    const dx = geometry.originX + point.x * geometry.half - x;
-    const dy = geometry.originY - point.y * geometry.half - y;
-    const distance = dx * dx + dy * dy;
-    if (distance < bestDistance) { best = point; bestDistance = distance; }
-  }
-  return best;
+  return searchPointGrid(mapGrid(), geometry, x, y);
 }
 
 function zoomMap(factor, x, y) {
@@ -696,14 +823,20 @@ function dragMap(event) {
   drawMap();
 }
 
+// A pointer move only records its position; the frame looks the point up (see runMapFrame).
 function hoverMap(event) {
-  const point = pointAt(event);
+  map.pendingHover = { clientX: event.clientX, clientY: event.clientY };
+  requestMapFrame();
+}
+
+// Called by the frame, which draws right after: a changed point only marks the map as to be drawn.
+function showHover(point) {
   if (point === map.hover) return;
   map.hover = point;
   const text = point ? point.kind + " · " + point.stableKey : "";
   $("mapHover").textContent = text;
   $("mapCanvas").title = text;
-  drawMap();
+  map.dirty = true;
 }
 
 function zoomMapAtCentre(factor) {
