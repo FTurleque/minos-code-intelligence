@@ -190,5 +190,5 @@ Pour que les stratégies soient égales au bit près, le chemin en flux calcule 
 
 ## Questions ouvertes
 
-- D4 (arrondi sous PostgreSQL, version de la méthode) : décision du propriétaire, recommandation ci-dessus.
-- Seuil d'acceptation du gain, à fixer sur la mesure « avant ».
+- D4 retenue : arrondi `float` commun aux deux stratégies, `METHOD_VERSION` inchangée.
+- Seuil d'acceptation du gain : aucun seuil chiffré, les gains se lisent tels que mesurés.
