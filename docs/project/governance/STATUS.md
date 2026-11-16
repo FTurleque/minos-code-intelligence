@@ -166,7 +166,7 @@ Les sept changements du sprint 1 de l'audit du 15 novembre 2026 (« remettre la 
 - **Auto-tests de gates** : tout gate a un auto-test câblé dans `invariants` ; les gates littéraux le tirent du pilote commun `scripts/quality/literal_gate.py`, les gates encore sans auto-test forment une liste fermée décroissante.
 - **Couverture** : scopes JaCoCo nominatifs `explorer-surface`, `wsl-lane` et `semantic-projection`, planchers de classe pour la garde HTTP de l'explorateur et `QueryViewMemoryBudget`.
 - **Banc** : `benchmarks/scalability` mesure la projection 2D et les routes de l'explorateur, refus attendus déclarés au-delà du budget de décodage local ; la référence complète sur la machine de référence, PostgreSQL compris, reste à produire.
-- **Front de l'explorateur** : `app.js` est exécuté sous Node par des tests (faux DOM, puits de balisage refusés) et contrôlé par `check-explorer-front.py` avant toute fusion.
+- **Front de l'explorateur** : `map.js` et `app.js` sont exécutés sous Node par des tests (faux DOM, puits de balisage refusés) et contrôlé par `check-explorer-front.py` avant toute fusion.
 - **Tests** : un test propre à une plateforme est compté sauté (`check-test-platform-guards.py`) ; les preuves de verrou échouent quand leur processus détenteur ne démarre pas ou quand le bail n'est plus tenu.
 
 Restes manuels : remise à niveau des fins de ligne d'un clone existant, référence complète du banc. Détail et preuves : [`docs/project/audits/2026-11-15/SUIVI.md`](../audits/2026-11-15/SUIVI.md).

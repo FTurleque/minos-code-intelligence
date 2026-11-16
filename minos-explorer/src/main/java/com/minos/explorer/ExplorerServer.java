@@ -60,7 +60,7 @@ final class ExplorerServer implements AutoCloseable {
 
     private static final String API_ROOT = "/api/";
     /** The page and its two resources: the only reads served to a navigation coming from another site. */
-    private static final Set<String> LINK_OPENED_PATHS = Set.of("/", "/app.css", "/app.js");
+    private static final Set<String> LINK_OPENED_PATHS = Set.of("/", "/app.css", "/map.js", "/app.js");
     private static final String REFUSED_PAGE_TEXT = """
             MINOS explorer : requête refusée.
             Ouvrez l'adresse imprimée par « minos explorer serve » en la collant dans la barre d'adresse \
