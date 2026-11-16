@@ -1,9 +1,10 @@
 package com.minos.api;
 
+import com.minos.diagnostics.UsageException;
 import java.util.List;
 import java.util.Objects;
 
-import static com.minos.domain.Preconditions.requireText;
+import static com.minos.domain.Preconditions.requireArgument;
 
 /** Additive M20 semantic/hybrid API. Existing structured APIs remain unchanged and authoritative. */
 public interface SemanticCodeIntelligenceApi {
@@ -26,27 +27,27 @@ public interface SemanticCodeIntelligenceApi {
 
     record SemanticQuery(String query, int limit, double minimumScore) {
         public SemanticQuery {
-            requireText(query, "query");
+            requireArgument(query, "query");
             requireRange(limit, 1, 1000, "limit");
             if (!Double.isFinite(minimumScore) || minimumScore < -1.0 || minimumScore > 1.0) {
-                throw new IllegalArgumentException("minimumScore must be between -1 and 1");
+                throw new UsageException("minimumScore must be between -1 and 1");
             }
         }
     }
 
     record HybridQuery(String query, int limit, double minimumScore) {
         public HybridQuery {
-            requireText(query, "query");
+            requireArgument(query, "query");
             requireRange(limit, 1, 500, "limit");
             if (!Double.isFinite(minimumScore) || minimumScore < 0.0 || minimumScore > 1.0) {
-                throw new IllegalArgumentException("minimumScore must be between 0 and 1");
+                throw new UsageException("minimumScore must be between 0 and 1");
             }
         }
     }
 
     record ContextQuery(String query, int maxDocuments, int maxTokens, int maxTokensPerDocument) {
         public ContextQuery {
-            requireText(query, "query");
+            requireArgument(query, "query");
             requireRange(maxDocuments, 1, 100, "maxDocuments");
             requireRange(maxTokens, 128, 65_536, "maxTokens");
             requireRange(maxTokensPerDocument, 32, maxTokens, "maxTokensPerDocument");
@@ -195,7 +196,7 @@ public interface SemanticCodeIntelligenceApi {
 
     private static void requireRange(int value, int minimum, int maximum, String name) {
         if (value < minimum || value > maximum) {
-            throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
+            throw new UsageException(name + " must be between " + minimum + " and " + maximum);
         }
     }
 

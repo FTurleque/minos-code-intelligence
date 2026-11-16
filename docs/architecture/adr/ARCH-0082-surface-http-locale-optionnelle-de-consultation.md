@@ -141,8 +141,8 @@ Changement OpenSpec `explorer-l-index-semantique-dans-un-navigateur`.
   `docs/user/docker-runtime.md` ; le propriétaire l'accepte en l'état (décision du 2026-11-13), le service restant optionnel et non qualifié.
 - **Contrôle d'origine (point 3).** En plus d'`Origin`, la surface refuse toute requête dont l'en-tête
   `Sec-Fetch-Site` vaut autre chose que `same-origin` ou `none`. Une seule lecture y échappe : le `GET` de la
-  page d'accueil et de ses deux ressources statiques (`/`, `/app.css`, `/app.js`), pour qu'un lien suivi depuis
-  une autre page ouvre la surface. Ces trois ressources ne portent aucune donnée et le jeton reste dans le
+  page d'accueil et de ses trois ressources statiques (`/`, `/app.css`, `/map.js`, `/app.js`), pour qu'un lien suivi depuis
+  une autre page ouvre la surface. Ces quatre ressources ne portent aucune donnée et le jeton reste dans le
   fragment de l'adresse ; `Host` et `Origin` y sont contrôlés comme ailleurs. Toute route `/api/` garde jeton,
   `Host`, `Origin` et refus des requêtes venues d'un autre site (`RequestGuard.check`, `ExplorerServerTest`).
   Un refus hors API répond par un texte fixe sans motif. Décision du propriétaire, 2026-11-14.

@@ -102,14 +102,14 @@ Le harnais est `minos-explorer/src/test/java/com/minos/explorer/SemanticExplorer
 des sources de test de `minos-explorer` (le module de la surface, que `minos-bootstrap` ne voit pas) dont le
 nom ne correspond à aucun motif d'inclusion de Surefire : il ne tourne jamais dans `mvn verify`.
 `SemanticExplorerBenchmarkSmokeTest` l'exécute à chaque build sur un index local de quelques centaines de
-documents : il vérifie la liste exacte des mesures émises (65 lignes `METRIC` pour un jeu local mesuré en
+documents : il vérifie la liste exacte des mesures émises (67 lignes `METRIC` pour un jeu local mesuré en
 entier), que chaque route de `ExplorerApi` a un scénario mesuré, la forme des refus, et que deux exécutions de
 même graine donnent les mêmes documents, passes et vecteurs lus. Il n'affirme aucune durée.
 
 ```powershell
 .\benchmarks\scalability\run-semantic-benchmark.ps1 -OutputDirectory <hors-dépôt>\semantic-run `
     [-PostgresUrl jdbc:postgresql://127.0.0.1:55432/postgres -PostgresUser minos] `
-    [-Only local:25000,postgresql:25000] [-Warmup 1] [-Iterations 3]
+    [-Only local:25000,postgresql:25000] [-Warmup 1] [-Iterations 3] [-ContentPaddingChars 2000]
 ```
 
 Le script compile le harnais (`mvnw -pl minos-explorer -am test-compile`), lance la JVM avec les paramètres
@@ -122,9 +122,13 @@ PowerShell 5.1 et PowerShell 7.
 ### Jeux
 
 `semantic.json` déclare la dimension (768), la graine, l'échauffement, les itérations et les jeux par
-stockage : `local` 25 000 et 32 768 documents, `local` 100 000 documents à refus attendu sur la liste, le
-détail, les voisins et la recherche sémantique, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
+stockage : `local` 25 000, 32 768 et 100 000 documents, `postgresql` 25 000 et 100 000 documents. Chaque jeu est mesuré dans un `MINOS_HOME`
 neuf ; son libellé porte le stockage, la taille et la dimension (`local-n25000-d768`).
+
+`-ContentPaddingChars` complète chaque contenu synthétique, de 60 caractères environ, jusqu'au nombre demandé :
+sans lui, un index de 32 768 documents à 768 dimensions pèse environ 230 Mo en cache et tient dans le plafond de
+256 Mio du store local ; avec 2 000 caractères, il le dépasse sans dépasser le budget de construction de la
+synchronisation (au plus 192 Mio de contenu). Le libellé du jeu porte alors le suffixe `-c<caractères>`.
 
 Tous les jeux sont **synthétiques** : textes tirés de la graine, vecteurs du provider déterministe
 `local-hash`, écrits directement par le port d'écriture du magasin sémantique
@@ -132,16 +136,17 @@ Tous les jeux sont **synthétiques** : textes tirés de la graine, vecteurs du p
 de construire (budget `SemanticIndexBudget.DEFAULT`, relu au HEAD par le harnais : au plus 32 768 documents à
 768 dimensions) porte la mention `beyond-build-budget` dans son libellé : il caractérise le magasin et les
 lectures, pas un index que l'utilisateur peut obtenir. Le jeu local de 100 000 documents dépasse aussi le
-décodage complet du magasin local : la liste, le détail, les voisins et la recherche sémantique (classement
-exact par défaut du port `SemanticVectorStore.search`, qui charge l'index entier) y sont refusés, et le banc
-constate ce refus.
+décodage complet du magasin local (192 Mio de vecteurs) : la liste, le détail, les voisins et la recherche
+sémantique y sont servis par un parcours du fichier, qui ne décode jamais l'index entier. Un jeu ne peut déclarer
+dans `semantic.json` un refus attendu (`expectRefusal`, liste de routes) que pour une route que le magasin
+refuse réellement ; le banc échoue si ce refus ne se produit pas.
 
 ### Mesures
 
 | Section | Mesures |
 |---|---|
 | `dataset` | `documents`, `dimensions`, `writeMillis` (écriture du jeu), `beyondBuildBudget` (0 ou 1) |
-| `projection` | `documents`, `durationMillis`, `passes` (parcours de l'index), `vectorPages` (pages de vecteurs lues), `vectorsRead`, `peakWorkingBytes`, `pointCount`, `candidateCount`, `sampled` |
+| `projection` | `documents`, `durationMillis`, `passes` (parcours de l'index), `iterations` (itérations d'ajustement), `inMemory` (1 si l'échantillon a été copié et itéré en mémoire, 0 si l'index a été relu à chaque étape), `vectorPages` (pages de vecteurs lues), `vectorsRead`, `peakWorkingBytes`, `pointCount`, `candidateCount`, `sampled` |
 | `explorer` | pour `projects`, `list-first`, `list-deep` (page atteinte par curseur), `detail`, `neighbors` (limite 20), `projection-status`, `projection-points` (limite 5 000), `search` (sémantique) : `coldMicros`, `p50Micros`, `p95Micros`, `maxMicros`, `allocatedBytesPerRequest` (médiane des octets alloués par la JVM pendant la requête, client compris), `responseBytes` |
 | `heap` | tas occupé après trois collectes : avant le premier appel, après la liste, après les voisins, après la lecture de tous les points |
 

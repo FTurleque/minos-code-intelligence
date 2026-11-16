@@ -36,6 +36,7 @@ final class WebResources {
     private static final Map<String, String[]> BY_PATH = Map.of(
             "/", new String[] {"index.html", "text/html; charset=utf-8"},
             "/index.html", new String[] {"index.html", "text/html; charset=utf-8"},
+            "/map.js", new String[] {"map.js", "text/javascript; charset=utf-8"},
             "/app.js", new String[] {"app.js", "text/javascript; charset=utf-8"},
             "/app.css", new String[] {"app.css", "text/css; charset=utf-8"});
 

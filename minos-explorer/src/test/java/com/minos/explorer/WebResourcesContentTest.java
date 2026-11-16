@@ -43,7 +43,9 @@ class WebResourcesContentTest {
         }
         assertTrue(resources.get("/app.js").contains("node.textContent = String(text)"),
                 "the single element factory writes text");
-        assertTrue(resources.get("/app.js").contains("\"use strict\""));
+        for (String script : List.of("/app.js", "/map.js")) {
+            assertTrue(resources.get(script).contains("\"use strict\""), script);
+        }
     }
 
     @Test
@@ -63,11 +65,11 @@ class WebResourcesContentTest {
             scripts.add(script.group(1).trim());
             assertEquals("", script.group(2).trim(), "inline script in the page");
         }
-        assertEquals(List.of("src=\"app.js\""), scripts);
+        assertEquals(List.of("src=\"map.js\"", "src=\"app.js\""), scripts, "the map script is loaded before the page script");
         List<String> referenced = new ArrayList<>();
         Matcher attribute = RESOURCE_ATTRIBUTE.matcher(html);
         while (attribute.find()) referenced.add(attribute.group(1));
-        assertEquals(List.of("app.css", "app.js"), referenced);
+        assertEquals(List.of("app.css", "map.js", "app.js"), referenced);
         assertFalse(resources.get("/app.css").contains("url("), "the stylesheet loads nothing");
         assertFalse(resources.get("/app.css").contains("@import"), "the stylesheet imports nothing");
         assertFalse(html.toLowerCase(java.util.Locale.ROOT).contains("<iframe"));
@@ -76,24 +78,27 @@ class WebResourcesContentTest {
 
     @Test
     void thePageKeepsTheTokenOutOfTheAddressAndSendsItInTheAuthorizationHeaderOnly() throws IOException {
-        String script = resources().get("/app.js");
+        Map<String, String> resources = resources();
+        String script = resources.get("/app.js");
+        String pageScripts = script + resources.get("/map.js");
 
         assertTrue(script.contains("window.history.replaceState(null, \"\", window.location.pathname)"),
                 "the fragment that carries the token is removed from the address");
         assertTrue(script.contains("headers: { Authorization: \"Bearer \" + token }"));
         assertTrue(script.contains("credentials: \"omit\""));
         assertTrue(script.contains("referrerPolicy: \"no-referrer\""));
-        assertFalse(script.contains("localStorage"), "the token does not outlive the browser tab");
-        assertFalse(script.contains("document.cookie"));
-        assertFalse(script.contains("?token="));
-        assertEquals(1, script.split("fetch\\(", -1).length - 1, "one place sends requests");
+        assertFalse(pageScripts.contains("localStorage"), "the token does not outlive the browser tab");
+        assertFalse(pageScripts.contains("document.cookie"));
+        assertFalse(pageScripts.contains("?token="));
+        assertEquals(1, pageScripts.split("fetch\\(", -1).length - 1, "one place sends requests");
         assertTrue(script.contains("fetch(API + path, options)"), "requests go to the API of the page's origin");
     }
 
     @Test
     void theMapOnlyReadsAProjectionAndNamesTheCommandThatPreparesOne() throws IOException {
         Map<String, String> resources = resources();
-        String script = resources.get("/app.js");
+        String page = resources.get("/app.js");
+        String script = resources.get("/map.js");
         String html = resources.get("/index.html");
 
         assertTrue(script.contains("api(projectPath() + \"/projection\")"), "the state is read by a GET");
@@ -101,9 +106,10 @@ class WebResourcesContentTest {
         for (String line : script.lines().filter(line -> line.contains("api(") && line.contains("projection")).toList()) {
             assertFalse(line.contains(", request") || line.contains(", {"), "a projection request carries no body: " + line);
         }
-        assertEquals(1, script.split("method: body === undefined \\? \"GET\" : \"POST\"", -1).length - 1,
+        assertEquals(1, page.split("method: body === undefined \\? \"GET\" : \"POST\"", -1).length - 1,
                 "a request is a POST only when it carries a body");
-        assertEquals(1, script.split("\"/search\", request\\)", -1).length - 1, "the search is the only request with a body");
+        assertEquals(1, page.split("\"/search\", request\\)", -1).length - 1, "the search is the only request with a body");
+        assertFalse(script.contains("\"POST\""), "the map script sends nothing");
         for (String state : List.of("ABSENTE", "ECHOUEE", "PERIMEE")) {
             assertTrue(script.contains(state + ": \""), "the page says what to do in the state " + state);
         }
@@ -127,7 +133,7 @@ class WebResourcesContentTest {
 
     private static Map<String, String> resources() throws IOException {
         Map<String, String> resources = new LinkedHashMap<>();
-        for (String path : List.of("/index.html", "/app.js", "/app.css")) {
+        for (String path : List.of("/index.html", "/map.js", "/app.js", "/app.css")) {
             resources.put(path, new String(WebResources.find(path).orElseThrow().content(), StandardCharsets.UTF_8));
         }
         return resources;

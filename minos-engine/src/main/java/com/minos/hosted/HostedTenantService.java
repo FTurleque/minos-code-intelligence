@@ -1,5 +1,6 @@
 package com.minos.hosted;
 
+import com.minos.diagnostics.UsageException;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -92,7 +93,7 @@ final class HostedTenantService {
 
     List<HostedAuditEvent> audit(String bearerToken, int limit) throws IOException {
         if (limit < HostedControlPlaneService.MIN_AUDIT_LIMIT || limit > HostedControlPlaneService.MAX_AUDIT_LIMIT) {
-            throw new IllegalArgumentException("audit limit must be between " + HostedControlPlaneService.MIN_AUDIT_LIMIT
+            throw new UsageException("audit limit must be between " + HostedControlPlaneService.MIN_AUDIT_LIMIT
                     + " and " + HostedControlPlaneService.MAX_AUDIT_LIMIT);
         }
         HostedTenantState state = authorization.authorizeRead(

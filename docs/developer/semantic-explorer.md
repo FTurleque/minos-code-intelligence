@@ -70,7 +70,7 @@ Préfixe `/api/v1/`. Toutes les réponses sont du JSON (`DeterministicJson`), av
 nosniff`. Autorisation de chaque route : `Authorization: Bearer <jeton>`, `Host` local, `Origin` absent ou égal
 à l'origine servie, `Sec-Fetch-Site` absent, `same-origin` ou `none`.
 
-Hors de l'API, `RequestGuard` classe la requête : le `GET` de `/`, `/app.css` ou `/app.js` (`Target.PAGE_READ`)
+Hors de l'API, `RequestGuard` classe la requête : le `GET` de `/`, `/app.css`, `/map.js` ou `/app.js` (`Target.PAGE_READ`)
 est servi quel que soit `Sec-Fetch-Site`, pour qu'un lien suivi depuis une autre page ouvre la surface ; `Host`
 et `Origin` y restent contrôlés. Toute autre requête hors API (`Target.OTHER`) garde le refus des requêtes
 venues d'un autre site. Un refus hors API répond par un texte fixe (`text/plain`), identique quel que soit le
@@ -105,21 +105,36 @@ commande `minos semantic projection prepare` et par elle seule ; les deux routes
 toute autre méthode rend `405`, et aucune lecture ne lit de vecteur ni ne calcule (`ExplorerProjectionRoutesTest`,
 `SemanticProjectionServiceTest`).
 
-**Préparation** (`ProjectionPreparation`). Chaque étape est un parcours de l'index par `vectorPage` :
+**Préparation** (`ProjectionPreparation`). La sélection est un parcours de l'index par `vectorPage` ; les étapes
+suivantes lisent soit une copie de l'échantillon en mémoire, soit l'index à nouveau, selon la mémoire :
 
 1. *select* : parmi les documents des natures demandées, les `maxPoints` de plus petit rang sont retenus ; le rang
    d'un document est `sha256(graine ␟ stableKey)`, donc la même graine tire le même échantillon du même index ;
-2. *center* : moyenne des vecteurs retenus ;
-3. *fit* : itération de sous-espace à deux vecteurs, une passe par itération, 40 passes au plus, arrêt quand la
-   base ne bouge plus (`PrincipalAxes.TOLERANCE`) ;
-4. *project* : coordonnées des points retenus, rotation sur les deux axes principaux de la base, signe de chaque
+2. *copy* (stratégie `IN_MEMORY` seulement) : si la matrice `float` de l'échantillon (`points × dimensions × 4`
+   octets, plus la position de chaque ligne) tient dans ce qui reste du budget (`WorkingMemory.fits`, une question
+   sans effet sur la mémoire tenue ni sur le pic), un second parcours la remplit dans l'ordre où le magasin rend
+   ses pages ; un index remplacé pendant la copie refuse la préparation ;
+3. *center* : moyenne des vecteurs retenus ;
+4. *fit* : itération de sous-espace à deux vecteurs, 40 itérations au plus, arrêt quand la base ne bouge plus
+   (`PrincipalAxes.TOLERANCE`) ;
+5. *project* : coordonnées des points retenus, rotation sur les deux axes principaux de la base, signe de chaque
    axe fixé (première valeur non nulle de sa direction positive), mise à l'échelle commune dans `[-1, 1]`.
+
+En stratégie `IN_MEMORY`, l'index est lu deux fois (`passes` = 2) et *center*, *fit* et *project* parcourent la
+copie ; en stratégie `STREAMED`, chacune de ces étapes (une par itération pour *fit*) est un parcours de l'index
+(`passes` = 3 + le nombre d'itérations). `PreparationReport` porte la stratégie et le nombre d'itérations. Les
+deux stratégies calculent sur la composante arrondie en `float` et visitent les vecteurs dans le même ordre : elles
+publient les mêmes coordonnées, au bit près (`SemanticProjectionServiceTest`). Le calcul de l'arrondi est sans effet
+pour le stockage local, dont les valeurs sont déjà des `float` ; il peut déplacer au dernier chiffre une
+coordonnée préparée sous PostgreSQL.
 
 Les sommes sont faites dans l'ordre où le magasin rend ses pages et les fonctions trigonométriques par `StrictMath` : deux
 préparations identiques publient deux fichiers identiques octet pour octet (`SemanticProjectionCommandLineTest`).
 La mémoire de travail est comptée (`ProjectionPreparation.WorkingMemory`) : un lot de vecteurs, six tableaux de
-la taille d'un vecteur, et par point retenu sa clé, son rang et ses coordonnées ; au-delà du budget
-`--max-memory-mb`, la préparation échoue sans publier. L'index n'est jamais chargé entier. Non compté : la table
+la taille d'un vecteur, par point retenu sa clé, son rang et ses coordonnées, et la matrice de l'échantillon en
+stratégie `IN_MEMORY` ; au-delà du budget `--max-memory-mb`, la préparation échoue sans publier. L'index n'est
+jamais chargé entier. Le pire cas que la synchronisation construit (32 768 documents à 768 dimensions) tient dans le
+budget par défaut (`ProjectionPreparationTest`). Non compté : la table
 des empreintes des documents, lue une fois au début et une fois avant publication pour l'identité de l'index ;
 le texte des vecteurs d'une page PostgreSQL avant son décodage. Un index local au format hérité `index-v1.bin`
 échappe au budget : ses lots passent par le chargement complet ; une resynchronisation le réécrit au format
@@ -151,7 +166,7 @@ reprend à l'octet où la page précédente s'est arrêtée, tant que le fichier
 format hérité `index-v1.bin` passe par le chargement complet. `PostgresSemanticReadQueries.vectorPage` lit en une
 requête les métadonnées de l'index, son effectif et une page `stable_key`, `kind`, `embedding`.
 
-**Carte.** `app.js` dessine sur un `<canvas>` 2D, sans dépendance : couleur par nature, filtre de nature appliqué
+**Carte.** `map.js` dessine sur un `<canvas>` 2D, sans dépendance : couleur par nature, filtre de nature appliqué
 à l'affichage, résultats de recherche mis en évidence, colonne « Carte » de la table. Les points sont lus par
 pages de 5 000. Une projection `PERIMEE` n'est dessinée que sur demande.
 
@@ -188,19 +203,21 @@ démarrage, jamais un repli silencieux. Il n'existe pas d'option de ligne de com
 
 ## Page embarquée
 
-`minos-explorer/src/main/resources/com/minos/explorer/web/` : `index.html`, `app.js`, `app.css`, sans chaîne de
-build ni dépendance. `WebResources` sert cet ensemble fermé ; aucun chemin de requête n'atteint le chargeur de
+`minos-explorer/src/main/resources/com/minos/explorer/web/` : `index.html`, `map.js` (la carte 2D), `app.js` (le reste de la page), `app.css`, sans chaîne de
+build ni dépendance. Deux scripts classiques partagent la portée globale de la page : `map.js`, chargé en premier,
+ne définit que des déclarations et ne s'exécute qu'après le démarrage de `app.js`, qui fournit `$`, `api`,
+`report`, `project`, `view`, `selectedKey` et `showDetail`. `WebResources` sert cet ensemble fermé ; aucun chemin de requête n'atteint le chargeur de
 classes. La page est servie avec `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src
 'self'; connect-src 'self'; …`. `WebResourcesContentTest` refuse `innerHTML` et ses équivalents, toute URL
 externe, tout script ou style en ligne.
 
 Le script de la page est exécuté par des tests `node:test` (`minos-explorer/src/test/js/`, hors des ressources
-livrées), sans paquet npm ni `package.json`. `harness.mjs` charge le vrai `app.js` dans un contexte `node:vm` muni
+livrées), sans paquet npm ni `package.json`. `harness.mjs` charge les vrais `map.js` puis `app.js` (l'ordre des balises `<script>` de `index.html`) dans un même contexte `node:vm` muni
 d'un faux DOM qui refuse toute écriture de balisage (`innerHTML`, `outerHTML`, `insertAdjacentHTML`,
 `document.write`, `createContextualFragment`, `DOMParser`, `srcdoc`, un attribut `on*` ou `srcdoc` posé par
 `setAttribute`, y compris sous un nom calculé) et d'un contexte qui
-refuse la génération de code depuis une chaîne (`eval`, `new Function`). `app.js` n'exporte rien et n'est pas
-modifié pour les tests : ses fonctions sont des propriétés du contexte, son état se lit par une expression évaluée
+refuse la génération de code depuis une chaîne (`eval`, `new Function`). Les scripts n'exportent rien et ne sont pas
+modifiés pour les tests : ses fonctions sont des propriétés du contexte, son état se lit par une expression évaluée
 dans le même contexte.
 
 | Fichier | Ce qu'il fixe |
@@ -208,6 +225,7 @@ dans le même contexte.
 | `smoke.test.mjs` | refus sans jeton ; jeton retiré de l'adresse et envoyé par l'en-tête `Authorization` seulement |
 | `sinks.test.mjs` | liste, en-tête, détail, voisins, recherche, textes et survol de la carte, bandeau rendus en texte avec `<script>alert(1)</script>` |
 | `map.test.mjs` | point désigné (jeux à graine fixe, jusqu'à 100 000 points, égalités, rayon de 8 px), filtre de nature, bornes et point fixe du zoom, suite des requêtes de points, tracé sur le faux canevas, compteurs de rafale (table `CURRENT`) |
+| `map-grid.test.mjs` | point désigné par la grille identique au parcours complet (100 000 points, zooms de 0,5 à 200), points examinés par recherche, liste filtrée calculée une fois par filtre, grille refaite à la relecture de la carte, survol traité une fois par image, clic immédiat |
 | `labels.test.mjs` | table des constantes du contrat confrontée aux libellés, fonctions pures, affichage d'une erreur d'API |
 | `clipboard.test.mjs` | échec de « Copier la référence » signalé dans le bandeau, sans rejet non traité |
 
@@ -215,6 +233,14 @@ Lancer : `python scripts/quality/check-explorer-front.py` (Node 20 ou plus dans 
 `node --test minos-explorer/src/test/js/map.test.mjs`. Les compteurs de `map.test.mjs` sont des caractérisations
 du comportement actuel, pas des seuils : une optimisation de la carte change la table `CURRENT` dans le même commit.
 Ces tests ne prouvent rien d'un vrai navigateur (rendu, durées, événements réels).
+
+Carte : les points reçus sont rangés dans une grille régulière sur le carré de -1 à 1 (environ deux points par
+cellule, au plus 1 024 cellules de côté), construite une fois par couple (points, filtre de nature). Le survol et le
+clic ne lisent que les cellules qui couvrent le rayon de capture de 8 px et rendent le même point que le parcours de
+tous les points (le plus proche, le plus petit indice à distance égale). Un mouvement du pointeur enregistre sa
+position ; l'image suivante cherche le point et dessine au plus une fois, le clic cherche à sa propre position sans
+attendre. Le dessin reste linéaire en nombre de points. `map-bench.mjs` (`node minos-explorer/src/test/js/map-bench.mjs`)
+mesure les recherches sous Node sur des jeux synthétiques : les durées ne valent pas mesure dans un navigateur.
 
 ## Tests
 

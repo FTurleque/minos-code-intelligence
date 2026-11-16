@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.diagnostics.InternalFailureReporter;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 
 import java.util.List;
@@ -14,6 +15,12 @@ public final class MinosMcpApplicationTools {
 
     public static List<SyncToolSpecification> specifications(MinosApplication application) {
         MinosApplication app = Objects.requireNonNull(application, "application");
-        return new MinosMcpTools(new MinosApplicationMcpBackend(app)).specifications();
+        InternalFailureReporter reporter = new InternalFailureReporter(
+                "mcp", app.home(), System.getenv(), System.getProperties());
+        return tools(app, reporter).specifications();
+    }
+
+    private static MinosMcpTools tools(MinosApplication app, InternalFailureReporter reporter) {
+        return new MinosMcpTools(new MinosApplicationMcpBackend(app), reporter);
     }
 }

@@ -37,7 +37,9 @@ HEAD `89be3fb4`. Lecture du code seulement ; la page n'a pas été ouverte dans 
 | Le banc de AUD-PERF-13 mesure les routes côté serveur, pas le coût dans le navigateur | `mesurer-la-projection-et-l-explorateur-au-banc` | — | La mesure de ce changement se fait par le harnais Node de AUD-TST-02 (compte et durée) et par un parcours manuel |
 | L'audit raisonne à 1 000 000 de points ; la synchronisation ne construit pas d'index de plus de 250 000 documents (32 768 à 768 dimensions), donc aucune carte de cette taille | `findings.json` AUD-PERF-10, impact | `minos-application/src/main/java/com/minos/application/semantic/SemanticIndexBudget.java:15-19`, `:59-75` | 1 000 000 de points n'est mesuré que comme jeu synthétique sous Node ; le cas réel le plus lourd est 250 000 points |
 | La part de points examinés dépend de la taille du canevas : `half` vaut la demi-hauteur utile multipliée par le zoom, et le rayon de capture de 8 px couvre d'autant plus de carte que `half` est petit | exigence « … parmi les points voisins seulement » | `app.js:576` | Le scénario fixe le canevas (800 × 600) et le zoom (1) ; l'équivalence, elle, est exigée à tous les zooms |
-| Le dessin reste linéaire en nombre de points (une passe par nature) | — | `app.js:603-616` | Hors périmètre ; relevé pour la mesure manuelle |
+| Le dessin reste linéaire en nombre de points (une passe par nature) | — | `app.js:603-616` | Hors périmètre ; relevé pour la mesure manuelle ; la mesure sous Node confirme qu'il n'a pas bougé |
+| Le test de caractérisation de la rafale (`map.test.mjs`, 50 recherches) et le test des puits (`sinks.test.mjs`, texte de survol lu avant l'image) encodent le survol synchrone | `map.test.mjs`, `sinks.test.mjs` | exigence « au plus une fois par image » | Adaptés dans le même commit : table `CURRENT.burst` à une recherche, image vidée avant la lecture du texte de survol ; aucune assertion de sécurité retirée |
+| Le gate `check-explorer-front.py --self-test` ancre sa mutation « rayon de capture » sur le littéral `let bestDistance = 64;` | `scripts/quality/check-explorer-front.py` | `app.js` au HEAD | Ancre déplacée sur `const MAP_CAPTURE_PIXELS = 8;` |
 
 ## Exigences couvertes
 
@@ -101,6 +103,25 @@ Aucun objectif chiffré de durée : aucune source. L'exigence se vérifie par un
 3. **(manuelle)** parcours dans un navigateur sur la plus grande projection réellement préparée (32 768 points à 768 dimensions ; davantage seulement à petites dimensions, 250 000 au plus) : fluidité du survol, relevé de l'outil de performance du navigateur.
 
 Les durées sous Node ne valent pas mesure dans un navigateur : elles sont écrites comme telles.
+
+### Relevé du 2026-11-15 (tâches 1.2, 4.1)
+
+Commande : `node minos-explorer/src/test/js/map-bench.mjs --json`. Machine : Windows 10, Node v24.18.0, poste de travail partagé avec d'autres sessions (bruit non maîtrisé). Jeux **synthétiques** (graine fixe, points uniformes sur le carré, un tiers par nature), canevas 800 × 600, zoom 1, 400 positions, médiane de 5 passes. « Avant » : `app.js` de `c388df1b` ; « après » : le correctif, trois exécutions (intervalle). Points examinés : nombre d'abscisses lues par une recherche (points à accesseur), médiane de 50 positions (maximum entre parenthèses).
+
+| Points | Filtre | Affichés | Examinés avant | Examinés après | Recherche avant | Recherche après |
+|---|---|---|---|---|---|---|
+| 100 000 | aucun | 100 000 | 100 000 | 91 (146) | 1 817 µs | 18 à 31 µs |
+| 100 000 | `SYMBOL` | 33 075 | 33 075 | 32 (57) | 2 137 µs | 6 à 15 µs |
+| 250 000 | aucun | 250 000 | 250 000 | 214 (276) | 4 524 µs | 41 à 48 µs |
+| 250 000 | `SYMBOL` | 83 355 | 83 355 | 70 (114) | 9 212 µs | 18 à 30 µs |
+| 1 000 000 (synthétique) | aucun | 1 000 000 | 1 000 000 | 826 (945) | 26 220 µs | 121 à 178 µs |
+| 1 000 000 (synthétique) | `SYMBOL` | 334 205 | 334 205 | 281 (351) | 45 103 µs | 56 à 65 µs |
+
+- Le nombre de points examinés suit la densité locale, pas le total : il croît avec le nombre de points parce que la surface du canevas est fixe.
+- Le tracé (`drawMap`) n'est pas accéléré : une image sur 100 000 à 1 000 000 de points prend de 4 à 163 ms sous Node avant comme après, dans le bruit des mesures (le faux canevas ne fait rien par point). Seule la réallocation de la liste filtrée à chaque image disparaît ; son gain n'est pas isolé par ces mesures.
+- Construction de la liste filtrée et de la grille, une fois par changement de points ou de filtre : 33 ms (100 000 points), 82 ms (250 000), 334 ms (1 000 000) sous `node:vm`, dont les accès aux globaux sont lents ; 7 à 13 ms à 250 000 points dans le Chromium du navigateur intégré (canevas 388 × 261, panneau masqué).
+- Contrôle hors harnais, **non** parcours de la tâche 4.2 : la vraie page servie par un faux serveur d'API (250 000 points synthétiques) dans le navigateur intégré de l'application (Chromium 156, Windows, panneau masqué donc sans images d'animation, canevas 388 × 261, appel direct de `pointAt` sur 400 positions, médiane de 5 passes). Avant : 1 636 µs sans filtre, 7 546 µs avec `SYMBOL`. Après : 49 µs et 19 µs. Aucun survol, clic ni zoom réel n'a été parcouru.
+- Non mesuré : un survol réel à la souris, le coût du tracé dans un navigateur, la mémoire de la grille (deux `Int32Array` de la taille des points et des cellules), une projection réellement préparée.
 
 ## Compatibilité, migration et retour arrière
 
@@ -178,11 +199,11 @@ Carte 2D : reste en **qualification partielle** (parcourue dans Chrome sous Wind
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › Le point sous le pointeur est cherché parmi les points voisins seulement | Même point que le parcours complet | D1, invariants | 2.1, 2.2 | test `node:test` — à écrire |
-| idem | Aucun point dans le rayon | Erreurs | 2.1, 2.2 | test `node:test` — à écrire |
-| exploration-semantique › La liste des points d'une nature n'est calculée qu'à son changement | Survols successifs sous un filtre ; Changement de filtre | D2 | 2.1, 2.3 | test `node:test` — à écrire |
-| exploration-semantique › Le survol de la carte est traité au plus une fois par image | Rafale de mouvements ; Clic entre deux images | diagramme | 3.1, 3.2 | test `node:test` avec faux `requestAnimationFrame` — à écrire |
-| (mesure du sprint) | — | Performance et mesure | 1.2, 4.1, 4.2 | relevés Node et navigateur — manquants |
+| exploration-semantique › Le point sous le pointeur est cherché parmi les points voisins seulement | Même point que le parcours complet | D1, invariants | 2.1, 2.2 | `minos-explorer/src/test/js/map-grid.test.mjs` (« the grid lookup returns the point of the full scan on 100 000 points, at every zoom and offset », « equal distances keep the lowest index… », « at 800 x 600 and zoom 1 a lookup examines less than a hundredth of the displayed points ») |
+| idem | Aucun point dans le rayon | Erreurs | 2.1, 2.2 | `map-grid.test.mjs` (« a position with no point in the radius selects nothing and a click there requests no detail ») |
+| exploration-semantique › La liste des points d'une nature n'est calculée qu'à son changement | Survols successifs sous un filtre ; Changement de filtre | D2 | 2.1, 2.3 | `map-grid.test.mjs` (« the displayed list is computed once per filter… », « after a change of filter only points of the new kind are examined or selected », « a map read again replaces the points and the lookup follows ») |
+| exploration-semantique › Le survol de la carte est traité au plus une fois par image | Rafale de mouvements ; Clic entre deux images | diagramme | 3.1, 3.2 | `map-grid.test.mjs` (« twenty pointer moves before the next frame are looked up once, at the last position », « a click before the next frame requests the detail of the clicked point at once »), `map.test.mjs` (rafale de 50 mouvements) |
+| (mesure du sprint) | — | Performance et mesure | 1.2, 4.1, 4.2 | relevé Node et contrôle hors harnais ci-dessus ; parcours manuel d'un navigateur sur une projection préparée (4.2) — manquant |
 
 ## Questions ouvertes
 

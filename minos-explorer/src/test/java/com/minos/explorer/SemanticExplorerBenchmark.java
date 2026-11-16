@@ -168,6 +168,7 @@ final class SemanticExplorerBenchmark {
             List<String[]> contents = contents();
             boolean beyond = beyondBuildBudget(contents);
             label = dataset.storage() + "-n" + dataset.documents() + "-d" + options.dimensions()
+                    + (options.contentPaddingChars() > 0 ? "-c" + options.contentPaddingChars() : "")
                     + (beyond ? "-" + BEYOND_BUILD_BUDGET : "");
             String missing = missingPostgresqlParameter();
             if (missing != null) {
@@ -269,9 +270,17 @@ final class SemanticExplorerBenchmark {
                 String content = "void " + VERBS[random.nextInt(VERBS.length)] + capital(noun) + random.nextInt(97)
                         + "() { " + NOUNS[random.nextInt(NOUNS.length)] + "." + VERBS[random.nextInt(VERBS.length)]
                         + "(" + NOUNS[random.nextInt(NOUNS.length)] + "); }";
-                contents.add(new String[] {key, content});
+                contents.add(new String[] {key, padded(content, options.contentPaddingChars())});
             }
             return contents;
+        }
+
+        /** The content repeated up to {@code chars} characters, so that a document weighs what a real chunk does. */
+        private static String padded(String content, int chars) {
+            if (chars <= content.length()) return content;
+            StringBuilder padded = new StringBuilder(chars);
+            while (padded.length() < chars) padded.append(content).append(' ');
+            return padded.substring(0, chars);
         }
 
         /** Whether the synchronization of the product would refuse to build this index, by its own budget. */
@@ -315,7 +324,8 @@ final class SemanticExplorerBenchmark {
             long[] pages = {0L};
             Map<Integer, Long> readByPass = new LinkedHashMap<>();
             SemanticProjectionService.Progress progress = (phase, pass, vectorsRead) -> {
-                if (SemanticProjectionService.PUBLISH_PHASE.equals(phase)) return;
+                // A step on the in-memory copy of the sample announces itself without reading a vector.
+                if (SemanticProjectionService.PUBLISH_PHASE.equals(phase) || vectorsRead == 0L) return;
                 pages[0]++;
                 readByPass.merge(pass, vectorsRead, Math::max);
             };
@@ -327,6 +337,9 @@ final class SemanticExplorerBenchmark {
                 emit.metric("projection", label, "documents", report.documentCount());
                 emit.metric("projection", label, "durationMillis", report.durationMillis());
                 emit.metric("projection", label, "passes", report.passes());
+                emit.metric("projection", label, "iterations", report.iterations());
+                emit.metric("projection", label, "inMemory",
+                        report.strategy() == SemanticProjectionService.Strategy.IN_MEMORY ? 1 : 0);
                 emit.metric("projection", label, "vectorPages", pages[0]);
                 emit.metric("projection", label, "vectorsRead",
                         readByPass.values().stream().mapToLong(Long::longValue).sum());
@@ -475,7 +488,10 @@ final class SemanticExplorerBenchmark {
             StringBuilder reason = new StringBuilder("http ").append(response.status())
                     .append(code.find() ? " " + code.group(1) : "");
             List<Exception> failures = new ArrayList<>();
-            api.answer(request.method(), request.segments(), request.parameters(), request::bodyText, failures::add);
+            api.answer(request.method(), request.segments(), request.parameters(), request::bodyText, failure -> {
+                failures.add(failure);
+                return "benchmark";
+            });
             if (!failures.isEmpty()) reason.append("; ").append(reason(failures.getFirst()));
             return reason.toString();
         }
@@ -634,7 +650,7 @@ final class SemanticExplorerBenchmark {
     /** The arguments of a run. */
     record Options(Path work, List<Dataset> datasets, int dimensions, long seed, int warmup, int iterations,
                    int maxPoints, long maxMemoryBytes, int deepPage, int requestTimeoutSeconds, String runId,
-                   String postgresUrl, String postgresUser, Path postgresPasswordFile) {
+                   int contentPaddingChars, String postgresUrl, String postgresUser, Path postgresPasswordFile) {
 
         static Options parse(List<String> arguments) {
             Map<String, String> values = new LinkedHashMap<>();
@@ -653,7 +669,8 @@ final class SemanticExplorerBenchmark {
                 }
             }
             Set<String> known = Set.of("work", "dimensions", "seed", "warmup", "iterations", "max-points",
-                    "max-memory-bytes", "deep-page", "request-timeout-seconds", "run-id", "postgres-url",
+                    "max-memory-bytes", "deep-page", "request-timeout-seconds", "run-id", "content-padding-chars",
+                    "postgres-url",
                     "postgres-user", "postgres-password-file");
             for (String name : values.keySet()) {
                 if (!known.contains(name)) throw new IllegalArgumentException("unknown argument: --" + name);
@@ -678,7 +695,8 @@ final class SemanticExplorerBenchmark {
                             Long.toString(SemanticProjectionService.DEFAULT_MAX_MEMORY_MEGABYTES * 1024L * 1024L))),
                     positive(values.getOrDefault("deep-page", "10"), "deep-page"),
                     positive(values.getOrDefault("request-timeout-seconds", "120"), "request-timeout-seconds"),
-                    runId, values.get("postgres-url"), values.get("postgres-user"),
+                    runId, nonNegative(values.getOrDefault("content-padding-chars", "0"), "content-padding-chars"),
+                    values.get("postgres-url"), values.get("postgres-user"),
                     blank(passwordFile) ? null : Path.of(passwordFile).toAbsolutePath().normalize());
         }
     }
