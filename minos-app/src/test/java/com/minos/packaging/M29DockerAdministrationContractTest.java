@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class M29DockerAdministrationContractTest {
@@ -376,7 +377,7 @@ class M29DockerAdministrationContractTest {
             assertTrue(compose.contains("\n  minos-provider-probe:\n"), file + ": the probe service is missing");
             String mutated = compose.replaceFirst("(?m)^ {4}# Administration image: probes .*$",
                     "    # Administration image: launches the providers to probe them.");
-            assertTrue(!mutated.equals(compose), file + ": the comment of the probe service was not found");
+            assertNotEquals(compose, mutated, file + ": the comment of the probe service was not found");
             assertTrue(administrationServiceViolations(file, mutated).stream()
                             .noneMatch(violation -> violation.contains("launches providers")),
                     file);
@@ -387,8 +388,10 @@ class M29DockerAdministrationContractTest {
     void theLauncherCommentOfTheDockerfileDoesNotSayTheAdministrationPlaneIndexes() throws Exception {
         String dockerfile = normalizedText(repoRoot().resolve(DOCKERFILE));
         assertTrue(dockerfile.contains(LAUNCHER_COMMENT), "the scip-java launcher passage is missing");
-        String claim = "# Project dependency resolution for the real Maven build is a separate indexing concern handled by\n"
-                + "# the ephemeral admin plane; the persistent MCP query plane remains networkless.\n";
+        String claim = """
+                # Project dependency resolution for the real Maven build is a separate indexing concern handled by
+                # the ephemeral admin plane; the persistent MCP query plane remains networkless.
+                """;
         String mutated = dockerfile.replaceFirst("(?m)^# is therefore recorded in provider evidence[^\\n]*\\n", "$0" + claim);
         List<String> violations = launcherCommentViolations(DOCKERFILE, mutated);
         assertTrue(violations.stream().anyMatch(v -> v.startsWith(DOCKERFILE + ":") && v.contains("administration plane indexes")),
