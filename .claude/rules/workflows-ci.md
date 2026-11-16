@@ -13,6 +13,7 @@ paths:
 - **YAML** : un nom d'étape contenant « : » non cité invalide tout le workflow (aucun job ne démarre, run `push` en échec). Charger le fichier par `yaml.safe_load` avant de pousser ; le hook `post_edit.py` le fait.
 - **Auto-tests** : tout `test_*.py` / `--self-test` d'un gate est exécuté par une étape du job `invariants`.
 - **Permissions** : `permissions:` minimales par job, aucun secret exposé aux PR de forks, `GITHUB_TOKEN` en lecture sauf besoin nommé.
+- **Secret et code d'une PR** : dans un workflow `pull_request`, un secret ne se pose que dans l'`env:` d'une étape (jamais celui d'un job ou du workflow, hors `DOCKERHUB_USERNAME`) et cette étape ne lance ni `mvnw` ni `scripts/`, sauf entrée de `SECRET_WITH_REPOSITORY_CODE_KEPT` dans `check-workflow-pins.py` ; compiler dans une étape sans secret.
 - **Releases** : tags immuables, candidat construit depuis une branche qui contient l'ascendance de `main` (vérifié par CI), preuve Docker/Windows avant promotion (`release-promotion-gate.yml`). Voir le skill `minos-release-promotion`.
 - **Dependabot** couvre Maven, `/minos-intellij` (Gradle), GitHub Actions et les images ; il ne change jamais silencieusement la baseline Java/Maven/Gradle/IntelliJ (`docs/developer/TOOLCHAIN_POLICY.md`).
 - Toute modification de workflow est une modification de **gouvernance** : la présenter comme telle dans la PR, et rejouer `check-workflow-pins`, `check-single-execution`, `check-ci-wiring`.
