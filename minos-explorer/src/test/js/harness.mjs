@@ -278,6 +278,29 @@ export function pointSet(seed, count) {
   return points;
 }
 
+// Points whose abscissa is a getter that counts its reads: the reads of one lookup are the points it examined,
+// whatever the way the page searches; `counter.byKind` splits them by kind. The caller resets the counter.
+class CountingPoint {
+  constructor(plain, counter) {
+    this.stableKey = plain.stableKey;
+    this.kind = plain.kind;
+    this.counter = counter;
+    this.abscissa = plain.x;
+    this.y = plain.y;
+  }
+
+  get x() {
+    this.counter.reads += 1;
+    this.counter.byKind[this.kind] = (this.counter.byKind[this.kind] || 0) + 1;
+    return this.abscissa;
+  }
+}
+
+export function countingPoints(plain) {
+  const counter = { reads: 0, byKind: {} };
+  return { counter, points: plain.map(point => new CountingPoint(point, counter)) };
+}
+
 // A project and documents as the v1 contract returns them.
 export function project(overrides = {}) {
   return {
