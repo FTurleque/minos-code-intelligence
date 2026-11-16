@@ -32,11 +32,12 @@ final class PostgresSemanticReadQueries {
     /** The metadata columns of every read: the document count is the one the writes keep in the metadata row. */
     private static final String METADATA_COLUMNS =
             "m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,m.document_count,";
+    private static final String SELECT_METADATA = "SELECT " + METADATA_COLUMNS;
 
     static final String METADATA_SQL = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
             + "m.document_count FROM semantic_index_meta m WHERE m.project_id=?";
 
-    private static final String DOCUMENT_PAGE_HEAD = "SELECT " + METADATA_COLUMNS
+    private static final String DOCUMENT_PAGE_HEAD = SELECT_METADATA
             + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
             + "d.content,d.checksum FROM semantic_index_meta m "
             + "LEFT JOIN LATERAL (SELECT p.document_id,p.stable_key,p.snapshot_id,p.kind,p.source_id,p.file_id,"
@@ -51,7 +52,7 @@ final class PostgresSemanticReadQueries {
     /** Page of documents after a key: key, {@code limit + 1}, project identifier. */
     static final String DOCUMENT_NEXT_PAGE_SQL = DOCUMENT_PAGE_HEAD + "AND p.stable_key > ? " + PAGE_TAIL;
 
-    private static final String VECTOR_PAGE_HEAD = "SELECT " + METADATA_COLUMNS
+    private static final String VECTOR_PAGE_HEAD = SELECT_METADATA
             + "d.stable_key,d.kind,d.embedding FROM semantic_index_meta m "
             + "LEFT JOIN LATERAL (SELECT p.stable_key,p.kind,p.embedding::text AS embedding "
             + "FROM semantic_documents p WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id ";
@@ -63,7 +64,7 @@ final class PostgresSemanticReadQueries {
     static final String VECTOR_NEXT_PAGE_SQL = VECTOR_PAGE_HEAD + "AND p.stable_key > ? " + PAGE_TAIL;
 
     /** One document and its vector: stable key, project identifier. */
-    static final String STORED_DOCUMENT_SQL = "SELECT " + METADATA_COLUMNS
+    static final String STORED_DOCUMENT_SQL = SELECT_METADATA
             + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
             + "d.content,d.checksum,d.embedding::text FROM semantic_index_meta m "
             + "LEFT JOIN semantic_documents d ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id "

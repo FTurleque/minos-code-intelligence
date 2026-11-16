@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The paged document reads and the stored vector read, on the pgvector store. */
@@ -99,7 +99,7 @@ class PostgresSemanticDocumentReadsContractTest extends PostgresTestSupport impl
         assertEquals(80, second.metadata().documentCount());
         assertEquals("snap-1", first.metadata().snapshotId());
         assertEquals("snap-2", second.metadata().snapshotId());
-        assertFalse(first.metadata().equals(second.metadata()));
+        assertNotEquals(first.metadata(), second.metadata());
     }
 
     @Test

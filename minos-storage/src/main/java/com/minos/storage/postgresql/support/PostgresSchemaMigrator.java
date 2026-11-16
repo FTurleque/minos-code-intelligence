@@ -55,18 +55,23 @@ public final class PostgresSchemaMigrator {
                     if (version > CURRENT_VERSION) {
                         throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
                     }
-                    if (version < 1) applyV1(statement);
-                    if (version < 2) applyV2(statement);
-                    if (version < 3) applyV3(statement);
-                    if (version < 4) applyV4(statement);
-                    if (version < 5) applyV5(statement);
-                    if (version < 6) applyV6(statement);
+                    applyMigrationsAfter(version, statement);
                     return null;
                 }
             });
         } catch (SQLException exception) {
             throw new IOException("unable to initialize MINOS PostgreSQL backend", exception);
         }
+    }
+
+    /** Applies, in order, every migration above {@code version}, inside the caller's transaction. */
+    private static void applyMigrationsAfter(int version, Statement statement) throws SQLException {
+        if (version < 1) applyV1(statement);
+        if (version < 2) applyV2(statement);
+        if (version < 3) applyV3(statement);
+        if (version < 4) applyV4(statement);
+        if (version < 5) applyV5(statement);
+        if (version < 6) applyV6(statement);
     }
 
     private static int currentVersion(Statement statement) throws SQLException {
