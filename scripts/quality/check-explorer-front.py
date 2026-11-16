@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Run the tests of the semantic explorer page under Node and fail closed.
 
-Audit finding AUD-TST-02: the script of the explorer page
-(``minos-explorer/src/main/resources/com/minos/explorer/web/app.js``) was only searched for substrings.
-This gate parses it with ``node --check`` and executes the ``node:test`` files of
-``minos-explorer/src/test/js`` (``*.test.mjs``), which load the real script into a ``node:vm`` context
+Audit finding AUD-TST-02: the scripts of the explorer page
+(``minos-explorer/src/main/resources/com/minos/explorer/web/map.js`` and ``app.js``) were only searched for
+substrings. This gate parses each of them with ``node --check`` and executes the ``node:test`` files of
+``minos-explorer/src/test/js`` (``*.test.mjs``), which load the real scripts into a ``node:vm`` context
 with a fake DOM. No npm package, no ``package.json``.
 
 It fails (exit code 1) when Node is missing from ``PATH`` or older than ``MINIMUM_NODE_MAJOR``, when the
@@ -42,6 +42,8 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 MINIMUM_NODE_MAJOR = 20
 WEB = "minos-explorer/src/main/resources/com/minos/explorer/web"
 APP_JS = f"{WEB}/app.js"
+MAP_JS = f"{WEB}/map.js"
+PAGE_SCRIPTS = (MAP_JS, APP_JS)
 TESTS = "minos-explorer/src/test/js"
 TEST_SUFFIX = ".test.mjs"
 TIMEOUT_SECONDS = 600
@@ -96,16 +98,20 @@ def node_version(node: str, root: Path, environment: dict[str, str], minimum: in
 
 
 def syntax_failures(node: str, root: Path, environment: dict[str, str]) -> list[str]:
-    """The page script must exist and parse under ``node --check``."""
-    if not (root / APP_JS).is_file():
-        return [f"{APP_JS} not found"]
-    try:
-        syntax = run_node(node, ["--check", APP_JS], root, environment)
-    except subprocess.TimeoutExpired:
-        return [f"node --check {APP_JS} did not finish within {TIMEOUT_SECONDS} s"]
-    if syntax.returncode != 0:
-        return [f"{APP_JS} does not parse (node --check, exit code {syntax.returncode}):\n{tail(syntax.stderr)}"]
-    return []
+    """Every script of the page must exist and parse under ``node --check``."""
+    failures: list[str] = []
+    for script in PAGE_SCRIPTS:
+        if not (root / script).is_file():
+            failures.append(f"{script} not found")
+            continue
+        try:
+            syntax = run_node(node, ["--check", script], root, environment)
+        except subprocess.TimeoutExpired:
+            failures.append(f"node --check {script} did not finish within {TIMEOUT_SECONDS} s")
+            continue
+        if syntax.returncode != 0:
+            failures.append(f"{script} does not parse (node --check, exit code {syntax.returncode}):\n{tail(syntax.stderr)}")
+    return failures
 
 
 def front_test_files(root: Path) -> list[str]:
@@ -170,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     failures, tests, version = check(args.root)
     if gate_cli.report_failures(LABEL, failures):
         return 1
-    print(f"{LABEL} OK: Node {version} (minimum {MINIMUM_NODE_MAJOR}), {APP_JS} parses, {tests} tests passed.")
+    print(f"{LABEL} OK: Node {version} (minimum {MINIMUM_NODE_MAJOR}), {', '.join(PAGE_SCRIPTS)} parse, {tests} tests passed.")
     return 0
 
 
@@ -201,6 +207,7 @@ Case = tuple[str, Callable[[Path], None], dict, int, str]
 
 def cases() -> list[Case]:
     app = Path(APP_JS)
+    map_script = Path(MAP_JS)
     labels = Path(TESTS) / "labels.test.mjs"
     no_node = os.pathsep.join([])
     # Each mutation must fail the test that owns the behaviour, named in the failure.
@@ -213,6 +220,10 @@ def cases() -> list[Case]:
          lambda t: replace(t / app, "  return value.length > 14 ? value.slice(0, 12) + \"…\" : value;\n}",
                            "  return value.length > 14 ? value.slice(0, 12) + \"…\" : value;\n"),
          {}, 1, "app.js"),
+        ("broken syntax in the map script names the file",
+         lambda t: replace(t / map_script, "  return (share * 100).toFixed(1).replace(\".\", \",\") + \" %\";\n}",
+                           "  return (share * 100).toFixed(1).replace(\".\", \",\") + \" %\";\n"),
+         {}, 1, "map.js"),
         ("empty test folder", empty_tests, {}, 1, "no test"),
         ("PATH without Node names Node and the minimum", lambda t: None, {"path_value": no_node}, 1,
          f"Node >= {MINIMUM_NODE_MAJOR}"),
@@ -230,7 +241,7 @@ def cases() -> list[Case]:
          lambda t: replace(t / app, "  if (!value) return \"—\";", "  if (!value) return \"—\";\n  eval(\"0\");"),
          {}, 1, hostile_list),
         ("capture radius changed",
-         lambda t: replace(t / app, "let bestDistance = 64;", "let bestDistance = 100;"), {}, 1, radius),
+         lambda t: replace(t / map_script, "const MAP_CAPTURE_PIXELS = 8;", "const MAP_CAPTURE_PIXELS = 10;"), {}, 1, radius),
         ("contract constant without a label",
          lambda t: replace(t / labels, "  indexStates: [\"DISABLED\",", "  indexStates: [\"UNKNOWN_STATE\", \"DISABLED\","),
          {}, 1, constant),

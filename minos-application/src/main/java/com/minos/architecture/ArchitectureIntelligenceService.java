@@ -3,6 +3,7 @@ package com.minos.architecture;
 import com.minos.domain.Evidence;
 import com.minos.domain.EvidenceType;
 import com.minos.domain.InformationNature;
+import com.minos.diagnostics.UsageException;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -120,7 +121,7 @@ public final class ArchitectureIntelligenceService {
 
     private static ArchitectureModule resolveModule(List<ArchitectureModule> modules, String identifier) {
         if (identifier == null || identifier.isBlank()) {
-            throw new IllegalArgumentException("module identifier must not be blank");
+            throw new UsageException("module identifier must not be blank");
         }
         String normalized = identifier.trim().replace('\\', '/');
 
@@ -148,9 +149,9 @@ public final class ArchitectureIntelligenceService {
             return byName.getFirst();
         }
         if (byName.size() > 1) {
-            throw new IllegalArgumentException("ambiguous module name, use module id or relative path: " + identifier);
+            throw new UsageException("ambiguous module name, use module id or relative path: " + identifier);
         }
-        throw new IllegalArgumentException("unknown module: " + identifier);
+        throw new UsageException("unknown module: " + identifier);
     }
 
     private static Map<String, ArchitectureModule> indexModules(List<ArchitectureModule> modules) {

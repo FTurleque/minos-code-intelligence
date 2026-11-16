@@ -99,7 +99,7 @@ erDiagram
   }
 ```
 
-Tables créées par `PostgresSchemaMigrator` (version de schéma courante 5 ; `resumable_run_id` ajoutée en v5). Le
+Tables créées par `PostgresSchemaMigrator` (version de schéma courante 6 ; `resumable_run_id` ajoutée en v5, `semantic_index_meta.document_count` en v6 : le nombre de documents de chaque index sémantique est tenu à l'écriture, dans la transaction qui écrit les documents, et repris par la migration pour un index existant). Le
 backend local porte les mêmes informations en fichiers sous `MINOS_HOME` : `symbol-snapshots/<projet>/`
 (`active.pointer`, snapshots versionnés), `index-state/projects/` et `index-state/runs/`.
 

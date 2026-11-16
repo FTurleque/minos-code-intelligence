@@ -44,8 +44,8 @@ http://127.0.0.1:51234/#token=…
   serveur et la page le retire de la barre d'adresse dès son chargement. Il vaut pour cette exécution seulement :
   relancer la commande en crée un autre.
 - Sans ce jeton, la page affiche « Accès refusé ». Rouvrez l'adresse imprimée par la commande.
-- L'adresse s'ouvre aussi par un lien cliqué dans une autre page ou une autre application : la page et ses deux
-  ressources (`app.css`, `app.js`) ne portent aucune donnée. Toute requête d'API venue d'un autre site reste
+- L'adresse s'ouvre aussi par un lien cliqué dans une autre page ou une autre application : la page et ses trois
+  ressources (`app.css`, `map.js`, `app.js`) ne portent aucune donnée. Toute requête d'API venue d'un autre site reste
   refusée.
 
 Codes de sortie : `0` arrêt demandé, `1` port indisponible, `2` erreur d'usage ou démarrage refusé.
@@ -98,6 +98,15 @@ préparation interrompue ne laisse aucune projection partielle, et la projection
 | `--max-memory-mb <n>` | 256 | budget de mémoire de travail ; dépassé, la commande échoue sans rien publier |
 | `--format text\|json` | `text` | forme du rapport |
 
+Deux stratégies de calcul. Quand les vecteurs de l'échantillon tiennent dans ce qui reste du budget
+`--max-memory-mb`, `prepare` lit l'index deux fois (sélection, puis copie de l'échantillon en mémoire) et fait
+toutes les itérations sur cette copie : le rapport annonce `"strategy":"in-memory"` et `"passes":2`. Sinon, il
+relit l'index à chaque étape (4 à 43 lectures) et le rapport annonce `"strategy":"streamed"` avec une
+limitation qui nomme `--max-memory-mb` : la commande ne dépasse jamais le budget pour économiser des lectures.
+Les deux stratégies publient la même projection ; `iterations` donne le nombre d'itérations d'ajustement. Un
+échantillon plus grand demande plus de mémoire : pour 100 000 points à 768 dimensions, il faut compter près de
+300 Mio, que le budget par défaut ne contient pas.
+
 Codes de sortie des deux commandes : `0` succès (quel que soit l'état lu par `status`), `1` échec (projet
 inconnu, index non `READY`, budget dépassé, index modifié pendant la préparation, autre préparation en cours),
 `2` erreur d'usage.
@@ -132,10 +141,18 @@ rafraîchit pas d'elle-même après une préparation : refermez puis rouvrez « 
 fichier dérivé sous `MINOS_HOME/semantic-projections/`, supprimable sans perte.
 
 Les valeurs par défaut de `prepare` (100 000 points, 256 Mio, 40 itérations au plus) et le repère de durée (30 s
-pour 25 000 documents à 256 dimensions sur stockage local) sont **provisoires** : ils reposent sur des mesures
+pour 25 000 documents à 256 dimensions sur stockage local) sont **provisoires** (le repère de durée précède la stratégie en mémoire) : ils reposent sur des mesures
 faites sous Windows sur des index `local-hash` synthétiques. Aucune mesure n'existe sur un index réel, sur
 PostgreSQL à 100 000 documents, sous Linux ni avec un modèle d'embeddings appris. La carte a été parcourue sous
 Windows dans Chrome seulement.
+
+Stockage local et taille de l'index : la liste lit le fichier d'index sans le charger en mémoire, et le détail
+le parcourt jusqu'au document demandé ; les voisins et la recherche classent les vecteurs du fichier sans
+retenir l'index quand il est trop lourd pour le cache de 256 Mio du stockage local. Un index que ce cache tient
+est lu une fois puis gardé : le premier détail, avant ce chargement, parcourt le fichier. Sur des jeux
+synthétiques `local-hash` à 768 dimensions (32 768 documents, contenu de 2 000 caractères), mesurés sous
+Windows sur un seul poste et bruités, la liste passe d'environ 760 à 11 ms et le détail d'environ 690 à 47 ms ;
+aucune mesure n'existe sur un index réel. La taille maximale reste celle que l'indexation construit.
 
 Avec le provider `local-hash`, un badge permanent rappelle que l'index est une référence déterministe (hachage de
 tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL`).
@@ -151,11 +168,27 @@ tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_
 | Méthode d'écriture (`PUT`, `PATCH`, `DELETE`) | `405` : aucune route n'écrit |
 | Toute méthode autre que `GET` sur la projection d'un projet | `405` : aucune requête ne prépare ni ne modifie une projection |
 | Curseur de liste émis pour un index remplacé depuis | `409` : la lecture reprend à la première page |
-| Plus de 4 requêtes d'API simultanées, ou requête de plus de 30 s | `503` |
+| Plus de 4 requêtes d'API simultanées | `503` de code `BUSY` |
+| Requête de plus de 30 s | `503` de code `TIMEOUT` : la surface libère aussitôt la place de la requête, même si la lecture sous-jacente ne s'interrompt pas |
+| Plus de 8 lectures abandonnées qui n'ont pas rendu la main | `503` de code `BUSY`, sans appeler de service, jusqu'à ce qu'une de ces lectures se termine |
+| Segment de chemin `.` ou `..` (même encodé en `%2E`) | `400` de code `INVALID_REQUEST`, avant tout appel de service |
+| Échec interne | `500` de code `INTERNAL_ERROR`, message terminé par `(ref <référence>)` |
 | Connexion depuis une autre machine | refusée : l'écoute est limitée à `127.0.0.1` et `::1` |
 
 Aucune option n'élargit l'écoute. Aucune réponse, erreur ni ligne de journal ne contient la racine absolue d'un
-projet. Le contenu indexé est affiché comme texte, jamais interprété comme HTML ; la page ne charge aucune
+projet.
+
+**Lignes de la commande.** La sortie d'erreur de `minos explorer serve` porte, avec le préfixe `explorer: ` :
+`refused request: <raison>` (`host`, `origin` ou `token`) à la première requête refusée de chaque raison, puis au plus
+une ligne `refused requests: <raison> (<n> since the previous line)` par raison et par minute ; `request failed (route=…,
+type=…, rootCause=…, at=…, ref=…)` pour un échec interne, avec la même référence que la réponse `500` (jamais le
+message de l'exception, l'adresse, un paramètre ni le jeton) ; `abandoned reads still running: <n> (limit <m>)` quand
+des lectures abandonnées bloquent la surface. Une erreur d'argument que le contrat ne prévoit pas (un défaut interne)
+est un `500`, non un `400`. Avec `MINOS_DIAGNOSTIC_LOG=enabled`, la pile d'un échec interne est écrite dans le journal
+privé ([Diagnostiquer un échec interne](diagnostic-d-un-echec-interne.md)) ; en Docker, `MINOS_HOME` est en lecture
+seule et ce journal n'existe pas.
+
+Le contenu indexé est affiché comme texte, jamais interprété comme HTML ; la page ne charge aucune
 ressource d'un autre site.
 
 Le jeton protège d'une page web tierce et d'un autre processus qui ne le connaît pas. Il ne protège pas d'un

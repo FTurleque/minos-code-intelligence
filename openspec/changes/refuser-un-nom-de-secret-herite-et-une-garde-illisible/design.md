@@ -34,6 +34,7 @@ Non mesuré : la couverture actuelle des branches des deux classes ; l'existence
 | E3. Site oublié par l'audit : `isWindowsSystemRoot` analyse `SystemRoot` sans protection ; une valeur illisible lève une exception dont le message reprend la valeur | `WindowsAppContainerWorkerSandboxBackend.java:780` | règle 7 (aucun chemin absolu dans un message) | Même traitement que la garde (D2) |
 | E5. L'octroi lui-même n'est pas observable par un test unitaire : `addToolchainHomeReadRoot` est `private static`, lit l'environnement réel et exige un répertoire existant | `WindowsAppContainerWorkerSandboxBackend.java:738-756` | scénarios de l'exigence | Les scénarios jugent la **réponse** des deux prédicats (garde et racine système) par la couture D3 ; le lien réponse → non-octroi est le code existant de la ligne 754, relu, et reste couvert par les tests de plan existants sous Windows |
 | E4. L'audit laisse le choix entre « juger trop large » et « refuser le plan » | action d'AUD-QUA-05 | Linux refuse le plan pour une racine trop large (`confinement-code-non-fiable › Une racine d'outillage trop large est refusée avant le lancement`) ; Windows n'accorde pas la racine et poursuit | D2 : garder le comportement Windows existant (racine non accordée) |
+| E6. `isWindowsSystemRoot` sert aussi à quatre autres sites (`WindowsAppContainerWorkerSandboxBackend.java:516`, `:534`, `:587`, `:595`) : une racine système illisible les fait aussi ne rien accorder, là où `Path.of` levait `InvalidPathException` (la valeur dans le message) | implémentation, relue au HEAD | règle 1 : ne rien accorder est fail-closed ; la valeur n'est plus reprise | Accepté tel quel ; le test juge le prédicat, les quatre sites héritent de sa réponse |
 
 ## Exigences couvertes
 
@@ -153,13 +154,13 @@ Seule la branche « non analysable » change : elle rejoignait la boucle, elle m
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| installation-des-providers › Une variable héritée à motif de secret n'atteint ni un provider ni un lanceur | Entrée de liste à motif de secret | D1 | 1.1, 1.2 | `ProviderProcessEnvironmentInheritedSecretsTest` — à écrire |
-| idem | Listes du dépôt | D1 | 1.1 | même test — à écrire |
+| installation-des-providers › Une variable héritée à motif de secret n'atteint ni un provider ni un lanceur | Entrée de liste à motif de secret | D1 | 1.1, 1.2 | `ProviderProcessEnvironmentInheritedSecretsTest` — écrit |
+| idem | Listes du dépôt | D1 | 1.1 | même test — écrit |
 | idem | Variable ordinaire héritée | D1 | 1.2 | `ProviderProcessEnvironmentAllowlistTest` (existant) |
-| confinement-code-non-fiable › Un emplacement large illisible fait refuser l'octroi d'une racine d'outillage sous Windows | Variable de profil non analysable | D2, D3, diagramme | 2.1, 2.2 | `WindowsOverBroadGrantGuardTest` — à écrire |
-| idem | Racine système non analysable | D2 (E3) | 2.1, 2.2 | même test — à écrire |
-| idem | Variables analysables | D3 | 2.1 | même test — à écrire |
-| idem | Variable absente ou vide | D3 | 2.1 | même test — à écrire |
+| confinement-code-non-fiable › Un emplacement large illisible fait refuser l'octroi d'une racine d'outillage sous Windows | Variable de profil non analysable | D2, D3, diagramme | 2.1, 2.2 | `WindowsOverBroadGrantGuardTest` — écrit |
+| idem | Racine système non analysable | D2 (E3) | 2.1, 2.2 | même test — écrit |
+| idem | Variables analysables | D3 | 2.1 | même test — écrit |
+| idem | Variable absente ou vide | D3 | 2.1 | même test — écrit |
 
 ## Ordre de fusion
 

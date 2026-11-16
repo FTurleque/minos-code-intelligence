@@ -1,17 +1,16 @@
 package com.minos.application.semantic;
 
-import com.minos.semantic.SemanticVector;
-
 import java.util.SplittableRandom;
 
 /**
- * The two principal axes of a set of vectors, found without ever holding the set: each step is one pass that adds
- * the vectors one after the other. The working memory is a few arrays of the size of one vector.
+ * The two principal axes of a set of vectors: each step is one pass that adds the vectors one after the other.
+ * A vector is given as a row of {@code float} components, read from a stream or from a matrix the caller holds;
+ * this class holds only a few arrays of the size of one vector.
  *
  * <p>Order of use: {@link #addToMean} for every vector, {@link #endMean}; then, until {@link #endIteration}
  * answers true or the caller stops, {@link #addToIteration} for every vector; then {@link #project} for every
  * vector and {@link #finish}. Vectors are given in the same order at every pass: the sums, and so the result,
- * are the same from one run to the next, whatever the machine.</p>
+ * are the same from one run to the next, whatever the machine, and whatever the source of the rows.</p>
  */
 final class PrincipalAxes {
 
@@ -53,8 +52,8 @@ final class PrincipalAxes {
         return 6L * dimensions * Double.BYTES;
     }
 
-    void addToMean(SemanticVector vector) {
-        for (int index = 0; index < dimensions; index++) mean[index] += vector.valueAt(index);
+    void addToMean(float[] values, int offset) {
+        for (int index = 0; index < dimensions; index++) mean[index] += values[offset + index];
         count++;
     }
 
@@ -63,8 +62,8 @@ final class PrincipalAxes {
         for (int index = 0; index < dimensions; index++) mean[index] /= count;
     }
 
-    void addToIteration(SemanticVector vector) {
-        center(vector);
+    void addToIteration(float[] values, int offset) {
+        center(values, offset);
         double onFirst = dot(centered, first);
         double onSecond = dot(centered, second);
         for (int index = 0; index < dimensions; index++) {
@@ -95,9 +94,9 @@ final class PrincipalAxes {
         return still;
     }
 
-    /** Writes the two raw coordinates of {@code vector} at {@code 2 * position} of {@code coordinates}. */
-    void project(SemanticVector vector, double[] coordinates, int position) {
-        center(vector);
+    /** Writes the two raw coordinates of a vector at {@code 2 * position} of {@code coordinates}. */
+    void project(float[] values, int offset, double[] coordinates, int position) {
+        center(values, offset);
         double onFirst = dot(centered, first);
         double onSecond = dot(centered, second);
         coordinates[2 * position] = onFirst;
@@ -157,8 +156,8 @@ final class PrincipalAxes {
         return 1.0;
     }
 
-    private void center(SemanticVector vector) {
-        for (int index = 0; index < dimensions; index++) centered[index] = vector.valueAt(index) - mean[index];
+    private void center(float[] values, int offset) {
+        for (int index = 0; index < dimensions; index++) centered[index] = values[offset + index] - mean[index];
     }
 
     /** Makes {@code a} a unit vector and {@code b} a unit vector orthogonal to it, or zero when it has no part left. */

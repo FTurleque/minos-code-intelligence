@@ -28,6 +28,48 @@ import java.util.UUID;
 
 /** Single-statement, snapshot-consistent read primitives for pgvector semantic state. */
 final class PostgresSemanticReadQueries {
+
+    /** The metadata columns of every read: the document count is the one the writes keep in the metadata row. */
+    private static final String METADATA_COLUMNS =
+            "m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,m.document_count,";
+    private static final String SELECT_METADATA = "SELECT " + METADATA_COLUMNS;
+
+    static final String METADATA_SQL = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+            + "m.document_count FROM semantic_index_meta m WHERE m.project_id=?";
+
+    private static final String DOCUMENT_PAGE_HEAD = SELECT_METADATA
+            + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
+            + "d.content,d.checksum FROM semantic_index_meta m "
+            + "LEFT JOIN LATERAL (SELECT p.document_id,p.stable_key,p.snapshot_id,p.kind,p.source_id,p.file_id,"
+            + "p.start_line,p.end_line,p.content,p.checksum FROM semantic_documents p "
+            + "WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id ";
+    private static final String PAGE_TAIL = "ORDER BY p.stable_key LIMIT ?) d ON TRUE "
+            + "WHERE m.project_id=? ORDER BY d.stable_key";
+
+    /** First page of documents: {@code limit + 1}, project identifier. No condition on the key. */
+    static final String DOCUMENT_FIRST_PAGE_SQL = DOCUMENT_PAGE_HEAD + PAGE_TAIL;
+
+    /** Page of documents after a key: key, {@code limit + 1}, project identifier. */
+    static final String DOCUMENT_NEXT_PAGE_SQL = DOCUMENT_PAGE_HEAD + "AND p.stable_key > ? " + PAGE_TAIL;
+
+    private static final String VECTOR_PAGE_HEAD = SELECT_METADATA
+            + "d.stable_key,d.kind,d.embedding FROM semantic_index_meta m "
+            + "LEFT JOIN LATERAL (SELECT p.stable_key,p.kind,p.embedding::text AS embedding "
+            + "FROM semantic_documents p WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id ";
+
+    /** First page of vectors: {@code limit + 1}, project identifier. */
+    static final String VECTOR_FIRST_PAGE_SQL = VECTOR_PAGE_HEAD + PAGE_TAIL;
+
+    /** Page of vectors after a key: key, {@code limit + 1}, project identifier. */
+    static final String VECTOR_NEXT_PAGE_SQL = VECTOR_PAGE_HEAD + "AND p.stable_key > ? " + PAGE_TAIL;
+
+    /** One document and its vector: stable key, project identifier. */
+    static final String STORED_DOCUMENT_SQL = SELECT_METADATA
+            + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
+            + "d.content,d.checksum,d.embedding::text FROM semantic_index_meta m "
+            + "LEFT JOIN semantic_documents d ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id "
+            + "AND d.stable_key=? WHERE m.project_id=?";
+
     private PostgresSemanticReadQueries() {
     }
 
@@ -42,23 +84,20 @@ final class PostgresSemanticReadQueries {
     }
 
     static Optional<IndexMetadata> metadata(Connection connection, String projectId, UUID id)
-            throws SQLException, IOException {
-        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,COUNT(d.stable_key) "
-                + "FROM semantic_index_meta m LEFT JOIN semantic_documents d "
-                + "ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id WHERE m.project_id=? "
-                + "GROUP BY m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(METADATA_SQL)) {
             statement.setObject(1, id);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) return Optional.empty();
-                long count = result.getLong(6);
-                if (count > Integer.MAX_VALUE) {
-                    throw new IOException("semantic document count exceeds supported integer range");
-                }
-                return Optional.of(new IndexMetadata(projectId, result.getString(1), result.getString(2),
-                        result.getString(3), result.getInt(4), result.getLong(5), (int) count));
+                return Optional.of(metadataOf(projectId, result));
             }
         }
+    }
+
+    /** The metadata of the index from the first six columns of the current row. */
+    private static IndexMetadata metadataOf(String projectId, ResultSet result) throws SQLException {
+        return new IndexMetadata(projectId, result.getString(1), result.getString(2), result.getString(3),
+                result.getInt(4), result.getLong(5), result.getInt(6));
     }
 
     /**
@@ -125,34 +164,22 @@ final class PostgresSemanticReadQueries {
     /**
      * One page of the documents of the index, with the metadata of that index and its document count, in one
      * statement that does not read the embedding column. The page asks for one row more than {@code limit} to
-     * know whether a document follows; the count is a scalar subquery evaluated in the same statement, so the
-     * page, the metadata and the count describe one state of the index.
+     * know whether a document follows. The count is the one kept in the metadata row, read by the join the
+     * statement already makes: the page, the metadata and the count describe one state of the index, and no
+     * row of the index is counted. A page that follows a key uses a statement with a condition on that key
+     * alone, never a test of whether the key is absent, so that the index bounds the page.
      */
     static Optional<DocumentPage> documentPage(Connection connection, String projectId, UUID id,
-                                               String afterStableKey, int limit) throws SQLException, IOException {
-        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
-                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
-                + "AND c.snapshot_id=m.snapshot_id),"
-                + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
-                + "d.content,d.checksum FROM semantic_index_meta m "
-                + "LEFT JOIN LATERAL (SELECT p.document_id,p.stable_key,p.snapshot_id,p.kind,p.source_id,p.file_id,"
-                + "p.start_line,p.end_line,p.content,p.checksum FROM semantic_documents p "
-                + "WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
-                + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
-                + "WHERE m.project_id=? ORDER BY d.stable_key";
+                                               String afterStableKey, int limit) throws SQLException {
+        String sql = afterStableKey == null ? DOCUMENT_FIRST_PAGE_SQL : DOCUMENT_NEXT_PAGE_SQL;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, afterStableKey);
-            statement.setString(2, afterStableKey);
-            statement.setInt(3, limit + 1);
-            statement.setObject(4, id);
+            int parameter = 1;
+            if (afterStableKey != null) statement.setString(parameter++, afterStableKey);
+            statement.setInt(parameter++, limit + 1);
+            statement.setObject(parameter, id);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) return Optional.empty();
-                long count = result.getLong(6);
-                if (count > Integer.MAX_VALUE) {
-                    throw new IOException("semantic document count exceeds supported integer range");
-                }
-                IndexMetadata metadata = new IndexMetadata(projectId, result.getString(1), result.getString(2),
-                        result.getString(3), result.getInt(4), result.getLong(5), (int) count);
+                IndexMetadata metadata = metadataOf(projectId, result);
                 List<SemanticDocument> documents = new ArrayList<>();
                 boolean hasMore = false;
                 do {
@@ -174,28 +201,16 @@ final class PostgresSemanticReadQueries {
      */
     static Optional<StoredDocument> storedDocument(Connection connection, String projectId, UUID id,
                                                    String stableKey) throws SQLException, IOException {
-        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
-                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
-                + "AND c.snapshot_id=m.snapshot_id),"
-                + "d.document_id,d.stable_key,d.snapshot_id,d.kind,d.source_id,d.file_id,d.start_line,d.end_line,"
-                + "d.content,d.checksum,d.embedding::text FROM semantic_index_meta m "
-                + "LEFT JOIN semantic_documents d ON d.project_id=m.project_id AND d.snapshot_id=m.snapshot_id "
-                + "AND d.stable_key=? WHERE m.project_id=?";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(STORED_DOCUMENT_SQL)) {
             statement.setString(1, stableKey);
             statement.setObject(2, id);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) return Optional.empty();
-                long count = result.getLong(6);
-                if (count > Integer.MAX_VALUE) {
-                    throw new IOException("semantic document count exceeds supported integer range");
-                }
-                int dimensions = result.getInt(4);
-                IndexMetadata metadata = new IndexMetadata(projectId, result.getString(1), result.getString(2),
-                        result.getString(3), dimensions, result.getLong(5), (int) count);
+                IndexMetadata metadata = metadataOf(projectId, result);
                 if (result.getString(7) == null) return Optional.of(new StoredDocument(metadata, Optional.empty()));
                 SemanticDocument document = document(projectId, result, 7);
-                SemanticVector vector = SemanticVector.fromArray(stableKey, parseVector(result.getString(17), dimensions));
+                SemanticVector vector = SemanticVector.fromArray(stableKey,
+                        parseVector(result.getString(17), metadata.dimensions()));
                 return Optional.of(new StoredDocument(metadata, Optional.of(new IndexedDocument(document, vector))));
             }
         }
@@ -204,32 +219,20 @@ final class PostgresSemanticReadQueries {
     /**
      * One page of the stored vectors of the index, with the kind of each document, the metadata of that index
      * and its document count, in one statement that reads no document content. The page asks for one row more
-     * than {@code limit} to know whether a vector follows.
+     * than {@code limit} to know whether a vector follows. Count and bound on the key are read as for
+     * {@link #documentPage}.
      */
     static Optional<VectorPage> vectorPage(Connection connection, String projectId, UUID id,
                                            String afterStableKey, int limit) throws SQLException, IOException {
-        String sql = "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
-                + "(SELECT COUNT(*) FROM semantic_documents c WHERE c.project_id=m.project_id "
-                + "AND c.snapshot_id=m.snapshot_id),"
-                + "d.stable_key,d.kind,d.embedding FROM semantic_index_meta m "
-                + "LEFT JOIN LATERAL (SELECT p.stable_key,p.kind,p.embedding::text AS embedding "
-                + "FROM semantic_documents p WHERE p.project_id=m.project_id AND p.snapshot_id=m.snapshot_id "
-                + "AND (CAST(? AS text) IS NULL OR p.stable_key > ?) ORDER BY p.stable_key LIMIT ?) d ON TRUE "
-                + "WHERE m.project_id=? ORDER BY d.stable_key";
+        String sql = afterStableKey == null ? VECTOR_FIRST_PAGE_SQL : VECTOR_NEXT_PAGE_SQL;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, afterStableKey);
-            statement.setString(2, afterStableKey);
-            statement.setInt(3, limit + 1);
-            statement.setObject(4, id);
+            int parameter = 1;
+            if (afterStableKey != null) statement.setString(parameter++, afterStableKey);
+            statement.setInt(parameter++, limit + 1);
+            statement.setObject(parameter, id);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) return Optional.empty();
-                long count = result.getLong(6);
-                if (count > Integer.MAX_VALUE) {
-                    throw new IOException("semantic document count exceeds supported integer range");
-                }
-                int dimensions = result.getInt(4);
-                IndexMetadata metadata = new IndexMetadata(projectId, result.getString(1), result.getString(2),
-                        result.getString(3), dimensions, result.getLong(5), (int) count);
+                IndexMetadata metadata = metadataOf(projectId, result);
                 List<StoredVector> vectors = new ArrayList<>();
                 boolean hasMore = false;
                 do {
@@ -240,7 +243,8 @@ final class PostgresSemanticReadQueries {
                         break;
                     }
                     vectors.add(new StoredVector(SemanticDocumentKind.valueOf(result.getString(8)),
-                            SemanticVector.fromArray(stableKey, parseVector(result.getString(9), dimensions))));
+                            SemanticVector.fromArray(stableKey,
+                                    parseVector(result.getString(9), metadata.dimensions()))));
                 } while (result.next());
                 return Optional.of(new VectorPage(metadata, vectors, hasMore));
             }

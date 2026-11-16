@@ -91,9 +91,9 @@ test("search results, the map texts and the hover render hostile values as text"
   await settle();
   assertRenderedAsText(page.$("mapMethod"), "the map method");
   page.$("mapCanvas").dispatch("pointermove", { clientX: 400, clientY: 300 });
+  page.flushFrames();
   assertRenderedAsText(page.$("mapHover"), "the map hover");
   assert.ok(page.$("mapCanvas").title.includes(HOSTILE));
-  page.flushFrames();
   assertNoMarkupAndNoFailure(page);
 });
 

@@ -33,6 +33,7 @@ import com.minos.impact.ProjectImpactQuery;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -45,7 +46,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static com.minos.domain.Preconditions.requireText;
+import static com.minos.domain.Preconditions.requireArgument;
 
 /**
  * Local M11 implementation backed by the already-qualified MINOS services.
@@ -170,7 +171,7 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
     @Override
     public List<UsageDto> findUsages(String projectIdentifier, String symbolId, int limit) throws MinosApiException {
         return execute(() -> {
-            requireText(symbolId, "symbolId");
+            requireArgument(symbolId, "symbolId");
             requireLimit(limit, "limit");
             return symbolQuery.findUsages(projectIdentifier, symbolId, limit).stream()
                     .map(LocalMinosApi::usage)
@@ -491,18 +492,18 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
             if (nullable) {
                 return null;
             }
-            throw new IllegalArgumentException(field + " must not be blank");
+            throw new UsageException(field + " must not be blank");
         }
         try {
             return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("unsupported " + field + ": " + value, exception);
+            throw new UsageException("unsupported " + field + ": " + value);
         }
     }
 
     private static void requireLimit(int value, String field) {
         if (value < 1 || value > 10_000) {
-            throw new IllegalArgumentException(field + " must be between 1 and 10000");
+            throw new UsageException(field + " must be between 1 and 10000");
         }
     }
 

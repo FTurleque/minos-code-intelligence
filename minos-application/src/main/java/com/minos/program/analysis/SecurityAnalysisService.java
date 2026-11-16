@@ -6,6 +6,7 @@ import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphEdge;
 import com.minos.program.ProgramGraphNode;
 import com.minos.program.ProgramNodeKind;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -156,9 +157,9 @@ public final class SecurityAnalysisService {
 
     public record SecurityRequest(String sourceNodeId, int maxDepth, int maxResults) {
         public SecurityRequest {
-            if (sourceNodeId != null && sourceNodeId.isBlank()) throw new IllegalArgumentException("sourceNodeId must be null or non-blank");
-            if (maxDepth < 1 || maxDepth > 32) throw new IllegalArgumentException("maxDepth must be between 1 and 32");
-            if (maxResults < 1 || maxResults > 1000) throw new IllegalArgumentException("maxResults must be between 1 and 1000");
+            if (sourceNodeId != null && sourceNodeId.isBlank()) throw new UsageException("sourceNodeId must be null or non-blank");
+            if (maxDepth < 1 || maxDepth > 32) throw new UsageException("maxDepth must be between 1 and 32");
+            if (maxResults < 1 || maxResults > 1000) throw new UsageException("maxResults must be between 1 and 1000");
         }
     }
 

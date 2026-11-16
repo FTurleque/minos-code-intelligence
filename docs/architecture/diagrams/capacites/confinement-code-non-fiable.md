@@ -46,6 +46,12 @@ backend natif sans isolation n'exécute jamais un provider géré : `StrongProce
 et `ProcessIndexerExecutor` refuse toujours l'exécution nue. Le résultat de la sonde Windows est mis en cache par
 JVM et par `MINOS_HOME`.
 
+Sous Windows, une racine d'outillage n'est accordée en lecture que si aucun emplacement large (profil, données
+d'application, programmes, lecteur système) ni la racine système ne la contient. Un emplacement défini mais qui
+n'est pas un chemin analysable fait juger la racine trop large : elle n'est pas accordée, et la valeur de la
+variable n'apparaît dans aucun message. Les deux prédicats reçoivent leur lecteur d'environnement et sont jugés par
+`WindowsOverBroadGrantGuardTest` sur les deux systèmes.
+
 ### Comment le lanceur AppContainer garantit-il le retrait des droits, même après un arrêt brutal ?
 
 Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « Un sandbox vivant n'est jamais

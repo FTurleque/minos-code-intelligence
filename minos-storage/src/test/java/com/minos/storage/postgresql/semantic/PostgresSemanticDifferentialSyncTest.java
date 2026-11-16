@@ -100,6 +100,7 @@ class PostgresSemanticDifferentialSyncTest extends PostgresTestSupport {
 
         assertEquals(List.of("c"), vectorWrites());
         assertEquals(rows(project), expectedRowsOfAFullReplacement(after));
+        assertAnnouncedCountIsTheRowCount(store, project);
     }
 
     @Test
@@ -158,16 +159,29 @@ class PostgresSemanticDifferentialSyncTest extends PostgresTestSupport {
         SemanticVectorStore.IndexSnapshot next = after.differential(differential, store);
         store.replaceConditionally(next, after.snapshot, () -> Optional.of(after.snapshot));
         store.delete(witness);
+        assertEquals(Optional.empty(), store.metadata(witness));
+        assertEquals(Optional.empty(), store.documentPage(witness, null, 10));
         store.replace(after.full(witness));
 
         assertEquals(expectedReuses, next.documents().stream()
                 .filter(SemanticVectorStore.IndexedDocument::reusesStoredVector).count(), "documents reused");
+        assertAnnouncedCountIsTheRowCount(store, differential);
+        assertAnnouncedCountIsTheRowCount(store, witness);
         assertEquals(rows(witness), rows(differential));
         assertEquals(metadataRow(witness), metadataRow(differential));
         assertEquals(expectedRowsOfAFullReplacement(after), rows(differential));
         SemanticVectorStore.IndexSnapshot loaded = store.load(differential).orElseThrow();
         assertEquals(after.snapshot, loaded.snapshotId());
         assertEquals(after.documents.size(), loaded.documents().size());
+    }
+
+    /** The count a read announces is the number of rows of the index, whatever write path produced them. */
+    private void assertAnnouncedCountIsTheRowCount(PostgresSemanticVectorStore store, String project)
+            throws Exception {
+        int rows = rows(project).size();
+        assertEquals(rows, store.metadata(project).orElseThrow().documentCount());
+        assertEquals(rows, store.documentPage(project, null, 1).orElseThrow().metadata().documentCount());
+        assertEquals(rows, store.vectorPage(project, null, 1).orElseThrow().metadata().documentCount());
     }
 
     private static List<List<String>> expectedRowsOfAFullReplacement(Target target) {

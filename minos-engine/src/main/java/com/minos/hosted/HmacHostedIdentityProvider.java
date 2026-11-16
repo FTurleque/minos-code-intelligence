@@ -1,5 +1,6 @@
 package com.minos.hosted;
 
+import com.minos.diagnostics.UsageException;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import java.io.ByteArrayInputStream;
@@ -40,7 +41,7 @@ public final class HmacHostedIdentityProvider implements HostedIdentityProvider 
     ) {
         Objects.requireNonNull(lifetime, "lifetime");
         if (lifetime.isNegative() || lifetime.isZero() || lifetime.compareTo(MAX_TOKEN_LIFETIME) > 0) {
-            throw new IllegalArgumentException("hosted token lifetime must be positive and at most 24 hours");
+            throw new UsageException("hosted token lifetime must be positive and at most 24 hours");
         }
         HostedAccessClaims claims = new HostedAccessClaims(
                 tenantId, principalId, keyId, issuedAt, issuedAt.plus(lifetime), tokenId);
