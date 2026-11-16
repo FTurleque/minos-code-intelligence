@@ -30,6 +30,14 @@ Version de développement courante :
 1.3.0-SNAPSHOT
 ```
 
+## Échec interne d'une commande
+
+Une exception imprévue d'une commande rend la ligne `error: <label> failed: <message public>` et le code `1`. Avec
+`MINOS_DIAGNOSTIC_LOG=enabled`, une ligne `diagnostic reference: <référence>` suit sur stderr et la pile est écrite dans
+`MINOS_HOME/logs/internal-failures/` ; sans ce réglage, la sortie est identique. Un projet inconnu, un registre illisible,
+un refus de mémoire et une erreur d'usage (code `2`) ne sont pas tracés. Voir
+[Diagnostiquer un échec interne](diagnostic-d-un-echec-interne.md).
+
 ## Formats de sortie
 
 La plupart des commandes qui acceptent `--format` proposent deux représentations du même résultat métier :

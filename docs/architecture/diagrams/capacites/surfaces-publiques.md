@@ -72,8 +72,8 @@ sequenceDiagram
     else mode équipe désactivé ou jeton absent
       T-->>C: isError, message fixe
     else autre échec
-      T->>T: journal WARNING (outil, classes, sans message ni arguments)
-      T-->>C: isError, error: MINOS tool execution failed
+      T->>T: journal WARNING (outil, classes, origine, référence, sans message ni arguments)
+      T-->>C: isError, error: MINOS tool execution failed (ref ...)
     else succès
       alt résultat au-delà du budget
         T-->>C: isError, budget de résultat dépassé
