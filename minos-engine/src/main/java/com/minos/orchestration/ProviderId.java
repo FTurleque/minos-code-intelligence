@@ -1,5 +1,7 @@
 package com.minos.orchestration;
 
+import com.minos.diagnostics.UsageException;
+
 /**
  * Canonical invariant for provider/indexer identifiers.
  *
@@ -15,7 +17,7 @@ public final class ProviderId {
 
     public static String require(String value) {
         if (value == null || !value.matches(SAFE_PATTERN)) {
-            throw new IllegalArgumentException("provider id must match " + SAFE_PATTERN);
+            throw new UsageException("provider id must match " + SAFE_PATTERN);
         }
         return value;
     }

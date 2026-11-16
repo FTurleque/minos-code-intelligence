@@ -203,11 +203,12 @@ jobs:
       - name: Twin script functions gate self-test
         run: python scripts/quality/test_check_twin_script_functions.py -v
 
-      - name: CI wiring, ruleset comparison and plugin gate self-tests
+      - name: CI wiring, ruleset comparison, plugin gate and Docker gate self-tests
         run: |
           python scripts/quality/test_check_ci_wiring.py -v
           python scripts/quality/test_verify_ruleset.py -v
           python scripts/ci/test_plugin_gate.py -v
+          python scripts/ci/test_docker_gate.py -v
 
       - name: JaCoCo gate self-test (decision logic on synthetic reports; the gate itself runs in the verify jobs)
         run: python scripts/quality/check-jacoco.py --self-test

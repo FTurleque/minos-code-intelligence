@@ -475,7 +475,10 @@ final class SemanticExplorerBenchmark {
             StringBuilder reason = new StringBuilder("http ").append(response.status())
                     .append(code.find() ? " " + code.group(1) : "");
             List<Exception> failures = new ArrayList<>();
-            api.answer(request.method(), request.segments(), request.parameters(), request::bodyText, failures::add);
+            api.answer(request.method(), request.segments(), request.parameters(), request::bodyText, failure -> {
+                failures.add(failure);
+                return "benchmark";
+            });
             if (!failures.isEmpty()) reason.append("; ").append(reason(failures.getFirst()));
             return reason.toString();
         }

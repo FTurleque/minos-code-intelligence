@@ -222,6 +222,61 @@ class ReachabilityTest(WiringTestCase):
         self.assertEqual([], self.failures(self.tree({"plugin.yml": block})))
 
 
+class RequiredJobWithNeedsTest(WiringTestCase):
+    """A required job that waits for others always runs: otherwise a failed or skipped job upstream leaves the check
+    without a verdict and blocks every pull request."""
+
+    NEEDING = PLUGIN.replace("    if: ${{ always() }}\n", "    needs: [changes]\n    if: ${{ always() }}\n")
+
+    def test_a_required_job_with_needs_and_without_the_condition_is_refused(self):
+        without = self.NEEDING.replace("    if: ${{ always() }}\n", "")
+        failures = self.failures(self.tree({"plugin.yml": without}))
+        self.assertEqual(1, len(failures), failures)
+        for expected in ("plugin.yml", "job 'gate'", "needs:", "always()"):
+            self.assertIn(expected, failures[0])
+
+    def test_a_condition_that_is_not_always_is_refused(self):
+        other = self.NEEDING.replace("${{ always() }}", "${{ github.actor != 'nobody' }}")
+        self.assertEqual(1, len(self.failures(self.tree({"plugin.yml": other}))))
+
+    def test_both_spellings_of_always_are_accepted(self):
+        for condition in ("${{ always() }}", "always()", "always() && github.actor != 'nobody'"):
+            with self.subTest(condition=condition):
+                text = self.NEEDING.replace("${{ always() }}", condition)
+                self.assertEqual([], self.failures(self.tree({"plugin.yml": text})))
+
+    def test_needs_written_as_a_block_or_a_scalar_is_read_too(self):
+        for needs in ("    needs: changes\n", "    needs:\n      - changes\n"):
+            with self.subTest(needs=needs):
+                text = self.NEEDING.replace("    needs: [changes]\n", needs).replace("    if: ${{ always() }}\n", "")
+                self.assertEqual(1, len(self.failures(self.tree({"plugin.yml": text}))))
+
+    def test_a_required_job_without_needs_is_not_concerned(self):
+        self.assertEqual([], self.failures(self.tree()))
+        with_condition = PLUGIN.replace("    if: ${{ always() }}\n", "    if: ${{ github.actor != 'nobody' }}\n")
+        self.assertEqual([], self.failures(self.tree({"plugin.yml": with_condition})))
+
+    def test_a_job_that_is_not_required_may_wait_without_the_condition(self):
+        extra = PLUGIN + "  other:\n    needs: [gate]\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo x\n"
+        self.assertEqual([], self.failures(self.tree({"plugin.yml": extra})))
+
+    def test_a_needs_key_of_a_step_does_not_count(self):
+        text = PLUGIN.replace("      - run: echo gate\n", "      - run: echo gate\n        env:\n          needs: x\n")
+        self.assertEqual([], self.failures(self.tree({"plugin.yml": text})))
+
+    def test_the_required_jobs_of_the_repository_that_wait_carry_the_condition(self):
+        failures, resolved, _wired, _lockfiles = gate.check(REPOSITORY)
+        self.assertEqual([], failures)
+        mutated = (REPOSITORY / ".github" / "workflows" / "release-promotion-gate.yml").read_text(encoding="utf-8")
+        needs = "    needs: [changes, docker-upgrade-qualification]\n"
+        self.assertIn(needs + "    if: always()\n", mutated)
+        mutated = mutated.replace(needs + "    if: always()\n", needs, 1)
+        manifest = json.loads((REPOSITORY / ".github" / "required-checks.json").read_text(encoding="utf-8"))
+        root = self.tree({"release-promotion-gate.yml": mutated}, manifest=manifest)
+        refused = [f for f in self.failures(root) if "release-promotion-gate.yml" in f and "always()" in f]
+        self.assertEqual(1, len(refused), refused)
+
+
 class SelfTestWiringTest(WiringTestCase):
 
     def test_a_test_script_that_no_invariants_step_runs_is_refused(self):

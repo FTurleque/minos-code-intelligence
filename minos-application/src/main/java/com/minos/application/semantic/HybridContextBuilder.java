@@ -1,6 +1,7 @@
 package com.minos.application.semantic;
 
 import com.minos.context.TokenEstimator;
+import com.minos.diagnostics.UsageException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -55,18 +56,18 @@ public final class HybridContextBuilder {
 
     public record ContextRequest(String query, int maxDocuments, int maxTokens, int maxTokensPerDocument) {
         public ContextRequest {
-            if (query == null || query.isBlank()) throw new IllegalArgumentException("query must not be blank");
+            if (query == null || query.isBlank()) throw new UsageException("query must not be blank");
             if (query.getBytes(StandardCharsets.UTF_8).length > HybridSearchService.MAX_QUERY_UTF8_BYTES) {
-                throw new IllegalArgumentException("query exceeds UTF-8 byte limit: " + HybridSearchService.MAX_QUERY_UTF8_BYTES);
+                throw new UsageException("query exceeds UTF-8 byte limit: " + HybridSearchService.MAX_QUERY_UTF8_BYTES);
             }
             if (maxDocuments < 1 || maxDocuments > MAX_DOCUMENTS) {
-                throw new IllegalArgumentException("maxDocuments must be between 1 and " + MAX_DOCUMENTS);
+                throw new UsageException("maxDocuments must be between 1 and " + MAX_DOCUMENTS);
             }
             if (maxTokens < 128 || maxTokens > MAX_TOKENS) {
-                throw new IllegalArgumentException("maxTokens must be between 128 and " + MAX_TOKENS);
+                throw new UsageException("maxTokens must be between 128 and " + MAX_TOKENS);
             }
             if (maxTokensPerDocument < 32 || maxTokensPerDocument > maxTokens) {
-                throw new IllegalArgumentException("maxTokensPerDocument must be between 32 and maxTokens");
+                throw new UsageException("maxTokensPerDocument must be between 32 and maxTokens");
             }
         }
         public static ContextRequest defaults(String query) { return new ContextRequest(query, 10, 4_000, 800); }

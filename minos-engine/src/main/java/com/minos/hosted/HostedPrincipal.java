@@ -1,5 +1,6 @@
 package com.minos.hosted;
 
+import com.minos.diagnostics.UsageException;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -18,7 +19,7 @@ public record HostedPrincipal(String principalId, String displayName, HostedRole
     public static String safeId(String value, String field) {
         String normalized = text(value, field, 128);
         if (!SAFE_ID.matcher(normalized).matches()) {
-            throw new IllegalArgumentException(field + " contains unsupported characters");
+            throw new UsageException(field + " contains unsupported characters");
         }
         return normalized;
     }
@@ -29,12 +30,12 @@ public record HostedPrincipal(String principalId, String displayName, HostedRole
     }
 
     public static String text(String value, String field, int maximum) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank");
+        if (value == null || value.isBlank()) throw new UsageException(field + " must not be blank");
         String normalized = value.trim();
         if (normalized.length() > maximum || normalized.indexOf('\0') >= 0
                 || normalized.indexOf('\n') >= 0 || normalized.indexOf('\r') >= 0
                 || normalized.indexOf('\t') >= 0) {
-            throw new IllegalArgumentException(field + " is invalid or exceeds its limit");
+            throw new UsageException(field + " is invalid or exceeds its limit");
         }
         return normalized;
     }

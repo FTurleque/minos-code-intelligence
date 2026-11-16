@@ -12,10 +12,11 @@ Principe : MINOS dit déjà pourquoi. Lire ses diagnostics, ne pas deviner ; ne 
 - `minos doctor --format json` (diagnostics par provider et par sandbox ; un préfixe `machine prerequisite (not shipped by MINOS)` désigne une dépendance externe du poste) et `minos tools verify`.
 - État d'un projet : `minos index-status <projet>`.
 - Journaux : le serveur MCP STDIO écrit sur **stderr** (capturé par le client MCP) ; stdout est réservé au protocole. Plugin IntelliJ : `idea.log`.
+- Erreur opaque (`error: MINOS tool execution failed (ref <référence>)`, `diagnostic reference:` de la CLI, ligne `MINOS API call failed internally`) : lire la **référence** ; la ligne de stderr qui la porte donne l'outil, les classes et l'origine (`at=`) ; avec `MINOS_DIAGNOSTIC_LOG=enabled`, la pile est dans `MINOS_HOME/logs/internal-failures/*-<référence>.txt` (privé, 200 entrées au plus, jamais en Docker). Voir `docs/user/diagnostic-d-un-echec-interne.md`. L'explorateur (`minos explorer serve`) écrit sur stderr `request failed (route=…, ref=…)`, `refused request: <raison>` (résumés par minute) et `abandoned reads still running: <n>` ; sa réponse `500` porte la même référence.
 - Données : `MINOS_HOME` (et `tools/`, `runs/`, quarantaine de runs) ; ne jamais copier un secret dans un rapport.
 
 ## 2. Codes de sortie et sens
-Le code **3** signifie *résultat partiel* (inventaire ou index incomplet, entrées abîmées ignorées), pas un échec : lire les limitations de la sortie. Les erreurs d'usage sont actionnables ; les erreurs internes sont volontairement opaques (la cause est dans les journaux de l'opérateur).
+Le code **3** signifie *résultat partiel* (inventaire ou index incomplet, entrées abîmées ignorées), pas un échec : lire les limitations de la sortie. Les erreurs d'usage sont actionnables ; les erreurs internes sont volontairement opaques et portent une référence qui mène à la ligne de stderr, puis au journal privé s'il est activé.
 
 ## 3. Symptômes fréquents → première hypothèse
 | Symptôme | À vérifier d'abord |

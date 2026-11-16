@@ -63,7 +63,7 @@ class MinosApiSupportTest {
     void sensitiveInvalidRequestMessagesAreNeverExposedPublicly() {
         for (String detail : SENSITIVE_MESSAGES) {
             MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
-                throw new IllegalArgumentException(detail);
+                throw new com.minos.diagnostics.UsageException(detail);
             });
             assertEquals(MinosApi.ErrorCode.INVALID_REQUEST, failure.code());
             assertNoSensitiveDetailIsReachable(failure, detail);

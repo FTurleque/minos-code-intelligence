@@ -5,6 +5,7 @@ import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.ProviderConformanceKit;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
+import com.minos.diagnostics.UsageException;
 
 import java.util.List;
 import java.util.Map;
@@ -59,12 +60,12 @@ public final class ProviderPlatformService {
 
     public ProviderView inspect(String providerId) {
         if (providerId == null || providerId.isBlank()) {
-            throw new IllegalArgumentException("providerId must not be blank");
+            throw new UsageException("providerId must not be blank");
         }
         IndexerProvider provider = providers.stream()
                 .filter(candidate -> providerId.equals(candidate.descriptor().id()))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("unknown provider: " + providerId));
+                .orElseThrow(() -> new UsageException("unknown provider: " + providerId));
         ProviderRuntimeStatus status = runtimes.inspect(providerId);
         return view(provider, status);
     }
