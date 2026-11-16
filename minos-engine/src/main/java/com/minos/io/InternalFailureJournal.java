@@ -11,7 +11,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,7 +39,7 @@ public final class InternalFailureJournal {
     public static final int MAX_ENTRIES_PER_WINDOW = 60;
     public static final Duration WINDOW = Duration.ofMinutes(1);
     static final String ENTRY_GLOB = "*.txt";
-    private static final Pattern ENTRY_NAME = Pattern.compile("[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}\\.txt");
+    private static final Pattern ENTRY_NAME = Pattern.compile("\\d{8}T\\d{9}Z-[0-9a-f]{8}\\.txt");
 
     private static final System.Logger LOGGER = System.getLogger(InternalFailureJournal.class.getName());
 
@@ -138,7 +137,7 @@ public final class InternalFailureJournal {
             }
         }
         if (names.size() <= maxEntries) return;
-        Collections.sort(names);
+        names.sort(null);
         for (String name : names.subList(0, names.size() - maxEntries)) {
             DurableAtomicFile.deleteIfExists(directory.resolve(name), "diagnostic journal entry");
         }

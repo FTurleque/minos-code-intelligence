@@ -24,7 +24,7 @@ class InternalFailureReporterTest {
     Path temp;
 
     @Test
-    void anInactiveJournalStillDescribesTheFailureAndWritesNoFile() throws Exception {
+    void anInactiveJournalStillDescribesTheFailureAndWritesNoFile() {
         InternalFailureReporter reporter = new InternalFailureReporter("mcp", temp, Map.of(), new Properties());
 
         InternalFailureTrace trace = reporter.report("minos_find_symbols", new IllegalStateException("boom"));
