@@ -108,14 +108,13 @@ final class MinosApiSupport {
         } catch (UsageException exception) {
             // The one argument error raised on purpose for the caller (an unknown document included).
             throw publicFailure(ErrorCode.INVALID_REQUEST, exception);
-        } catch (IllegalArgumentException exception) {
-            // A precondition violated inside a service is a defect, not advice to the caller.
-            throw publicFailure(ErrorCode.EXECUTION_FAILURE, exception);
         } catch (IllegalStateException exception) {
             throw publicFailure(ErrorCode.UNAVAILABLE, exception);
         } catch (IOException exception) {
             throw publicFailure(ErrorCode.IO_FAILURE, exception);
         } catch (Exception exception) {
+            // Any other failure, a precondition violated inside a service (IllegalArgumentException) included, is a
+            // defect and not advice to the caller.
             throw publicFailure(ErrorCode.EXECUTION_FAILURE, exception);
         }
     }

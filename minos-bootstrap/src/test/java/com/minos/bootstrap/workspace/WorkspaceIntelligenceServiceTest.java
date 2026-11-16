@@ -1,5 +1,6 @@
 package com.minos.bootstrap.workspace;
 
+import com.minos.diagnostics.UsageException;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.InformationNature;
@@ -24,12 +25,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkspaceIntelligenceServiceTest {
+
+    @Test
+    void anUnknownWorkspaceOrALimitOutOfBoundsIsAUsageError(@TempDir Path home) throws Exception {
+        LocalProjectRegistry registry = new LocalProjectRegistry(home.resolve("registry"));
+        WorkspaceIntelligenceService service = new WorkspaceIntelligenceService(
+                registry, new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")));
+        registry.createWorkspace("platform");
+        String unknownId = UUID.randomUUID().toString();
+
+        assertThrows(UsageException.class, () -> service.getWorkspace(unknownId));
+        assertThrows(UsageException.class, () -> service.getWorkspace("absent"));
+        assertThrows(UsageException.class, () -> service.getWorkspaceTolerantly(unknownId));
+        assertThrows(UsageException.class, () -> service.getWorkspaceTolerantly("absent"));
+        assertThrows(UsageException.class, () -> service.analyze("platform", 0));
+    }
 
     @Test
     void resolvesOnlyExactProviderIdentityAcrossWorkspaceProjects(@TempDir Path home) throws Exception {

@@ -445,7 +445,7 @@ public final class SemanticCorpusQueryService {
     }
 
     /** The index holds no document under the requested stable key. */
-    public static final class DocumentNotFoundException extends UsageException {
+    public static final class DocumentNotFoundException extends UsageException { // NOSONAR java:S110, a usage error by design
         private static final long serialVersionUID = 1L;
 
         public DocumentNotFoundException() {
