@@ -32,6 +32,7 @@ class ExplorerCitedCommandsTest {
     /** The files whose text sends the reader to a command, from the reactor root. */
     private static final List<String> SOURCES = List.of(
             "minos-explorer/src/main/resources/com/minos/explorer/web/app.js",
+            "minos-explorer/src/main/resources/com/minos/explorer/web/map.js",
             "docs/user/semantic-explorer.md");
 
     /** A command quoted in a message («…») or in code (`…`), or alone on a line of a code block. */

@@ -1,6 +1,7 @@
-// Test harness of the explorer page: loads the real app.js into a node:vm context with a minimal fake DOM.
-// Nothing is exported by app.js and nothing is changed in it. Function declarations become properties of the
-// context; the let/const state is read and written by expressions evaluated in the same context.
+// Test harness of the explorer page: loads the real scripts of index.html (map.js, then app.js) into one node:vm
+// context with a minimal fake DOM. Nothing is exported by the scripts and nothing is changed in them. Function
+// declarations become properties of the context; the let/const state is read and written by expressions evaluated
+// in the same context, and the scripts share it as scripts of one page do.
 //
 // The fake DOM refuses every way to write markup (innerHTML, outerHTML, insertAdjacentHTML, document.write,
 // createContextualFragment, DOMParser, srcdoc, an on* or srcdoc attribute), records the attempt and throws. The context refuses code
@@ -10,8 +11,10 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const WEB = new URL("../../main/resources/com/minos/explorer/web/", import.meta.url);
-export const APP_JS = fileURLToPath(new URL("app.js", WEB));
 export const INDEX_HTML = fileURLToPath(new URL("index.html", WEB));
+// The scripts of the page, in the order of its <script src> tags.
+export const SCRIPTS = Array.from(readFileSync(INDEX_HTML, "utf8").matchAll(/<script src="([^"]+)"><\/script>/g),
+  match => fileURLToPath(new URL(match[1], WEB)));
 export const HOSTILE = "<script>alert(1)</script>";
 export const TOKEN = "0123456789abcdef".repeat(4);
 
@@ -241,7 +244,7 @@ export function createPage(options = {}) {
     for (const callback of pending) callback(0);
     return pending.length;
   };
-  vm.runInContext(readFileSync(APP_JS, "utf8"), page.context, { filename: APP_JS });
+  for (const script of SCRIPTS) vm.runInContext(readFileSync(script, "utf8"), page.context, { filename: script });
   return page;
 }
 
