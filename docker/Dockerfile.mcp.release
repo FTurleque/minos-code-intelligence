@@ -259,8 +259,9 @@ RUN set -eux; \
 # embeds the exact 0.13.2 artifact. Coursier coordinates are immutable upstream inputs but their
 # full transitive graph is not represented by a repository-owned lockfile; the produced executable
 # is therefore recorded in provider evidence rather than advertised as bit-for-bit reproducible.
-# Project dependency resolution for the real Maven build is a separate indexing concern handled by
-# the ephemeral admin plane; the persistent MCP query plane remains networkless.
+# No provider indexes in a container: indexing is refused in the administration plane (no OS sandbox, SEC-0074),
+# so this launcher is only run for its version, by the tools probe; it is not part of any lockfile of the
+# repository (R-13). The persistent MCP query plane remains networkless.
 RUN set -eux; \
     export COURSIER_CACHE=/tmp/minos-coursier-build-cache; \
     mkdir -p /run/minos-native; \

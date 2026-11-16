@@ -404,8 +404,9 @@ Les six constats du sprint ont leur changement fusionné : AUD-DEP-01 (PR #434),
 | Reste | Changement / constat | Blocage |
 |---|---|---|
 | Premier passage de la veille planifiée (tâche 3.4), puis archivage (tâche 4.3) | `surveiller-les-outils-embarques`, AUD-DEP-03 | `workflow_dispatch` refusé tant que `embedded-tools-advisories.yml` n'est pas sur `main` |
-| Exception Java 25 des workflows de qualification A → B | AUD-DEP-01 | `release-promotion-gate.yml:80` et `docker-upgrade-qualification.yml:63` installent Java 25 pour construire le candidat A (`main`, encore en Java 25) ; la liste fermée de `check-toolchain-baseline.py` (`PREVIOUS_JAVA`) se vide quand `main` est en Java 21 |
 | Indexation Java par le runtime de l'installateur | AUD-DEP-01 | runtime Java 25 de la distribution prouvé sur un projet TypeScript (run 38927003115) ; l'indexation d'un projet Maven Java échoue sur le poste à l'identique sous 1.2.0 (« Échec d'indexation Java sous Windows ») : la preuve Java attend une distribution 1.3.0 publiée et installée |
+
+La réserve « Exception Java 25 des workflows de qualification A → B » (AUD-DEP-01) est close : les deux étapes Java 25, `PREVIOUS_JAVA` et `PREVIOUS_JAVA_STEPS` sont retirés par le changement `solder-les-restes-de-java-25-et-de-develop` (AUD-DEP-04 de l'audit du 2026-11-15), `main` étant construit en Java 21.
 
 **En attente d'une décision du propriétaire** :
 
