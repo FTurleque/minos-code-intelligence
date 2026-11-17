@@ -21,6 +21,7 @@ import com.minos.domain.SymbolOccurrence;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -188,6 +189,75 @@ class RelatedTestDerivationServiceTest {
                 List.of(reference("reference", production, file, 4)),
                 List.of()
         ).isEmpty());
+    }
+
+    // Name normalisation rule (tests-lies-et-impact): lower-case with Locale.ROOT first, then keep only
+    // [a-z0-9]. The order matters: a non-ASCII character whose root lower case is ASCII is kept.
+
+    @Test
+    void linksAMixedCaseProductionNameWithASeparatorByNamingConvention() {
+        Symbol test = symbol(
+                "order-test", "OrderServiceTest", "com.acme.OrderServiceTest",
+                SymbolKind.CLASS, "src/test/java/com/acme/OrderServiceTest.java");
+        Symbol production = symbol(
+                "order", "Order_Service", "com.acme.Order_Service",
+                SymbolKind.CLASS, "src/main/java/com/acme/Order_Service.java");
+
+        assertNamingLink(test, production);
+    }
+
+    @Test
+    void keepsANonAsciiCharacterWhoseRootLowerCaseIsAsciiLetter() {
+        Symbol test = symbol(
+                "kelvin-test", "KelvinTest", "com.acme.KelvinTest",
+                SymbolKind.CLASS, "src/test/java/com/acme/KelvinTest.java");
+        // U+212A KELVIN SIGN lower-cases to 'k' under Locale.ROOT.
+        Symbol production = symbol(
+                "kelvin", "Kelvin", "com.acme.Kelvin",
+                SymbolKind.CLASS, "src/main/java/com/acme/Kelvin.java");
+
+        assertNamingLink(test, production);
+    }
+
+    @Test
+    void normalisesNamesIndependentlyOfTheHostDefaultLocale() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            Symbol test = symbol(
+                    "index-test", "IndexTest", "com.acme.IndexTest",
+                    SymbolKind.CLASS, "src/test/java/com/acme/IndexTest.java");
+            Symbol production = symbol(
+                    "index", "INDEX", "com.acme.INDEX",
+                    SymbolKind.CLASS, "src/main/java/com/acme/Catalog.java");
+
+            assertNamingLink(test, production);
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    @Test
+    void createsNoNamingLinkWhenNoAsciiLetterOrDigitRemains() {
+        // Both the test name and its file stem reduce to an empty name once the test suffix is removed;
+        // the production name reduces to an empty name too, and an empty name never links.
+        Symbol test = symbol(
+                "kanji-test", "日本Test", "com.acme.日本Test",
+                SymbolKind.CLASS, "src/test/java/com/acme/日本_test.java");
+        Symbol production = symbol(
+                "kanji", "日本", "com.acme.日本",
+                SymbolKind.CLASS, "src/main/java/com/acme/日本.java");
+
+        assertTrue(service.derive(List.of(test, production), List.of(), List.of()).isEmpty());
+    }
+
+    private void assertNamingLink(Symbol test, Symbol production) {
+        List<Relationship> related = service.derive(List.of(test, production), List.of(), List.of());
+
+        assertEquals(1, related.size());
+        assertEquals(ref(test), related.getFirst().source());
+        assertEquals(ref(production), related.getFirst().target());
+        assertTrue(evidenceTypes(related.getFirst()).contains(EvidenceType.NAMING_CONVENTION));
     }
 
     @Test

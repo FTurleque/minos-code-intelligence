@@ -123,11 +123,11 @@ et Linux.
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| tests-lies-et-impact › Les noms comparés par la dérivation des tests liés sont normalisés par une règle stable | Nom mixte | D1 | 1.1 | `RelatedTestDerivationServiceTest` — à compléter |
-| idem | Caractère non ASCII dont la minuscule est une lettre ASCII | D1, Écarts | 1.1 | à écrire |
-| idem | Langue de l'hôte turque | D1 | 1.1 | à écrire |
-| idem | Nom sans lettre ni chiffre ASCII | D1 | 1.1 | à écrire |
-| idem | Sorties inchangées | Vérification | 1.3 | tests de caractérisation de `minos-app` — existants |
+| tests-lies-et-impact › Les noms comparés par la dérivation des tests liés sont normalisés par une règle stable | Nom mixte | D1 | 1.1 | `RelatedTestDerivationServiceTest#linksAMixedCaseProductionNameWithASeparatorByNamingConvention` |
+| idem | Caractère non ASCII dont la minuscule est une lettre ASCII | D1, Écarts | 1.1 | `RelatedTestDerivationServiceTest#keepsANonAsciiCharacterWhoseRootLowerCaseIsAsciiLetter` (rouge sous mutation filtre-avant-minuscules) |
+| idem | Langue de l'hôte turque | D1 | 1.1 | `RelatedTestDerivationServiceTest#normalisesNamesIndependentlyOfTheHostDefaultLocale` |
+| idem | Nom sans lettre ni chiffre ASCII | D1 | 1.1 | `RelatedTestDerivationServiceTest#createsNoNamingLinkWhenNoAsciiLetterOrDigitRemains` |
+| idem | Sorties inchangées | Vérification | 1.3 | `A2SurfaceCharacterizationTest` (`minos-app`), vert sans golden régénéré |
 
 ## Questions ouvertes
 

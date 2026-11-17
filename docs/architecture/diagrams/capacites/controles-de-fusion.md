@@ -50,6 +50,10 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 « branche à jour » ne relève que de ce réglage manuel (écart E6). Le job `gate` du plugin s'exécute toujours
 (`if: always()`) et refuse un job sauté alors que la portée l'incluait.
 
+Les portées calculées du plugin et de la qualification Docker lisent le diff sans détection de renommage
+(`scripts/ci/plugin-gate.py`, fonction `changed_files`) : l'ancien chemin d'un fichier renommé compte comme le
+nouveau, et déplacer une source vers `docs/` ou `src/test/` laisse la pull request concernée.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -83,6 +87,7 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 | Le budget mémoire des vues a un plancher de classe | tous ; « état du dépôt » : le rapport jacoco-gate.json de l'artefact pr-validation-Linux-1 du run 43749092436 (PR #743) porte la mesure et le plancher de `QueryViewMemoryBudget` | V1 | `scripts/quality/check-jacoco.py:41` (plancher de `QueryViewMemoryBudget`), `scripts/quality/check-jacoco.py:561` (cas « weak live prefix » de `--self-test`) | couverte |
 | Aucun test ne passe à vide derrière un retour anticipé de plateforme | tous ; « test Windows sous Linux » : rapports Surefire de `Verify (ubuntu-24.04)` du run 43744069549 (PR #742), tests Windows de `CommandLocatorTest`, `ManagedPolyglotScipRuntimeManagerTest` et `M24PolyglotProviderTest` comptés sautés | V1 | `scripts/quality/check-test-platform-guards.py` (dépôt réel, puis cas « two-line guard », « local variable from os.name », « no test source » de `--self-test`) | couverte |
 | Les retours anticipés de plateforme tolérés sont une liste fermée et motivée | tous | V1 | `scripts/quality/check-test-platform-guards.py` (cas « stale exception refused », « exception in a test method refused », « exception without reason refused » de `--self-test`), `.github/workflows/pr-ci.yml` (étapes du job `invariants`, câblage gardé par `scripts/quality/check-ci-wiring.py`) | couverte |
+| Les deux chemins d'un renommage comptent dans une portée calculée | 4/4 | — | `scripts/ci/test_docker_gate.py#test_a_main_source_moved_under_test_sources_or_documents_is_in_scope`, `scripts/ci/test_docker_gate.py#test_a_document_renamed_within_the_excluded_list_stays_out_of_scope`, `scripts/ci/test_plugin_gate.py#test_a_renderer_moved_out_of_the_plugin_paths_is_in_scope` | couverte |
 
 `check-jacoco.py` porte son auto-test en option (`--self-test`), exécuté par le job `invariants` ; ses cas sont
 des étiquettes de la fonction `self_test`, d'où les preuves citées par ligne.

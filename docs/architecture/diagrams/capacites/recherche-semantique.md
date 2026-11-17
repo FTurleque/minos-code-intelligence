@@ -84,6 +84,11 @@ chaque lecture (ils ne sont pas persistés). Une synchronisation écrit par `rep
 snapshot est promu entre-temps, elle est refusée et l'index précédent reste en place. L'indexation déclenche la
 synchronisation après promotion, sans la rendre fatale.
 
+Le corpus hybride, les vecteurs de requête et l'index vectoriel local gardent au plus le plus petit de leur plafond
+configuré et de leur part du tas (`HeapShare` : 6 %, 1 % et 2 %) ; une entrée plus lourde n'est pas gardée et la
+requête rend le même résultat. Une recherche sur un index local plus lourd que son cache le décode en entier à chaque
+requête : limite déclarée (ADR DATA-0085, point 19).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -100,6 +105,7 @@ synchronisation après promotion, sans la rendre fatale.
 | Un MINOS_HOME configuré pour Docker reste ouvrable par un lanceur natif | 2/2 | — | `minos-bootstrap/src/test/java/com/minos/bootstrap/semantic/M23SemanticProviderConfigurationTest.java#nativeOpenOfADockerConfiguredHomeSucceedsAndReportsTheProviderUnusable` | couverte |
 | Le corps d'une réponse d'erreur Ollama est borné et assaini | 2/2 | — | `minos-application/src/test/java/com/minos/application/semantic/OllamaEmbeddingProviderErrorBodyTest.java#aLargeErrorBodyIsBoundedInTheMessage`, `minos-application/src/test/java/com/minos/application/semantic/OllamaEmbeddingProviderErrorBodyTest.java#anErrorBodyNamingAnAbsolutePathIsOmittedButTheStatusRemains` | couverte |
 | La preuve inter-processus du verrou de synchronisation échoue quand son détenteur ne démarre pas | 3/3 | — | `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticSyncConsistencyTest.java#crossJvmFileLockBlocksConditionalReplaceUntilReleased`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticSyncConsistencyTest.java#lockHolderThatCannotStartFailsTheProofInsteadOfSkippingIt`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticSyncConsistencyTest.java#lockHolderFailureKeepsOnlyTheBoundedTailOfALargeErrorOutput` | couverte |
+| Les caches de la recherche sémantique sont plafonnés par une part du tas | 4/4 | — | `minos-application/src/test/java/com/minos/application/semantic/HybridQueryCostTest.java#underASmallHeapTheCorpusAndQueryCeilingsAreTheirShares`, `minos-application/src/test/java/com/minos/application/semantic/HybridQueryCostTest.java#underALargeHeapTheCorpusAndQueryCeilingsAreTheConfiguredOnes`, `minos-application/src/test/java/com/minos/application/semantic/HybridQueryCostTest.java#aCorpusHeavierThanTheCeilingIsNotKeptAndTheAnswerIsTheSame`, `minos-engine/src/test/java/com/minos/store/cache/HeapShareTest.java#aShareOutsideOneToHundredPercentIsRefusedByName`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticVectorStoreTest.java#underASmallHeapTheIndexCacheCeilingIsItsShare` | couverte |
 
 Les tests PostgreSQL se sautent sans serveur de test (`minos-storage/src/test/java/com/minos/storage/postgresql/PostgresTestSupport.java`) :
 `Verify (ubuntu-24.04)` les exécute en mode requis, `Verify (windows-2022)` les saute.

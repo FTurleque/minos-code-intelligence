@@ -100,9 +100,10 @@ def last_json(completed: subprocess.CompletedProcess) -> dict:
 
 
 def run_named_functions(executable: str, directory: Path, names: tuple[str, ...], call: str,
-                        compose: Path | None = None, environment: Path | None = None) -> dict:
-    """Runs `call` after loading the named functions of the real lifecycle script; returns its JSON result."""
-    body = (HARNESS.replace("%SCRIPT%", str(LIFECYCLE))
+                        compose: Path | None = None, environment: Path | None = None,
+                        script_path: Path = LIFECYCLE) -> dict:
+    """Runs `call` after loading the named functions of a real script (the lifecycle one by default)."""
+    body = (HARNESS.replace("%SCRIPT%", str(script_path))
             .replace("%NAMES%", ",".join(f"'{name}'" for name in names))
             .replace("%COMPOSE%", str(compose or directory / "absent-compose.yaml"))
             .replace("%ENVIRONMENT%", str(environment or directory / "absent.env"))
@@ -281,6 +282,42 @@ if ($Name -ne '') { $Extra['Name'] = $Name }
 & $Script -Action $Action -InstallRoot (Join-Path $Root 'install') -DataRoot (Join-Path $Root 'data') @Extra
 Write-Output "CALLER-QUERY-IMAGE=[$env:MINOS_QUERY_IMAGE]"
 """
+
+
+class ScratchSizeOverrideTests(PowerShellCase):
+    """AUD-PERF-09: the size of the PostgreSQL scratch area survives the regeneration of the runtime .env, in both
+    scripts that carry the function, and an invalid size is refused by name before anything is written."""
+
+    SCRIPTS = (LIFECYCLE, ROOT / "docker" / "scripts" / "prod-mcp.ps1")
+    NAMES = ("Test-CeilingOverride", "Get-PreservedCeilingOverrides")
+
+    def preserved(self, executable: str, environment_text: str, script_path: Path) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            environment = directory / ".env"
+            environment.write_text(environment_text, encoding="ascii")
+            return run_named_functions(executable, directory, self.NAMES,
+                                       f"Get-PreservedCeilingOverrides -Path '{environment}'",
+                                       script_path=script_path)
+
+    def test_the_scratch_size_is_carried_over(self):
+        for script_path in self.SCRIPTS:
+            for label, executable in self.runtimes:
+                result = self.preserved(executable, "A=1\nMINOS_MCP_SCRATCH_SIZE=512m\nMINOS_MCP_MEM_LIMIT=4g\n",
+                                        script_path)
+                self.assertEqual("RETURNED", result["outcome"], (script_path.name, label, result))
+                # Windows PowerShell 5.1 serialises a line of Get-Content with its notes: keep the text alone.
+                lines = [line["value"] if isinstance(line, dict) else line for line in result["value"]]
+                self.assertIn("MINOS_MCP_SCRATCH_SIZE=512m", lines, (script_path.name, label))
+
+    def test_an_invalid_scratch_size_is_refused_by_name(self):
+        for script_path in self.SCRIPTS:
+            for label, executable in self.runtimes:
+                for value in ("0", "", "lots", "-1"):
+                    result = self.preserved(executable, f"MINOS_MCP_SCRATCH_SIZE={value}\n", script_path)
+                    self.assertEqual("THREW", result["outcome"], (script_path.name, label, value, result))
+                    self.assertIn("MINOS_MCP_SCRATCH_SIZE", result["message"], (script_path.name, label, value))
+                    self.assertIn("nothing was written", result["message"], (script_path.name, label, value))
 
 
 class WholeScriptTests(PowerShellCase):

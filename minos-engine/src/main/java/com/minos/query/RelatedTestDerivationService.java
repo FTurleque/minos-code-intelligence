@@ -61,6 +61,8 @@ public final class RelatedTestDerivationService {
             SymbolKind.ENUM
     );
 
+    private static final Pattern NOT_ASCII_LOWER_ALPHANUMERIC = Pattern.compile("[^a-z0-9]");
+
     /**
      * Suffixe de test d'un NOM de type ou de fonction, retiré à une frontière de mot uniquement :
      * soit derrière un séparateur ({@code _}, {@code -}, {@code .}), sans tenir compte de la casse
@@ -452,7 +454,7 @@ public final class RelatedTestDerivationService {
         if (value == null) {
             return "";
         }
-        return value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return NOT_ASCII_LOWER_ALPHANUMERIC.matcher(value.toLowerCase(Locale.ROOT)).replaceAll("");
     }
 
     private static boolean isTestSymbol(Symbol symbol) {

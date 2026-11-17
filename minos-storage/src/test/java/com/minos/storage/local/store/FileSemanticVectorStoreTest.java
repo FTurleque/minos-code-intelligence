@@ -4,6 +4,7 @@ import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
+import com.minos.store.cache.HeapShare;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -119,6 +120,43 @@ class FileSemanticVectorStoreTest {
             output.writeInt(indexed.vector().dimensions());
             for (double value : indexed.vector().values()) output.writeDouble(value);
         }
+    }
+
+    @Test
+    void underASmallHeapTheIndexCacheCeilingIsItsShare(@TempDir Path temp) throws Exception {
+        long heap = 1_128_267_776L;
+
+        FileSemanticVectorStore store = new FileSemanticVectorStore(temp.resolve("semantic"),
+                FileSemanticVectorStore.DEFAULT_MAX_CACHE_WEIGHT_BYTES, heap);
+
+        assertEquals(HeapShare.LOCAL_VECTOR_INDEX.ceiling(FileSemanticVectorStore.DEFAULT_MAX_CACHE_WEIGHT_BYTES, heap),
+                store.cacheStats().maximumWeightBytes());
+    }
+
+    @Test
+    void underALargeHeapTheIndexCacheCeilingIsTheConfiguredOne(@TempDir Path temp) throws Exception {
+        FileSemanticVectorStore store = new FileSemanticVectorStore(temp.resolve("semantic"),
+                FileSemanticVectorStore.DEFAULT_MAX_CACHE_WEIGHT_BYTES, 64L * 1024L * 1024L * 1024L);
+
+        assertEquals(FileSemanticVectorStore.DEFAULT_MAX_CACHE_WEIGHT_BYTES, store.cacheStats().maximumWeightBytes());
+    }
+
+    @Test
+    void anIndexHeavierThanTheCeilingIsNotKeptAndTheAnswerIsTheSame(@TempDir Path temp) throws Exception {
+        Path root = temp.resolve("semantic");
+        new FileSemanticVectorStore(root).replace(index("project-1", "snapshot-1", "model-v1", "alpha", List.of(1.0, 0.0)));
+        // A heap of 100 bytes: a share of 2 bytes holds no index.
+        FileSemanticVectorStore tiny = new FileSemanticVectorStore(root, FileSemanticVectorStore.DEFAULT_MAX_CACHE_WEIGHT_BYTES, 100L);
+        FileSemanticVectorStore kept = new FileSemanticVectorStore(root);
+        SemanticVector query = new SemanticVector("query", List.of(1.0, 0.0));
+
+        var first = tiny.search("project-1", query, 5, 0.0);
+        var second = tiny.search("project-1", query, 5, 0.0);
+
+        assertEquals(kept.search("project-1", query, 5, 0.0), first);
+        assertEquals(first, second);
+        assertEquals(0L, tiny.cacheStats().weightBytes());
+        assertEquals(0, tiny.cacheStats().entries());
     }
 
     private static void writeString(DataOutputStream output, String value) throws Exception {

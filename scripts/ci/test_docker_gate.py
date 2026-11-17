@@ -105,6 +105,10 @@ class ChangedFilesTest(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8", newline="\n")
 
+    def move(self, source: str, target: str) -> None:
+        (self.root / target).parent.mkdir(parents=True, exist_ok=True)
+        self.git("mv", source, target)
+
     def commit(self, message: str) -> str:
         self.git("add", "-A")
         self.git("commit", "-q", "-m", message)
@@ -120,6 +124,24 @@ class ChangedFilesTest(unittest.TestCase):
         self.write("docker/Dockerfile", "FROM y\n")
         head = self.commit("both")
         self.assertTrue(gate.scope("pull_request", self.base, head, self.root))
+
+    def test_a_main_source_moved_under_test_sources_or_documents_is_in_scope(self):
+        # AUD-DEP-08: a rename lists only its new path unless renames are disabled; the old path leaves the image.
+        self.write("minos-engine/src/main/java/com/minos/store/Cache.java", "class Cache {}\n")
+        self.write("minos-engine/src/main/java/com/minos/store/Other.java", "class Other {}\n")
+        base = self.commit("sources")
+        self.move("minos-engine/src/main/java/com/minos/store/Cache.java",
+                  "minos-engine/src/test/java/com/minos/store/Cache.java")
+        to_tests = self.commit("to tests")
+        self.assertTrue(gate.scope("pull_request", base, to_tests, self.root))
+        self.move("minos-engine/src/main/java/com/minos/store/Other.java", "docs/Other.java")
+        to_docs = self.commit("to docs")
+        self.assertTrue(gate.scope("pull_request", to_tests, to_docs, self.root))
+
+    def test_a_document_renamed_within_the_excluded_list_stays_out_of_scope(self):
+        self.move("docs/a.md", "openspec/a.md")
+        head = self.commit("move doc")
+        self.assertFalse(gate.scope("pull_request", self.base, head, self.root))
 
     def test_an_unknown_directory_is_in_scope(self):
         self.write("brand-new/x.txt", "x\n")
