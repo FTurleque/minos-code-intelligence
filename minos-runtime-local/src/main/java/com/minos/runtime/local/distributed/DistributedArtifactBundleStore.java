@@ -809,7 +809,7 @@ public final class DistributedArtifactBundleStore {
             this.manifestBytes = Objects.requireNonNull(manifestBytes, "manifestBytes").clone();
             this.artifact = Objects.requireNonNull(artifact, "artifact");
             this.artifactSize = artifactSize;
-            this.artifactSha256 = Objects.requireNonNull(artifactSha256, "artifactSha256");
+            this.artifactSha256 = Objects.requireNonNull(artifactSha256, "extracted artifact digest");
             this.bundleSha256 = Objects.requireNonNull(bundleSha256, "bundleSha256");
         }
 

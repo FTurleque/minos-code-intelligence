@@ -280,8 +280,7 @@ public final class IndexingRuntimePorts {
             if (mode == IndexingMode.INCREMENTAL && changedFiles.isEmpty()) {
                 throw new IllegalArgumentException("INCREMENTAL execution requires changed files");
             }
-            registeredProjectFingerprint = Objects.requireNonNull(
-                    registeredProjectFingerprint, "registeredProjectFingerprint");
+            Objects.requireNonNull(registeredProjectFingerprint, "registeredProjectFingerprint");
             if (registeredProjectFingerprint.isPresent()
                     && !LOWER_CASE_SHA256.matcher(registeredProjectFingerprint.orElseThrow()).matches()) {
                 throw new IllegalArgumentException(

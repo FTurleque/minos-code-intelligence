@@ -34,8 +34,9 @@ class IndexingExecutionRequestFingerprintTest {
     void aMalformedFingerprintIsRefusedWithoutAnAbsolutePath(@TempDir Path project) {
         for (String malformed : List.of("ABCDEF0123456789".repeat(4), "a".repeat(63), "a".repeat(65),
                 "g".repeat(64), "")) {
+            Optional<String> fingerprint = Optional.of(malformed);
             IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                    () -> request(project, Optional.of(malformed)), malformed);
+                    () -> request(project, fingerprint), malformed);
 
             assertEquals("registeredProjectFingerprint must be a lower-case hexadecimal SHA-256",
                     refusal.getMessage());
