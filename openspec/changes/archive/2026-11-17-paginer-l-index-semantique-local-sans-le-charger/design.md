@@ -207,6 +207,6 @@ Choix : `search` garde le chemin chargé quand l'index tient dans le cache (un p
 
 ## Questions ouvertes
 
-- D3 et D4 : décisions du propriétaire, recommandations ci-dessus.
-- Index d'offsets en mémoire pour le détail : seulement si la mesure « après » le désigne.
-- Seuil d'acceptation du gain, à fixer sur la mesure « avant ».
+- D3 retenue (voisins classés sans rétention quand le cache ne tient pas l'index) ; D4 reportée (vecteurs en `float[]`).
+- Index d'offsets en mémoire pour le détail : non retenu, la mesure « après » ne le désigne pas.
+- Seuil d'acceptation du gain : aucun seuil chiffré, les gains se lisent tels que mesurés.

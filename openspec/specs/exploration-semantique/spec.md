@@ -333,6 +333,159 @@ Quand la copie de la référence d'un document dans le presse-papiers est refus�
 - **WHEN** le test active « Copier la référence »
 - **THEN** le texte copié est l'identifiant du fichier suivi de ses lignes, et le bandeau reste inchangé
 
+### Requirement: En stockage local, une page de documents est lue sans charger l'index
+En stockage local, le système SHALL rendre une page de documents en parcourant le fichier d'index dans l'ordre des clés stables, en ne décodant que les documents de la page, sans décoder de vecteur et sans charger l'index entier. Un index à l'ancien format, dont l'ordre n'est pas garanti, SHALL rester lu par le chemin chargé.
+
+#### Scenario: Index plus lourd que le plafond du cache
+- **GIVEN** un store local dont le plafond de cache est inférieur au poids d'un index de 500 documents
+- **WHEN** les pages de 200 documents sont lues jusqu'à épuisement
+- **THEN** les 500 documents sont rendus une fois chacun, en ordre de clé stable, identiques à ceux de l'index chargé
+- **AND** le compteur de chargements complets du store n'a pas augmenté
+
+#### Scenario: Index remplacé entre deux pages
+- **GIVEN** une première page de 20 documents lue sur un index de 60 documents
+- **WHEN** l'index est remplacé par un index de 30 documents d'un autre snapshot, puis la page qui suit la 20e clé est demandée
+- **THEN** la page porte les métadonnées du nouvel index et ses 10 documents de clé supérieure
+- **AND** elle ne contient aucun document de l'ancien index
+
+#### Scenario: Fichier hors ordre
+- **GIVEN** un fichier d'index au format courant dont deux clés stables ne se suivent pas en ordre croissant
+- **WHEN** une page est lue
+- **THEN** la lecture est refusée par une erreur d'index invalide, sans chemin absolu
+
+### Requirement: En stockage local, le détail lit le seul document demandé
+En stockage local, le système SHALL rendre un document et son vecteur stocké en ne décodant que ce document, sans charger l'index entier. Une clé absente SHALL rendre les métadonnées de l'index sans document.
+
+#### Scenario: Document présent
+- **GIVEN** un index local de 500 documents plus lourd que le plafond du cache
+- **WHEN** le document d'une clé stable existante est lu
+- **THEN** le document et son vecteur sont égaux à ceux de l'index chargé
+- **AND** le compteur de chargements complets du store n'a pas augmenté
+
+#### Scenario: Clé absente
+- **GIVEN** le même index
+- **WHEN** une clé stable absente est lue
+- **THEN** la réponse porte les métadonnées de l'index et aucun document
+
+### Requirement: En stockage local, les voisins sont classés sans retenir l'index
+Quand l'index local ne peut pas être tenu par le cache, le système SHALL classer les voisins d'un vecteur par un parcours du fichier qui ne retient ni l'index ni les contenus des documents hors résultat. Le classement et les scores SHALL être ceux du classement sur l'index chargé.
+
+#### Scenario: Même classement que l'index chargé
+- **GIVEN** un index local de 500 documents, lu une fois par un store au cache large et une fois par un store au cache trop étroit
+- **WHEN** les 20 voisins du même vecteur sont demandés aux deux
+- **THEN** les deux réponses ont les mêmes documents, dans le même ordre, avec les mêmes scores
+- **AND** le store au cache étroit n'a retenu aucun index en cache
+
+#### Scenario: Dimensions différentes
+- **GIVEN** un index local à 8 dimensions
+- **WHEN** les voisins d'un vecteur à 4 dimensions sont demandés
+- **THEN** la demande est refusée par une erreur de dimensions
+- **AND** aucun résultat partiel n'est rendu
+
+### Requirement: Des lectures simultanées d'un index local que le cache tient ne le décodent qu'une fois
+Quand plusieurs requêtes demandent en même temps le chargement complet du même index local, absent du cache et que le cache peut tenir, le système SHALL le décoder une seule fois et servir les autres requêtes du résultat. Un échec du décodage SHALL être rendu à chaque requête en attente, sans entrée de cache.
+
+#### Scenario: Quatre lectures froides simultanées
+- **GIVEN** un index local absent du cache, plus léger que son plafond, et quatre fils qui demandent son chargement au même instant
+- **WHEN** les quatre chargements se terminent
+- **THEN** le store rapporte un seul décodage complet
+- **AND** les quatre fils reçoivent le même index
+
+#### Scenario: Décodage en échec
+- **GIVEN** un fichier d'index tronqué et deux fils qui le chargent au même instant
+- **WHEN** le décodage échoue
+- **THEN** les deux fils reçoivent une erreur d'index tronqué
+- **AND** le cache ne contient aucune entrée pour ce projet
+
+### Requirement: Une page PostgreSQL de l'index sémantique ne recompte pas les documents
+Sous PostgreSQL, le système SHALL rendre une page de documents, une page de vecteurs, un document stocké et les métadonnées d'un index sémantique sans compter les lignes de l'index dans la requête. Le nombre de documents rendu avec la réponse SHALL être celui de l'index lu, tenu à jour par chaque écriture de l'index dans la même transaction que cette écriture.
+
+#### Scenario: Plan d'une requête de page
+- **GIVEN** un index sémantique PostgreSQL de 3 000 documents
+- **WHEN** la requête d'une page de vecteurs, puis d'une page de documents, est préparée sur le serveur et son plan lu par `EXPLAIN EXECUTE`
+- **THEN** aucun des deux plans ne contient de nœud d'agrégat
+- **AND** chaque page rendue annonce 3 000 documents
+
+#### Scenario: Compte après une synchronisation différentielle
+- **GIVEN** un index de 120 documents
+- **WHEN** une synchronisation retire 20 documents, en ajoute 5, puis une page de documents est lue
+- **THEN** la page annonce 105 documents
+- **AND** ce nombre est égal au nombre de lignes de l'index
+
+#### Scenario: Index remplacé entre deux pages
+- **GIVEN** une première page de vecteurs lue sur un index de 120 documents
+- **WHEN** l'index est remplacé par un index de 80 documents, puis la page suivante est lue
+- **THEN** les métadonnées de la seconde page diffèrent de celles de la première par le snapshot et par le nombre de documents
+- **AND** aucune des deux pages ne porte le nombre de documents de l'autre index
+
+### Requirement: Une page suivante PostgreSQL est bornée par la clé stable dans l'index
+Sous PostgreSQL, le système SHALL lire une page qui suit une clé stable par une condition d'index sur cette clé, y compris quand le serveur exécute la requête en plan générique. Le système SHALL NOT parcourir les lignes qui précèdent la clé pour les écarter une à une.
+
+#### Scenario: Plan générique forcé
+- **GIVEN** un index de 3 000 documents et une session dont `plan_cache_mode` vaut `force_generic_plan`
+- **WHEN** la requête de page suivante est préparée par `PREPARE`, puis son plan lu par `EXPLAIN (ANALYZE) EXECUTE` avec la 2 000e clé stable
+- **THEN** le plan porte une condition d'index sur `stable_key`
+- **AND** il n'écarte par filtre aucune ligne dont la clé précède la borne
+
+#### Scenario: Borne absente sur une page suivante
+- **GIVEN** un store PostgreSQL ouvert
+- **WHEN** une page est demandée avec une clé de reprise vide
+- **THEN** la demande est refusée par une erreur d'argument
+- **AND** aucune requête n'est envoyée au serveur
+
+### Requirement: La migration du schéma PostgreSQL reprend le nombre de documents de chaque index sémantique
+La migration d'un schéma PostgreSQL antérieur SHALL inscrire, pour chaque index sémantique existant, son nombre réel de documents. Après migration, une lecture SHALL annoncer ce nombre sans resynchronisation de l'index ni recalcul de vecteur.
+
+#### Scenario: Migration d'un index existant
+- **GIVEN** une base au schéma précédent qui porte un index sémantique de 250 documents
+- **WHEN** le runtime migre le schéma puis lit la première page de documents
+- **THEN** la colonne du nombre de documents de cet index vaut 250 et la page annonce 250 documents
+- **AND** la page rend les mêmes clés stables qu'avant la migration
+
+#### Scenario: Migration rejouée
+- **GIVEN** une base déjà migrée dont un index sémantique porte 250 documents
+- **WHEN** la migration est relancée
+- **THEN** elle n'échoue pas et le nombre de documents inscrit reste 250
+
+### Requirement: La préparation ne relit pas l'index à chaque itération quand l'échantillon tient en mémoire
+Quand les vecteurs de l'échantillon tiennent dans le budget de mémoire de la préparation, le système SHALL lire l'index au plus deux fois (sélection, puis copie de l'échantillon) et SHALL calculer centrage, ajustement et projection sans autre lecture du store. La mémoire de l'échantillon SHALL être comptée sur ce budget.
+
+#### Scenario: Échantillon dans le budget
+- **GIVEN** un index de 2 000 documents, un plafond de 500 points et un budget qui contient 500 vecteurs
+- **WHEN** la préparation s'exécute sur un store qui compte ses parcours complets
+- **THEN** le store a été parcouru deux fois, quel que soit le nombre d'itérations
+- **AND** le rapport annonce la stratégie en mémoire et un pic de mémoire au plus égal au budget
+
+#### Scenario: Index remplacé pendant la copie
+- **GIVEN** une préparation dont la sélection est faite
+- **WHEN** l'index est remplacé avant la fin de la copie de l'échantillon
+- **THEN** la préparation est refusée avec le motif « index modifié pendant la préparation »
+- **AND** aucune projection n'est publiée et la projection précédente est intacte
+
+### Requirement: Un échantillon plus lourd que le budget garde le parcours en flux et l'annonce
+Quand les vecteurs de l'échantillon dépassent le budget de mémoire, le système SHALL préparer la projection par le parcours en flux, sans retenir l'échantillon, et SHALL annoncer cette stratégie dans le rapport avec l'option qui relève le budget. Le système SHALL NOT dépasser le budget pour éviter des lectures.
+
+#### Scenario: Repli annoncé
+- **GIVEN** un index de 2 000 documents, un plafond de 500 points et un budget qui ne contient pas 500 vecteurs mais suffit au parcours en flux
+- **WHEN** la préparation s'exécute
+- **THEN** la projection est publiée et le rapport annonce la stratégie en flux et nomme `--max-memory-mb`
+- **AND** le pic de mémoire rapporté est au plus égal au budget
+
+#### Scenario: Budget insuffisant même en flux
+- **GIVEN** un budget qui ne contient ni l'échantillon ni la sélection
+- **WHEN** la préparation s'exécute
+- **THEN** la commande échoue avec le refus de budget, un message actionnable et un code de sortie non nul
+- **AND** aucune projection n'est publiée
+
+### Requirement: Les deux stratégies de préparation rendent les mêmes coordonnées
+Pour un même index, une même sélection et une même graine, le système SHALL publier les mêmes points, coordonnées et parts de variance, que l'échantillon ait été itéré en mémoire ou relu en flux.
+
+#### Scenario: Égalité des projections
+- **GIVEN** un index inchangé de 2 000 documents et une graine
+- **WHEN** la préparation est lancée une fois avec un budget qui contient l'échantillon, une fois avec un budget qui force le flux
+- **THEN** les deux projections ont les mêmes clés stables, les mêmes coordonnées et les mêmes parts de variance
+- **AND** seuls la stratégie, le nombre de passes et le pic de mémoire diffèrent dans les rapports
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [exploration-semantique](../../../docs/architecture/diagrams/capacites/exploration-semantique.md)
