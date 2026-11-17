@@ -23,10 +23,10 @@
 
 ## 5. Clôture
 
-- [ ] 5.1 AUD-PERF-09 — Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes (mesure 3.1 si non faite) ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 5.2 AUD-PERF-09 — Contrôler les dossiers de capacité et leurs liens ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
-- [ ] 5.3 AUD-PERF-09 — Valider les spécifications et les gates ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`.
-- [ ] 5.4 AUD-PERF-09 — Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP si le constat y figure, `docs/user/docker-runtime.md`, ADR et ses index, suivi de l'audit du 2026-11-15) ; vérifier que chacun est fait ou nommé comme reste.
+- [x] 5.1 AUD-PERF-09 — Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes (mesure 3.1 si non faite) ; vérifier qu'aucune ligne n'affirme une couverture sans preuve. Preuves manquantes nommées : mesure 3.1 ; ligne de docker/.env.example.
+- [x] 5.2 AUD-PERF-09 — Contrôler les dossiers de capacité et leurs liens ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 5.3 AUD-PERF-09 — Valider les spécifications et les gates ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`. Fait le 2026-11-17 sous Windows : openspec 53/53, run_gates.py --fast 29/29 ; tests ciblés minos-domain, minos-storage (PostgreSQL requis, aucun saut), minos-mcp, minos-cli, minos-app verts ; suite complète de minos-storage verte.
+- [x] 5.4 AUD-PERF-09 — Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP si le constat y figure, `docs/user/docker-runtime.md`, ADR et ses index, suivi de l'audit du 2026-11-15) ; vérifier que chacun est fait ou nommé comme reste. Faits : docker-runtime.md, DATA-0085, dossiers de capacité, SUIVI.md. Restes : docker/.env.example, mesure 3.1, STATUS et ROADMAP à l'archivage.
 
 ## Workflow follow-up
 
