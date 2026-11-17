@@ -6,6 +6,7 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.InternalFailureTrace;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
+import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import com.minos.output.json.DeterministicJson;
 import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.diagnostics.UsageException;
@@ -222,6 +223,12 @@ public final class MinosMcpTools implements AutoCloseable {
                 return toolError("error: " + PublicErrorMessages.sanitize(
                         memoryRefusal.getMessage(), SnapshotMemoryExhaustedException.MESSAGE_PREFIX));
             }
+            SnapshotScratchSpaceExhaustedException scratchRefusal = scratchRefusal(exception);
+            if (scratchRefusal != null) {
+                // AUD-PERF-09: same public form for a scratch area too small for the payload.
+                return toolError("error: " + PublicErrorMessages.sanitize(
+                        scratchRefusal.getMessage(), SnapshotScratchSpaceExhaustedException.MESSAGE_PREFIX));
+            }
             return toolError(internalFailure(toolName, exception));
         }
     }
@@ -278,9 +285,18 @@ public final class MinosMcpTools implements AutoCloseable {
 
     /** The memory refusal of a snapshot view carried by {@code failure} or one of its causes, or {@code null}. */
     private static SnapshotMemoryExhaustedException memoryRefusal(Throwable failure) {
+        return causeOfType(failure, SnapshotMemoryExhaustedException.class);
+    }
+
+    /** The scratch-space refusal of a snapshot view carried by {@code failure} or one of its causes, or {@code null}. */
+    private static SnapshotScratchSpaceExhaustedException scratchRefusal(Throwable failure) {
+        return causeOfType(failure, SnapshotScratchSpaceExhaustedException.class);
+    }
+
+    private static <T extends Throwable> T causeOfType(Throwable failure, Class<T> type) {
         Throwable current = failure;
         for (int depth = 0; depth <= MAX_CAUSE_DEPTH && current != null; depth++) {
-            if (current instanceof SnapshotMemoryExhaustedException refusal) return refusal;
+            if (type.isInstance(current)) return type.cast(current);
             if (current.getCause() == current) return null;
             current = current.getCause();
         }

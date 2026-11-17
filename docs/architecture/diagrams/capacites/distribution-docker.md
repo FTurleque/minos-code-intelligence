@@ -160,6 +160,25 @@ flowchart LR
 Les deux services sont publiés sur la boucle locale de l'hôte ; la rotation réelle d'un conteneur n'est pas observée
 par ce dépôt (aucun Docker lancé pour ce relevé).
 
+### Comment la zone de travail PostgreSQL du plan de requête est-elle dimensionnée ?
+
+Type : flowchart · Portée : existant vérifié par `M29DockerQueryImageContractTest` · Exigences : changement
+`dimensionner-la-zone-de-travail-postgresql-du-plan-de-requete` › « La zone de travail PostgreSQL du plan de requête est
+dimensionnée pour le nombre déclaré de JVM »
+
+```mermaid
+flowchart LR
+    B["budget par défaut d'une JVM (3 Gio × 35 % × 50 %)"] --> C["charge utile admissible : réservation de 310 % sous le budget"]
+    D["docs/user/docker-runtime.md : 2 JVM simultanées"] --> M["taille minimale = JVM × charge utile admissible"]
+    C --> M
+    M --> T["tmpfs postgresql-snapshot-scratch de minos-mcp et minos-explorer : MINOS_MCP_SCRATCH_SIZE, 384m par défaut"]
+    T --> L{"JVM × tas + zone ≤ limite mémoire par défaut ?"}
+```
+
+Le réglage est reporté par la régénération du `.env` (`Get-PreservedCeilingOverrides`, deux scripts jumeaux) ; une zone
+trop petite fait échouer la lecture par un refus public sans chemin. Calculé, non mesuré : aucun conteneur lancé pour ce
+relevé.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

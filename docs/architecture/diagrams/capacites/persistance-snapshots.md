@@ -175,6 +175,33 @@ sequenceDiagram
 La charge utile demandée est toujours celle dont la taille a été réservée ; une ligne absente n'est jamais lue comme une
 absence de snapshot (`minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java`).
 
+### Que fait PostgreSQL quand la zone de travail ne contient pas la charge utile ?
+
+Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « Une zone de travail PostgreSQL
+insuffisante donne un refus explicite »
+
+```mermaid
+sequenceDiagram
+    participant S as PostgresCodeKnowledgeSnapshotStore
+    participant Z as Zone de travail
+    participant P as PostgreSQL
+    S->>Z: espace utilisable ?
+    alt espace < taille de la charge utile
+        S-->>S: SnapshotScratchSpaceExhaustedException (réservation libérée, rien demandé)
+    else espace suffisant
+        S->>P: charge utile de la version réservée
+        P-->>S: flux copié dans un fichier de la zone
+        alt écriture en échec et espace restant < reste à copier
+            S-->>S: fichier partiel supprimé, même refus explicite
+        else autre échec
+            S-->>S: erreur d'origine
+        end
+    end
+```
+
+Le message du refus donne la taille de la charge utile et l'espace disponible, sans chemin ; la CLI et le serveur MCP le
+rendent tel quel.
+
 ### Quand l'import applique-t-il la rétention, et que rend-il si elle ne tourne pas ?
 
 Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « Un import manuel applique la même

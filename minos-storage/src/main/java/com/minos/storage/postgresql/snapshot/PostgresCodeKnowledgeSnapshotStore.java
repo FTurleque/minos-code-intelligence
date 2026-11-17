@@ -4,6 +4,7 @@ import com.minos.storage.postgresql.support.PostgresConnectionFactory;
 import com.minos.storage.postgresql.support.PostgresProjectMutationLock;
 import com.minos.storage.postgresql.support.PostgresSnapshotPayloadCodec;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
@@ -69,6 +70,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private final QueryViewMemoryBudget memoryBudget;
     private final long maxQueryCacheWeightBytes;
     private final Consumer<UUID> beforePayloadFetch;
+    private final ScratchSpace scratchSpace;
     private final QueryViewMemoryBudget.Tenant budgetTenant = new CacheTenant();
     private final Object cacheLock = new Object();
     private final BudgetedViewCache<CacheKey, SnapshotReadView> queryCache;
@@ -111,6 +113,16 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated,
             SnapshotLimits limits, QueryViewMemoryBudget memoryBudget, Consumer<UUID> beforePayloadFetch)
             throws IOException {
+        this(connections, minosHome, afterScratchFileCreated, limits, memoryBudget, beforePayloadFetch,
+                ScratchSpace.FILE_STORE);
+    }
+
+    /** Test seam: {@code scratchSpace} replaces the usable space of the file store that holds the scratch area. */
+    PostgresCodeKnowledgeSnapshotStore(
+            PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated,
+            SnapshotLimits limits, QueryViewMemoryBudget memoryBudget, Consumer<UUID> beforePayloadFetch,
+            ScratchSpace scratchSpace) throws IOException {
+        this.scratchSpace = Objects.requireNonNull(scratchSpace, "scratchSpace");
         this.limits = Objects.requireNonNull(limits, "limits");
         this.memoryBudget = Objects.requireNonNull(memoryBudget, "memoryBudget");
         this.beforePayloadFetch = Objects.requireNonNull(beforePayloadFetch, "beforePayloadFetch");
@@ -198,6 +210,8 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                         estimateWeight(metadata, metadata.payloadBytes(), metadata.headerFormatVersion()),
                         limits.fetchTransientBytes(metadata.payloadBytes()));
                 try (QueryViewMemoryBudget.Reservation reservation = memoryBudget.reserve(reservationBytes)) {
+                    // AUD-PERF-09: a scratch area that cannot hold the payload refuses it before it is asked for.
+                    requireScratchSpace(metadata.payloadBytes());
                     beforePayloadFetch.accept(projectId);
                     // AUD-PERF-05: the payload asked for is the version whose size was reserved; when it is no longer
                     // active, no row comes back and the resolution starts again from the metadata.
@@ -440,7 +454,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                     statement.setString(3, metadata.sha256());
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) return Optional.empty();
-                        return Optional.of(readRow(result));
+                        return Optional.of(readRow(result, metadata.payloadBytes()));
                     }
                 }
             });
@@ -449,19 +463,56 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
-    /** Copies the payload of the current row to a private scratch file, hashing it while it is copied. */
-    private Row readRow(ResultSet result) throws SQLException, IOException {
+    private void requireScratchSpace(long payloadBytes) throws IOException {
+        long available = scratchSpace.usableBytes(scratchRoot);
+        if (available < payloadBytes) throw new SnapshotScratchSpaceExhaustedException(payloadBytes, available);
+    }
+
+    /**
+     * Copies the payload of the current row to a private scratch file, hashing it while it is copied. A write that
+     * fails while the scratch area no longer holds what remains to copy is a scratch-space refusal; any other failure
+     * keeps its own error.
+     */
+    private Row readRow(ResultSet result, long payloadBytes) throws SQLException, IOException {
         Path payload = createScratchFile("snapshot-read-");
         // Hashed while it is copied: the payload is not read a second time to check it.
         MessageDigest digest = Sha256.newDigest();
         try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
              OutputStream output = PrivateLocalStorage.openPrivateOutputStream(payload)) {
             copyBounded(input, output, limits.maxPersistedBytes());
+        } catch (IOException exception) {
+            long copied = copiedBytes(payload);
+            Files.deleteIfExists(payload);
+            throw scratchRefusalOr(exception, payloadBytes, copied);
         } catch (Exception exception) {
             Files.deleteIfExists(payload);
             throw exception;
         }
         return new Row(result.getString(1), payload, result.getString(3), HexFormat.of().formatHex(digest.digest()));
+    }
+
+    /** Bytes already written to a partial scratch file; 0 when its size cannot be read. */
+    private static long copiedBytes(Path payload) {
+        try {
+            return Files.isRegularFile(payload, LinkOption.NOFOLLOW_LINKS) ? Files.size(payload) : 0L;
+        } catch (IOException unreadable) {
+            return 0L;
+        }
+    }
+
+    /** {@code failure} as a scratch-space refusal when the scratch area no longer holds the rest of the payload. */
+    private IOException scratchRefusalOr(IOException failure, long payloadBytes, long copiedBytes) {
+        long available;
+        try {
+            available = scratchSpace.usableBytes(scratchRoot);
+        } catch (IOException unreadable) {
+            failure.addSuppressed(unreadable);
+            return failure;
+        }
+        if (available >= payloadBytes - copiedBytes) return failure;
+        SnapshotScratchSpaceExhaustedException refusal = new SnapshotScratchSpaceExhaustedException(payloadBytes, available);
+        refusal.initCause(failure);
+        return refusal;
     }
 
     private Path createScratchFile(String prefix) throws IOException {
@@ -570,6 +621,14 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
     private record CacheKey(UUID projectId, String snapshotId, String sha256) { }
+
+    /** Usable bytes of the file store that holds a directory. */
+    @FunctionalInterface
+    interface ScratchSpace {
+        ScratchSpace FILE_STORE = directory -> Files.getFileStore(directory).getUsableSpace();
+
+        long usableBytes(Path directory) throws IOException;
+    }
     /** {@code weightBytes} is the weight of the cached views, {@code heldWeightBytes} that of the view held alone. */
     record QueryCacheStats(long hits, long misses, long evictions, int entries,
                            long weightBytes, long maximumWeightBytes, long heldWeightBytes) { }

@@ -280,13 +280,71 @@ class M29DockerQueryImageContractTest {
                 "the thresholds must state that they hold for a view with no symbol and no occurrence");
     }
 
+    /**
+     * AUD-PERF-09 — every JVM of the query role copies a whole PostgreSQL payload into the scratch tmpfs: its default
+     * size holds the largest payload the default view budget admits, for the number of simultaneous JVM the
+     * documentation declares, and the heaps of those JVM plus the tmpfs stay under the default memory limit.
+     */
+    @Test
+    void theScratchAreaOfTheQueryRoleHoldsOnePayloadPerDeclaredJvm() throws Exception {
+        String name = "docker/compose-mcp.connected.yaml";
+        Matcher declared = Pattern.compile("dimensionnée pour (\\d+) JVM simultanées")
+                .matcher(text("docs/user/docker-runtime.md"));
+        assertTrue(declared.find(), "docs/user/docker-runtime.md must announce the number of simultaneous JVM the"
+                + " scratch area is sized for (\"dimensionnée pour <n> JVM simultanées\")");
+        long jvms = Long.parseLong(declared.group(1));
+        com.minos.storage.codec.QueryViewMemoryBudget budget = defaultQueryBudget(name);
+        long minimum = jvms * largestAdmissiblePostgresPayload(budget.budgetBytes());
+        String compose = text(name);
+        Map<String, String> services = serviceBlocks(compose);
+        long heap = budget.maximumHeapBytes();
+        long memoryLimit = defaultQueryMemoryLimit(name);
+
+        for (String service : new String[]{"minos-mcp", "minos-explorer"}) {
+            Matcher size = Pattern.compile("postgresql-snapshot-scratch:[^\\n]*size=\\$\\{MINOS_MCP_SCRATCH_SIZE:-(\\d+)([kmg])}")
+                    .matcher(services.get(service));
+            assertTrue(size.find(), name + ": " + service
+                    + " must size its PostgreSQL scratch tmpfs with ${MINOS_MCP_SCRATCH_SIZE:-<n><unit>}");
+            long bytes = Long.parseLong(size.group(1)) * switch (size.group(2)) {
+                case "k" -> 1024L;
+                case "m" -> 1024L * 1024L;
+                default -> 1024L * 1024L * 1024L;
+            };
+            assertTrue(bytes >= minimum, name + ": " + service + " declares a scratch tmpfs of " + bytes
+                    + " bytes, below the computed minimum of " + minimum + " bytes (" + jvms + " JVM)");
+            assertTrue(jvms * heap + bytes <= memoryLimit, name + ": " + service + ": " + jvms + " heaps of " + heap
+                    + " bytes and a scratch tmpfs of " + bytes + " bytes exceed the default memory limit of "
+                    + memoryLimit + " bytes");
+        }
+    }
+
+    /** Largest PostgreSQL payload whose reservation (view weight or fetch transient) fits {@code budgetBytes}. */
+    private static long largestAdmissiblePostgresPayload(long budgetBytes) {
+        com.minos.storage.codec.SnapshotLimits limits = com.minos.storage.codec.SnapshotLimits.production();
+        long low = 0L;
+        long high = limits.maxPersistedBytes();
+        while (low < high) {
+            long middle = low + (high - low + 1L) / 2L;
+            long reservation = Math.max(limits.viewWeightBytes(3, middle, 0L, 0L, 0L),
+                    limits.fetchTransientBytes(middle));
+            if (reservation <= budgetBytes) low = middle;
+            else high = middle - 1L;
+        }
+        return low;
+    }
+
+    /** The default memory limit of the query role in {@code compose}, in bytes. */
+    private static long defaultQueryMemoryLimit(String name) throws IOException {
+        Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
+                .matcher(text(name));
+        assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
+        return Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L;
+    }
+
     /** The view budget of one MCP JVM under the default memory limit and heap share of {@code compose}. */
     private static com.minos.storage.codec.QueryViewMemoryBudget defaultQueryBudget(String name) throws IOException {
         String compose = text(name);
-        Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
-                .matcher(compose);
-        assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
-        long memoryBytes = Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L;
+        long memoryBytes = defaultQueryMemoryLimit(name);
         long heap = memoryBytes * maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp")) / 100L;
         return com.minos.storage.codec.QueryViewMemoryBudget.of(heap,
                 com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
