@@ -103,6 +103,10 @@ snapshot et découvre le dépôt une seule fois par requête. `ArchitectureDepen
 références par occurrence ; `ArchitectureResultRenderer` la rend comme dernière clé JSON, comme ligne de texte ou
 comme commentaire Mermaid ou DOT, en interdisant qu'un nom issu de la vue ouvre une directive Mermaid (`%%{`).
 
+Le cache des graphes et celui des empreintes du provider Java gardent au plus le plus petit de leur plafond configuré
+et de leur part du tas (`HeapShare` : 2 % et 1 %) ; un graphe plus lourd n'est pas gardé et la requête rend le même
+graphe (ADR DATA-0085, point 19).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

@@ -297,6 +297,26 @@ Ordre des verrous : le verrou de projet d'un store, puis le verrou du budget, pu
 
 Preuves : `QueryViewMemoryBudgetTest` (réglage, refus, attente, éviction, conversion), `BudgetedViewCacheTest`, `FileSymbolSnapshotStoreViewBudgetTest` et `PostgresCodeKnowledgeSnapshotStoreViewBudgetTest` (vue retenue seule et comptée, libérée par l'éviction ou la publication ; côté PostgreSQL, version remplacée entre les métadonnées et la charge utile), et `QueryViewAdmissionChildJvmTest`, qui lance une JVM fille `-Xmx256m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError` sur deux snapshots de 148 Mio chargés au même instant : sans admission elle meurt d'une `OutOfMemoryError` (code 3), avec un budget de 80 % du tas elle se termine avec le code 0. `LargeSnapshotMeasurement` rapporte le plafond effectif (`cache.maximum.bytes`) et le pic de tas d'une vue admise.
 
+## Parts du tas des caches applicatifs
+
+Hors du budget des vues, chaque cache applicatif garde au plus le plus petit de son plafond configuré et de sa part du tas maximal (`HeapShare`, `minos-engine`, `com.minos.store.cache`). Les parts ont été fixées sur une mesure du tas retenu (`ApplicationCacheMeasurement`, sources de test de `minos-bootstrap`, lancé à la demande), qui montre que chaque estimation majore le retenu.
+
+| Terme | Part du tas | Plafond configuré | Sous 1 076 Mio de tas |
+|---|---|---|---|
+| Budget des vues (`QueryViewMemoryBudget`) | 50 % | — | 538 Mio |
+| Marge de décodage d'une vue | 34 % | — | 366 Mio |
+| Corpus hybride (`HybridSearchService`) | 6 % | 256 Mio | 64,6 Mio |
+| Graphe de programme (`ProgramGraphService`) | 2 % | 256 Mio | 21,5 Mio |
+| Empreintes Java (`FingerprintConstrainedJavaProgramGraphProvider`) | 1 % | 128 Mio | 10,8 Mio |
+| Projection décodée (`FileSemanticProjectionStore`) | 1 % | 256 Mio | 10,8 Mio |
+| Vecteurs de requête (`SemanticSearchService`) | 1 % | 8 Mio | 8 Mio |
+| Index vectoriel local (`FileSemanticVectorStore`) | 2 % | 256 Mio | 21,5 Mio |
+| Travail des requêtes | 3 % | — | 32,3 Mio |
+
+Une entrée plus lourde que son plafond n'est pas gardée ; la requête rend le même résultat. Une projection dont le poids décodé estimé (56 octets par point plus deux fois la taille du fichier) dépasse sa part est refusée avant décodage (`SemanticProjectionStore.ProjectionTooLargeException`). La table de symboles de l'explorateur est rangée dans une `WeakHashMap` indexée par la vue du snapshot : elle part avec la vue. `M29DockerQueryImageContractTest` vérifie que la somme tient sous le tas par défaut, en stockage local et PostgreSQL ; `WeightedCacheInventoryTest` refuse un cache pondéré de production qui ne passe pas par `HeapShare` sans figurer dans sa liste fermée.
+
+Limites : la construction d'un cache alloue au-delà de sa part (corpus : 2,4 fois son poids retenu), et une recherche sur un index local plus lourd que son cache le décode en entier à chaque requête (451 à 479 Mio mesurés sous 1 076 Mio de tas).
+
 ## Cohérence concurrente
 
 `IndexingLifecycleService` sérialise les runs par projet dans une instance : un projet déjà `INDEXING` ou `REFRESHING` ne peut pas démarrer un second run concurrent.

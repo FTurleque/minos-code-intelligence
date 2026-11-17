@@ -116,7 +116,13 @@ inconnu, index non `READY`, budget dépassé, index modifié pendant la prépara
 | `ABSENTE` | aucune projection n'est préparée | `minos semantic projection prepare <projet>` |
 | `PRETE` | la projection décrit l'index courant | — |
 | `PERIMEE` | l'index a changé depuis la préparation ; la page n'affiche la carte que sur demande, marquée « périmée » | relancer `prepare` |
-| `ECHOUEE` | le fichier de projection est illisible (tronqué, altéré, autre format) | relancer `prepare` |
+| `ECHOUEE` | le fichier de projection est illisible (tronqué, altéré, autre format), raison `PROJECTION_UNREADABLE` | relancer `prepare` |
+| `ECHOUEE`, raison `PROJECTION_TOO_LARGE` | la projection décodée dépasserait sa part du tas (1 %) : elle est refusée avant d'être lue | relancer `prepare` avec moins de points (`--max-points`), ou relever le tas |
+
+Une projection lue garde ses points en mémoire, environ 116 octets par point. Le processus qui la sert lui donne
+1 % de son tas : sous le tas par défaut du plan de requête Docker (1 076 Mio), une projection d'environ 65 000
+points (clés de 40 caractères) au plus est lue ; au-delà, l'état est `ECHOUEE` avec la raison
+`PROJECTION_TOO_LARGE`.
 
 Ce que dit la carte :
 

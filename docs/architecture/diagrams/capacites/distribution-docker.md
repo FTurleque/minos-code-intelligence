@@ -179,6 +179,10 @@ Le réglage est reporté par la régénération du `.env` (`Get-PreservedCeiling
 trop petite fait échouer la lecture par un refus public sans chemin. Calculé, non mesuré : aucun conteneur lancé pour ce
 relevé.
 
+Sous le tas par défaut du plan de requête, le budget des vues (50 %), la marge de décodage d'une vue (34 %) et les
+parts des caches applicatifs (13 %) tiennent sous le tas, en stockage local et PostgreSQL :
+`M29DockerQueryImageContractTest` le vérifie, `WeightedCacheInventoryTest` recense les caches pondérés.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

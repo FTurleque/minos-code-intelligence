@@ -41,29 +41,35 @@ class WeightedCacheInventoryTest {
     void everyWeightedCacheOfProductionIsBoundedByAHeapShareOrListedWithItsReason() throws IOException {
         Path root = repositoryRoot();
         List<String> unbounded = new ArrayList<>();
-        try (Stream<Path> modules = Files.list(root)) {
-            for (Path module : modules.filter(path -> path.getFileName().toString().startsWith("minos-")).toList()) {
-                Path sources = module.resolve("src/main/java");
-                if (!Files.isDirectory(sources)) continue;
-                try (Stream<Path> files = Files.walk(sources)) {
-                    for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                        String relative = root.relativize(file).toString().replace('\\', '/');
-                        String text = Files.readString(file);
-                        if (!text.contains(WEIGHTED_CACHE)) continue;
-                        if (text.contains(HEAP_SHARE) || VIEW_BUDGET_TENANTS.containsKey(relative)
-                                || COUNT_BOUNDED.containsKey(relative)) {
-                            continue;
-                        }
-                        unbounded.add(relative);
-                    }
-                }
-            }
+        for (Path file : productionSources(root)) {
+            String relative = root.relativize(file).toString().replace('\\', '/');
+            if (isUnboundedWeightedCache(relative, Files.readString(file))) unbounded.add(relative);
         }
         for (String relative : OTHER_WEIGHTED_CACHES) {
             if (!Files.readString(root.resolve(relative)).contains(HEAP_SHARE)) unbounded.add(relative);
         }
         assertTrue(unbounded.isEmpty(), "weighted caches built without a heap share (HeapShare) and not listed with"
                 + " a reason: " + unbounded);
+    }
+
+    private static boolean isUnboundedWeightedCache(String relative, String text) {
+        return text.contains(WEIGHTED_CACHE) && !text.contains(HEAP_SHARE)
+                && !VIEW_BUDGET_TENANTS.containsKey(relative) && !COUNT_BOUNDED.containsKey(relative);
+    }
+
+    /** The Java sources of {@code src/main/java} of every {@code minos-*} module. */
+    private static List<Path> productionSources(Path root) throws IOException {
+        List<Path> sources = new ArrayList<>();
+        try (Stream<Path> modules = Files.list(root)) {
+            for (Path module : modules.filter(path -> path.getFileName().toString().startsWith("minos-")).toList()) {
+                Path main = module.resolve("src/main/java");
+                if (!Files.isDirectory(main)) continue;
+                try (Stream<Path> files = Files.walk(main)) {
+                    files.filter(path -> path.toString().endsWith(".java")).forEach(sources::add);
+                }
+            }
+        }
+        return sources;
     }
 
     private static Path repositoryRoot() throws IOException {

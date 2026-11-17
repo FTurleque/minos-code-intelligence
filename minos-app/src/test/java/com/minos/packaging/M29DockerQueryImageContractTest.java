@@ -380,15 +380,9 @@ class M29DockerQueryImageContractTest {
                         + com.minos.store.cache.HeapShare.REQUEST_WORK_PERCENT <= 100,
                 "view budget, decoding margin, cache shares and request work exceed 100 percent of the heap");
         for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
-            String compose = text(name);
-            Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
-                    .matcher(compose);
-            assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
-            long heap = Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L
-                    * maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp")) / 100L;
-            long budget = com.minos.storage.codec.QueryViewMemoryBudget.of(heap,
-                    com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
-                    com.minos.storage.codec.SnapshotLimits.VIEW_ADMISSION_WAIT).budgetBytes();
+            com.minos.storage.codec.QueryViewMemoryBudget views = defaultQueryBudget(name);
+            long heap = views.maximumHeapBytes();
+            long budget = views.budgetBytes();
             long margin = heap / 100L * com.minos.store.cache.HeapShare.VIEW_DECODING_MARGIN_PERCENT;
             Map<String, Long> caches = new LinkedHashMap<>();
             caches.put("hybrid corpus", com.minos.store.cache.HeapShare.HYBRID_CORPUS.ceiling(
