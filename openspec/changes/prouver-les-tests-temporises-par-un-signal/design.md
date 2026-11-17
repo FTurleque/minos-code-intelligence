@@ -182,18 +182,18 @@ plugin par le job `IntelliJ plugin (gate)` (Linux) et son job Windows.
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| confinement-code-non-fiable › L'absence de dépassement de quota est prouvée par des échantillons observés | Provider conforme | D1 | 1.1, 1.2 | `ProviderWriteQuotaSupervisorTest` — à réécrire |
-| idem | Superviseur qui n'échantillonne pas | D1 | 1.1 | `assertThrows` sur l'aide — à écrire |
-| idem | Racines imbriquées comptées une fois | D1 | 1.2 | à réécrire |
-| confinement-code-non-fiable › La cadence du suivi de propriété est jugée sur le temps réellement mesuré | Fenêtre réelle en régime établi | D2 | 2.1, 2.2 | `ProcessOwnershipTrackerCadenceTest` — à réécrire |
-| idem | Fil de test endormi plus longtemps que prévu | D2 | 2.1 | verdict à valeurs injectées — à écrire |
-| idem | Cadence trop élevée | D2 | 2.1 | `assertThrows` sur le verdict — à écrire |
-| idem | Suivi arrêté | D2 | 2.1 | `assertThrows` sur le verdict — à écrire |
-| client-intellij › La cadence du superviseur du plugin est jugée sur le temps réellement mesuré | Fenêtre réelle dans le plugin | D2 | 3.1 | `MinosProcessSupervisorCadenceTest` — à réécrire |
-| idem | Cadence trop élevée dans le plugin | D2 | 3.1 | à écrire |
-| idem | Superviseur qui n'énumère plus | D2 | 3.1 | à écrire |
-| persistance-snapshots › La mesure du tas retenu par une vue ne dépend d'aucun délai fixe | Tas stabilisé | D3 | 4.1 | `QueryViewWeightTest` — à réécrire |
-| idem | Tas jamais stable | D3 | 4.1 | `assertThrows` sur l'aide — à écrire |
+| confinement-code-non-fiable › L'absence de dépassement de quota est prouvée par des échantillons observés | Provider conforme | D1 | 1.1, 1.2 | `ProviderWriteQuotaSupervisorTest#aProviderStayingInsideItsBudgetIsNeverKilled` (rouge sous « fil non démarré », 50/50 vert) |
+| idem | Superviseur qui n'échantillonne pas | D1 | 1.1 | `ProviderWriteQuotaSupervisorTest#aSupervisorThatNeverSamplesFailsTheSampleWait` |
+| idem | Racines imbriquées comptées une fois | D1 | 1.2 | `ProviderWriteQuotaSupervisorTest#nestedRootsAreAccountedOnceAndSubRootsNeverDoubleCount` (rouge sous mutation, 50/50 vert) |
+| confinement-code-non-fiable › La cadence du suivi de propriété est jugée sur le temps réellement mesuré | Fenêtre réelle en régime établi | D2 | 2.1, 2.2 | `ProcessOwnershipTrackerCadenceTest#aLiveProcessIsEnumeratedRarelyOnceTheInitialPhaseIsOver` (rouge à 10 ms : 128 en 2 006 ms ; 50/50 vert) |
+| idem | Fil de test endormi plus longtemps que prévu | D2 | 2.1 | `ProcessOwnershipTrackerCadenceTest#aWindowThatLastedLongerThanPlannedIsJudgedOnItsMeasuredDuration` |
+| idem | Cadence trop élevée | D2 | 2.1 | `ProcessOwnershipTrackerCadenceTest#aCadenceAboveTheBoundIsRefusedWithItsMeasures` |
+| idem | Suivi arrêté | D2 | 2.1 | `ProcessOwnershipTrackerCadenceTest#aTrackerThatStoppedEnumeratingIsRefused` |
+| client-intellij › La cadence du superviseur du plugin est jugée sur le temps réellement mesuré | Fenêtre réelle dans le plugin | D2 | 3.1 | `MinosProcessSupervisorCadenceTest#aLiveProcessIsEnumeratedRarelyOnceTheInitialPhaseIsOver` (vert en local, Gradle sans `instrumentCode` ; mutation non prouvée sur le poste) |
+| idem | Cadence trop élevée dans le plugin | D2 | 3.1 | `MinosProcessSupervisorCadenceTest#aCadenceAboveTheBoundIsRefusedWithItsMeasures` |
+| idem | Superviseur qui n'énumère plus | D2 | 3.1 | `MinosProcessSupervisorCadenceTest#aSupervisorThatStoppedEnumeratingIsRefused` |
+| persistance-snapshots › La mesure du tas retenu par une vue ne dépend d'aucun délai fixe | Tas stabilisé | D3 | 4.1 | `QueryViewWeightTest#estimatedWeightIsNotBelowTheHeapRetainedByTheView`, `QueryViewWeightTest#aSettledHeapIsTheCommonValueOfTwoConsecutiveReadings` |
+| idem | Tas jamais stable | D3 | 4.1 | `QueryViewWeightTest#aHeapThatNeverSettlesFailsTheMeasure` |
 
 ## Questions ouvertes
 
