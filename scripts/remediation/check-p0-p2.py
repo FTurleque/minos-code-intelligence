@@ -336,7 +336,7 @@ def main() -> int:
         require("ScipJavaProcessPlanFactory.java", scip_java,
                 "FileTreeOperations.deleteRecursively(workspace)")
         require("check-jacoco.py", jacoco_gate,
-                '"com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15}')
+                '"com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.69, "branch": 0.56}')
         require("check-jacoco.py", jacoco_gate,
                 '"com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35}')
 

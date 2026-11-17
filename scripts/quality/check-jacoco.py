@@ -188,9 +188,13 @@ SCOPES = {
             "com/minos/adapter/scip/runtime/install/ManagedToolInstallation": {"line": 0.90, "branch": 0.57},
             "com/minos/adapter/scip/runtime/install/BoundedZipExtraction": {"line": 0.90, "branch": 0.80},
             "com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallation": {"line": 0.85, "branch": 0.75},
-            "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
+            # AUD-TST-03: module report of minos-provider-scip on pr-ci.yml run 44075151765 (main fc1002e0, 2026-11-17).
+            # ManagedPolyglotScipRuntimeManager: Linux 237/300 lines, 100/149 branches; Windows 234/300, 99/149.
+            # ScipJavaProcessPlanFactory: Linux 119/152, 39/54; Windows 113/152, 33/54. Floor = lower measure minus about
+            # 5 points; the branch floor keeps the trust-boundary minimum of TRUST_BOUNDARY_MINIMUMS.
+            "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager": {"line": 0.73, "branch": 0.61},
             "com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35},
-            "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15},
+            "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.69, "branch": 0.56},
         },
     },
     "m25-remote-distributed-indexing": {
@@ -228,8 +232,13 @@ SCOPES = {
         "line": 0.68,
         "branch": 0.48,
         "prefixMinimums": {
-            "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.35, "branch": 0.18},
-            "com/minos/runtime/local/process/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
+            # AUD-TST-03: module report of minos-runtime-local on pr-ci.yml run 44075151765 (main fc1002e0, 2026-11-17).
+            # StrongProcessOwnershipIndexerExecutor: Linux 58/62 lines, 12/16 branches; Windows 44/62, 9/16.
+            # ProviderProcessEnvironment once its rules of both systems are tested on each system: 59/59 lines, 40/40
+            # branches (local Windows report of its own tests, 2026-11-17; Linux 51/58, 23/40 before those tests).
+            # Floor = lower measure minus about 5 points, never under TRUST_BOUNDARY_MINIMUMS.
+            "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.66, "branch": 0.51},
+            "com/minos/runtime/local/process/ProviderProcessEnvironment": {"line": 0.95, "branch": 0.95},
         },
     },
     "provider-write-quota-supervisor": {
@@ -376,6 +385,36 @@ def missing_zone_declarations(scopes: dict) -> list[str]:
                 problems.append(f"{name}: {clazz} not declared in prefixes")
             if clazz not in minimums:
                 problems.append(f"{name}: {clazz} has no class floor")
+    return problems
+
+
+# AUD-TST-03: the classes of the provider trust boundary and the minimum their branch floor must keep, wherever their
+# scope is judged. A class floor is one number per counter, so it holds on both systems.
+TRUST_BOUNDARY_MINIMUMS = {
+    ("provider-execution-trust-boundary", "com/minos/runtime/local/process/ProviderProcessEnvironment"): 0.80,
+    ("provider-execution-trust-boundary", "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor"): 0.50,
+    ("m24-polyglot-provider-platform", "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory"): 0.50,
+    ("m24-polyglot-provider-platform", "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager"): 0.50,
+}
+
+
+def trust_boundary_floor_problems(scopes: dict) -> list[str]:
+    """Trust-boundary classes of the given table without a class floor, or with a branch floor under its minimum."""
+    problems: list[str] = []
+    for (name, clazz), minimum in TRUST_BOUNDARY_MINIMUMS.items():
+        config = scopes.get(name)
+        if config is None:
+            problems.append(f"{name}: scope not declared")
+            continue
+        if clazz not in tuple(config.get("prefixes", ())):
+            problems.append(f"{name}: {clazz} not declared in prefixes")
+        floor = config.get("prefixMinimums", {}).get(clazz)
+        if floor is None:
+            problems.append(f"{name}: {clazz} has no class floor")
+            continue
+        branch = float(floor["branch"])
+        if branch < minimum:
+            problems.append(f"{name}: {clazz} branch floor {branch:.2f} is below the minimum {minimum:.2f}")
     return problems
 
 
