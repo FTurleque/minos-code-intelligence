@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
+import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import io.modelcontextprotocol.spec.McpSchema.TextContent;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +40,17 @@ class MinosMcpSnapshotMemoryRefusalTest {
         assertTrue(McpToolCalls.isError(result));
         assertTrue(((TextContent) result.content().getFirst()).text()
                 .startsWith("error: insufficient memory to load this snapshot"), McpToolCalls.text(result));
+    }
+
+    @Test
+    void aScratchSpaceRefusalIsRenderedWithItsMessage() {
+        var refusal = new SnapshotScratchSpaceExhaustedException(300L, 200L);
+        var result = McpToolCalls.call(new MinosMcpTools(failingBackend(new UncheckedIOException(refusal))),
+                "minos_find_symbols", Map.of("project", "demo", "query", "Symbol"));
+
+        assertTrue(McpToolCalls.isError(result));
+        assertEquals("error: " + refusal.getMessage(), McpToolCalls.text(result));
+        assertTrue(McpToolCalls.text(result).startsWith("error: insufficient scratch space to load this snapshot"));
     }
 
     private static MinosMcpBackend failingBackend(Throwable failure) {

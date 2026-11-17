@@ -6,6 +6,7 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.InternalFailureTrace;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
+import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import com.minos.output.json.DeterministicJson;
 import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.diagnostics.UsageException;
@@ -216,11 +217,9 @@ public final class MinosMcpTools implements AutoCloseable {
             if (exception instanceof McpClientFailure failure) {
                 return toolError("error: " + failure.clientMessage());
             }
-            SnapshotMemoryExhaustedException memoryRefusal = memoryRefusal(exception);
-            if (memoryRefusal != null) {
-                // AUD-PERF-15: a public message (byte counts and the setting to raise, no path), as the CLI renders it.
-                return toolError("error: " + PublicErrorMessages.sanitize(
-                        memoryRefusal.getMessage(), SnapshotMemoryExhaustedException.MESSAGE_PREFIX));
+            String snapshotRefusal = snapshotLoadRefusal(exception);
+            if (snapshotRefusal != null) {
+                return toolError("error: " + snapshotRefusal);
             }
             return toolError(internalFailure(toolName, exception));
         }
@@ -276,11 +275,26 @@ public final class MinosMcpTools implements AutoCloseable {
         return GENERIC_TOOL_ERROR + " (ref " + trace.reference() + ")";
     }
 
-    /** The memory refusal of a snapshot view carried by {@code failure} or one of its causes, or {@code null}. */
-    private static SnapshotMemoryExhaustedException memoryRefusal(Throwable failure) {
+    /**
+     * The public message of a snapshot view refused for lack of memory (AUD-PERF-15) or of scratch space
+     * (AUD-PERF-09), carried by {@code failure} or one of its causes, or {@code null}: byte counts and the setting to
+     * raise, no path, as the CLI renders it.
+     */
+    private static String snapshotLoadRefusal(Throwable failure) {
+        SnapshotMemoryExhaustedException memory = causeOfType(failure, SnapshotMemoryExhaustedException.class);
+        if (memory != null) {
+            return PublicErrorMessages.sanitize(memory.getMessage(), SnapshotMemoryExhaustedException.MESSAGE_PREFIX);
+        }
+        SnapshotScratchSpaceExhaustedException scratch =
+                causeOfType(failure, SnapshotScratchSpaceExhaustedException.class);
+        return scratch == null ? null : PublicErrorMessages.sanitize(
+                scratch.getMessage(), SnapshotScratchSpaceExhaustedException.MESSAGE_PREFIX);
+    }
+
+    private static <T extends Throwable> T causeOfType(Throwable failure, Class<T> type) {
         Throwable current = failure;
         for (int depth = 0; depth <= MAX_CAUSE_DEPTH && current != null; depth++) {
-            if (current instanceof SnapshotMemoryExhaustedException refusal) return refusal;
+            if (type.isInstance(current)) return type.cast(current);
             if (current.getCause() == current) return null;
             current = current.getCause();
         }

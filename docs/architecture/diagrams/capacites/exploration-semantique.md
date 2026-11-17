@@ -257,6 +257,10 @@ stateDiagram-v2
 
 `ABANDONNEE` est borné (8 lectures) et visible dans le journal de la surface.
 
+La table de symboles de l'explorateur est tenue par la vue du snapshot (`WeakHashMap`) et part avec elle. Une
+projection dont le poids décodé estimé dépasse 1 % du tas est refusée avant décodage : état `ECHOUEE`, raison
+`PROJECTION_TOO_LARGE` (ADR DATA-0085, point 19).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -291,6 +295,8 @@ stateDiagram-v2
 | La préparation ne relit pas l'index à chaque itération quand l'échantillon tient en mémoire | 2/2 | V5 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aSampleThatFitsTheBudgetIsIteratedInMemoryAfterTwoWalksOfTheIndex`, `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#anIndexReplacedWhileTheSampleIsCopiedRefusesThePreparationAndKeepsThePublishedProjection`, `minos-application/src/test/java/com/minos/application/semantic/ProjectionPreparationTest.java#theLargestIndexTheProductBuildsIsIteratedInMemoryUnderTheDefaultBudget` | couverte |
 | Un échantillon plus lourd que le budget garde le parcours en flux et l'annonce | 2/2 | V5 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aSampleThatDoesNotFitTheBudgetKeepsTheStreamAndSaysWhichStrategyRan`, `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#aBudgetBelowTheSmallestWorkableOneIsRefusedAndPublishesNothing`, `minos-cli/src/test/java/com/minos/cli/SemanticProjectionCommandLineTest.java#aStreamedPreparationNamesTheOptionThatLiftsItsLimit`, `minos-application/src/test/java/com/minos/application/semantic/ProjectionPreparationTest.java#askingWhetherBytesFitChangesNeitherTheMemoryHeldNorThePeak` | couverte |
 | Les deux stratégies de préparation rendent les mêmes coordonnées | 1/1 | V5, V6 | `minos-application/src/test/java/com/minos/application/semantic/SemanticProjectionServiceTest.java#theTwoStrategiesPublishTheSamePointsCoordinatesAndVariance` | couverte |
+| La table de symboles de l'explorateur ne survit pas à sa vue | 3/3 | — | `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#twoPagesReadTheViewOfTheStoreAndKeepTheSameSymbols`, `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#anEvictedViewIsNoLongerReachableFromTheService`, `minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java#anIndexOfAnotherSnapshotLeavesTheSymbolsUnresolvedWithoutAskingForTheView` | couverte |
+| Une projection plus lourde que sa part du tas est refusée avant décodage | 3/3 | — | `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticProjectionStoreTest.java#aProjectionWithinItsShareIsDecodedOnceAndWeighedByItsEstimate`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticProjectionStoreTest.java#aProjectionHeavierThanItsShareIsRefusedBeforeDecodingWithoutAPath`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticProjectionStoreTest.java#aHeaderThatAnnouncesTooManyPointsIsUnreadableBeforeAnyEstimate` | couverte |
 
 ## Écarts
 
