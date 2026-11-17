@@ -217,17 +217,9 @@ public final class MinosMcpTools implements AutoCloseable {
             if (exception instanceof McpClientFailure failure) {
                 return toolError("error: " + failure.clientMessage());
             }
-            SnapshotMemoryExhaustedException memoryRefusal = memoryRefusal(exception);
-            if (memoryRefusal != null) {
-                // AUD-PERF-15: a public message (byte counts and the setting to raise, no path), as the CLI renders it.
-                return toolError("error: " + PublicErrorMessages.sanitize(
-                        memoryRefusal.getMessage(), SnapshotMemoryExhaustedException.MESSAGE_PREFIX));
-            }
-            SnapshotScratchSpaceExhaustedException scratchRefusal = scratchRefusal(exception);
-            if (scratchRefusal != null) {
-                // AUD-PERF-09: same public form for a scratch area too small for the payload.
-                return toolError("error: " + PublicErrorMessages.sanitize(
-                        scratchRefusal.getMessage(), SnapshotScratchSpaceExhaustedException.MESSAGE_PREFIX));
+            String snapshotRefusal = snapshotLoadRefusal(exception);
+            if (snapshotRefusal != null) {
+                return toolError("error: " + snapshotRefusal);
             }
             return toolError(internalFailure(toolName, exception));
         }
@@ -283,14 +275,20 @@ public final class MinosMcpTools implements AutoCloseable {
         return GENERIC_TOOL_ERROR + " (ref " + trace.reference() + ")";
     }
 
-    /** The memory refusal of a snapshot view carried by {@code failure} or one of its causes, or {@code null}. */
-    private static SnapshotMemoryExhaustedException memoryRefusal(Throwable failure) {
-        return causeOfType(failure, SnapshotMemoryExhaustedException.class);
-    }
-
-    /** The scratch-space refusal of a snapshot view carried by {@code failure} or one of its causes, or {@code null}. */
-    private static SnapshotScratchSpaceExhaustedException scratchRefusal(Throwable failure) {
-        return causeOfType(failure, SnapshotScratchSpaceExhaustedException.class);
+    /**
+     * The public message of a snapshot view refused for lack of memory (AUD-PERF-15) or of scratch space
+     * (AUD-PERF-09), carried by {@code failure} or one of its causes, or {@code null}: byte counts and the setting to
+     * raise, no path, as the CLI renders it.
+     */
+    private static String snapshotLoadRefusal(Throwable failure) {
+        SnapshotMemoryExhaustedException memory = causeOfType(failure, SnapshotMemoryExhaustedException.class);
+        if (memory != null) {
+            return PublicErrorMessages.sanitize(memory.getMessage(), SnapshotMemoryExhaustedException.MESSAGE_PREFIX);
+        }
+        SnapshotScratchSpaceExhaustedException scratch =
+                causeOfType(failure, SnapshotScratchSpaceExhaustedException.class);
+        return scratch == null ? null : PublicErrorMessages.sanitize(
+                scratch.getMessage(), SnapshotScratchSpaceExhaustedException.MESSAGE_PREFIX);
     }
 
     private static <T extends Throwable> T causeOfType(Throwable failure, Class<T> type) {

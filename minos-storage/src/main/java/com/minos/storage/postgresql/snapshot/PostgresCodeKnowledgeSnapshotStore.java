@@ -491,7 +491,10 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         return new Row(result.getString(1), payload, result.getString(3), HexFormat.of().formatHex(digest.digest()));
     }
 
-    /** Bytes already written to a partial scratch file; 0 when its size cannot be read. */
+    /**
+     * Bytes already written to a partial scratch file; 0 when its size cannot be read, which counts the whole payload
+     * as still to copy and so leans towards the scratch-space refusal, never towards hiding one.
+     */
     private static long copiedBytes(Path payload) {
         try {
             return Files.isRegularFile(payload, LinkOption.NOFOLLOW_LINKS) ? Files.size(payload) : 0L;
