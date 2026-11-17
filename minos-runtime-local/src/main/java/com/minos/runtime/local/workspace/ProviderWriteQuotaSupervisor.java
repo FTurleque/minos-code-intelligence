@@ -57,6 +57,7 @@ public final class ProviderWriteQuotaSupervisor implements AutoCloseable {
     private final AtomicReference<String> breach = new AtomicReference<>();
     private final AtomicLong observedBytes = new AtomicLong();
     private final AtomicLong observedEntries = new AtomicLong();
+    private final AtomicLong sampleCount = new AtomicLong();
     private volatile boolean running = true;
 
     private ProviderWriteQuotaSupervisor(
@@ -137,6 +138,11 @@ public final class ProviderWriteQuotaSupervisor implements AutoCloseable {
         return observedEntries.get();
     }
 
+    /** Number of samples taken, counted once their observed bytes and entries are published. */
+    long sampleCount() {
+        return sampleCount.get();
+    }
+
     @Override
     public void close() {
         running = false;
@@ -155,6 +161,7 @@ public final class ProviderWriteQuotaSupervisor implements AutoCloseable {
             long elapsedMillis = Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
             observedBytes.set(sample.bytes());
             observedEntries.set(sample.entries());
+            sampleCount.incrementAndGet();
             if (sample.visibilityFailure() != null) {
                 breachAndKill("provider write quota visibility lost: " + sample.visibilityFailure()
                         + "; bytes=" + sample.bytes() + ", entries=" + sample.entries());
