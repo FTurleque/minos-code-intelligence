@@ -101,6 +101,19 @@ class GitScopeTest(unittest.TestCase):
         self.assertFalse(gate.scope("push", base, docs_head, root))
         self.assertTrue(gate.scope("push", docs_head, "HEAD", root))
 
+    def test_a_renderer_moved_out_of_the_plugin_paths_is_in_scope(self):
+        # AUD-DEP-08: the old path of a rename counts, otherwise moving a renderer to docs/ leaves the plugin untested.
+        root, _, _ = self.repository()
+
+        def git(*arguments: str) -> str:
+            return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *arguments], cwd=root,
+                                  capture_output=True, text=True, check=True).stdout.strip()
+
+        before = git("rev-parse", "HEAD")
+        git("mv", "minos-application/src/main/java/com/minos/output/ProjectJson.java", "docs/ProjectJson.java")
+        git("commit", "-q", "-m", "move")
+        self.assertTrue(gate.scope("pull_request", before, "HEAD", root))
+
     def test_when_in_doubt_the_plugin_is_in_scope(self):
         root, base, docs_head = self.repository()
         self.assertTrue(gate.scope("workflow_dispatch", base, docs_head, root))

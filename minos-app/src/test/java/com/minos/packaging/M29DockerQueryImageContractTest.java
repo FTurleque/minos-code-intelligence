@@ -246,20 +246,164 @@ class M29DockerQueryImageContractTest {
     @Test
     void theDefaultQueryHeapGivesAViewBudgetThatHoldsTheHeaviestPersistableView() throws Exception {
         for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
-            String compose = text(name);
-            Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
-                    .matcher(compose);
-            assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
-            long memoryBytes = Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L;
-            int percent = maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp"));
-            long heap = memoryBytes * percent / 100L;
-            com.minos.storage.codec.QueryViewMemoryBudget budget = com.minos.storage.codec.QueryViewMemoryBudget.of(
-                    heap, com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
-                    com.minos.storage.codec.SnapshotLimits.VIEW_ADMISSION_WAIT);
+            com.minos.storage.codec.QueryViewMemoryBudget budget = defaultQueryBudget(name);
             long heaviest = com.minos.storage.codec.SnapshotLimits.production().largestPersistableViewWeightBytes();
 
             assertTrue(budget.budgetBytes() >= heaviest,
                     name + ": view budget " + budget.budgetBytes() + " < heaviest persistable view " + heaviest);
+        }
+    }
+
+    /**
+     * AUD-PERF-06 — the documentation of the resource limits announces, for a V3 view of the persisted ceiling with
+     * no symbol and no occurrence, the largest number of relationships under which it fits the cache ceiling, then
+     * the view budget, derived index of incoming edges included. Both numbers are computed, never copied.
+     */
+    @Test
+    void theResourceLimitsAnnounceTheComputedRelationshipThresholds() throws Exception {
+        String documentation = text("docs/user/docker-runtime.md").replaceAll("(?<=\\d)[ \u00a0\u202f](?=\\d{3})", "");
+        for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
+            com.minos.storage.codec.QueryViewMemoryBudget budget = defaultQueryBudget(name);
+            com.minos.storage.codec.SnapshotLimits limits = com.minos.storage.codec.SnapshotLimits.production();
+            long underCache = largestRelationshipCount(limits,
+                    budget.effectiveCacheCeiling(limits.maxQueryCacheWeightBytes()));
+            long underBudget = largestRelationshipCount(limits, budget.budgetBytes());
+
+            assertTrue(documentation.contains(Long.toString(underCache)), name
+                    + ": docs/user/docker-runtime.md must announce the computed threshold under the cache ceiling, "
+                    + underCache + " relationships");
+            assertTrue(documentation.contains(Long.toString(underBudget)), name
+                    + ": docs/user/docker-runtime.md must announce the computed threshold under the view budget, "
+                    + underBudget + " relationships");
+        }
+        assertTrue(documentation.contains("sans symbole ni occurrence"),
+                "the thresholds must state that they hold for a view with no symbol and no occurrence");
+    }
+
+    /**
+     * AUD-PERF-09 — every JVM of the query role copies a whole PostgreSQL payload into the scratch tmpfs: its default
+     * size holds the largest payload the default view budget admits, for the number of simultaneous JVM the
+     * documentation declares, and the heaps of those JVM plus the tmpfs stay under the default memory limit.
+     */
+    @Test
+    void theScratchAreaOfTheQueryRoleHoldsOnePayloadPerDeclaredJvm() throws Exception {
+        String name = "docker/compose-mcp.connected.yaml";
+        Matcher declared = Pattern.compile("dimensionnée pour (\\d+) JVM simultanées")
+                .matcher(text("docs/user/docker-runtime.md"));
+        assertTrue(declared.find(), "docs/user/docker-runtime.md must announce the number of simultaneous JVM the"
+                + " scratch area is sized for (\"dimensionnée pour <n> JVM simultanées\")");
+        long jvms = Long.parseLong(declared.group(1));
+        com.minos.storage.codec.QueryViewMemoryBudget budget = defaultQueryBudget(name);
+        long minimum = jvms * largestAdmissiblePostgresPayload(budget.budgetBytes());
+        String compose = text(name);
+        Map<String, String> services = serviceBlocks(compose);
+        long heap = budget.maximumHeapBytes();
+        long memoryLimit = defaultQueryMemoryLimit(name);
+
+        for (String service : new String[]{"minos-mcp", "minos-explorer"}) {
+            Matcher size = Pattern.compile("postgresql-snapshot-scratch:[^\\n]*size=\\$\\{MINOS_MCP_SCRATCH_SIZE:-(\\d+)([kmg])}")
+                    .matcher(services.get(service));
+            assertTrue(size.find(), name + ": " + service
+                    + " must size its PostgreSQL scratch tmpfs with ${MINOS_MCP_SCRATCH_SIZE:-<n><unit>}");
+            long bytes = Long.parseLong(size.group(1)) * switch (size.group(2)) {
+                case "k" -> 1024L;
+                case "m" -> 1024L * 1024L;
+                default -> 1024L * 1024L * 1024L;
+            };
+            assertTrue(bytes >= minimum, name + ": " + service + " declares a scratch tmpfs of " + bytes
+                    + " bytes, below the computed minimum of " + minimum + " bytes (" + jvms + " JVM)");
+            assertTrue(jvms * heap + bytes <= memoryLimit, name + ": " + service + ": " + jvms + " heaps of " + heap
+                    + " bytes and a scratch tmpfs of " + bytes + " bytes exceed the default memory limit of "
+                    + memoryLimit + " bytes");
+        }
+    }
+
+    /** Largest PostgreSQL payload whose reservation (view weight or fetch transient) fits {@code budgetBytes}. */
+    private static long largestAdmissiblePostgresPayload(long budgetBytes) {
+        com.minos.storage.codec.SnapshotLimits limits = com.minos.storage.codec.SnapshotLimits.production();
+        long low = 0L;
+        long high = limits.maxPersistedBytes();
+        while (low < high) {
+            long middle = low + (high - low + 1L) / 2L;
+            long reservation = Math.max(limits.viewWeightBytes(3, middle, 0L, 0L, 0L),
+                    limits.fetchTransientBytes(middle));
+            if (reservation <= budgetBytes) low = middle;
+            else high = middle - 1L;
+        }
+        return low;
+    }
+
+    /** The default memory limit of the query role in {@code compose}, in bytes. */
+    private static long defaultQueryMemoryLimit(String name) throws IOException {
+        Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
+                .matcher(text(name));
+        assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
+        return Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L;
+    }
+
+    /** The view budget of one MCP JVM under the default memory limit and heap share of {@code compose}. */
+    private static com.minos.storage.codec.QueryViewMemoryBudget defaultQueryBudget(String name) throws IOException {
+        String compose = text(name);
+        long memoryBytes = defaultQueryMemoryLimit(name);
+        long heap = memoryBytes * maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp")) / 100L;
+        return com.minos.storage.codec.QueryViewMemoryBudget.of(heap,
+                com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
+                com.minos.storage.codec.SnapshotLimits.VIEW_ADMISSION_WAIT);
+    }
+
+    /** Largest relationship count whose V3 view of the persisted ceiling, without symbols or occurrences, fits. */
+    private static long largestRelationshipCount(com.minos.storage.codec.SnapshotLimits limits, long bound) {
+        assertTrue(limits.largestPersistableViewWeightBytes(0L, 0L, 0L) <= bound, "no relationship already exceeds " + bound);
+        long low = 0L;
+        long high = Integer.MAX_VALUE;
+        while (low < high) {
+            long middle = low + (high - low + 1L) / 2L;
+            if (limits.largestPersistableViewWeightBytes(0L, 0L, middle) <= bound) low = middle;
+            else high = middle - 1L;
+        }
+        return low;
+    }
+
+    /**
+     * AUD-PERF-04 — under the default memory limit, the view budget, the decoding margin of a view and the effective
+     * ceilings of the application caches stay under the heap of one query JVM, with the local and the PostgreSQL
+     * storage; the declared shares leave the view budget its fraction.
+     */
+    @Test
+    void theViewBudgetAndTheApplicationCachesFitTheDefaultQueryHeap() throws Exception {
+        int shares = 0;
+        for (com.minos.store.cache.HeapShare share : com.minos.store.cache.HeapShare.values()) shares += share.percent();
+        assertEquals(com.minos.store.cache.HeapShare.CACHES_PERCENT, shares, "the declared sum of the heap shares");
+        assertTrue(com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT
+                        + com.minos.store.cache.HeapShare.VIEW_DECODING_MARGIN_PERCENT
+                        + com.minos.store.cache.HeapShare.CACHES_PERCENT
+                        + com.minos.store.cache.HeapShare.REQUEST_WORK_PERCENT <= 100,
+                "view budget, decoding margin, cache shares and request work exceed 100 percent of the heap");
+        for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
+            com.minos.storage.codec.QueryViewMemoryBudget views = defaultQueryBudget(name);
+            long heap = views.maximumHeapBytes();
+            long budget = views.budgetBytes();
+            long margin = heap / 100L * com.minos.store.cache.HeapShare.VIEW_DECODING_MARGIN_PERCENT;
+            Map<String, Long> caches = new LinkedHashMap<>();
+            caches.put("hybrid corpus", com.minos.store.cache.HeapShare.HYBRID_CORPUS.ceiling(
+                    com.minos.application.semantic.HybridSearchService.DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES, heap));
+            caches.put("query vectors", com.minos.store.cache.HeapShare.QUERY_VECTORS.ceiling(
+                    com.minos.application.semantic.SemanticSearchService.MAX_QUERY_CACHE_WEIGHT_BYTES, heap));
+            caches.put("program graph", com.minos.store.cache.HeapShare.PROGRAM_GRAPH.ceiling(
+                    com.minos.program.analysis.ProgramGraphService.DEFAULT_MAX_CACHE_WEIGHT, heap));
+            caches.put("java fingerprints", com.minos.store.cache.HeapShare.JAVA_FINGERPRINTS.ceiling(
+                    com.minos.program.analysis.FingerprintConstrainedJavaProgramGraphProvider
+                            .DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES, heap));
+            caches.put("semantic projection", com.minos.store.cache.HeapShare.SEMANTIC_PROJECTION.ceiling(
+                    com.minos.storage.local.store.FileSemanticProjectionStore.DEFAULT_MAX_DECODED_WEIGHT_BYTES, heap));
+            long postgres = budget + margin + caches.values().stream().mapToLong(Long::longValue).sum();
+            assertTrue(postgres <= heap, name + " (PostgreSQL storage): heap " + heap + ", view budget " + budget
+                    + ", decoding margin " + margin + ", caches " + caches + " exceed the heap");
+            caches.put("local vector index", com.minos.store.cache.HeapShare.LOCAL_VECTOR_INDEX.ceiling(
+                    com.minos.storage.local.store.FileSemanticVectorStore.DEFAULT_MAX_CACHE_WEIGHT_BYTES, heap));
+            long local = budget + margin + caches.values().stream().mapToLong(Long::longValue).sum();
+            assertTrue(local <= heap, name + " (local storage): heap " + heap + ", view budget " + budget
+                    + ", decoding margin " + margin + ", caches " + caches + " exceed the heap");
         }
     }
 

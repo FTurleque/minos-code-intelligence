@@ -93,7 +93,10 @@ services:
       # as 10001 with the data mount writable, and always precedes this plane in
       # prod-mcp-release.ps1's Install/Validate -- lets MINOS create it through its own
       # PrivateLocalStorage invariant, which is also what keeps the permissions correct.
-      - /var/lib/minos/postgresql-snapshot-scratch:rw,nosuid,nodev,noexec,size=256m,mode=0700,uid=10001,gid=10001
+      #
+      # Each JVM copies a whole payload here: the default size holds the largest payload the default view
+      # budget admits for each of the 2 JVM the documentation declares (M29DockerQueryImageContractTest).
+      - /var/lib/minos/postgresql-snapshot-scratch:rw,nosuid,nodev,noexec,size=${MINOS_MCP_SCRATCH_SIZE:-384m},mode=0700,uid=10001,gid=10001
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
@@ -157,7 +160,7 @@ services:
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
       # Same scratch area as minos-mcp: the PostgreSQL snapshot store needs it and the data mount is read-only.
-      - /var/lib/minos/postgresql-snapshot-scratch:rw,nosuid,nodev,noexec,size=256m,mode=0700,uid=10001,gid=10001
+      - /var/lib/minos/postgresql-snapshot-scratch:rw,nosuid,nodev,noexec,size=${MINOS_MCP_SCRATCH_SIZE:-384m},mode=0700,uid=10001,gid=10001
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"

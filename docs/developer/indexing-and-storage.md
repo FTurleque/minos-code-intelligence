@@ -285,15 +285,37 @@ Un processus a un seul budget de mémoire des vues de snapshot (`QueryViewMemory
 | Étape | Magasin fichier | PostgreSQL |
 |---|---|---|
 | Avant toute lecture de la charge utile | pointeur actif, présence du fichier, `Files.size` | métadonnées avec `octet_length(payload)` et les 8 octets d'en-tête ; une taille hors `[1, plafond de persistance]` est refusée (`snapshot payload exceeds persisted byte limit: <taille>/<plafond>`) sans demander la charge utile ni créer de fichier temporaire |
+| Lecture de la charge utile | le fichier désigné par le pointeur, revérifié après la construction | la ligne désignée par `(project_id, snapshot_id, sha256)` des métadonnées ; si cette version n'est plus active, aucune ligne ne revient : la réservation est libérée et la résolution reprend depuis les métadonnées (4 tentatives au plus) |
 | Réservation | poids estimé de la vue | le plus grand du poids estimé et du transitoire du pilote pendant le rapatriement (`SnapshotLimits.fetchTransientBytes`, 310 % de la charge utile : pire cas mesuré de 305 %, avant que le pilote passe au rapatriement binaire d'une requête préparée côté serveur) |
-| Vue mise en cache | la réservation devient du poids résident sous le verrou du budget | idem |
-| Vue non mise en cache, erreur, pointeur déplacé | la réservation est libérée | idem |
+| Vue sous le plafond effectif du cache | mise en cache : la réservation devient du poids résident sous le verrou du budget | idem |
+| Vue au-dessus du plafond effectif, sous le budget | retenue seule par le store (`BudgetedViewCache`), qui vide son cache : la réservation devient du poids résident, la vue sert les lectures suivantes et part à l'éviction du budget, à une publication du projet ou à l'arrivée d'une autre vue | idem |
+| Erreur, pointeur ou version déplacés | la réservation est libérée | idem |
 
-Une réservation plus lourde que tout le budget est refusée aussitôt (`SnapshotMemoryExhaustedException`, `minos-domain`, message `insufficient memory to load this snapshot: …` qui donne poids, budget, pourcentage et tas, et nomme `-Xmx`, `-XX:MaxRAMPercentage` et `MINOS_VIEW_HEAP_PERCENT`). Une réservation qui ne tient pas à côté des autres vide d'abord les vues en cache de tous les stores inscrits, puis attend une libération au plus `SnapshotLimits.VIEW_ADMISSION_WAIT` (30 s), et échoue alors par `insufficient memory to load this snapshot now: …`. Le plafond effectif du cache d'un store vaut le plus petit de `SnapshotLimits.maxQueryCacheWeightBytes()` (512 Mio) et du budget ; c'est lui que rapportent `cacheStats()` et `queryCacheStats()`. L'invariant `requireCacheCoversPersistable` porte sur le plafond configuré, jamais sur le plafond effectif. La CLI rend le message avec le code de sortie 1, le serveur MCP le rend tel quel (`error: insufficient memory…`) au lieu de l'erreur générique.
+Une réservation plus lourde que tout le budget est refusée aussitôt (`SnapshotMemoryExhaustedException`, `minos-domain`, message `insufficient memory to load this snapshot: …` qui donne poids, budget, pourcentage et tas, et nomme `-Xmx`, `-XX:MaxRAMPercentage` et `MINOS_VIEW_HEAP_PERCENT`). Une réservation qui ne tient pas à côté des autres vide d'abord les vues en cache de tous les stores inscrits, puis attend une libération au plus `SnapshotLimits.VIEW_ADMISSION_WAIT` (30 s), et échoue alors par `insufficient memory to load this snapshot now: …`. Le plafond effectif du cache d'un store vaut le plus petit de `SnapshotLimits.maxQueryCacheWeightBytes()` (512 Mio) et du budget ; c'est lui que rapportent `cacheStats()` et `queryCacheStats()`. L'invariant `requireCacheCoversPersistable` porte sur le plafond configuré, jamais sur le plafond effectif, et sur la seule amplification : ni l'index des arêtes entrantes (96 octets par relation, plus 1 024 fixes) ni la somme des comptes n'y entrent, puisque le nombre de relations d'un snapshot persistable n'est pas borné. `SnapshotLimits.viewWeightBytes` est l'estimation commune aux deux stores ; `largestPersistableViewWeightBytes(symboles, occurrences, relations)` la donne pour un snapshot V3 de la taille du plafond de persistance. `cacheStats()` et `queryCacheStats()` rapportent le poids de la vue retenue seule (`heldWeightBytes`). La CLI rend le message avec le code de sortie 1, le serveur MCP le rend tel quel (`error: insufficient memory…`) au lieu de l'erreur générique.
 
 Ordre des verrous : le verrou de projet d'un store, puis le verrou du budget, puis le verrou du cache du store ; un store n'appelle jamais le budget en tenant son verrou de cache. Une vue vidée du cache mais encore tenue par une requête en cours n'est plus comptée : la marge du budget (la moitié du tas) la couvre.
 
-Preuves : `QueryViewMemoryBudgetTest` (réglage, refus, attente, éviction, conversion), `FileSymbolSnapshotStoreViewBudgetTest`, `PostgresCodeKnowledgeSnapshotStoreViewBudgetTest`, et `QueryViewAdmissionChildJvmTest`, qui lance une JVM fille `-Xmx256m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError` sur deux snapshots de 148 Mio chargés au même instant : sans admission elle meurt d'une `OutOfMemoryError` (code 3), avec un budget de 80 % du tas elle se termine avec le code 0. `LargeSnapshotMeasurement` rapporte le plafond effectif (`cache.maximum.bytes`) et le pic de tas d'une vue admise.
+Preuves : `QueryViewMemoryBudgetTest` (réglage, refus, attente, éviction, conversion), `BudgetedViewCacheTest`, `FileSymbolSnapshotStoreViewBudgetTest` et `PostgresCodeKnowledgeSnapshotStoreViewBudgetTest` (vue retenue seule et comptée, libérée par l'éviction ou la publication ; côté PostgreSQL, version remplacée entre les métadonnées et la charge utile), et `QueryViewAdmissionChildJvmTest`, qui lance une JVM fille `-Xmx256m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError` sur deux snapshots de 148 Mio chargés au même instant : sans admission elle meurt d'une `OutOfMemoryError` (code 3), avec un budget de 80 % du tas elle se termine avec le code 0. `LargeSnapshotMeasurement` rapporte le plafond effectif (`cache.maximum.bytes`) et le pic de tas d'une vue admise.
+
+## Parts du tas des caches applicatifs
+
+Hors du budget des vues, chaque cache applicatif garde au plus le plus petit de son plafond configuré et de sa part du tas maximal (`HeapShare`, `minos-engine`, `com.minos.store.cache`). Les parts ont été fixées sur une mesure du tas retenu (`ApplicationCacheMeasurement`, sources de test de `minos-bootstrap`, lancé à la demande), qui montre que chaque estimation majore le retenu.
+
+| Terme | Part du tas | Plafond configuré | Sous 1 076 Mio de tas |
+|---|---|---|---|
+| Budget des vues (`QueryViewMemoryBudget`) | 50 % | — | 538 Mio |
+| Marge de décodage d'une vue | 34 % | — | 366 Mio |
+| Corpus hybride (`HybridSearchService`) | 6 % | 256 Mio | 64,6 Mio |
+| Graphe de programme (`ProgramGraphService`) | 2 % | 256 Mio | 21,5 Mio |
+| Empreintes Java (`FingerprintConstrainedJavaProgramGraphProvider`) | 1 % | 128 Mio | 10,8 Mio |
+| Projection décodée (`FileSemanticProjectionStore`) | 1 % | 256 Mio | 10,8 Mio |
+| Vecteurs de requête (`SemanticSearchService`) | 1 % | 8 Mio | 8 Mio |
+| Index vectoriel local (`FileSemanticVectorStore`) | 2 % | 256 Mio | 21,5 Mio |
+| Travail des requêtes | 3 % | — | 32,3 Mio |
+
+Une entrée plus lourde que son plafond n'est pas gardée ; la requête rend le même résultat. Une projection dont le poids décodé estimé (56 octets par point plus deux fois la taille du fichier) dépasse sa part est refusée avant décodage (`SemanticProjectionStore.ProjectionTooLargeException`). La table de symboles de l'explorateur est rangée dans une `WeakHashMap` indexée par la vue du snapshot : elle part avec la vue. `M29DockerQueryImageContractTest` vérifie que la somme tient sous le tas par défaut, en stockage local et PostgreSQL ; `WeightedCacheInventoryTest` refuse un cache pondéré de production qui ne passe pas par `HeapShare` sans figurer dans sa liste fermée.
+
+Limites : la construction d'un cache alloue au-delà de sa part (corpus : 2,4 fois son poids retenu), et une recherche sur un index local plus lourd que son cache le décode en entier à chaque requête (451 à 479 Mio mesurés sous 1 076 Mio de tas).
 
 ## Cohérence concurrente
 
