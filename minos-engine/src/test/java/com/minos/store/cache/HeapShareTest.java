@@ -50,6 +50,6 @@ class HeapShareTest {
         assertEquals(HeapShare.CACHES_PERCENT, sum);
         assertTrue(50 + HeapShare.VIEW_DECODING_MARGIN_PERCENT + HeapShare.CACHES_PERCENT
                 + HeapShare.REQUEST_WORK_PERCENT <= 100);
-        assertTrue(HeapShare.PROGRAM_GRAPH.ceiling(1L) == 1L);
+        assertEquals(1L, HeapShare.PROGRAM_GRAPH.ceiling(1L));
     }
 }

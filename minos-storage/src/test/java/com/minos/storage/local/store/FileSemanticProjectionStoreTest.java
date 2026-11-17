@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -240,7 +241,7 @@ class FileSemanticProjectionStoreTest {
         SemanticProjection first = store.read(PROJECT).orElseThrow();
         SemanticProjection second = store.read(PROJECT).orElseThrow();
 
-        assertTrue(first == second, "the second read is served by the cache");
+        assertSame(first, second, "the second read is served by the cache");
         assertEquals(FileSemanticProjectionStore.estimatedWeightBytes(500, fileBytes), store.cachedWeightBytes());
         assertEquals(FileSemanticProjectionStore.DEFAULT_MAX_DECODED_WEIGHT_BYTES, store.maxDecodedWeightBytes());
     }
