@@ -171,10 +171,10 @@ le dossier le dit).
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Les classes de la frontière de confiance des providers ont un plancher de branches minimal | Plancher abaissé sous le minimum | D3 | 1.2, 3.1 | `check-jacoco.py --self-test` — à écrire |
-| idem | Plancher de classe retiré | D3 | 1.2, 3.1 | idem — à écrire |
-| idem | Érosion de la couverture du filtre d'environnement | D1 | 3.1 | cas d'auto-test sur rapport synthétique — à écrire |
-| idem | Table réelle | D1, D2 | 2.1, 2.2, 3.1 | auto-test + gate sur la CI des deux systèmes — manquante jusqu'à la mesure |
+| controles-de-fusion › Les classes de la frontière de confiance des providers ont un plancher de branches minimal | Plancher abaissé sous le minimum | D3 | 1.2, 3.1 | `jacoco_gate_self_test.py`, cas « lowered environment filter floor is refused » |
+| idem | Plancher de classe retiré | D3 | 1.2, 3.1 | `jacoco_gate_self_test.py`, cas « removed class floor is refused » |
+| idem | Érosion de la couverture du filtre d'environnement | D1 | 3.1 | `jacoco_gate_self_test.py`, cas « eroded environment filter » (rouge avec le plancher de 0,20) |
+| idem | Table réelle | D1, D2 | 2.1, 2.2, 3.1 | `jacoco_gate_self_test.py`, cas « real table floors the trust-boundary classes » (rouge au HEAD : 0,20, 0,18, 0,15, 0,20) ; gate sur les rapports Linux et Windows de la CI de la PR — à relire |
 
 ## Questions ouvertes
 
