@@ -103,6 +103,10 @@ snapshot et découvre le dépôt une seule fois par requête. `ArchitectureDepen
 références par occurrence ; `ArchitectureResultRenderer` la rend comme dernière clé JSON, comme ligne de texte ou
 comme commentaire Mermaid ou DOT, en interdisant qu'un nom issu de la vue ouvre une directive Mermaid (`%%{`).
 
+Le cache des graphes et celui des empreintes du provider Java gardent au plus le plus petit de leur plafond configuré
+et de leur part du tas (`HeapShare` : 2 % et 1 %) ; un graphe plus lourd n'est pas gardé et la requête rend le même
+graphe (ADR DATA-0085, point 19).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -121,6 +125,7 @@ comme commentaire Mermaid ou DOT, en interdisant qu'un nom issu de la vue ouvre 
 | Une ligne de commentaire Mermaid ne porte pas de directive issue de la vue | 2/2 (nom de projet seulement ; identifiant de snapshot hostile non testé) | V2 | `minos-application/src/test/java/com/minos/output/ArchitectureResultRendererMermaidEscapingTest.java#aProjectNameCannotOpenAMermaidDirective` | couverte |
 | Les règles de sécurité fournies par le dépôt analysé sont déclarées | 3/4 (aucun test de surface MCP ou CLI pour la limitation) | V1 | `minos-application/src/test/java/com/minos/program/analysis/ProgramGraphSecurityRulesProvenanceTest.java#aRepositoryThatSuppliesItsRulesIsDeclaredByTheThreeAnalyses`, `minos-application/src/test/java/com/minos/program/analysis/ProgramGraphSecurityRulesProvenanceTest.java#aHostileRepositoryThatOmitsItsSourcesGetsNoPathButTheDeclaration` | partielle |
 | Un chemin assaini reste rapporté et marqué | 2/2 (au niveau du service, pas de l'outil MCP) | — | `minos-application/src/test/java/com/minos/program/analysis/ProgramGraphSecurityRulesProvenanceTest.java#aSanitizerOnThePathMarksItAndNeverRemovesIt`, `minos-bootstrap/src/test/java/com/minos/bootstrap/program/analysis/ProgramGraphAnalysisTest.java#impactV2AddsProgramFlowBeyondM8AndSecurityReportsSanitizedObservedPath` | couverte |
+| Les caches du graphe de programme sont plafonnés par une part du tas | 3/3 | — | `minos-application/src/test/java/com/minos/program/analysis/ProgramGraphCacheHeapShareTest.java#underASmallHeapBothCeilingsAreTheirShares`, `minos-application/src/test/java/com/minos/program/analysis/ProgramGraphCacheHeapShareTest.java#underALargeHeapBothCeilingsAreTheConfiguredOnes`, `minos-application/src/test/java/com/minos/program/analysis/ProgramGraphCacheHeapShareTest.java#aGraphHeavierThanTheCeilingIsNotKeptAndTheAnswerIsTheSame` | couverte |
 
 ## Écarts
 

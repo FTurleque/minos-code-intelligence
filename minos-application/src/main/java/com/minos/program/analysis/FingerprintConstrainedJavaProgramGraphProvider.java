@@ -9,6 +9,7 @@ import com.minos.io.Sha256;
 import com.minos.program.ProgramGraph;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.cache.HeapShare;
 import com.minos.store.cache.WeightedLruCache;
 
 import java.io.IOException;
@@ -41,8 +42,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
 
     private final ProjectFingerprintSnapshotStore fingerprints;
     private final JavaSourceProgramGraphProvider delegate;
-    private final WeightedLruCache<UUID, CachedFingerprint> immutableFingerprintCache = new WeightedLruCache<>(
-            DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES, DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES);
+    private final WeightedLruCache<UUID, CachedFingerprint> immutableFingerprintCache;
     private final SourceStateKeyMemo sourceStateKeys;
 
     public FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints) {
@@ -55,6 +55,14 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
      */
     public FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints,
                                                           LongSupplier monotonicNanoClock) {
+        this(fingerprints, monotonicNanoClock, Runtime.getRuntime().maxMemory());
+    }
+
+    /** Test seam: the fingerprint cache keeps the smaller of its ceiling and its share of {@code maximumHeapBytes}. */
+    FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints,
+                                                   LongSupplier monotonicNanoClock, long maximumHeapBytes) {
+        this.immutableFingerprintCache = new WeightedLruCache<>(DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES,
+                HeapShare.JAVA_FINGERPRINTS.ceiling(DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES, maximumHeapBytes));
         this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
         this.delegate = new JavaSourceProgramGraphProvider();
         this.sourceStateKeys = new SourceStateKeyMemo(
@@ -101,7 +109,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         synchronized (immutableFingerprintCache) {
             return new FingerprintCacheStats(
                     immutableFingerprintCache.size(), immutableFingerprintCache.weight(),
-                    DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES, DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES,
+                    DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES, immutableFingerprintCache.maximumWeight(),
                     immutableFingerprintCache.evictions());
         }
     }

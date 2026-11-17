@@ -4,12 +4,14 @@ import com.minos.storage.postgresql.support.PostgresConnectionFactory;
 import com.minos.storage.postgresql.support.PostgresProjectMutationLock;
 import com.minos.storage.postgresql.support.PostgresSnapshotPayloadCodec;
 import com.minos.io.ConfinedFileOpener;
+import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.io.Sha256;
 import com.minos.storage.codec.KnowledgeSnapshotCodecs;
+import com.minos.storage.codec.BudgetedViewCache;
 import com.minos.storage.codec.QueryViewMemoryBudget;
 import com.minos.storage.codec.SnapshotLimits;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -17,7 +19,6 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SnapshotReadView;
-import com.minos.store.cache.WeightedLruCache;
 import com.minos.store.SymbolSnapshot;
 
 import java.io.IOException;
@@ -69,9 +70,10 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     private final QueryViewMemoryBudget memoryBudget;
     private final long maxQueryCacheWeightBytes;
     private final Consumer<UUID> beforePayloadFetch;
+    private final ScratchSpace scratchSpace;
     private final QueryViewMemoryBudget.Tenant budgetTenant = new CacheTenant();
     private final Object cacheLock = new Object();
-    private final WeightedLruCache<CacheKey, SnapshotReadView> queryCache;
+    private final BudgetedViewCache<CacheKey, SnapshotReadView> queryCache;
     private final ReentrantLock[] buildLocks = buildLocks();
     private long cacheHits;
     private long cacheMisses;
@@ -111,12 +113,22 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
             PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated,
             SnapshotLimits limits, QueryViewMemoryBudget memoryBudget, Consumer<UUID> beforePayloadFetch)
             throws IOException {
+        this(connections, minosHome, afterScratchFileCreated, limits, memoryBudget, beforePayloadFetch,
+                ScratchSpace.FILE_STORE);
+    }
+
+    /** Test seam: {@code scratchSpace} replaces the usable space of the file store that holds the scratch area. */
+    PostgresCodeKnowledgeSnapshotStore(
+            PostgresConnectionFactory connections, Path minosHome, Consumer<Path> afterScratchFileCreated,
+            SnapshotLimits limits, QueryViewMemoryBudget memoryBudget, Consumer<UUID> beforePayloadFetch,
+            ScratchSpace scratchSpace) throws IOException {
+        this.scratchSpace = Objects.requireNonNull(scratchSpace, "scratchSpace");
         this.limits = Objects.requireNonNull(limits, "limits");
         this.memoryBudget = Objects.requireNonNull(memoryBudget, "memoryBudget");
         this.beforePayloadFetch = Objects.requireNonNull(beforePayloadFetch, "beforePayloadFetch");
         this.codec = new PostgresSnapshotPayloadCodec(limits);
         this.maxQueryCacheWeightBytes = memoryBudget.effectiveCacheCeiling(limits.maxQueryCacheWeightBytes());
-        this.queryCache = new WeightedLruCache<>(MAX_QUERY_CACHE_ENTRIES, maxQueryCacheWeightBytes);
+        this.queryCache = new BudgetedViewCache<>(MAX_QUERY_CACHE_ENTRIES, maxQueryCacheWeightBytes);
         this.afterScratchFileCreated = Objects.requireNonNull(afterScratchFileCreated, "afterScratchFileCreated");
         this.connections = Objects.requireNonNull(connections, "connections");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
@@ -198,14 +210,14 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                         estimateWeight(metadata, metadata.payloadBytes(), metadata.headerFormatVersion()),
                         limits.fetchTransientBytes(metadata.payloadBytes()));
                 try (QueryViewMemoryBudget.Reservation reservation = memoryBudget.reserve(reservationBytes)) {
+                    // AUD-PERF-09: a scratch area that cannot hold the payload refuses it before it is asked for.
+                    requireScratchSpace(metadata.payloadBytes());
                     beforePayloadFetch.accept(projectId);
-                    Optional<Row> row = activeRow(projectId);
-                    if (row.isEmpty()) return Optional.empty();
-                    Row value = row.orElseThrow();
-                    if (!metadata.snapshotId().equals(value.snapshotId()) || !metadata.sha256().equals(value.sha256())) {
-                        // The active row moved on since the metadata read: drop the stale payload and resolve again.
-                        Files.deleteIfExists(value.payload());
-                    } else {
+                    // AUD-PERF-05: the payload asked for is the version whose size was reserved; when it is no longer
+                    // active, no row comes back and the resolution starts again from the metadata.
+                    Optional<Row> row = activeRow(projectId, metadata);
+                    if (row.isPresent()) {
+                        Row value = row.orElseThrow();
                         long payloadBytes = Files.size(value.payload());
                         DecodedPayload decoded = decodeVerified(projectId, value);
                         CodeKnowledgeSnapshot snapshot = decoded.snapshot();
@@ -239,7 +251,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     QueryCacheStats queryCacheStats() {
         synchronized (cacheLock) {
             return new QueryCacheStats(cacheHits, cacheMisses, queryCache.evictions(), queryCache.size(),
-                    queryCache.weight(), maxQueryCacheWeightBytes);
+                    queryCache.cachedWeight(), maxQueryCacheWeightBytes, queryCache.heldWeight());
         }
     }
 
@@ -252,13 +264,17 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
-    /** The reservation becomes resident weight under the budget lock, then the cache lock (lock order). */
+    /**
+     * The reservation becomes resident weight under the budget lock, then the cache lock (lock order): a view above
+     * the cache ceiling is held alone and stays counted (AUD-PERF-06).
+     */
     private void cache(UUID projectId, CacheKey key, SnapshotReadView view, long weight,
                        QueryViewMemoryBudget.Reservation reservation) {
         memoryBudget.convert(reservation, () -> {
             synchronized (cacheLock) {
                 removeProjectEntries(projectId, key);
-                return queryCache.put(key, view, weight);
+                queryCache.put(key, view, weight);
+                return null;
             }
         });
     }
@@ -425,16 +441,20 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
-    private Optional<Row> activeRow(UUID projectId) throws IOException {
+    /** The payload row of the version {@code metadata} describes, if that version is still the active one. */
+    private Optional<Row> activeRow(UUID projectId, ActiveMetadata metadata) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         try {
             return connections.withConnection(connection -> {
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT s.snapshot_id,s.payload,s.sha256 " + ACTIVE_SNAPSHOT_FROM)) {
+                        "SELECT s.snapshot_id,s.payload,s.sha256 " + ACTIVE_SNAPSHOT_FROM
+                                + " AND s.snapshot_id=? AND s.sha256=?")) {
                     statement.setObject(1, projectId);
+                    statement.setString(2, metadata.snapshotId());
+                    statement.setString(3, metadata.sha256());
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) return Optional.empty();
-                        return Optional.of(readRow(result));
+                        return Optional.of(readRow(result, metadata.payloadBytes()));
                     }
                 }
             });
@@ -443,19 +463,59 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
         }
     }
 
-    /** Copies the payload of the current row to a private scratch file, hashing it while it is copied. */
-    private Row readRow(ResultSet result) throws SQLException, IOException {
+    private void requireScratchSpace(long payloadBytes) throws IOException {
+        long available = scratchSpace.usableBytes(scratchRoot);
+        if (available < payloadBytes) throw new SnapshotScratchSpaceExhaustedException(payloadBytes, available);
+    }
+
+    /**
+     * Copies the payload of the current row to a private scratch file, hashing it while it is copied. A write that
+     * fails while the scratch area no longer holds what remains to copy is a scratch-space refusal; any other failure
+     * keeps its own error.
+     */
+    private Row readRow(ResultSet result, long payloadBytes) throws SQLException, IOException {
         Path payload = createScratchFile("snapshot-read-");
         // Hashed while it is copied: the payload is not read a second time to check it.
         MessageDigest digest = Sha256.newDigest();
         try (InputStream input = new DigestInputStream(result.getBinaryStream(2), digest);
              OutputStream output = PrivateLocalStorage.openPrivateOutputStream(payload)) {
             copyBounded(input, output, limits.maxPersistedBytes());
+        } catch (IOException exception) {
+            long copied = copiedBytes(payload);
+            Files.deleteIfExists(payload);
+            throw scratchRefusalOr(exception, payloadBytes, copied);
         } catch (Exception exception) {
             Files.deleteIfExists(payload);
             throw exception;
         }
         return new Row(result.getString(1), payload, result.getString(3), HexFormat.of().formatHex(digest.digest()));
+    }
+
+    /**
+     * Bytes already written to a partial scratch file; 0 when its size cannot be read, which counts the whole payload
+     * as still to copy and so leans towards the scratch-space refusal, never towards hiding one.
+     */
+    private static long copiedBytes(Path payload) {
+        try {
+            return Files.isRegularFile(payload, LinkOption.NOFOLLOW_LINKS) ? Files.size(payload) : 0L;
+        } catch (IOException unreadable) {
+            return 0L;
+        }
+    }
+
+    /** {@code failure} as a scratch-space refusal when the scratch area no longer holds the rest of the payload. */
+    private IOException scratchRefusalOr(IOException failure, long payloadBytes, long copiedBytes) {
+        long available;
+        try {
+            available = scratchSpace.usableBytes(scratchRoot);
+        } catch (IOException unreadable) {
+            failure.addSuppressed(unreadable);
+            return failure;
+        }
+        if (available >= payloadBytes - copiedBytes) return failure;
+        SnapshotScratchSpaceExhaustedException refusal = new SnapshotScratchSpaceExhaustedException(payloadBytes, available);
+        refusal.initCause(failure);
+        return refusal;
     }
 
     private Path createScratchFile(String prefix) throws IOException {
@@ -524,18 +584,8 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
     }
 
     private long estimateWeight(ActiveMetadata metadata, long persistedBytes, int formatVersion) {
-        long countWeight = 64L * 1024L;
-        countWeight = saturatingAdd(countWeight, metadata.symbolCount() * 1024L);
-        countWeight = saturatingAdd(countWeight, metadata.occurrenceCount() * 640L);
-        countWeight = saturatingAdd(countWeight, metadata.relationshipCount() * 1024L);
-        long persistedWeight = limits.amplifiedBytes(formatVersion, persistedBytes);
-        // AUD-PERF-11: the derived index of incoming edges, built later, lives as long as the cached view.
-        return saturatingAdd(Math.max(countWeight, persistedWeight),
-                SnapshotReadView.incomingRelationshipsWeightBytes(metadata.relationshipCount()));
-    }
-
-    private static long saturatingAdd(long left, long right) {
-        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+        return limits.viewWeightBytes(formatVersion, persistedBytes,
+                metadata.symbolCount(), metadata.occurrenceCount(), metadata.relationshipCount());
     }
 
     private static ReentrantLock[] buildLocks() {
@@ -561,7 +611,7 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
                                   int occurrenceCount, int relationshipCount,
                                   long payloadBytes, int headerFormatVersion) { }
 
-    /** The cached views of this store, as the memory budget counts and evicts them. */
+    /** The cached and held views of this store, as the memory budget counts and evicts them. */
     private final class CacheTenant implements QueryViewMemoryBudget.Tenant {
         @Override
         public long residentWeightBytes() {
@@ -570,10 +620,19 @@ public final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSn
 
         @Override
         public void evictAll() {
-            synchronized (cacheLock) { queryCache.removeIf(key -> true); }
+            synchronized (cacheLock) { queryCache.clear(); }
         }
     }
     private record CacheKey(UUID projectId, String snapshotId, String sha256) { }
+
+    /** Usable bytes of the file store that holds a directory. */
+    @FunctionalInterface
+    interface ScratchSpace {
+        ScratchSpace FILE_STORE = directory -> Files.getFileStore(directory).getUsableSpace();
+
+        long usableBytes(Path directory) throws IOException;
+    }
+    /** {@code weightBytes} is the weight of the cached views, {@code heldWeightBytes} that of the view held alone. */
     record QueryCacheStats(long hits, long misses, long evictions, int entries,
-                           long weightBytes, long maximumWeightBytes) { }
+                           long weightBytes, long maximumWeightBytes, long heldWeightBytes) { }
 }

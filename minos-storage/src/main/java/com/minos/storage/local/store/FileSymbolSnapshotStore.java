@@ -1,5 +1,6 @@
 package com.minos.storage.local.store;
 
+import com.minos.storage.codec.BudgetedViewCache;
 import com.minos.storage.codec.KnowledgeSnapshotCodecs;
 import com.minos.storage.codec.SnapshotCodec;
 import com.minos.storage.codec.SnapshotCodecV1;
@@ -14,7 +15,6 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotDescriptor;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SnapshotReadView;
-import com.minos.store.cache.WeightedLruCache;
 import com.minos.store.SymbolSnapshot;
 
 import java.io.IOException;
@@ -64,7 +64,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final QueryViewMemoryBudget.Tenant budgetTenant = new CacheTenant();
     private final Object cacheLock = new Object();
     private final ReentrantLock[] buildLocks = buildLocks();
-    private final WeightedLruCache<CacheKey, SnapshotReadView> queryCache;
+    private final BudgetedViewCache<CacheKey, SnapshotReadView> queryCache;
 
     private long cacheHits;
     private long cacheMisses;
@@ -149,7 +149,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this.codecV1 = new SnapshotCodecV1(limits);
         this.maxQueryCacheEntries = maxQueryCacheEntries;
         this.maxQueryCacheWeightBytes = cacheWeightCeiling;
-        this.queryCache = new WeightedLruCache<>(maxQueryCacheEntries, cacheWeightCeiling);
+        this.queryCache = new BudgetedViewCache<>(maxQueryCacheEntries, cacheWeightCeiling);
         this.maxActiveQueryRetries = maxActiveQueryRetries;
         this.activeQueryBuildHook = Objects.requireNonNull(activeQueryBuildHook, "activeQueryBuildHook");
         memoryBudget.register(budgetTenant);
@@ -302,7 +302,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             long weight,
             QueryViewMemoryBudget.Reservation reservation
     ) {
-        // The reservation becomes resident weight under the budget lock, then the cache lock (lock order).
+        // The reservation becomes resident weight under the budget lock, then the cache lock (lock order); a view
+        // above the cache ceiling is held alone and stays counted (AUD-PERF-06).
         return memoryBudget.convert(reservation, () -> {
             synchronized (cacheLock) {
                 SnapshotReadView raced = queryCache.get(key);
@@ -329,7 +330,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             return new CacheStats(
                     cacheHits, cacheMisses, fullSnapshotLoads, queryViewBuilds,
                     queryCache.size(), maxQueryCacheEntries,
-                    queryCache.weight(), maxQueryCacheWeightBytes, queryCache.evictions());
+                    queryCache.cachedWeight(), maxQueryCacheWeightBytes, queryCache.evictions(),
+                    queryCache.heldWeight());
         }
     }
 
@@ -415,19 +417,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     }
 
     private long estimateQueryViewWeight(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
-        long countWeight = 64L * 1024L;
-        countWeight = saturatingAdd(countWeight, descriptor.symbolCount() * 1024L);
-        countWeight = saturatingAdd(countWeight, descriptor.occurrenceCount() * 640L);
-        countWeight = saturatingAdd(countWeight, descriptor.relationshipCount() * 1024L);
         Path snapshot = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
-        long persistedWeight = limits.amplifiedBytes(descriptor.formatVersion(), Files.size(snapshot));
-        // AUD-PERF-11: the derived index of incoming edges, built later, lives as long as the cached view.
-        return saturatingAdd(Math.max(countWeight, persistedWeight),
-                SnapshotReadView.incomingRelationshipsWeightBytes(descriptor.relationshipCount()));
-    }
-
-    private static long saturatingAdd(long left, long right) {
-        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+        return limits.viewWeightBytes(descriptor.formatVersion(), Files.size(snapshot),
+                descriptor.symbolCount(), descriptor.occurrenceCount(), descriptor.relationshipCount());
     }
 
     private static <T> List<T> orderedById(Collection<T> values, Function<T, String> id, String name) {
@@ -453,7 +445,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         return locks;
     }
 
-    /** The cached views of this store, as the memory budget counts and evicts them. */
+    /** The cached and held views of this store, as the memory budget counts and evicts them. */
     private final class CacheTenant implements QueryViewMemoryBudget.Tenant {
         @Override
         public long residentWeightBytes() {
@@ -462,7 +454,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
         @Override
         public void evictAll() {
-            synchronized (cacheLock) { queryCache.removeIf(key -> true); }
+            synchronized (cacheLock) { queryCache.clear(); }
         }
     }
 
@@ -480,6 +472,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         }
     }
 
+    /** {@code weightBytes} is the weight of the cached views, {@code heldWeightBytes} that of the view held alone. */
     public record CacheStats(
             long hits,
             long misses,
@@ -489,7 +482,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             int maximumEntries,
             long weightBytes,
             long maximumWeightBytes,
-            long evictions
+            long evictions,
+            long heldWeightBytes
     ) { }
 }
 

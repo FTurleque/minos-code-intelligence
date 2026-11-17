@@ -13,6 +13,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.cache.WeightedLruCache;
 import com.minos.diagnostics.UsageException;
 
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.WeakHashMap;
 
 /**
  * Read-only consultation of the semantic documents of a project: paged list, detail of one document and its
@@ -66,13 +68,15 @@ public final class SemanticCorpusQueryService {
 
     /** Projects whose fingerprint, a few bytes each, is kept; and projects whose symbols, far heavier, are. */
     static final int MAX_FINGERPRINTED_PROJECTS = 64;
-    static final int MAX_SYMBOL_LOOKUPS = 4;
 
     private final Object cacheLock = new Object();
     private final WeightedLruCache<String, FingerprintedIndex> fingerprints =
             new WeightedLruCache<>(MAX_FINGERPRINTED_PROJECTS, MAX_FINGERPRINTED_PROJECTS);
-    private final WeightedLruCache<String, SymbolLookup> lookups =
-            new WeightedLruCache<>(MAX_SYMBOL_LOOKUPS, MAX_SYMBOL_LOOKUPS);
+    /**
+     * The symbol table of each snapshot view still in use, held through the view (AUD-PERF-04, D3): a view that the
+     * store no longer keeps and no request uses is collected with its table. The table never refers to its view.
+     */
+    private final Map<SnapshotReadView, SymbolLookup> lookups = new WeakHashMap<>();
 
     public SemanticCorpusQueryService(ProjectRegistry registry, ProjectResolver projects,
                                       CodeKnowledgeSnapshotStore snapshots, SemanticIndexService indexService,
@@ -404,17 +408,18 @@ public final class SemanticCorpusQueryService {
         if (active.isEmpty() || !active.orElseThrow().equals(indexedSnapshotId)) {
             return SymbolLookup.unresolved();
         }
-        synchronized (cacheLock) {
-            SymbolLookup known = lookups.get(projectId);
-            if (known != null && known.describes(projectId, indexedSnapshotId)) return known;
-        }
-        Optional<CodeKnowledgeSnapshot> loaded = snapshots.loadActiveKnowledge(project.id());
-        if (loaded.isEmpty() || !indexedSnapshotId.equals(loaded.orElseThrow().snapshotId())) {
+        Optional<SnapshotReadView> loaded = snapshots.loadActiveReadView(project.id());
+        if (loaded.isEmpty() || !indexedSnapshotId.equals(loaded.orElseThrow().snapshot().snapshotId())) {
             return SymbolLookup.unresolved();
         }
-        SymbolLookup built = SymbolLookup.of(projectId, loaded.orElseThrow());
+        SnapshotReadView view = loaded.orElseThrow();
         synchronized (cacheLock) {
-            lookups.put(projectId, built, 1L);
+            SymbolLookup known = lookups.get(view);
+            if (known != null && known.describes(projectId, indexedSnapshotId)) return known;
+        }
+        SymbolLookup built = SymbolLookup.of(projectId, view.snapshot());
+        synchronized (cacheLock) {
+            lookups.put(view, built);
         }
         return built;
     }
