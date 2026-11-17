@@ -82,7 +82,8 @@ class BudgetedViewCacheTest {
     @Test
     void aNegativeWeightIsRefused() {
         BudgetedViewCache<String, Object> cache = new BudgetedViewCache<>(4, 100L);
+        Object view = new Object();
 
-        assertThrows(IllegalArgumentException.class, () -> cache.put("a", new Object(), -1L));
+        assertThrows(IllegalArgumentException.class, () -> cache.put("a", view, -1L));
     }
 }

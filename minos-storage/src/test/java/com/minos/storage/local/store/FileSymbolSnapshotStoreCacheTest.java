@@ -68,7 +68,7 @@ class FileSymbolSnapshotStoreCacheTest {
         assertEquals(1, store.cacheStats().fullSnapshotLoads());
         assertEquals(0, store.cacheStats().entries());
         assertTrue(store.cacheStats().heldWeightBytes() > persisted, "the held view stays counted");
-        assertTrue(first == second, "the held view serves the second read");
+        assertSame(first, second, "the held view serves the second read");
     }
 
     @Test
