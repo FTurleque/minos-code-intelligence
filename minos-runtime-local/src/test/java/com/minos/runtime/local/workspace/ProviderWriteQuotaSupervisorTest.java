@@ -10,15 +10,18 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class ProviderWriteQuotaSupervisorTest {
 
     private static final Duration FAST_SAMPLE = Duration.ofMillis(20L);
+    private static final Duration SAMPLE_DEADLINE = Duration.ofSeconds(10L);
 
     @Test
     void aProviderThatFillsTheDiskIsDetectedAndTheJobIsDestroyed(@TempDir Path workspace) throws Exception {
@@ -61,7 +64,7 @@ class ProviderWriteQuotaSupervisorTest {
                 Set.of(workspace),
                 new ProviderWriteQuota(1L << 30, 10_000L, FAST_SAMPLE),
                 kills::incrementAndGet)) {
-            Thread.sleep(200L);
+            awaitTwoSamples(supervisor, SAMPLE_DEADLINE);
             assertTrue(supervisor.breach().isEmpty(), "a compliant provider must not be terminated");
         }
         assertEquals(0, kills.get());
@@ -76,10 +79,38 @@ class ProviderWriteQuotaSupervisorTest {
                 new ProviderWriteQuota(1L << 30, 10_000L, FAST_SAMPLE),
                 () -> {
                 })) {
-            Thread.sleep(200L);
+            awaitTwoSamples(supervisor, SAMPLE_DEADLINE);
             assertTrue(supervisor.observedBytes() >= 8L * 1024L);
             assertTrue(supervisor.observedBytes() < 16L * 1024L,
                     "a nested writable root must not be measured twice: " + supervisor.observedBytes());
+        }
+    }
+
+    @Test
+    void aSupervisorThatNeverSamplesFailsTheSampleWait(@TempDir Path workspace) throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        ProviderWriteQuotaSupervisor.RootSampler blocked = (root, quota) -> {
+            try {
+                release.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            return new ProviderWriteQuotaSupervisor.RootSample(0L, 0L, null);
+        };
+        try (ProviderWriteQuotaSupervisor supervisor = ProviderWriteQuotaSupervisor.startForTest(
+                Set.of(workspace),
+                new ProviderWriteQuota(1L << 30, 10_000L, FAST_SAMPLE),
+                () -> {
+                },
+                blocked)) {
+            try {
+                AssertionError error = assertThrows(AssertionError.class,
+                        () -> awaitTwoSamples(supervisor, Duration.ofMillis(200L)));
+                assertTrue(error.getMessage().contains("missing samples before the deadline: sampleCount=0"),
+                        error.getMessage());
+            } finally {
+                release.countDown();
+            }
         }
     }
 
@@ -109,6 +140,22 @@ class ProviderWriteQuotaSupervisorTest {
             Files.setPosixFilePermissions(hidden, PosixFilePermissions.fromString("rwx------"));
         }
         assertEquals(1, kills.get(), "visibility loss must destroy the contained job exactly once");
+    }
+
+    /**
+     * Waits for two counted samples: the first one may have started before the test wrote anything, the second
+     * one is a complete sample taken after the supervisor started. Fails at the deadline.
+     */
+    private static void awaitTwoSamples(ProviderWriteQuotaSupervisor supervisor, Duration deadline)
+            throws InterruptedException {
+        long expiresAt = System.nanoTime() + deadline.toNanos();
+        while (supervisor.sampleCount() < 2L) {
+            if (System.nanoTime() - expiresAt > 0L) {
+                throw new AssertionError("missing samples before the deadline: sampleCount="
+                        + supervisor.sampleCount() + " after " + deadline.toMillis() + " ms");
+            }
+            Thread.sleep(5L);
+        }
     }
 
     private static boolean awaitBreach(ProviderWriteQuotaSupervisor supervisor) throws InterruptedException {
