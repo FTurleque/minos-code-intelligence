@@ -171,6 +171,17 @@ Les sept changements du sprint 1 de l'audit du 15 novembre 2026 (« remettre la 
 
 Restes manuels : remise à niveau des fins de ligne d'un clone existant, référence complète du banc. Détail et preuves : [`docs/project/audits/2026-11-15/SUIVI.md`](../audits/2026-11-15/SUIVI.md).
 
+## Audit 2026-11-15 — sprint 4, lecture de l'index sémantique (2026-11-17)
+
+Les trois changements Java du sprint 4 de l'audit du 15 novembre 2026 (AUD-PERF-01 à 03) sont **fusionnés dans `main` et archivés** (PR #758, #760 et #761). Aucune sortie CLI, API Java ni MCP ne change, hors le rapport de la commande de préparation de la projection (champs additifs `strategy`, `iterations`, `limitations`) ; le schéma PostgreSQL passe à la version 6.
+
+- **Stockage local** : la liste, le détail et les voisins parcourent le fichier d'index sans le charger quand le cache de 256 Mio ne peut pas le tenir ; des lectures simultanées d'un index que le cache tient ne le décodent qu'une fois.
+- **PostgreSQL** : le nombre de documents est tenu à l'écriture (colonne `document_count`, migration 6) et les pages de lecture ne le recomptent plus ; un MINOS antérieur déjà ouvert sur la base échoue à l'écriture d'un index sémantique tant qu'il n'est pas remplacé.
+- **Projection** : la préparation copie l'échantillon en mémoire quand il tient dans le budget (2 parcours de l'index) et garde le parcours en flux sinon, en l'annonçant ; les deux stratégies publient les mêmes coordonnées.
+- **Mesures** : relevées sur un poste, sur des jeux synthétiques, en une exécution bruitée ; la référence sur la machine de référence reste à produire.
+
+Restes manuels : référence complète du banc sur la machine de référence (PostgreSQL et 100 000 documents compris), mesure d'un index construit par la synchronisation. Détail et preuves : [`docs/project/audits/2026-11-15/SUIVI.md`](../audits/2026-11-15/SUIVI.md).
+
 ## État produit
 
 - **C0 → M30** : terminés et intégrés.
