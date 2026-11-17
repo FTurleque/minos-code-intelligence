@@ -50,6 +50,10 @@ demande l'écart entre ce ruleset et la liste déclarée (0 conforme, 1 écart, 
 « branche à jour » ne relève que de ce réglage manuel (écart E6). Le job `gate` du plugin s'exécute toujours
 (`if: always()`) et refuse un job sauté alors que la portée l'incluait.
 
+Les portées calculées du plugin et de la qualification Docker lisent le diff sans détection de renommage
+(`scripts/ci/plugin-gate.py`, fonction `changed_files`) : l'ancien chemin d'un fichier renommé compte comme le
+nouveau, et déplacer une source vers `docs/` ou `src/test/` laisse la pull request concernée.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
