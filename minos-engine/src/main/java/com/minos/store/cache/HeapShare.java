@@ -8,7 +8,7 @@ package com.minos.store.cache;
  *
  * <p>The shares were fixed on a measurement of the retained heap of each cache (design of
  * {@code borner-les-caches-applicatifs-par-le-tas}, ADR DATA-0085): the view budget keeps 50 percent of the heap, the
- * decoding of a view that fills it uses up to 34 percent more, 5 percent is left to the work of the requests, and
+ * decoding of a view that fills it uses up to 34 percent more, 3 percent is left to the work of the requests, and
  * {@value #CACHES_PERCENT} percent goes to the caches below. Every estimate of these caches was measured above the
  * heap it retains, so a ceiling taken from a share bounds what they retain.</p>
  */
@@ -22,14 +22,16 @@ public enum HeapShare {
     /** Decoded semantic projection. */
     SEMANTIC_PROJECTION(1),
     /** Embedded query vectors. */
-    QUERY_VECTORS(1);
+    QUERY_VECTORS(1),
+    /** Decoded local vector index. */
+    LOCAL_VECTOR_INDEX(2);
 
     /** Sum of the shares, in percent of the maximum heap. */
-    public static final int CACHES_PERCENT = 11;
+    public static final int CACHES_PERCENT = 13;
     /** Heap a view uses while it is decoded beyond its estimated weight, in percent of the heap (peak of 0.84). */
     public static final int VIEW_DECODING_MARGIN_PERCENT = 34;
     /** Heap left to the work of the requests, in percent. */
-    public static final int REQUEST_WORK_PERCENT = 5;
+    public static final int REQUEST_WORK_PERCENT = 3;
 
     private static final long HUNDRED = 100L;
 

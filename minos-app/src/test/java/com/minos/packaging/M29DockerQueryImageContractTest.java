@@ -364,6 +364,55 @@ class M29DockerQueryImageContractTest {
         return low;
     }
 
+    /**
+     * AUD-PERF-04 — under the default memory limit, the view budget, the decoding margin of a view and the effective
+     * ceilings of the application caches stay under the heap of one query JVM, with the local and the PostgreSQL
+     * storage; the declared shares leave the view budget its fraction.
+     */
+    @Test
+    void theViewBudgetAndTheApplicationCachesFitTheDefaultQueryHeap() throws Exception {
+        int shares = 0;
+        for (com.minos.store.cache.HeapShare share : com.minos.store.cache.HeapShare.values()) shares += share.percent();
+        assertEquals(com.minos.store.cache.HeapShare.CACHES_PERCENT, shares, "the declared sum of the heap shares");
+        assertTrue(com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT
+                        + com.minos.store.cache.HeapShare.VIEW_DECODING_MARGIN_PERCENT
+                        + com.minos.store.cache.HeapShare.CACHES_PERCENT
+                        + com.minos.store.cache.HeapShare.REQUEST_WORK_PERCENT <= 100,
+                "view budget, decoding margin, cache shares and request work exceed 100 percent of the heap");
+        for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
+            String compose = text(name);
+            Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
+                    .matcher(compose);
+            assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
+            long heap = Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L
+                    * maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp")) / 100L;
+            long budget = com.minos.storage.codec.QueryViewMemoryBudget.of(heap,
+                    com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
+                    com.minos.storage.codec.SnapshotLimits.VIEW_ADMISSION_WAIT).budgetBytes();
+            long margin = heap / 100L * com.minos.store.cache.HeapShare.VIEW_DECODING_MARGIN_PERCENT;
+            Map<String, Long> caches = new LinkedHashMap<>();
+            caches.put("hybrid corpus", com.minos.store.cache.HeapShare.HYBRID_CORPUS.ceiling(
+                    com.minos.application.semantic.HybridSearchService.DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES, heap));
+            caches.put("query vectors", com.minos.store.cache.HeapShare.QUERY_VECTORS.ceiling(
+                    com.minos.application.semantic.SemanticSearchService.MAX_QUERY_CACHE_WEIGHT_BYTES, heap));
+            caches.put("program graph", com.minos.store.cache.HeapShare.PROGRAM_GRAPH.ceiling(
+                    com.minos.program.analysis.ProgramGraphService.DEFAULT_MAX_CACHE_WEIGHT, heap));
+            caches.put("java fingerprints", com.minos.store.cache.HeapShare.JAVA_FINGERPRINTS.ceiling(
+                    com.minos.program.analysis.FingerprintConstrainedJavaProgramGraphProvider
+                            .DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES, heap));
+            caches.put("semantic projection", com.minos.store.cache.HeapShare.SEMANTIC_PROJECTION.ceiling(
+                    com.minos.storage.local.store.FileSemanticProjectionStore.DEFAULT_MAX_DECODED_WEIGHT_BYTES, heap));
+            long postgres = budget + margin + caches.values().stream().mapToLong(Long::longValue).sum();
+            assertTrue(postgres <= heap, name + " (PostgreSQL storage): heap " + heap + ", view budget " + budget
+                    + ", decoding margin " + margin + ", caches " + caches + " exceed the heap");
+            caches.put("local vector index", com.minos.store.cache.HeapShare.LOCAL_VECTOR_INDEX.ceiling(
+                    com.minos.storage.local.store.FileSemanticVectorStore.DEFAULT_MAX_CACHE_WEIGHT_BYTES, heap));
+            long local = budget + margin + caches.values().stream().mapToLong(Long::longValue).sum();
+            assertTrue(local <= heap, name + " (local storage): heap " + heap + ", view budget " + budget
+                    + ", decoding margin " + margin + ", caches " + caches + " exceed the heap");
+        }
+    }
+
     private static int maxRamPercentage(String where, String text) {
         Matcher matcher = Pattern.compile("-XX:MaxRAMPercentage=(?:\\$\\{MINOS_MCP_HEAP_PERCENT:-)?(\\d+)").matcher(text);
         assertTrue(matcher.find(), where + " must declare -XX:MaxRAMPercentage=");
