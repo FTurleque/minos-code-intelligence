@@ -189,7 +189,7 @@ plugin par le job `IntelliJ plugin (gate)` (Linux) et son job Windows.
 | idem | Fil de test endormi plus longtemps que prévu | D2 | 2.1 | `ProcessOwnershipTrackerCadenceTest#aWindowThatLastedLongerThanPlannedIsJudgedOnItsMeasuredDuration` |
 | idem | Cadence trop élevée | D2 | 2.1 | `ProcessOwnershipTrackerCadenceTest#aCadenceAboveTheBoundIsRefusedWithItsMeasures` |
 | idem | Suivi arrêté | D2 | 2.1 | `ProcessOwnershipTrackerCadenceTest#aTrackerThatStoppedEnumeratingIsRefused` |
-| client-intellij › La cadence du superviseur du plugin est jugée sur le temps réellement mesuré | Fenêtre réelle dans le plugin | D2 | 3.1 | `MinosProcessSupervisorCadenceTest#aLiveProcessIsEnumeratedRarelyOnceTheInitialPhaseIsOver` (vert en local, Gradle sans `instrumentCode` ; mutation non prouvée sur le poste) |
+| client-intellij › La cadence du superviseur du plugin est jugée sur le temps réellement mesuré | Fenêtre réelle dans le plugin | D2 | 3.1 | `MinosProcessSupervisorCadenceTest#aLiveProcessIsEnumeratedRarelyOnceTheInitialPhaseIsOver` (rouge à 10 ms : 180 en 2 000 ms ; vert en local et sur la CI) |
 | idem | Cadence trop élevée dans le plugin | D2 | 3.1 | `MinosProcessSupervisorCadenceTest#aCadenceAboveTheBoundIsRefusedWithItsMeasures` |
 | idem | Superviseur qui n'énumère plus | D2 | 3.1 | `MinosProcessSupervisorCadenceTest#aSupervisorThatStoppedEnumeratingIsRefused` |
 | persistance-snapshots › La mesure du tas retenu par une vue ne dépend d'aucun délai fixe | Tas stabilisé | D3 | 4.1 | `QueryViewWeightTest#estimatedWeightIsNotBelowTheHeapRetainedByTheView`, `QueryViewWeightTest#aSettledHeapIsTheCommonValueOfTwoConsecutiveReadings` |

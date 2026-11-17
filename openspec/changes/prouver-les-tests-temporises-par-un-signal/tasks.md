@@ -17,7 +17,7 @@
 ## 3. Superviseur du plugin : même preuve (AUD-TST-06)
 
 - [x] 3.1 AUD-TST-06 — Rouge puis correction, dans `minos-intellij` (Gradle, hors reactor, code de test seul) : verdict de cadence du plugin et ses cas à valeurs injectées, puis réécriture de `MinosProcessSupervisorCadenceTest` sur une fenêtre mesurée, comme 2.2. Exigence : client-intellij › La cadence du superviseur du plugin est jugée sur le temps réellement mesuré. Vérifier : `./gradlew --no-daemon test jacocoTestCoverageVerification` par le job `IntelliJ plugin (gate)` ou sous WSL ; **ne pas lancer `pitest` du plugin sur le poste** ; garde de dépendances du plugin verte (aucun `com.minos:*`).
-  - Preuve partielle : `./gradlew.bat test -x instrumentCode -x instrumentTestCode --tests …MinosProcessSupervisorCadenceTest` vert en local (4 tests). `instrumentCode` échoue sur le poste (JDK Microsoft sans dossier `Packages`) : le test s'exécute alors contre un jar instrumenté figé, et la mutation de la période du plugin n'est **pas** prouvée sur le poste. La CI (`IntelliJ plugin (gate)`) exécute le test sur le code instrumenté. Aucun pitest lancé.
+  - Preuve (2026-11-17, Windows) : `./gradlew.bat test --rerun -x instrumentCode -x instrumentTestCode`, après suppression des classes instrumentées périmées de `build/` (sans quoi le test tourne contre un jar figé) : vert (4 tests) ; période établie du plugin à 10 ms en mutation locale → rouge (`expected at most 30 enumerations in 2000 ms (15.0 per second), got 180 enumerations`). Job `IntelliJ plugin (gate)` vert sur la PR. Aucun pitest lancé.
 
 ## 4. Mesure du tas retenu par une vue (AUD-TST-06)
 
