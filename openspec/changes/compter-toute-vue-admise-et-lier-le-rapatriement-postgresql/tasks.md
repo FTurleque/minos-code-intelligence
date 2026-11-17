@@ -33,10 +33,10 @@ comptés, et la preuve PostgreSQL manque.
 
 ## 6. Clôture
 
-- [ ] 6.1 AUD-PERF-05, AUD-PERF-06 — Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes (mesures 2.1 et 3.1 si non faites) ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 6.2 AUD-PERF-05, AUD-PERF-06 — Contrôler les dossiers de capacité et leurs liens ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
-- [ ] 6.3 AUD-PERF-05, AUD-PERF-06 — Valider les spécifications et les gates ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`.
-- [ ] 6.4 AUD-PERF-05, AUD-PERF-06 — Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP si le constat y figure, `docs/user/docker-runtime.md`, `docs/developer/indexing-and-storage.md`, ADR et ses index, suivi de l'audit du 2026-11-15) ; vérifier que chacun est fait ou nommé comme reste.
+- [x] 6.1 AUD-PERF-05, AUD-PERF-06 — Mettre à jour la matrice de traçabilité du design (exigence → scénario → conception ou diagramme → tâche → test ou preuve) en nommant les preuves manquantes (mesures 2.1 et 3.1 si non faites) ; vérifier qu'aucune ligne n'affirme une couverture sans preuve. Preuves manquantes nommées : mesures 2.1 et 3.1 ; rouge des tests 1.1 et 3.2 établi par construction, non rejoué sur le commit parent.
+- [x] 6.2 AUD-PERF-05, AUD-PERF-06 — Contrôler les dossiers de capacité et leurs liens ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 6.3 AUD-PERF-05, AUD-PERF-06 — Valider les spécifications et les gates ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`. Fait le 2026-11-17 sous Windows : openspec 53/53, run_gates.py --fast 29/29 ; tests Maven ciblés verts avec PostgreSQL requis (serveur de test local, aucun saut) et suite complète de minos-storage verte (1 148 tests).
+- [x] 6.4 AUD-PERF-05, AUD-PERF-06 — Lister les documents à mettre à jour avant archivage (STATUS, ROADMAP si le constat y figure, `docs/user/docker-runtime.md`, `docs/developer/indexing-and-storage.md`, ADR et ses index, suivi de l'audit du 2026-11-15) ; vérifier que chacun est fait ou nommé comme reste. Faits : docker-runtime.md, indexing-and-storage.md, DATA-0085 et ses index, SUIVI.md. Restes : acceptation de DATA-0085 et archivage de DATA-0081 (propriétaire), STATUS et ROADMAP à l'archivage.
 
 ## Workflow follow-up
 
