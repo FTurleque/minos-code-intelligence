@@ -11,6 +11,7 @@ import com.minos.orchestration.IndexingRun.Phase;
 import com.minos.orchestration.IndexingRun.ResumeTrace;
 import com.minos.orchestration.IndexingRun.Status;
 import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
+import com.minos.orchestration.IndexingRuntimePorts.ExecutionPathAuthorization;
 import com.minos.orchestration.IndexingRuntimePorts.IndexSnapshotStageRequest;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -341,7 +342,9 @@ final class IndexingRunExecutor {
                 relative,
                 selection,
                 mode,
-                scopedChangedFiles)), "indexer execution artifact");
+                scopedChangedFiles,
+                ExecutionPathAuthorization.tryCapture(root.lexicalRoot(), executionRoot),
+                registeredProjectFingerprint(context))), "indexer execution artifact");
         Path artifactPath = validateArtifact(context, executor, selection, artifact, relative);
         CheckpointOutcome checkpoint = checkpoint(
                 material, artifactPath, relative, selection.indexer().version(), mode, scopedChangedFiles,
@@ -354,6 +357,19 @@ final class IndexingRunExecutor {
                 "provider artifacts completed: " + context.executions().size()
                         + "/" + context.totalTargets() + ", mode=" + mode + ", scope=" + portable(relative)
                         + checkpoint.withheldReason().map(reason -> ", checkpoint withheld: " + reason).orElse("")));
+    }
+
+    /**
+     * Fingerprint of the whole registered project already known to the run (AUD-PERF-07): the reference fingerprint
+     * when it is reusable, otherwise the root scope captured earlier in this run, otherwise none. Never captured here,
+     * so a run without a root scope costs no extra hash.
+     */
+    private static Optional<String> registeredProjectFingerprint(RunContext context) {
+        if (context.ports.rootScopeFingerprint().isPresent()) {
+            return context.ports.rootScopeFingerprint();
+        }
+        CheckpointMaterial root = context.scopeFingerprints.get(Path.of(""));
+        return root == null ? Optional.empty() : root.scopeFingerprint();
     }
 
     private static CheckpointMaterial captureScopeFingerprint(

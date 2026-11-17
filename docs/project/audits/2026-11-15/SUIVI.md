@@ -91,8 +91,8 @@ Ordre : `compter-…`, `dimensionner-…`, `borner-…` (sa mesure 1.1 peut tour
 
 | Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
 |---|---|---|---|
-| AUD-PERF-07 | `reduire-les-lectures-de-la-voie-wsl` | Spécifié | La voie utilise l'empreinte du projet enregistré, pas l'empreinte de scope : empreinte racine portée, repli d'une capture par run. |
-| AUD-PERF-08 | idem | Spécifié | Six lectures côté Windows au HEAD (sept sur entrée identique), trois après : le critère est borné à « au plus deux lectures entre l'acceptation du paquet et son retour », la lecture préalable du manifeste restant hors périmètre. Aucune comparaison d'empreinte au manifeste n'est retirée ; deux relectures du disque le sont, sur décision du propriétaire. |
+| AUD-PERF-07 | `reduire-les-lectures-de-la-voie-wsl` | Implémenté (PR #772) | La voie utilise l'empreinte du projet enregistré, pas l'empreinte de scope : empreinte racine portée, repli d'une capture par run. |
+| AUD-PERF-08 | idem | Implémenté (PR #772) | Six lectures côté Windows au HEAD (sept sur entrée identique), trois après : le critère est borné à « au plus deux lectures entre l'acceptation du paquet et son retour », la lecture préalable du manifeste restant hors périmètre. Aucune comparaison d'empreinte au manifeste n'est retirée ; deux relectures du disque le sont, sur décision du propriétaire. |
 | AUD-PERF-11 | `normaliser-les-noms-de-tests-lies-sans-recompilation` | Implémenté (PR #768) | Test de caractérisation avant réécriture (ordre filtre / minuscules, U+212A). |
 | AUD-TST-06 | `prouver-les-tests-temporises-par-un-signal` | Implémenté (PR #771) | Le test de cadence garde un fil réel et juge la borne haute sur le temps mesuré par `System.nanoTime()` ; les deux exigences en vigueur restent prouvées. L'égalité des périodes entre plugin et runtime est une limite déclarée. |
 | AUD-TST-03 | `relever-les-planchers-de-la-frontiere-des-providers` | Implémenté (PR #773) ; D2 : option A (code de chaque plateforme séparé) | Mesurer, tester, puis relever ; un plancher de classe est un seul nombre. Le plancher de 0,50 n'est pas garanti sur les deux systèmes. |

@@ -21,7 +21,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.Objects;
+import java.util.UUID;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -42,8 +44,11 @@ public final class WslIndexerExecutor implements IndexerExecutor {
     private final String providerVersion;
     private final Worker worker;
     private final DistributedArtifactBundleStore bundleStore;
-    private final ProjectFingerprintService fingerprints;
+    private final FingerprintCapture fingerprints;
+    private final ArtifactOpener artifactOpener;
     private final Path runsRoot;
+    private final Object fingerprintMonitor = new Object();
+    private RunFingerprint lastRunFingerprint;
 
     /**
      * @param minosHome MINOS_HOME of this installation, whose run directory receives the verified artifact
@@ -51,12 +56,26 @@ public final class WslIndexerExecutor implements IndexerExecutor {
     public WslIndexerExecutor(String indexerId, String providerVersion, Worker worker,
                               DistributedArtifactBundleStore bundleStore, ProjectFingerprintService fingerprints,
                               Path minosHome) {
+        this(indexerId, providerVersion, worker, bundleStore, captureWith(fingerprints),
+                ConfinedFileOpener::openRegularFileNoFollow, minosHome);
+    }
+
+    /** Package-private seam: counts the fingerprint captures and the reads of the cache entry in tests. */
+    WslIndexerExecutor(String indexerId, String providerVersion, Worker worker,
+                       DistributedArtifactBundleStore bundleStore, FingerprintCapture fingerprints,
+                       ArtifactOpener artifactOpener, Path minosHome) {
         this.indexerId = requireText(indexerId, "indexerId");
         this.providerVersion = requireText(providerVersion, "providerVersion");
         this.worker = Objects.requireNonNull(worker, "worker");
         this.bundleStore = Objects.requireNonNull(bundleStore, "bundleStore");
         this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints");
+        this.artifactOpener = Objects.requireNonNull(artifactOpener, "artifactOpener");
         this.runsRoot = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize().resolve("runs");
+    }
+
+    private static FingerprintCapture captureWith(ProjectFingerprintService service) {
+        Objects.requireNonNull(service, "fingerprints");
+        return root -> service.capture(root).projectSha256();
     }
 
     @Override
@@ -70,7 +89,7 @@ public final class WslIndexerExecutor implements IndexerExecutor {
         if (!indexerId.equals(request.selection().indexer().id())) {
             throw new IllegalArgumentException("the WSL executor runs " + indexerId + " only");
         }
-        String fingerprint = fingerprints.capture(request.registeredProjectRoot()).projectSha256();
+        String fingerprint = provenanceFingerprint(request);
         WorkerRequest workerRequest = WorkerRequest.local(request, providerVersion, fingerprint, WorkerNetworkPolicy.DENY);
         WorkerResponse response = Objects.requireNonNull(worker.execute(workerRequest), "worker response");
         VerifiedArtifact verified = null;
@@ -90,6 +109,26 @@ public final class WslIndexerExecutor implements IndexerExecutor {
         }
         release(verified, response.bundle());
         return artifact;
+    }
+
+    /**
+     * The fingerprint of the registered project the provenance names: the one the run already knows, otherwise one
+     * capture per run and registered root, whatever the number of targets (AUD-PERF-07).
+     */
+    private String provenanceFingerprint(IndexingExecutionRequest request) throws IOException {
+        if (request.registeredProjectFingerprint().isPresent()) {
+            return request.registeredProjectFingerprint().orElseThrow();
+        }
+        synchronized (fingerprintMonitor) {
+            RunFingerprint last = lastRunFingerprint;
+            if (last != null && last.runId().equals(request.runId())
+                    && last.registeredRoot().equals(request.registeredProjectRoot())) {
+                return last.fingerprint();
+            }
+            String captured = fingerprints.capture(request.registeredProjectRoot());
+            lastRunFingerprint = new RunFingerprint(request.runId(), request.registeredProjectRoot(), captured);
+            return captured;
+        }
     }
 
     /** Releases the lease and deletes the bundle; the second step runs even when the first fails. */
@@ -114,7 +153,9 @@ public final class WslIndexerExecutor implements IndexerExecutor {
 
     /**
      * Copies the verified artifact to {@code runs/<runId>/<provider>/<scope key>/index.scip}, created new and private,
-     * then checks that the copy still has the verified size and SHA-256.
+     * hashing the bytes while it copies them; the copy must have the verified size and SHA-256, checked once the
+     * target is closed, or it is deleted. The target is created exclusively in a private directory: what it holds is
+     * what was hashed.
      */
     private Path copyUnderRun(IndexingExecutionRequest request, VerifiedArtifact verified) throws IOException {
         DistributedArtifactManifest manifest = verified.manifest();
@@ -133,27 +174,45 @@ public final class WslIndexerExecutor implements IndexerExecutor {
         // A resumed run executes the same target again in the same run directory.
         Files.deleteIfExists(target);
         long maximum = IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES;
-        try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(verified.artifact());
+        MessageDigest digest = Sha256.newDigest();
+        long total = 0L;
+        try (InputStream input = artifactOpener.open(verified.artifact());
              OutputStream output = PrivateLocalStorage.createPrivateOutputStream(target)) {
             byte[] buffer = new byte[8192];
-            long total = 0L;
             int read;
             while ((read = input.read(buffer)) != -1) {
                 total += read;
                 if (total > maximum) {
                     throw new IOException("WSL artifact exceeds its byte limit");
                 }
+                digest.update(buffer, 0, read);
                 output.write(buffer, 0, read);
             }
         } catch (IOException | RuntimeException failure) {
             Files.deleteIfExists(target);
             throw failure;
         }
-        if (!DistributedArtifactBundleStore.sha256Exact(target, manifest.artifactSize(), maximum)
-                .equals(manifest.artifactSha256())) {
+        if (total != manifest.artifactSize()
+                || Files.size(target) != manifest.artifactSize()
+                || !Sha256.hex(digest).equals(manifest.artifactSha256())) {
             Files.deleteIfExists(target);
             throw new IOException("WSL artifact copy does not match its verified checksum");
         }
         return target;
+    }
+
+    /** Captures the SHA-256 of a registered project root. */
+    @FunctionalInterface
+    interface FingerprintCapture {
+        String capture(Path registeredProjectRoot) throws IOException;
+    }
+
+    /** Opens the verified cache entry for reading, without following links. */
+    @FunctionalInterface
+    interface ArtifactOpener {
+        InputStream open(Path artifact) throws IOException;
+    }
+
+    private record RunFingerprint(UUID runId, Path registeredRoot, String fingerprint) {
     }
 }
