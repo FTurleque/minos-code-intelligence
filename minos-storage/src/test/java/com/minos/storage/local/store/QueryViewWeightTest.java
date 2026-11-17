@@ -16,9 +16,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -32,6 +36,7 @@ class QueryViewWeightTest {
 
     private static final String PRINT_PROPERTY = "minos.queryViewWeight.print";
     private static final int FILES = 150;
+    private static final int MAXIMUM_SETTLING_ROUNDS = 20;
 
     @Test
     void estimatedWeightIsNotBelowTheHeapRetainedByTheView(@TempDir Path workspace) throws Exception {
@@ -42,6 +47,25 @@ class QueryViewWeightTest {
         measure(workspace, "mixed", List.of(QueryViewWeightFixtures.ASCII, QueryViewWeightFixtures.LATIN1,
                 QueryViewWeightFixtures.CJK), failures);
         assertTrue(failures.isEmpty(), String.join("\n", failures));
+    }
+
+    @Test
+    void aHeapThatNeverSettlesFailsTheMeasure() {
+        AtomicLong readings = new AtomicLong();
+
+        AssertionError error = assertThrows(AssertionError.class,
+                () -> settledHeap(readings::incrementAndGet, 5));
+
+        assertTrue(error.getMessage().contains("never settled"), error.getMessage());
+        assertEquals(5L, readings.get(), "the measure gives up after its bounded number of rounds");
+    }
+
+    @Test
+    void aSettledHeapIsTheCommonValueOfTwoConsecutiveReadings() {
+        long[] readings = {300L, 200L, 200L, 100L};
+        AtomicLong round = new AtomicLong();
+
+        assertEquals(200L, settledHeap(() -> readings[(int) round.getAndIncrement()], 5));
     }
 
     private static void measure(Path workspace, String label, List<String[]> vocabularies, List<String> failures)
@@ -94,11 +118,27 @@ class QueryViewWeightTest {
         }
     }
 
-    private static long settledHeap() throws InterruptedException {
-        for (int round = 0; round < 4; round++) {
-            System.gc();
-            Thread.sleep(150L);
+    private static long settledHeap() {
+        return settledHeap(QueryViewWeightTest::collectAndReadHeap, MAXIMUM_SETTLING_ROUNDS);
+    }
+
+    /**
+     * Collects and reads until two consecutive readings are equal, within a bounded number of rounds; never waits
+     * for a fixed delay. A heap that does not settle fails the measure instead of yielding an arbitrary reading.
+     */
+    static long settledHeap(LongSupplier collectAndRead, int maximumRounds) {
+        long previous = collectAndRead.getAsLong();
+        for (int round = 1; round < maximumRounds; round++) {
+            long current = collectAndRead.getAsLong();
+            if (current == previous) return current;
+            previous = current;
         }
+        throw new AssertionError("heap never settled: no two consecutive readings were equal in "
+                + maximumRounds + " rounds");
+    }
+
+    private static long collectAndReadHeap() {
+        System.gc();
         return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
     }
 }

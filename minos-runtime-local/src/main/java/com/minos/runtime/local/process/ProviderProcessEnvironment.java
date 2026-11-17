@@ -226,7 +226,15 @@ public final class ProviderProcessEnvironment {
     }
 
     private static boolean isSafeInheritedKey(String candidate) {
-        if (CommandLocator.isWindows()) {
+        return isSafeInheritedKey(candidate, CommandLocator.isWindows());
+    }
+
+    /**
+     * The inherited-key rule of one system, decided by {@code windows} so that both rules are tested on every system:
+     * Windows names are case-insensitive and include the per-drive current directories, other systems match exactly.
+     */
+    static boolean isSafeInheritedKey(String candidate, boolean windows) {
+        if (windows) {
             return isWindowsDriveCurrentDirectory(candidate)
                     || COMMON_SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate))
                     || WINDOWS_SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate));
@@ -235,7 +243,7 @@ public final class ProviderProcessEnvironment {
     }
 
     /** Windows environment blocks may contain per-drive current-directory pseudo variables such as =C:. */
-    private static boolean isWindowsDriveCurrentDirectory(String candidate) {
+    static boolean isWindowsDriveCurrentDirectory(String candidate) {
         return candidate.length() == 3
                 && candidate.charAt(0) == '='
                 && Character.isLetter(candidate.charAt(1))

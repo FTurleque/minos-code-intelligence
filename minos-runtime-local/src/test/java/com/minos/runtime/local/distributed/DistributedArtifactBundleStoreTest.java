@@ -15,7 +15,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -272,6 +275,120 @@ class DistributedArtifactBundleStoreTest {
             assertEquals(DistributedArtifactManifest.FORMAT_V1, result.manifest().format());
         } finally {
             store.release(result);
+        }
+    }
+
+    // indexation-java-via-wsl › Le paquet produit dans la distribution est vérifié pendant son écriture
+
+    @Test
+    void aBundleIsBuiltByReadingItsSourceArtifactOnce(@TempDir Path temp) throws Exception {
+        List<Path> opened = new ArrayList<>();
+        DistributedArtifactBundleStore store = CountingBundleStores.countingStore(
+                temp.resolve("home"), new DistributedArtifactCachePolicy(2, 4096, 64), opened);
+        Path artifact = Files.writeString(temp.resolve("source.scip"), "scip-one");
+        DistributedArtifactManifest manifest = manifest(
+                "scip-java", artifact, Instant.parse("2026-07-29T00:00:01Z"));
+
+        Path bundle = store.createBundle(temp.resolve("artifact.zip"), manifest, artifact);
+
+        assertEquals(1, Collections.frequency(opened, artifact.toAbsolutePath().normalize()),
+                "the source artifact is read once, hashed while it is written into the bundle: " + opened);
+        var accepted = store.accept(bundle);
+        store.release(accepted);
+    }
+
+    @Test
+    void anArtifactChangedAfterItsManifestPublishesNoBundleAndLeavesNoTemporaryFile(@TempDir Path temp)
+            throws Exception {
+        DistributedArtifactBundleStore store = store(temp, 2);
+        Path artifact = Files.writeString(temp.resolve("source.scip"), "scip-one");
+        DistributedArtifactManifest manifest = manifest(
+                "scip-java", artifact, Instant.parse("2026-07-29T00:00:01Z"));
+        Files.writeString(artifact, "scip-two");
+        Path output = Files.createDirectories(temp.resolve("out")).resolve("artifact.zip");
+
+        java.io.IOException refusal = assertThrows(java.io.IOException.class,
+                () -> store.createBundle(output, manifest, artifact));
+
+        assertEquals("distributed worker artifact checksum does not match its manifest", refusal.getMessage());
+        assertFalse(Files.exists(output), "no bundle is published");
+        try (var leftovers = Files.list(output.getParent())) {
+            assertEquals(0L, leftovers.count(), "no .bundle-*.tmp file is left behind");
+        }
+    }
+
+    // indexation-java-via-wsl › L'artefact de WSL est lu au plus deux fois entre l'acceptation du paquet et son retour
+
+    @Test
+    void acceptanceReadsTheBundleOnceAndReportsItsSha256(@TempDir Path temp) throws Exception {
+        List<Path> opened = new ArrayList<>();
+        DistributedArtifactBundleStore store = CountingBundleStores.countingStore(
+                temp.resolve("home"), new DistributedArtifactCachePolicy(2, 4096, 64), opened);
+        Path artifact = Files.writeString(temp.resolve("source.scip"), "scip-one");
+        DistributedArtifactManifest manifest = manifest(
+                "scip-java", artifact, Instant.parse("2026-07-29T00:00:01Z"));
+        Path bundle = store.createBundle(temp.resolve("artifact.zip"), manifest, artifact);
+        String bundleSha256 = DistributedArtifactBundleStore.sha256(bundle);
+        opened.clear();
+
+        var accepted = store.accept(bundle);
+        try {
+            assertEquals(List.of(bundle.toAbsolutePath().normalize()), opened,
+                    "a cache miss reads the bundle once and neither the extracted artifact nor the cache entry");
+            assertEquals(bundleSha256, accepted.bundleSha256());
+            assertFalse(accepted.cacheHit());
+        } finally {
+            store.release(accepted);
+        }
+    }
+
+    @Test
+    void aBundleWhoseArtifactDiffersFromItsManifestLeavesNeitherCacheEntryNorExtraction(@TempDir Path temp)
+            throws Exception {
+        DistributedArtifactBundleStore store = store(temp, 2);
+        Path artifact = Files.writeString(temp.resolve("source.scip"), "trusted");
+        DistributedArtifactManifest manifest = manifest(
+                "scip-java", artifact, Instant.parse("2026-07-29T00:00:01Z"));
+        Map<String, byte[]> entries = readEntries(store.createBundle(temp.resolve("valid.zip"), manifest, artifact));
+        Map<String, byte[]> sameSize = new LinkedHashMap<>(entries);
+        sameSize.put(DistributedArtifactManifest.ARTIFACT_PATH, "TRUSTED".getBytes(StandardCharsets.UTF_8));
+        Map<String, byte[]> otherSize = new LinkedHashMap<>(entries);
+        otherSize.put(DistributedArtifactManifest.ARTIFACT_PATH, "trusted!".getBytes(StandardCharsets.UTF_8));
+
+        java.io.IOException checksum = assertThrows(java.io.IOException.class,
+                () -> store.accept(writeEntries(temp.resolve("same-size.zip"), sameSize)));
+        java.io.IOException size = assertThrows(java.io.IOException.class,
+                () -> store.accept(writeEntries(temp.resolve("other-size.zip"), otherSize)));
+
+        assertEquals("transported artifact checksum does not match its manifest", checksum.getMessage());
+        assertEquals("transported artifact size does not match its manifest", size.getMessage());
+        assertEquals(0L, cacheEntryCount(temp), "no cache entry is created");
+        try (var children = Files.list(temp.resolve("home").resolve("distributed-artifacts"))) {
+            assertTrue(children.noneMatch(path -> path.getFileName().toString().startsWith(".accept-")),
+                    "the extraction directory is deleted");
+        }
+    }
+
+    @Test
+    void anIdenticalCacheEntryIsVerifiedAgainBeforeItIsReturned(@TempDir Path temp) throws Exception {
+        List<Path> opened = new ArrayList<>();
+        DistributedArtifactBundleStore store = CountingBundleStores.countingStore(
+                temp.resolve("home"), new DistributedArtifactCachePolicy(2, 4096, 64), opened);
+        Path artifact = Files.writeString(temp.resolve("source.scip"), "scip-one");
+        DistributedArtifactManifest manifest = manifest(
+                "scip-java", artifact, Instant.parse("2026-07-29T00:00:01Z"));
+        Path bundle = store.createBundle(temp.resolve("artifact.zip"), manifest, artifact);
+        store.release(store.accept(bundle));
+        opened.clear();
+
+        var hit = store.accept(bundle);
+        try {
+            assertTrue(hit.cacheHit());
+            assertEquals(1, Collections.frequency(opened, hit.artifact()),
+                    "the cached artifact is hashed again before it is returned: " + opened);
+            assertEquals(1, Collections.frequency(opened, bundle.toAbsolutePath().normalize()));
+        } finally {
+            store.release(hit);
         }
     }
 

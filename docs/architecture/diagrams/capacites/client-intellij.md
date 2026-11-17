@@ -108,6 +108,7 @@ Linux.
 | E4 | « Aucune capture générique (`catch (Throwable`) » repose sur une recherche manuelle, sans gate en CI | `openspec/specs/client-intellij/spec.md` | [Proposition] Ajouter la recherche au gate du plugin |
 | E5 | La liste gardée par le test « sans plateforme » ne contient pas les classes d'interprétation des réponses de la CLI, qui n'importent pourtant pas la plateforme | `minos-intellij/src/test/java/com/minos/intellij/PlatformFreeLogicTest.java:20` | [Proposition] Étendre la liste |
 | E6 | Un survivant après l'arrêt forcé est signalé par le code mais aucun test ne le vérifie ; le test du superviseur est exclu de la mutation | `minos-intellij/src/main/java/com/minos/intellij/protocol/MinosProcessSupervisor.java:131` | [Proposition] Test du cas survivant |
+| E7 | Les périodes de suivi de propriété du plugin (10 ms pendant 1 000 ms, puis 100 ms) sont une copie de celles du runtime ; aucun contrôle ne compare les deux fichiers : les deux tests de cadence jugent la même borne de 15 énumérations par seconde mesurée, pas l'égalité des périodes | `minos-intellij/src/main/java/com/minos/intellij/protocol/MinosProcessSupervisor.java:42-44`, `minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProcessOwnershipTracker.java:33-36` | Limite déclarée (AUD-TST-06, design D2) |
 
 ## Questions ouvertes
 

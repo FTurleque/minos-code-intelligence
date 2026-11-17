@@ -9,6 +9,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.semantic.StaleSemanticSyncException;
+import com.minos.store.cache.HeapShare;
 import com.minos.store.cache.WeightedLruCache;
 
 import java.io.BufferedInputStream;
@@ -84,10 +85,18 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     }
 
     FileSemanticVectorStore(Path root, long maxCacheWeightBytes) throws IOException {
+        this(root, maxCacheWeightBytes, Runtime.getRuntime().maxMemory());
+    }
+
+    /**
+     * Test seam: the index cache keeps the smaller of {@code maxCacheWeightBytes} and its share of
+     * {@code maximumHeapBytes} (AUD-PERF-04).
+     */
+    FileSemanticVectorStore(Path root, long maxCacheWeightBytes, long maximumHeapBytes) throws IOException {
         this.root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         if (maxCacheWeightBytes < 1L) throw new IllegalArgumentException("maxCacheWeightBytes must be positive");
-        this.maxCacheWeightBytes = maxCacheWeightBytes;
-        this.cache = new WeightedLruCache<>(Integer.MAX_VALUE, maxCacheWeightBytes);
+        this.maxCacheWeightBytes = HeapShare.LOCAL_VECTOR_INDEX.ceiling(maxCacheWeightBytes, maximumHeapBytes);
+        this.cache = new WeightedLruCache<>(Integer.MAX_VALUE, this.maxCacheWeightBytes);
         DurableAtomicFile.ensureDirectory(this.root, "semantic index root");
     }
 

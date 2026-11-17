@@ -211,7 +211,47 @@ def run_self_test(gate: ModuleType) -> int:
     expect("guard class absent from the report: exit", code, 1)
     expect("guard class absent from the report: failures", failed, ["guard-absent"])
 
+    # 21-23. the classes of the provider trust boundary keep a class floor of at least their minimum (AUD-TST-03): the
+    #     real table holds, a copy whose environment filter floor is lowered is refused with the class, its floor and the
+    #     minimum, and a copy deprived of one class floor is refused by name.
+    expect("real table floors the trust-boundary classes", gate.trust_boundary_floor_problems(gate.SCOPES), [])
+    environment = "com/minos/runtime/local/process/ProviderProcessEnvironment"
+    lowered = {name: dict(config) for name, config in gate.SCOPES.items()}
+    lowered["provider-execution-trust-boundary"]["prefixMinimums"] = {
+        **lowered["provider-execution-trust-boundary"]["prefixMinimums"], environment: {"line": 0.70, "branch": 0.20}}
+    expect("lowered environment filter floor is refused", gate.trust_boundary_floor_problems(lowered),
+           [f"provider-execution-trust-boundary: {environment} branch floor 0.20 is below the minimum 0.80"])
+    manager = "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager"
+    removed = {name: dict(config) for name, config in gate.SCOPES.items()}
+    removed["m24-polyglot-provider-platform"]["prefixMinimums"] = {
+        clazz: floor for clazz, floor in removed["m24-polyglot-provider-platform"]["prefixMinimums"].items()
+        if clazz != manager}
+    expect("removed class floor is refused", gate.trust_boundary_floor_problems(removed),
+           [f"m24-polyglot-provider-platform: {manager} has no class floor"])
+
+    # 24. an environment filter whose covered branches fall under its class floor fails the gate, naming the scope,
+    #     the class, its measure and its floor.
+    filter_floor = gate.SCOPES["provider-execution-trust-boundary"]["prefixMinimums"][environment]
+    eroded_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<report name="self-test-trust-boundary">
+  <class name="com/minos/runtime/local/process/Neighbour">
+    <counter type="LINE" covered="990" missed="10"/>
+    <counter type="BRANCH" covered="990" missed="10"/>
+  </class>
+  <class name="com/minos/runtime/local/process/ProviderProcessEnvironment">
+    <counter type="LINE" covered="58" missed="0"/>
+    <counter type="BRANCH" covered="20" missed="20"/>
+  </class>
+</report>
+"""
+    code, failed = run({"eroded-filter": {
+        "prefixes": ("com/minos/runtime/local/process/", environment), "line": 0.50, "branch": 0.50,
+        "prefixMinimums": {environment: filter_floor},
+    }}, xml=eroded_xml)
+    expect("eroded environment filter: exit", code, 1)
+    expect("eroded environment filter: failures", failed, ["eroded-filter"])
+
     if gate_cli.report_failure_list("MINOS JACOCO GATE SELF-TEST", failures):
         return 1
-    print("MINOS JACOCO GATE SELF-TEST SUCCESS (20 scenarios)")
+    print("MINOS JACOCO GATE SELF-TEST SUCCESS (24 scenarios)")
     return 0

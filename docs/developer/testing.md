@@ -98,6 +98,12 @@ Le concurrent pose d'abord un loquet « démarré » et publie son `Thread` : av
 
 **Rejeu.** Un test de concurrence nouveau ou réécrit est rejoué 50 fois avant d'être déclaré stable : `@RepeatedTest(50)` temporaire (retiré avant commit) ou boucle sur `./mvnw -B -ntp -pl <module> -am test "-Dtest=Classe#methode"`. Un seul échec renvoie à la réécriture. Le décompte, et la plateforme qui n'a tourné qu'en CI, sont consignés.
 
+**Absence d'un effet périodique.** Un test qui affirme qu'un superviseur périodique n'a rien fait (aucun dépassement, aucun arrêt) ou qui lit ce qu'il a observé attend d'abord des **échantillons comptés** : au moins deux (le premier a pu commencer avant l'écriture du test), dans une échéance qui fait échouer le test. Modèle : `ProviderWriteQuotaSupervisor.sampleCount()` et l'aide `awaitTwoSamples` de `ProviderWriteQuotaSupervisorTest`, dont le cas « superviseur qui n'échantillonne pas » prouve que l'aide échoue.
+
+**Cadence.** Une borne de fréquence se juge sur la **durée mesurée** par `System.nanoTime()`, jamais sur la durée du sommeil demandé par le test : la fenêtre s'ouvre après un premier signal observé (première énumération) et la phase initiale, on lit l'horloge puis le compteur à l'ouverture, le compteur puis l'horloge à la fermeture, et un verdict pur (au moins un, au plus N par seconde mesurée) juge le couple ; ses cas à valeurs injectées sont des tests à part. Modèles : `ProcessOwnershipTrackerCadenceTest` (runtime) et `MinosProcessSupervisorCadenceTest` (plugin), dont les périodes sont recopiées sans contrôle d'égalité.
+
+**Mesure de tas.** Une mesure de tas répète collecte et lecture jusqu'à deux lectures consécutives égales, dans une limite de tours, et échoue sinon (`QueryViewWeightTest.settledHeap`) ; aucune pause fixe entre deux collectes.
+
 **Affirmation constante.** `assertTrue(true)` n'est pas une preuve. Un test de bail affirme un fait observé : après une fermeture refusée, un concurrent sur un autre fil est vu en attente ou échoue à une échéance courte, puis obtient le bail après la fermeture par le propriétaire (`ProjectLeaseOwnershipTest`, `SnapshotProjectLeaseTest`, AUD-TST-07).
 
 ### Tests de frontières

@@ -117,9 +117,9 @@ flowchart LR
     V3 --> M
     V2 --> M
     M --> W["+ index des arêtes : poids estimé"]
-    W --> P{"≤ plafond du cache ?"}
+    W --> P{"≤ plafond effectif du cache ?"}
     P -- oui --> Y["Vue en cache : lectures suivantes en millisecondes"]
-    P -- non --> N["Vue servie, non mise en cache : rechargée à chaque requête"]
+    P -- non --> N["Vue retenue seule par le store : comptée par le budget, cache du store vidé"]
 ```
 
 Les trois valeurs (plafond de persistance 400 Mio, amplifications, plafond configuré du cache 512 Mio) viennent de `SnapshotLimits`
@@ -127,7 +127,80 @@ Les trois valeurs (plafond de persistance 400 Mio, amplifications, plafond confi
 cache couvre le plafond de persistance multiplié par l'amplification de V3. La décision est dans
 `docs/architecture/adr/DATA-0081-port-de-connaissance-et-persistance-des-snapshots-budget-memoire-des-vues.md` (points 12 à 14).
 Le plafond effectif du cache vaut `min(512 Mio, budget de mémoire des vues)` (`QueryViewMemoryBudget`, 50 % du tas
-maximal par défaut) : sous un petit tas, il descend sous le plafond configuré.
+maximal par défaut) : sous un petit tas, il descend sous le plafond configuré. Une vue admise par le budget mais plus
+lourde que ce plafond est retenue seule par son store (`BudgetedViewCache`) : elle sert les lectures suivantes, reste
+comptée comme poids résident et quitte le store par l'éviction du budget, une publication du projet ou l'arrivée d'une
+autre vue. L'invariant ne porte que sur l'amplification : `SnapshotLimits.largestPersistableViewWeightBytes(symboles,
+occurrences, relations)` donne le poids complet, index des arêtes entrantes compris.
+
+### Quel est le sort d'une vue admise selon son poids ?
+
+Type : stateDiagram-v2 (UML, états) · Portée : existant vérifié · Exigences : « Une vue admise plus lourde que le plafond du
+cache reste comptée par le budget », « Un snapshot de la taille de ce dépôt est admis au cache de vues »
+
+```mermaid
+stateDiagram-v2
+    [*] --> Reservee: reserve(poids)
+    Reservee --> EnCache: poids <= plafond effectif
+    Reservee --> RetenueSeule: plafond effectif < poids <= budget
+    Reservee --> [*]: échec du chargement (réservation libérée)
+    EnCache --> [*]: éviction, publication, remplacement
+    RetenueSeule --> [*]: éviction du budget, publication, arrivée d'une autre vue
+```
+
+Dans les deux états le poids est résident, donc compté. Le refus au-delà du budget a lieu avant la réservation.
+
+### Que demande PostgreSQL quand le snapshot actif change entre les métadonnées et la charge utile ?
+
+Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « PostgreSQL rapatrie la charge utile de la
+version dont la taille a été réservée »
+
+```mermaid
+sequenceDiagram
+    participant S as PostgresCodeKnowledgeSnapshotStore
+    participant B as QueryViewMemoryBudget
+    participant P as PostgreSQL
+    S->>P: métadonnées du snapshot actif (A, sha, taille)
+    S->>B: reserve(poids de A)
+    S->>P: charge utile WHERE project_id, snapshot_id=A, sha256
+    alt A n'est plus actif
+        P-->>S: aucune ligne
+        S->>B: libère la réservation
+        S->>P: métadonnées du nouveau snapshot actif, puis nouvelle réservation (4 tentatives au plus)
+    else A est toujours actif
+        P-->>S: charge utile de A
+    end
+```
+
+La charge utile demandée est toujours celle dont la taille a été réservée ; une ligne absente n'est jamais lue comme une
+absence de snapshot (`minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java`).
+
+### Que fait PostgreSQL quand la zone de travail ne contient pas la charge utile ?
+
+Type : sequenceDiagram (UML, séquence) · Portée : existant vérifié · Exigences : « Une zone de travail PostgreSQL
+insuffisante donne un refus explicite »
+
+```mermaid
+sequenceDiagram
+    participant S as PostgresCodeKnowledgeSnapshotStore
+    participant Z as Zone de travail
+    participant P as PostgreSQL
+    S->>Z: espace utilisable ?
+    alt espace < taille de la charge utile
+        S-->>S: SnapshotScratchSpaceExhaustedException (réservation libérée, rien demandé)
+    else espace suffisant
+        S->>P: charge utile de la version réservée
+        P-->>S: flux copié dans un fichier de la zone
+        alt écriture en échec et espace restant < reste à copier
+            S-->>S: fichier partiel supprimé, même refus explicite
+        else autre échec
+            S-->>S: erreur d'origine
+        end
+    end
+```
+
+Le message du refus donne la taille de la charge utile et l'espace disponible, sans chemin ; la CLI et le serveur MCP le
+rendent tel quel.
 
 ### Quand l'import applique-t-il la rétention, et que rend-il si elle ne tourne pas ?
 
@@ -242,7 +315,7 @@ Le serveur est fourni par `scripts/dev/start-test-postgres.sh` (ou `.ps1`) : con
 | Une connexion rendue dans un état incertain n'est pas réutilisée | message de l'erreur rejouée non vérifié | — | `minos-storage/src/test/java/com/minos/storage/postgresql/support/PostgresConnectionFactoryValidationTest.java#aConnectionReturnedAfterAnyFailureOfItsCallIsClosedAndNeverReused`, `minos-storage/src/test/java/com/minos/storage/postgresql/support/PostgresConnectionFactoryValidationTest.java#aWriteThatAlreadyRanIsNeverReplayed` | partielle |
 | Une recherche de symbole par identifiant utilise l'index de la vue | tous | — | `minos-application/src/test/java/com/minos/application/dynamic/RuntimeIntelligenceServiceTest.java#symbolReportReadsTheActiveQueryViewAndNeverTheRawSnapshot`, `minos-application/src/test/java/com/minos/impact/ReadViewSubstitutionTest.java#theRuntimeReportOfASymbolReadsTheSubstituteReader` | couverte |
 | Le poids d'une vue en cache compte ses index dérivés | cache du graphe de programme : poids sans mesure du tas | — | `minos-storage/src/test/java/com/minos/storage/local/store/QueryViewWeightTest.java#estimatedWeightIsNotBelowTheHeapRetainedByTheView`, `minos-engine/src/test/java/com/minos/store/SymbolEdgeIndexTest.java#weightIsChargedPerRelationshipAndSaturates` | partielle |
-| Un snapshot de la taille de ce dépôt est admis au cache de vues | snapshot de plus de 64 Mio persistés non reproduit : les tests abaissent les plafonds (V3 admis en un chargement, V1 et V2 amplifiés à 200 %, vue plus lourde que le plafond rechargée) ; mesure réelle sur un snapshot de 339,5 Mio dans `docs/developer/indexing-and-storage.md` | V3 | `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewAdmissionTest.java`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest.java` (serveur PostgreSQL de test requis), `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreCacheTest.java` | partielle |
+| Un snapshot de la taille de ce dépôt est admis au cache de vues | snapshot de plus de 64 Mio persistés non reproduit : les tests abaissent les plafonds (V3 admis en un chargement, V1 et V2 amplifiés à 200 %, vue plus lourde que le plafond retenue seule et chargée une fois) ; mesure réelle sur un snapshot de 339,5 Mio dans `docs/developer/indexing-and-storage.md` | V3 | `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewAdmissionTest.java`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest.java` (serveur PostgreSQL de test requis), `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreCacheTest.java` | partielle |
 | Le poids estimé d'une vue ne sous-évalue pas le tas qu'elle retient | l'amplification de V3 (125 %) ne couvre pas seule le tas des corpus riches en relations (0,84 à 0,88 du tas retenu) : la somme des comptes porte la garantie ; V1 et V2 gardent 200 % ; corpus de plus de 300 Mio non rejoué dans le test | V3 | `minos-storage/src/test/java/com/minos/storage/local/store/QueryViewWeightTest.java#estimatedWeightIsNotBelowTheHeapRetainedByTheView`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotLimitsTest.java` | partielle |
 | Un snapshot altéré n'est ni publié ni mis en cache | tous | V1 | `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreIntegrityTest.java`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotVerifiedReadTest.java#truncatedContentIsAChecksumMismatchNotADecodingError` | couverte |
 | Un snapshot décodé partage une instance par chaîne distincte | tous | — | `minos-storage/src/test/java/com/minos/storage/codec/SnapshotDecodeStringSharingTest.java#utf8DecodingSharesEqualStrings`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotDecodeStringSharingTest.java#sharingIsLocalToOneDecodingPass` | couverte |
@@ -287,6 +360,11 @@ Le serveur est fourni par `scripts/dev/start-test-postgres.sh` (ou `.ps1`) : con
 | Le script local démarre le conteneur de test épinglé | tous (Docker simulé) | — | `scripts/dev/test_start_test_postgres.py#test_print_image_reads_the_compose_default`, `scripts/dev/test_start_test_postgres.py#test_unpinned_default_is_refused_before_docker`, `scripts/dev/test_start_test_postgres.py#test_custom_port_is_bound_to_loopback`, `scripts/dev/test_start_test_postgres.py#test_unhealthy_container_is_removed_and_fails` | couverte |
 | L'arbre de dépendances ne contient ni Testcontainers ni docker-java | relevé `dependency:tree` sans test automatique ; rapport Dependency-Check des tests non produit | — | `scripts/quality/test_check_image_pins.py#test_the_testcontainers_image_list_is_gone`, `minos-storage/pom.xml` | partielle |
 | Une fermeture refusée depuis un autre fil laisse le bail tenu | tous ; rouge constaté à la main sur une copie locale mutée, qui ne départage anciens et nouveaux tests que pour le bail en mémoire ; « plus d'affirmation constante » : la recherche du scénario ne rend aucune ligne | — | `minos-storage/src/test/java/com/minos/storage/local/orchestration/ProjectLeaseOwnershipTest.java#inMemoryWrongThreadCloseKeepsLeaseHeldUntilOwnerCloses`, `minos-storage/src/test/java/com/minos/storage/local/orchestration/ProjectLeaseOwnershipTest.java#physicalFileLeaseWrongThreadCloseKeepsLeaseHeldUntilOwnerCloses`, `minos-storage/src/test/java/com/minos/storage/local/orchestration/ProjectLeaseOwnershipTest.java#fileStoreWrongThreadCloseKeepsLeaseHeldUntilOwnerCloses`, `minos-storage/src/test/java/com/minos/storage/local/store/SnapshotProjectLeaseTest.java#wrongThreadCloseKeepsLeaseHeldUntilOwnerCloses` | couverte |
+| PostgreSQL rapatrie la charge utile de la version dont la taille a été réservée | 4/4 (serveur PostgreSQL de test requis) | — | `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewBudgetTest.java#aLargerSnapshotPublishedBeforeThePayloadFetchIsNeverFetchedUnderTheFormerReservation`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewBudgetTest.java#aNewVersionHeavierThanTheBudgetIsRefusedWithoutFetchingItsPayload`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewBudgetTest.java#aStableActiveVersionIsFetchedOnce`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewBudgetTest.java#anActiveVersionReplacedBeforeEveryFetchExhaustsTheRetriesWithoutCopyingAPayload` | couverte |
+| Une vue admise plus lourde que le plafond du cache reste comptée par le budget | 4/4 à plafond abaissé (ordres de grandeur réels non mesurés) | — | `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewBudgetTest.java#aViewAboveTheCacheCeilingIsHeldAloneAndCountedAsResident`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewBudgetTest.java#theCachedViewsGiveWayToAHeldView`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewBudgetTest.java#aHeldViewIsReleasedToAdmitAnotherLoadWithoutWaiting`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewBudgetTest.java#aPublicationOfTheProjectReleasesItsHeldView`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreViewBudgetTest.java#aViewAboveTheCacheCeilingIsHeldAloneAndCountedAsResident` | partielle |
+| Le poids de la vue la plus lourde persistable se calcule index dérivés compris | 3/3 | — | `minos-storage/src/test/java/com/minos/storage/codec/SnapshotLimitsTest.java#withoutAnyEntityTheLargestPersistableViewIsTheAmplifiedCeilingPlusTheFixedPartOfTheIndex`, `minos-storage/src/test/java/com/minos/storage/codec/SnapshotLimitsTest.java#whenTheSumOverTheCountsDominatesTheWeightIsThatSumPlusTheIndex`, `minos-storage/src/test/java/com/minos/storage/local/store/FileSymbolSnapshotStoreViewAdmissionTest.java#theLimitsGiveTheWeightTheStoreEstimatesForASnapshotOfTheCeilingSize` | couverte |
+| Une zone de travail PostgreSQL insuffisante donne un refus explicite | 4/4 (serveur PostgreSQL de test requis ; espace injecté) | — | `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreScratchSpaceTest.java#aScratchAreaSmallerThanThePayloadRefusesItBeforeItIsFetched`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreScratchSpaceTest.java#aScratchAreaFilledDuringTheCopyGivesTheSameRefusalAndRemovesThePartialFile`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreScratchSpaceTest.java#theRefusalMessageCarriesNoPath`, `minos-storage/src/test/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStoreScratchSpaceTest.java#aWriteFailureThatIsNotALackOfSpaceKeepsItsOwnError` | couverte |
+| Un refus de zone de travail est rendu par la CLI et le MCP avec son message | 2/2 | — | `minos-mcp/src/test/java/com/minos/mcp/MinosMcpSnapshotMemoryRefusalTest.java#aScratchSpaceRefusalIsRenderedWithItsMessage`, `minos-cli/src/test/java/com/minos/cli/command/SnapshotMemoryRefusalCliTest.java#aScratchSpaceRefusalIsPrintedOnTheErrorOutputWithExitCodeOne` | couverte |
 
 Les tests PostgreSQL se connectent à un serveur fourni de l'extérieur (`minos.postgresql.test.url`, `.user`,
 `.password`, repli sur `MINOS_TEST_POSTGRES_*`) ; sans serveur, ils se sautent et sont comptés, sauf avec

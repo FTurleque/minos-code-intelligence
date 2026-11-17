@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -22,9 +23,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,7 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * AUD-PERF-15 — the PostgreSQL store reads the size and the format header of the active payload with its metadata,
  * refuses a payload above the persisted ceiling without asking the server for it, and reserves on the view budget,
  * before the payload is fetched, the larger of the view weight and the transient of the driver while it fetches the
- * row. Only the API of {@link PostgresTestSupport} is used ({@code connections}).
+ * row. The payload asked for under a reservation is the version whose size was reserved (AUD-PERF-05), and a view
+ * above the cache ceiling is held alone and stays counted (AUD-PERF-06). Only the API of
+ * {@link PostgresTestSupport} is used ({@code connections}).
  */
 class PostgresCodeKnowledgeSnapshotStoreViewBudgetTest extends PostgresTestSupport {
 
@@ -140,6 +145,186 @@ class PostgresCodeKnowledgeSnapshotStoreViewBudgetTest extends PostgresTestSuppo
                 .queryCacheStats().maximumWeightBytes());
         assertEquals(SnapshotLimits.DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES,
                 store(SnapshotLimits.production(), large, ignored -> { }).queryCacheStats().maximumWeightBytes());
+    }
+
+    @Test
+    void aLargerSnapshotPublishedBeforeThePayloadFetchIsNeverFetchedUnderTheFormerReservation() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        publish(projectId);
+        QueryViewMemoryBudget budget = QueryViewMemoryBudget.of(1L << 40, 50, LONG);
+        PostgresCodeKnowledgeSnapshotStore reader = store(SnapshotLimits.production(), budget, loading -> {
+            if (payloadFetches.incrementAndGet() == 1) publishLarger(loading, "larger");
+        });
+
+        SnapshotReadView view = reader.loadActiveReadView(projectId).orElseThrow();
+
+        assertEquals("larger", view.snapshot().snapshotId(), "the resolution started again on the new version");
+        assertEquals(2, payloadFetches.get());
+        assertEquals(1, scratchFiles.get(), "only the reserved version was copied");
+        assertEquals(0L, budget.stats().reservedBytes());
+        assertScratchDirectoryEmpty();
+    }
+
+    @Test
+    void aNewVersionHeavierThanTheBudgetIsRefusedWithoutFetchingItsPayload() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        long payload = new SnapshotCodecV3().encodedSize(publish(projectId));
+        long fetch = SnapshotLimits.production().fetchTransientBytes(payload);
+        // The budget holds the reservation of the first version, not that of a version three times larger.
+        QueryViewMemoryBudget budget = QueryViewMemoryBudget.of(2L * (fetch + 1_024L), 50, LONG);
+        PostgresCodeKnowledgeSnapshotStore reader = store(SnapshotLimits.production(), budget, loading -> {
+            if (payloadFetches.incrementAndGet() == 1) publishLarger(loading, "larger");
+        });
+
+        SnapshotMemoryExhaustedException refused =
+                assertThrows(SnapshotMemoryExhaustedException.class, () -> reader.loadActiveReadView(projectId));
+
+        assertTrue(refused.getMessage().startsWith("insufficient memory to load this snapshot"), refused.getMessage());
+        assertEquals(1, payloadFetches.get(), "the payload of the new version was never asked for");
+        assertEquals(0, scratchFiles.get(), "no payload was copied");
+        assertEquals(0L, budget.stats().reservedBytes());
+        assertScratchDirectoryEmpty();
+    }
+
+    @Test
+    void aStableActiveVersionIsFetchedOnce() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        publish(projectId);
+        PostgresCodeKnowledgeSnapshotStore reader = store(SnapshotLimits.production(),
+                QueryViewMemoryBudget.of(1L << 40, 50, LONG), ignored -> payloadFetches.incrementAndGet());
+
+        SnapshotReadView view = reader.loadActiveReadView(projectId).orElseThrow();
+
+        assertEquals("budget", view.snapshot().snapshotId());
+        assertEquals(1, payloadFetches.get());
+        assertEquals(1, scratchFiles.get());
+    }
+
+    @Test
+    void anActiveVersionReplacedBeforeEveryFetchExhaustsTheRetriesWithoutCopyingAPayload() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        publish(projectId);
+        QueryViewMemoryBudget budget = QueryViewMemoryBudget.of(1L << 40, 50, LONG);
+        PostgresCodeKnowledgeSnapshotStore reader = store(SnapshotLimits.production(), budget,
+                loading -> publishLarger(loading, "replaced-" + payloadFetches.incrementAndGet()));
+
+        IOException refused = assertThrows(IOException.class, () -> reader.loadActiveReadView(projectId));
+
+        assertTrue(refused.getMessage().contains("retry limit exceeded"), refused.getMessage());
+        assertEquals(4, payloadFetches.get());
+        assertEquals(0, scratchFiles.get());
+        assertEquals(0L, budget.stats().reservedBytes(), "no reservation is kept");
+        assertScratchDirectoryEmpty();
+    }
+
+    @Test
+    void aViewAboveTheCacheCeilingIsHeldAloneAndCountedAsResident() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        publish(projectId);
+        long weight = viewWeight(projectId);
+        QueryViewMemoryBudget budget = QueryViewMemoryBudget.of(1L << 40, 50, LONG);
+        PostgresCodeKnowledgeSnapshotStore reader = store(ceilingBelow(weight), budget,
+                ignored -> payloadFetches.incrementAndGet());
+
+        SnapshotReadView first = reader.loadActiveReadView(projectId).orElseThrow();
+        SnapshotReadView second = reader.loadActiveReadView(projectId).orElseThrow();
+
+        assertSame(first, second, "the held view serves the next read");
+        assertEquals(1, payloadFetches.get());
+        assertEquals(0, reader.queryCacheStats().entries());
+        assertEquals(weight, reader.queryCacheStats().heldWeightBytes());
+        assertTrue(budget.stats().residentBytes() >= weight, "the held view is counted");
+        assertEquals(0L, budget.stats().reservedBytes());
+    }
+
+    @Test
+    void theCachedViewsGiveWayToAHeldView() throws Exception {
+        UUID small = UUID.randomUUID();
+        UUID large = UUID.randomUUID();
+        CodeKnowledgeSnapshot tiny = PersistedSizeFixtures.withTail(small, "small", 0, 10);
+        new PostgresCodeKnowledgeSnapshotStore(connections, tempDir)
+                .publish(small, "small", tiny.symbols(), List.of(), List.of());
+        publish(large);
+        long weight = viewWeight(large);
+        QueryViewMemoryBudget budget = QueryViewMemoryBudget.of(1L << 40, 50, LONG);
+        PostgresCodeKnowledgeSnapshotStore reader = store(ceilingBelow(weight), budget, ignored -> { });
+        reader.loadActiveReadView(small).orElseThrow();
+        assertEquals(1, reader.queryCacheStats().entries());
+
+        reader.loadActiveReadView(large).orElseThrow();
+
+        assertEquals(0, reader.queryCacheStats().entries(), "the small view left the cache");
+        assertEquals(weight, reader.queryCacheStats().heldWeightBytes());
+        QueryViewMemoryBudget.Stats stats = budget.stats();
+        assertTrue(stats.reservedBytes() + stats.residentBytes() <= stats.budgetBytes());
+    }
+
+    @Test
+    void aHeldViewIsReleasedToAdmitAnotherLoadWithoutWaiting() throws Exception {
+        UUID projectA = UUID.randomUUID();
+        UUID projectB = UUID.randomUUID();
+        long payload = new SnapshotCodecV3().encodedSize(publish(projectA));
+        publish(projectB);
+        long weight = viewWeight(projectA);
+        // Room for one fetch transient beside nothing else: B is admitted only once A is released.
+        long fetch = SnapshotLimits.production().fetchTransientBytes(payload);
+        QueryViewMemoryBudget budget = QueryViewMemoryBudget.of(2L * (fetch + weight / 2L), 50, LONG);
+        PostgresCodeKnowledgeSnapshotStore reader = store(ceilingBelow(weight), budget, ignored -> { });
+        reader.loadActiveReadView(projectA).orElseThrow();
+
+        SnapshotReadView other = reader.loadActiveReadView(projectB).orElseThrow();
+
+        assertEquals(projectB, other.snapshot().projectId());
+        assertEquals(0L, budget.stats().waits(), "the held view was released, nothing waited");
+        assertEquals(weight, budget.stats().residentBytes(), "only B is resident");
+        assertEquals(0L, budget.stats().refusals());
+    }
+
+    @Test
+    void aPublicationOfTheProjectReleasesItsHeldView() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        publish(projectId);
+        long weight = viewWeight(projectId);
+        QueryViewMemoryBudget budget = QueryViewMemoryBudget.of(1L << 40, 50, LONG);
+        PostgresCodeKnowledgeSnapshotStore reader = store(ceilingBelow(weight), budget, ignored -> { });
+        reader.loadActiveReadView(projectId).orElseThrow();
+
+        CodeKnowledgeSnapshot next = PersistedSizeFixtures.withTail(projectId, "next", 0, 1_000_000);
+        reader.publish(projectId, "next", next.symbols(), List.of(), List.of());
+
+        assertEquals(0L, reader.queryCacheStats().heldWeightBytes());
+        assertEquals(0L, budget.stats().residentBytes());
+    }
+
+    /** Publishes, from another store, a version of {@code projectId} three times larger than {@link #snapshot}. */
+    private void publishLarger(UUID projectId, String snapshotId) {
+        CodeKnowledgeSnapshot larger = PersistedSizeFixtures.withTail(projectId, snapshotId, 0, 3_000_000);
+        try {
+            new PostgresCodeKnowledgeSnapshotStore(connections, tempDir)
+                    .publish(projectId, snapshotId, larger.symbols(), List.of(), List.of());
+        } catch (IOException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    /** Estimated weight of the active view of {@code projectId}, as an unconstrained store caches it. */
+    private long viewWeight(UUID projectId) throws IOException {
+        PostgresCodeKnowledgeSnapshotStore measuring = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir,
+                created -> { }, SnapshotLimits.production(), QueryViewMemoryBudget.of(1L << 40, 50, LONG),
+                ignored -> { });
+        measuring.loadActiveReadView(projectId).orElseThrow();
+        return measuring.queryCacheStats().weightBytes();
+    }
+
+    /** Production limits with a cache ceiling one byte below {@code weight}: such a view is above the ceiling. */
+    private static SnapshotLimits ceilingBelow(long weight) {
+        return SnapshotLimits.production().withMaxQueryCacheWeightBytes(weight - 1L);
+    }
+
+    private void assertScratchDirectoryEmpty() throws IOException {
+        try (Stream<Path> files = Files.list(tempDir.resolve("postgresql-snapshot-scratch"))) {
+            assertEquals(List.of(), files.toList(), "no scratch file remains");
+        }
     }
 
     private CodeKnowledgeSnapshot publish(UUID projectId) throws IOException {
