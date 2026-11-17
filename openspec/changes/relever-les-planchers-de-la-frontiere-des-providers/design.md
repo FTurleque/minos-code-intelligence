@@ -119,7 +119,7 @@ changement `borner-la-couverture-des-zones-nouvelles` (sprint 1) pour ses planch
 
 ### D2 — Classe qui ne peut pas atteindre 0,50 sur le système où elle mesure le moins
 
-[Proposition — décision du propriétaire attendue] Si, après tests, la plus basse mesure d'une classe reste sous
+[Décision du propriétaire, 2026-11-17 : option A] Si, après tests, la plus basse mesure d'une classe reste sous
 0,55 en branches parce qu'une part de son code ne s'exécute que sur l'autre système :
 
 - **A (recommandée)** : séparer le code. La logique indépendante du système reste dans la classe, sous son plancher
