@@ -282,17 +282,17 @@ par tests unitaires indépendants de la plateforme ; aucune exécution réelle d
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| indexation-java-via-wsl › La voie WSL réutilise l'empreinte du projet connue de l'indexation | Deux cibles avec l'empreinte fournie | D1, diagramme | 1.1, 1.2 | `WslIndexerExecutorTest` — à écrire |
-| idem | Deux cibles sans empreinte fournie | D2 | 1.1, 1.2 | `WslIndexerExecutorTest` — à écrire |
-| idem | Empreinte fournie mal formée | Modèle de domaine | 1.1, 1.2 | test du record — à écrire |
-| idem | Manifeste qui porte une autre empreinte | Sécurité | 1.3 | `WslArtifactProvenanceTest` — existant, à rejouer |
-| indexation-java-via-wsl › L'artefact de WSL est lu au plus deux fois entre l'acceptation du paquet et son retour | Chemin nominal compté | D3, D6 | 2.1, 2.2 | `WslIndexerExecutorTest` — à écrire |
-| idem | Artefact du paquet différent de son manifeste | Persistance et intégrité | 2.1, 2.2 | `DistributedArtifactBundleStoreTest` — à compléter |
-| idem | Entrée de cache altérée entre l'acceptation et la copie | D3 | 2.1, 2.2 | `WslIndexerExecutorTest` — à écrire |
-| idem | Entrée de cache déjà présente à l'identique | D4 | 2.1 | `DistributedArtifactBundleStoreTest` — à compléter |
-| indexation-java-via-wsl › Le paquet produit dans la distribution est vérifié pendant son écriture | Artefact conforme à son manifeste | D5 | 3.1 | `DistributedArtifactBundleStoreTest` — existant |
-| idem | Artefact modifié après le calcul du manifeste | D5 | 3.1 | garde verte au HEAD (`DistributedArtifactBundleStore.java:128`), à garder verte ; absence de `.bundle-*.tmp` à affirmer |
-| idem | Source lue une seule fois par la fabrication | D5, D6 | 3.1 | `DistributedArtifactBundleStoreTest` — à écrire (2 ouvertures au HEAD) |
+| indexation-java-via-wsl › La voie WSL réutilise l'empreinte du projet connue de l'indexation | Deux cibles avec l'empreinte fournie | D1, diagramme | 1.1, 1.2 | `WslIndexerExecutorTest#twoTargetsCarryingTheProjectFingerprintCaptureNothing`, `IndexingRunExecutorCheckpointTest` (3 cas : référence, racine capturée, scopes imbriqués seuls) |
+| idem | Deux cibles sans empreinte fournie | D2 | 1.1, 1.2 | `WslIndexerExecutorTest#twoTargetsWithoutTheProjectFingerprintCaptureItOncePerRun` (rouge sans mémoire par run : 2 captures) |
+| idem | Empreinte fournie mal formée | Modèle de domaine | 1.1, 1.2 | `IndexingExecutionRequestFingerprintTest#aMalformedFingerprintIsRefusedWithoutAnAbsolutePath` |
+| idem | Manifeste qui porte une autre empreinte | Sécurité | 1.3 | `WslIndexerExecutorTest#aManifestNamingAnotherFingerprintIsRefusedAndItsBundleDeleted`, `WslArtifactProvenanceTest` rejoué ; libération du bail non affirmée par un test |
+| indexation-java-via-wsl › L'artefact de WSL est lu au plus deux fois entre l'acceptation du paquet et son retour | Chemin nominal compté | D3, D6 | 2.1, 2.2 | `WslIndexerExecutorTest#theNominalPathReadsTheBundleOnceAndTheCacheEntryOnce`, `DistributedArtifactBundleStoreTest#acceptanceReadsTheBundleOnceAndReportsItsSha256` (rouges sous relectures réintroduites) |
+| idem | Artefact du paquet différent de son manifeste | Persistance et intégrité | 2.1, 2.2 | `DistributedArtifactBundleStoreTest#aBundleWhoseArtifactDiffersFromItsManifestLeavesNeitherCacheEntryNorExtraction` |
+| idem | Entrée de cache altérée entre l'acceptation et la copie | D3 | 2.1, 2.2 | `WslIndexerExecutorTest#aCacheEntryAlteredBeforeTheCopyFailsTheTargetWithoutCopy` |
+| idem | Entrée de cache déjà présente à l'identique | D4 | 2.1 | `DistributedArtifactBundleStoreTest#anIdenticalCacheEntryIsVerifiedAgainBeforeItIsReturned` |
+| indexation-java-via-wsl › Le paquet produit dans la distribution est vérifié pendant son écriture | Artefact conforme à son manifeste | D5 | 3.1 | `DistributedArtifactBundleStoreTest#roundTripsStrictManifestAndArtifactThenUsesVerifiedCache` |
+| idem | Artefact modifié après le calcul du manifeste | D5 | 3.1 | `DistributedArtifactBundleStoreTest#anArtifactChangedAfterItsManifestPublishesNoBundleAndLeavesNoTemporaryFile` |
+| idem | Source lue une seule fois par la fabrication | D5, D6 | 3.1 | `DistributedArtifactBundleStoreTest#aBundleIsBuiltByReadingItsSourceArtifactOnce` (rouge sous relecture réintroduite) |
 
 ## Questions ouvertes
 

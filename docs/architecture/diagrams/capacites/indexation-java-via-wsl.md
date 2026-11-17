@@ -150,6 +150,7 @@ sequenceDiagram
   UC->>RR: executor(scip-java)
   RR-->>UC: WslIndexerExecutor de la distribution résolue
   UC->>E: execute(requête préparée)
+  E->>E: empreinte du projet fournie par le run, sinon une capture par run
   E->>W: WorkerRequest locale, empreinte du projet, DENY
   W->>D: wsl.exe --exec systemd-run --user --scope Delegate=yes java internal wsl-worker
   D->>D: refus ou scip-java sous bubblewrap et cgroup v2, réseau DENY
@@ -160,11 +161,11 @@ sequenceDiagram
     W-->>E: échec sans chemin absolu
   else ligne d'état OK et bundle v3
     W-->>E: bundle repris sous MINOS_HOME
-    E->>E: magasin vérifié, manifeste identique, provenance v3
+    E->>E: magasin vérifié (paquet lu une fois, empreintes calculées à l'extraction), manifeste identique, provenance v3
     alt non conforme
       E-->>UC: rejet, bail libéré, bundle supprimé
     else conforme
-      E->>E: copie sous runs/<runId>/, bail libéré, bundle supprimé
+      E->>E: copie hachée en flux sous runs/<runId>/, bail libéré, bundle supprimé
       E-->>UC: artefact
       UC->>UC: staging puis promotion atomique
     end
@@ -182,7 +183,7 @@ pu répondre) ne bloque pas
 les mêmes contrôles dans la distribution avant de lancer le provider. Le lancement, le délai et l'arrêt du scope sont dans `WslIndexWorker`
 (`minos-runtime-local/src/main/java/com/minos/runtime/local/wsl/WslIndexWorker.java:147-230`) ; la vérification, la
 recopie et la libération du bail dans `WslIndexerExecutor`
-(`minos-runtime-local/src/main/java/com/minos/runtime/local/wsl/WslIndexerExecutor.java:68-155`).
+(`minos-runtime-local/src/main/java/com/minos/runtime/local/wsl/WslIndexerExecutor.java:87-202`).
 
 ### Par quels états passe un run via WSL ?
 

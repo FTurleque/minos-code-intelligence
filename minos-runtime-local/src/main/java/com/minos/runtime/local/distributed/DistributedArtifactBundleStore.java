@@ -92,6 +92,7 @@ public final class DistributedArtifactBundleStore {
      */
     private final ReentrantLock[] operationStripes = createOperationStripes();
     private final Map<VerifiedArtifact, Boolean> activeHandles = new IdentityHashMap<>();
+    private final ReadOpener readOpener;
 
     public DistributedArtifactBundleStore(Path minosHome) throws IOException {
         this(minosHome, DistributedArtifactCachePolicy.DEFAULT);
@@ -101,6 +102,16 @@ public final class DistributedArtifactBundleStore {
             Path minosHome,
             DistributedArtifactCachePolicy policy
     ) throws IOException {
+        this(minosHome, policy, ConfinedFileOpener::openRegularFileNoFollow);
+    }
+
+    /** Package-private seam: every read of an artifact, a bundle or a cache entry goes through {@code readOpener}. */
+    DistributedArtifactBundleStore(
+            Path minosHome,
+            DistributedArtifactCachePolicy policy,
+            ReadOpener readOpener
+    ) throws IOException {
+        this.readOpener = Objects.requireNonNull(readOpener, "readOpener");
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.cacheRoot = home.resolve("distributed-artifacts");
         this.leasesRoot = cacheRoot.resolve(".leases");
@@ -125,9 +136,6 @@ public final class DistributedArtifactBundleStore {
         if (size != manifest.artifactSize() || size > policy.maxArtifactBytes()) {
             throw new IOException("distributed worker artifact size does not match its manifest or limit");
         }
-        if (!sha256Exact(source, size, policy.maxArtifactBytes()).equals(manifest.artifactSha256())) {
-            throw new IOException("distributed worker artifact checksum does not match its manifest");
-        }
 
         Path target = Objects.requireNonNull(output, "output").toAbsolutePath().normalize();
         Files.createDirectories(target.getParent());
@@ -141,10 +149,17 @@ public final class DistributedArtifactBundleStore {
                 zip.write(manifestBytes);
                 zip.closeEntry();
                 zip.putNextEntry(new ZipEntry(DistributedArtifactManifest.ARTIFACT_PATH));
-                try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(source)) {
-                    transferBounded(input, zip, policy.maxArtifactBytes());
+                // The bytes written into the bundle are the ones hashed: they must match the manifest before the
+                // bundle is published, otherwise the temporary file is deleted by the finally block.
+                MessageDigest digest = Sha256.newDigest();
+                long written;
+                try (InputStream input = new DigestInputStream(readOpener.open(source), digest)) {
+                    written = transferBounded(input, zip, policy.maxArtifactBytes());
                 }
                 zip.closeEntry();
+                if (written != manifest.artifactSize() || !Sha256.hex(digest).equals(manifest.artifactSha256())) {
+                    throw new IOException("distributed worker artifact checksum does not match its manifest");
+                }
             }
             DurableAtomicFile.replace(temporary, target, "distributed worker bundle publication");
             return target;
@@ -181,17 +196,10 @@ public final class DistributedArtifactBundleStore {
         Path extraction = PrivateLocalStorage.createPrivateTempDirectory(cacheRoot, ACCEPT_PREFIX);
         String leasedKey = null;
         try {
-            Extracted extracted = extract(source, extraction);
+            Extracted extracted = extract(source, extraction, bundleBytes, maxBundleBytes);
             DistributedArtifactManifest manifest = decodeManifest(extracted.manifestBytes());
             Path artifact = extracted.artifact();
-            long size = Files.size(artifact);
-            if (size != manifest.artifactSize()) {
-                throw new IOException("transported artifact size does not match its manifest");
-            }
-            String checksum = sha256Exact(artifact, size, policy.maxArtifactBytes());
-            if (!checksum.equals(manifest.artifactSha256())) {
-                throw new IOException("transported artifact checksum does not match its manifest");
-            }
+            verifyAgainstManifest(extracted, manifest);
 
             String cacheKey = cacheKey(manifest);
             ReentrantLock operationLock = operationStripe(cacheKey);
@@ -203,7 +211,7 @@ public final class DistributedArtifactBundleStore {
                 Path entry = cacheRoot.resolve(cacheKey);
                 Path cachedArtifact = entry.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
                 Path cachedManifest = entry.resolve(MANIFEST_ENTRY);
-                String bundleSha = sha256Exact(source, bundleBytes, maxBundleBytes);
+                String bundleSha = extracted.bundleSha256();
                 if (validCached(entry, manifest)) {
                     Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.from(Instant.now()));
                     VerifiedArtifact result = registerHandle(
@@ -244,6 +252,18 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
+    /** The extracted artifact must have the size and SHA-256 of its manifest, as written and as left on disk. */
+    private static void verifyAgainstManifest(Extracted extracted, DistributedArtifactManifest manifest)
+            throws IOException {
+        if (extracted.artifactSize() != manifest.artifactSize()
+                || Files.size(extracted.artifact()) != manifest.artifactSize()) {
+            throw new IOException("transported artifact size does not match its manifest");
+        }
+        if (!extracted.artifactSha256().equals(manifest.artifactSha256())) {
+            throw new IOException("transported artifact checksum does not match its manifest");
+        }
+    }
+
     public void release(VerifiedArtifact artifact) throws IOException {
         Objects.requireNonNull(artifact, "artifact");
         if (!unregisterHandle(artifact)) return;
@@ -263,11 +283,20 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
-    private Extracted extract(Path bundle, Path extraction) throws IOException {
+    /**
+     * Reads the bundle once: extracts its two entries and computes, on the way, the size and SHA-256 of the extracted
+     * artifact (on the bytes written to the extraction directory) and the SHA-256 of the whole bundle file, which
+     * must still have {@code bundleBytes} bytes.
+     */
+    private Extracted extract(Path bundle, Path extraction, long bundleBytes, long maxBundleBytes) throws IOException {
         byte[] manifest = null;
         Path artifact = extraction.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
         Set<String> names = new HashSet<>();
-        try (ZipInputStream zip = new ZipInputStream(ConfinedFileOpener.openRegularFileNoFollow(bundle))) {
+        MessageDigest bundleDigest = Sha256.newDigest();
+        MessageDigest artifactDigest = Sha256.newDigest();
+        long artifactBytes = 0L;
+        try (DigestInputStream raw = new DigestInputStream(readOpener.open(bundle), bundleDigest);
+             ZipInputStream zip = new ZipInputStream(raw)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 String name = entry.getName();
@@ -279,17 +308,23 @@ public final class DistributedArtifactBundleStore {
                 if (MANIFEST_ENTRY.equals(name)) {
                     manifest = readBounded(zip, MAX_MANIFEST_BYTES);
                 } else {
-                    copyBounded(zip, artifact, policy.maxArtifactBytes());
+                    artifactBytes = copyBounded(
+                            new DigestInputStream(zip, artifactDigest), artifact, policy.maxArtifactBytes());
                 }
                 zip.closeEntry();
             }
+            // The rest of the file (central directory) belongs to the bundle digest too.
+            transferBounded(raw, OutputStream.nullOutputStream(), maxBundleBytes);
         }
         if (!names.equals(Set.of(MANIFEST_ENTRY, DistributedArtifactManifest.ARTIFACT_PATH))
                 || manifest == null
                 || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("distributed artifact bundle must contain exactly manifest.properties and index.scip");
         }
-        return new Extracted(manifest, artifact);
+        if (Files.size(bundle) != bundleBytes) {
+            throw new IOException("distributed artifact bundle changed while it was read");
+        }
+        return new Extracted(manifest, artifact, artifactBytes, Sha256.hex(artifactDigest), Sha256.hex(bundleDigest));
     }
 
     private static byte[] readBounded(InputStream input, long maximum) throws IOException {
@@ -298,18 +333,18 @@ public final class DistributedArtifactBundleStore {
         return output.toByteArray();
     }
 
-    private static void copyBounded(InputStream input, Path target, long maximum) throws IOException {
-        // Created new and hardened: the file is read back by MINOS, so it can neither pre-exist nor be adopted.
+    private static long copyBounded(InputStream input, Path target, long maximum) throws IOException {
+        // Created new and hardened: what the file holds is what was hashed, so it can neither pre-exist nor be adopted.
         OutputStream created = PrivateLocalStorage.createPrivateOutputStream(target);
         try (OutputStream output = created) {
-            transferBounded(input, output, maximum);
+            return transferBounded(input, output, maximum);
         } catch (Exception exception) {
             Files.deleteIfExists(target);
             throw exception;
         }
     }
 
-    private static void transferBounded(InputStream input, OutputStream output, long maximum) throws IOException {
+    private static long transferBounded(InputStream input, OutputStream output, long maximum) throws IOException {
         byte[] buffer = new byte[8192];
         long total = 0L;
         int read;
@@ -324,6 +359,7 @@ public final class DistributedArtifactBundleStore {
             }
             output.write(buffer, 0, read);
         }
+        return total;
     }
 
     private static byte[] encodeManifest(DistributedArtifactManifest manifest) throws IOException {
@@ -537,13 +573,13 @@ public final class DistributedArtifactBundleStore {
                 return false;
             }
             DistributedArtifactManifest actual;
-            try (InputStream input = ConfinedFileOpener.openRegularFileNoFollow(manifestFile)) {
+            try (InputStream input = readOpener.open(manifestFile)) {
                 actual = decodeManifest(readBounded(input, MAX_MANIFEST_BYTES));
             }
             long artifactBytes = Files.size(artifact);
             return expected.equals(actual)
                     && artifactBytes == actual.artifactSize()
-                    && sha256Exact(artifact, artifactBytes, policy.maxArtifactBytes())
+                    && sha256Exact(readOpener, artifact, artifactBytes, policy.maxArtifactBytes())
                     .equals(actual.artifactSha256());
         } catch (Exception exception) {
             return false;
@@ -650,6 +686,11 @@ public final class DistributedArtifactBundleStore {
      * length detects truncation or replacement.
      */
     public static String sha256Exact(Path file, long expectedBytes, long maximumBytes) throws IOException {
+        return sha256Exact(ConfinedFileOpener::openRegularFileNoFollow, file, expectedBytes, maximumBytes);
+    }
+
+    private static String sha256Exact(ReadOpener opener, Path file, long expectedBytes, long maximumBytes)
+            throws IOException {
         if (expectedBytes < 0L || maximumBytes < 0L || expectedBytes > maximumBytes) {
             throw new IllegalArgumentException("hash byte bounds must satisfy 0 <= expected <= maximum");
         }
@@ -658,8 +699,7 @@ public final class DistributedArtifactBundleStore {
             throw new IOException("refusing to hash a missing, non-regular or symbolic-link file");
         }
         MessageDigest digest = Sha256.newDigest();
-        try (DigestInputStream input = new DigestInputStream(
-                ConfinedFileOpener.openRegularFileNoFollow(normalized), digest)) {
+        try (DigestInputStream input = new DigestInputStream(opener.open(normalized), digest)) {
             byte[] buffer = new byte[8192];
             long remaining = expectedBytes;
             while (remaining > 0L) {
@@ -751,13 +791,38 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
+    /** Opens a file of the store for reading, without following links. */
+    @FunctionalInterface
+    interface ReadOpener {
+        InputStream open(Path file) throws IOException;
+    }
+
     private static final class Extracted {
         private final byte[] manifestBytes;
         private final Path artifact;
+        private final long artifactSize;
+        private final String artifactSha256;
+        private final String bundleSha256;
 
-        private Extracted(byte[] manifestBytes, Path artifact) {
+        private Extracted(byte[] manifestBytes, Path artifact, long artifactSize, String artifactSha256,
+                          String bundleSha256) {
             this.manifestBytes = Objects.requireNonNull(manifestBytes, "manifestBytes").clone();
             this.artifact = Objects.requireNonNull(artifact, "artifact");
+            this.artifactSize = artifactSize;
+            this.artifactSha256 = Objects.requireNonNull(artifactSha256, "extracted artifact digest");
+            this.bundleSha256 = Objects.requireNonNull(bundleSha256, "bundleSha256");
+        }
+
+        private long artifactSize() {
+            return artifactSize;
+        }
+
+        private String artifactSha256() {
+            return artifactSha256;
+        }
+
+        private String bundleSha256() {
+            return bundleSha256;
         }
 
         private byte[] manifestBytes() {
