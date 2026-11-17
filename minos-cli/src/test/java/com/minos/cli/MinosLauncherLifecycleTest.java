@@ -1,7 +1,7 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.application.MinosApplication;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.local.LocalStorageBackend;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ class MinosLauncherLifecycleTest {
     void theApplicationIsClosedAfterASuccessfulCommand(@TempDir Path home) {
         Launch launch = launch(home, new String[]{"project", "list", "--format", "json"}, MinosLauncher::run, null);
 
-        assertEquals(FindSymbolCommand.SUCCESS, launch.exit(), launch.error());
+        assertEquals(CliExitCodes.SUCCESS, launch.exit(), launch.error());
         assertEquals(List.of("open", "close"), launch.events(), "une ouverture, une fermeture");
         assertEquals("", launch.error());
     }
@@ -46,7 +46,7 @@ class MinosLauncherLifecycleTest {
         // puis le fermait avant ce correctif : [open, close]).
         Launch launch = launch(home, new String[]{"find-symbol", "--bogus"}, MinosLauncher::run, null);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, launch.exit(), launch.error());
+        assertEquals(CliExitCodes.USAGE_ERROR, launch.exit(), launch.error());
         assertEquals(List.of(), launch.events());
     }
 
@@ -57,7 +57,7 @@ class MinosLauncherLifecycleTest {
             throw new IOException("boom");
         }, null);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, launch.exit());
+        assertEquals(CliExitCodes.EXECUTION_ERROR, launch.exit());
         assertEquals("error: MINOS bootstrap failed: boom", launch.error().strip());
         assertEquals(List.of("open", "close"), launch.events());
     }
@@ -69,7 +69,7 @@ class MinosLauncherLifecycleTest {
             throw new IllegalStateException("broken");
         }, null);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, launch.exit());
+        assertEquals(CliExitCodes.EXECUTION_ERROR, launch.exit());
         assertEquals("error: MINOS bootstrap failed: broken", launch.error().strip());
         assertEquals(List.of("open", "close"), launch.events());
     }
@@ -79,7 +79,7 @@ class MinosLauncherLifecycleTest {
         Launch launch = launch(home, new String[]{"project", "list", "--format", "json"}, MinosLauncher::run,
                 new IOException("storage refused to close"));
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, launch.exit());
+        assertEquals(CliExitCodes.EXECUTION_ERROR, launch.exit());
         assertTrue(launch.error().contains("error: MINOS bootstrap failed: storage refused to close"), launch.error());
         assertEquals(List.of("open", "close"), launch.events());
     }
@@ -91,7 +91,7 @@ class MinosLauncherLifecycleTest {
                 {"ide", "handshake", "--format", "json"}}) {
             Launch launch = launch(home, arguments, MinosLauncher::run, null);
 
-            assertEquals(FindSymbolCommand.SUCCESS, launch.exit(), String.join(" ", arguments) + " " + launch.error());
+            assertEquals(CliExitCodes.SUCCESS, launch.exit(), String.join(" ", arguments) + " " + launch.error());
             assertEquals(List.of(), launch.events(), String.join(" ", arguments));
         }
     }

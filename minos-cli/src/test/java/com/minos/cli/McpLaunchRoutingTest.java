@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -45,7 +45,7 @@ class McpLaunchRoutingTest {
 
         Result result = launch(testRuntimeClasspath(), absentHome, "mcp");
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, result.exitCode(), result.error());
+        assertEquals(CliExitCodes.EXECUTION_ERROR, result.exitCode(), result.error());
         assertEquals("error: MINOS bootstrap failed: " + McpLaunchRoutes.MISSING, result.error().strip());
         assertFalse(result.error().contains(root.toString()), result.error());
         assertFalse(Files.exists(absentHome), "a missing MCP entry point must not create MINOS_HOME");

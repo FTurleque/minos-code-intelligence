@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.cli.support.LazyApplication;
@@ -50,11 +51,11 @@ public final class RetrievalStatusCommand {
         Objects.requireNonNull(error, "error");
         if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(usage(mode)).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         if (arguments.length == 2 && "status".equals(arguments[0]) && CliCommandSupport.isHelp(arguments[1])) {
             output.append(usage(mode)).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
 
         Options options;
@@ -63,19 +64,19 @@ public final class RetrievalStatusCommand {
         } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n')
                     .append(usage(mode)).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
 
         try {
             SemanticIndexService.Status status = statusReader.status(options.projectReference());
             output.append(render(status, mode, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         } catch (LazyApplication.OpenFailure openFailure) {
             throw openFailure;
         } catch (UnreadableRegistryException | RuntimeException exception) {
             error.append("error: ").append(mode.commandName()).append(" status failed: ")
                     .append(CliCommandSupport.failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
+            return CliExitCodes.EXECUTION_ERROR;
         }
     }
 

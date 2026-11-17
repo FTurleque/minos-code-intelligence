@@ -1,7 +1,7 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.LazyApplication;
 import com.minos.application.MinosApplication;
 import com.minos.application.diagnostics.InternalFailureReporter;
@@ -65,10 +65,10 @@ public final class MinosLauncher {
         try {
             if (arguments.length == 1 && "--version".equals(arguments[0])) {
                 out.println("MINOS " + VERSION);
-                exitCode = FindSymbolCommand.SUCCESS;
+                exitCode = CliExitCodes.SUCCESS;
             } else if (isHelp(arguments)) {
                 out.println(MinosCli.usage());
-                exitCode = FindSymbolCommand.SUCCESS;
+                exitCode = CliExitCodes.SUCCESS;
             } else if (MinosCliRunner.isStatelessHelpRequest(arguments)) {
                 exitCode = MinosCliRunner.runStatelessHelp(arguments, out, err);
             } else if (MinosCliRunner.isIdeHandshake(arguments)) {
@@ -81,15 +81,15 @@ public final class MinosLauncher {
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            exitCode = FindSymbolCommand.EXECUTION_ERROR;
+            exitCode = CliExitCodes.EXECUTION_ERROR;
         } catch (LazyApplication.OpenFailure openFailure) {
             err.println("error: MINOS bootstrap failed: " + failureMessage(openFailure.failure()));
             printReference(err, CliCommandSupport.traceExecutionFailure("launch", openFailure.failure()));
-            exitCode = FindSymbolCommand.EXECUTION_ERROR;
+            exitCode = CliExitCodes.EXECUTION_ERROR;
         } catch (Exception exception) {
             err.println("error: MINOS bootstrap failed: " + failureMessage(exception));
             printReference(err, CliCommandSupport.traceExecutionFailure("launch", exception));
-            exitCode = FindSymbolCommand.EXECUTION_ERROR;
+            exitCode = CliExitCodes.EXECUTION_ERROR;
         } finally {
             CliCommandSupport.clearInternalFailureReporter();
         }

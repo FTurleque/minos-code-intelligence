@@ -2,7 +2,7 @@ package com.minos.app;
 
 import com.minos.application.MinosApplication;
 import com.minos.cli.ExplorerLaunchRoute;
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.explorer.ExplorerSession;
 import com.minos.io.PrivateLocalStorage;
@@ -98,6 +98,6 @@ public final class ExplorerLaunchRouteProvider implements ExplorerLaunchRoute {
 
     private static int refuse(Appendable error, String reason) throws IOException {
         error.append("error: ").append(reason).append(System.lineSeparator());
-        return FindSymbolCommand.USAGE_ERROR;
+        return CliExitCodes.USAGE_ERROR;
     }
 }

@@ -2,6 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectOperations;
@@ -83,7 +84,7 @@ public final class IndexCommand {
                             .append(diagnostic == null ? "" : ": " + diagnostic)
                             .append('\n');
                 }
-                return FindSymbolCommand.SUCCESS;
+                return CliExitCodes.SUCCESS;
             }
             if (autonomousOperations == null) {
                 throw new IllegalStateException("autonomous indexing is not configured in this CLI bootstrap");
@@ -100,7 +101,7 @@ public final class IndexCommand {
                         options.project(), options.providerId(), options.forceFull(), options.resumeChoice()),
                         options.format())).append('\n');
             }
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         });
     }
 
