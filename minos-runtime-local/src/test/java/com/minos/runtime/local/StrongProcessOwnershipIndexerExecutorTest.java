@@ -318,6 +318,36 @@ class StrongProcessOwnershipIndexerExecutorTest {
     }
 
     @Test
+    void eachPlatformGetsTheBoundaryOfItsOwnSystem() {
+        Path home = temporary.resolve("boundary-home");
+
+        assertTrue(StrongProcessOwnershipIndexerExecutor.platformBoundary(
+                WorkerSandboxQualification.Platform.LINUX, home) instanceof LinuxCgroupOwnershipBoundary);
+        assertTrue(StrongProcessOwnershipIndexerExecutor.platformBoundary(
+                WorkerSandboxQualification.Platform.WINDOWS, home) instanceof WindowsJobObjectOwnershipBoundary);
+        assertThrows(NullPointerException.class,
+                () -> StrongProcessOwnershipIndexerExecutor.platformBoundary(null, home));
+    }
+
+    @Test
+    void anUnsupportedPlatformDeclaresNoOwnershipAndBuildsNoTransformer() {
+        StrongProcessOwnershipIndexerExecutor.BoundaryProvider unsupported =
+                StrongProcessOwnershipIndexerExecutor.platformBoundary(
+                        WorkerSandboxQualification.Platform.OTHER, temporary.resolve("other-home"));
+        var submitted = request(temporary.resolve("other-project"));
+
+        StrongProcessOwnershipIndexerExecutor.Capability capability = unsupported.capability();
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> unsupported.transformer(submitted));
+
+        assertFalse(capability.strong());
+        assertEquals("none", capability.mechanism());
+        assertEquals(List.of("strong process ownership is unsupported on this platform"), capability.diagnostics());
+        assertTrue(failure.getMessage().endsWith("strong process ownership is unsupported on this platform"),
+                failure.getMessage());
+    }
+
+    @Test
     void aCapabilityNeedsAMechanismName() {
         assertThrows(IllegalArgumentException.class,
                 () -> StrongProcessOwnershipIndexerExecutor.Capability.available(" "));

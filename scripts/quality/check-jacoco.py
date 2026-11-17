@@ -232,14 +232,14 @@ SCOPES = {
         "line": 0.68,
         "branch": 0.48,
         "prefixMinimums": {
-            # AUD-TST-03: aggregate report of pr-ci.yml run 44075151765 (main fc1002e0, 2026-11-17), nested classes included.
-            # StrongProcessOwnershipIndexerExecutor (8 classes): Linux 97/124 lines, 25/52 branches; Windows 67/124, 16/52.
-            # Its Linux cgroup transformer (16 branches) and the per-platform arms run on one system only: the branch floor
-            # holds the trust-boundary minimum and awaits decision D2 of the change (split the platform code).
+            # AUD-TST-03: StrongProcessOwnershipIndexerExecutor, nested classes included, once its Linux and Windows
+            # boundaries live in LinuxCgroupOwnershipBoundary and WindowsJobObjectOwnershipBoundary (decision D2, option A,
+            # judged in provider-sandbox-linux and provider-sandbox-windows): 75/80 lines, 25/25 branches (local Windows
+            # module report of its own tests, 2026-11-17); everything left in it runs on both systems.
             # ProviderProcessEnvironment once its rules of both systems are tested on each system: 59/59 lines, 40/40
             # branches (local Windows report of its own tests, 2026-11-17; Linux 51/58, 23/40 before those tests).
             # Floor = lower measure minus about 5 points, never under TRUST_BOUNDARY_MINIMUMS.
-            "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.49, "branch": 0.50},
+            "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.88, "branch": 0.95},
             "com/minos/runtime/local/process/ProviderProcessEnvironment": {"line": 0.95, "branch": 0.95},
         },
     },
@@ -254,6 +254,8 @@ SCOPES = {
             "com/minos/runtime/local/sandbox/LinuxCgroupJob",
             # AUD-TST-02: the cgroup v2 ownership of a process tree is Linux code.
             "com/minos/runtime/local/sandbox/CgroupJobOwnership",
+            # AUD-TST-03 (decision D2, option A): the Linux boundary of the strong-ownership executor, Linux code.
+            "com/minos/runtime/local/LinuxCgroupOwnershipBoundary",
         ),
         "platform": "linux",
         "line": 0.55,
@@ -270,6 +272,8 @@ SCOPES = {
             "com/minos/runtime/local/sandbox/WindowsContainmentScript",
             # AUD-TST-12: the Job Object ownership is Windows-only code (its test is @EnabledOnOs(WINDOWS)).
             "com/minos/runtime/local/sandbox/WindowsJobObjectProcessOwnership",
+            # AUD-TST-03 (decision D2, option A): the Windows boundary of the strong-ownership executor, Windows code.
+            "com/minos/runtime/local/WindowsJobObjectOwnershipBoundary",
         ),
         "platform": "windows",
         "line": 0.55,

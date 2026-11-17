@@ -1,12 +1,8 @@
 package com.minos.runtime.local;
 
-import com.minos.runtime.local.sandbox.WindowsJobObjectProcessOwnership;
 import com.minos.runtime.local.sandbox.WorkerSandboxBackends;
-import com.minos.runtime.local.process.CommandLocator;
-import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.local.process.ProcessSandboxCapableIndexerExecutor;
-import com.minos.runtime.local.sandbox.LinuxCgroupJob;
 import com.minos.runtime.local.sandbox.WorkerSandboxBackend;
 import com.minos.runtime.local.sandbox.WorkerSandboxQualification;
 import com.minos.runtime.local.workspace.LocalProviderWorkspace;
@@ -17,7 +13,6 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Function;
 
 /**
@@ -31,6 +26,19 @@ import java.util.function.Function;
 public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
     private static final String DELEGATE_PARAMETER = "delegate";
+
+    /** No strong ownership exists on this platform: the capability says so and no transformer is ever built. */
+    private static final BoundaryProvider UNSUPPORTED_PLATFORM = new BoundaryProvider() {
+        @Override
+        public Capability capability() {
+            return Capability.unavailable("none", "strong process ownership is unsupported on this platform");
+        }
+
+        @Override
+        public ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request) {
+            throw unavailable("strong process ownership is unsupported on this platform");
+        }
+    };
 
     private final ProcessIndexerExecutor delegate;
     private final BoundaryProvider boundaryProvider;
@@ -170,99 +178,22 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
     }
 
     private static BoundaryProvider platformBoundary(Path minosHome) {
-        return new BoundaryProvider() {
-            @Override
-            public Capability capability() {
-                return switch (WorkerSandboxQualification.currentPlatform()) {
-                    case LINUX -> {
-                        Optional<Path> root = LinuxCgroupJob.delegatedRoot();
-                        Optional<Path> shell = CommandLocator.find("sh");
-                        if (root.isPresent() && shell.isPresent()) {
-                            yield Capability.available("linux-cgroup-v2");
-                        }
-                        yield Capability.unavailable("linux-cgroup-v2",
-                                root.isEmpty()
-                                        ? "delegated cgroup v2 root with cgroup.kill is unavailable"
-                                        : "trusted POSIX sh is unavailable");
-                    }
-                    case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome).isPresent()
-                            ? Capability.available("windows-job-object")
-                            : Capability.unavailable(
-                                    "windows-job-object",
-                                    "trusted PowerShell/native Job Object launcher is unavailable");
-                    case OTHER -> Capability.unavailable(
-                            "none", "strong process ownership is unsupported on this platform");
-                };
-            }
+        return platformBoundary(WorkerSandboxQualification.currentPlatform(), minosHome);
+    }
 
-            @Override
-            public ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request) {
-                return switch (WorkerSandboxQualification.currentPlatform()) {
-                    case LINUX -> linuxTransformer(request);
-                    case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome)
-                            .orElseThrow(() -> unavailable("Windows Job Object ownership is unavailable"))
-                            .transformer();
-                    case OTHER -> throw unavailable("strong process ownership is unsupported on this platform");
-                };
-            }
+    /**
+     * The ownership boundary of {@code platform}. The platform is a parameter so that the choice is tested on every
+     * system; each boundary holds the code of its own system and is judged there.
+     */
+    static BoundaryProvider platformBoundary(WorkerSandboxQualification.Platform platform, Path minosHome) {
+        return switch (Objects.requireNonNull(platform, "platform")) {
+            case LINUX -> new LinuxCgroupOwnershipBoundary();
+            case WINDOWS -> new WindowsJobObjectOwnershipBoundary(minosHome);
+            case OTHER -> UNSUPPORTED_PLATFORM;
         };
     }
 
-    private static ProcessIndexerExecutor.ProcessPlanTransformer linuxTransformer(IndexingExecutionRequest request) {
-        Path root = LinuxCgroupJob.delegatedRoot()
-                .orElseThrow(() -> unavailable("delegated cgroup v2 ownership is unavailable"));
-        Path shell = CommandLocator.find("sh")
-                .orElseThrow(() -> unavailable("trusted POSIX sh required by cgroup ownership launcher is unavailable"));
-        String jobName = "minos-provider-" + request.runId();
-        return new ProcessIndexerExecutor.ProcessPlanTransformer() {
-            private LinuxCgroupJob job;
-            private RuntimeException deferredContainmentFailure;
-
-            @Override
-            public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
-                if (job != null) throw new IllegalStateException("process ownership transformer is single-use");
-                plan.requireNoSandboxMounts("Linux cgroup process ownership without an OS sandbox");
-                job = LinuxCgroupJob.createOwnershipOnly(root, jobName);
-                return plan.withCommand(job.enterThenExec(shell, plan.command()));
-            }
-
-            @Override
-            public synchronized void killContainedJob() {
-                if (job == null) return;
-                try {
-                    job.kill();
-                } catch (RuntimeException failure) {
-                    rememberContainmentFailure(failure);
-                }
-            }
-
-            @Override
-            public synchronized void releaseContainment() {
-                if (job == null) return;
-                RuntimeException failure = deferredContainmentFailure;
-                try {
-                    job.close();
-                } catch (RuntimeException closeFailure) {
-                    if (failure == null) failure = closeFailure;
-                    else if (failure != closeFailure) failure.addSuppressed(closeFailure);
-                } finally {
-                    job = null;
-                    deferredContainmentFailure = null;
-                }
-                if (failure != null) throw failure;
-            }
-
-            private void rememberContainmentFailure(RuntimeException failure) {
-                if (deferredContainmentFailure == null) {
-                    deferredContainmentFailure = failure;
-                } else if (deferredContainmentFailure != failure) {
-                    deferredContainmentFailure.addSuppressed(failure);
-                }
-            }
-        };
-    }
-
-    private static IllegalStateException unavailable(String detail) {
+    static IllegalStateException unavailable(String detail) {
         return new IllegalStateException("strong provider process ownership is required but unavailable: " + detail);
     }
 
