@@ -4,6 +4,7 @@ import com.minos.domain.InformationNature;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
+import com.minos.store.cache.HeapShare;
 import com.minos.store.cache.WeightedLruCache;
 import com.minos.diagnostics.UsageException;
 
@@ -23,10 +24,16 @@ public final class SemanticSearchService {
     private static final String SEMANTIC_MODE = "SEMANTIC";
 
     private final SemanticIndexService indexService;
-    private final WeightedLruCache<QueryCacheKey, SemanticVector> queryCache =
-            new WeightedLruCache<>(MAX_QUERY_CACHE_ENTRIES, MAX_QUERY_CACHE_WEIGHT_BYTES);
+    private final WeightedLruCache<QueryCacheKey, SemanticVector> queryCache;
 
     public SemanticSearchService(SemanticIndexService indexService) {
+        this(indexService, Runtime.getRuntime().maxMemory());
+    }
+
+    /** Test seam: the query cache keeps the smaller of its ceiling and its share of {@code maximumHeapBytes}. */
+    SemanticSearchService(SemanticIndexService indexService, long maximumHeapBytes) {
+        this.queryCache = new WeightedLruCache<>(MAX_QUERY_CACHE_ENTRIES,
+                HeapShare.QUERY_VECTORS.ceiling(MAX_QUERY_CACHE_WEIGHT_BYTES, maximumHeapBytes));
         this.indexService = Objects.requireNonNull(indexService, "indexService");
     }
 
@@ -121,6 +128,10 @@ public final class SemanticSearchService {
 
     long queryCacheWeightBytes() {
         return queryCache.weight();
+    }
+
+    long queryCacheMaximumWeightBytes() {
+        return queryCache.maximumWeight();
     }
 
     private record QueryCacheKey(String providerId, String modelId, int dimensions, String query) {

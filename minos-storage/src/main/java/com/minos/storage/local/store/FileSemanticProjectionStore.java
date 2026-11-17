@@ -8,6 +8,7 @@ import com.minos.io.Sha256;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticProjection;
 import com.minos.semantic.SemanticProjectionStore;
+import com.minos.store.cache.HeapShare;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -62,14 +63,43 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
     private static final Object JVM_LOCK_MONITOR = new Object();
     private static final Map<Path, ReentrantLock> JVM_LOCKS = new HashMap<>();
 
+    /** Configured ceiling of a decoded projection; the process applies the smaller of it and its heap share. */
+    public static final long DEFAULT_MAX_DECODED_WEIGHT_BYTES = 256L * 1024L * 1024L;
+    /**
+     * Estimated heap of one decoded point beyond its strings: the point, its two strings and its list slot. With
+     * twice the file size for the strings, the estimate was measured above the retained heap (116 bytes per point
+     * retained for 58 bytes per point in the file, from 100,000 to 1,000,000 points).
+     */
+    static final long POINT_WEIGHT_BYTES = 56L;
+
     private final Path root;
+    private final long maxDecodedWeightBytes;
     private final Object cacheLock = new Object();
     private final Object decodeLock = new Object();
     private final Map<String, CachedProjection> cache = new HashMap<>();
 
     /** Nothing is created here: a reader works on a root it cannot write, or that does not exist yet. */
     public FileSemanticProjectionStore(Path root) {
+        this(root, Runtime.getRuntime().maxMemory());
+    }
+
+    /** Test seam: a decoded projection may weigh at most its share of {@code maximumHeapBytes} (AUD-PERF-04). */
+    FileSemanticProjectionStore(Path root, long maximumHeapBytes) {
         this.root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
+        this.maxDecodedWeightBytes =
+                HeapShare.SEMANTIC_PROJECTION.ceiling(DEFAULT_MAX_DECODED_WEIGHT_BYTES, maximumHeapBytes);
+    }
+
+    /** The weight ceiling of a decoded projection in this store. */
+    long maxDecodedWeightBytes() {
+        return maxDecodedWeightBytes;
+    }
+
+    /** Estimated weight of the projection kept in cache, 0 when none is kept. */
+    long cachedWeightBytes() {
+        synchronized (cacheLock) {
+            return cache.values().stream().mapToLong(CachedProjection::weightBytes).sum();
+        }
     }
 
     @Override
@@ -91,10 +121,11 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
                 CachedProjection known = cache.get(projectId);
                 if (known != null && known.stamp().equals(stamp)) return Optional.of(known.projection());
             }
-            SemanticProjection projection = decode(projectId, file, stamp.sizeBytes());
+            long[] weight = new long[1];
+            SemanticProjection projection = decode(projectId, file, stamp.sizeBytes(), maxDecodedWeightBytes, weight);
             synchronized (cacheLock) {
                 cache.clear();
-                cache.put(projectId, new CachedProjection(stamp, projection));
+                cache.put(projectId, new CachedProjection(stamp, projection, weight[0]));
             }
             return Optional.of(projection);
         }
@@ -205,7 +236,12 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
         }
     }
 
-    private static SemanticProjection decode(String projectId, Path file, long sizeBytes) throws IOException {
+    /**
+     * Decodes and verifies the projection; {@code weight[0]} receives its estimated decoded weight. A projection
+     * whose estimate exceeds {@code ceilingBytes} is refused once its header is read, before any point is decoded.
+     */
+    private static SemanticProjection decode(String projectId, Path file, long sizeBytes, long ceilingBytes,
+                                             long[] weight) throws IOException {
         if (sizeBytes <= DIGEST_BYTES || sizeBytes > MAX_FILE_BYTES) throw unreadable(null);
         MessageDigest digest = Sha256.newDigest();
         try (InputStream raw = new BufferedInputStream(ConfinedFileOpener.openRegularFileNoFollow(file));
@@ -222,7 +258,7 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
             int documentCount = input.readInt();
             int candidateCount = input.readInt();
             List<Double> variance = List.of(input.readDouble(), input.readDouble());
-            List<SemanticProjection.Point> points = readPoints(input);
+            List<SemanticProjection.Point> points = readPoints(input, sizeBytes, ceilingBytes, weight);
             digested.on(false);
             byte[] expected = digest.digest();
             byte[] stored = input.readNBytes(DIGEST_BYTES);
@@ -243,15 +279,26 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
         return new SemanticProjection.Selection(kinds, input.readInt());
     }
 
-    private static List<SemanticProjection.Point> readPoints(DataInputStream input) throws IOException {
+    private static List<SemanticProjection.Point> readPoints(DataInputStream input, long fileBytes, long ceilingBytes,
+                                                         long[] weight) throws IOException {
         int pointCount = input.readInt();
         if (pointCount < 0 || pointCount > MAX_POINTS) throw unreadable(null);
+        long estimated = estimatedWeightBytes(pointCount, fileBytes);
+        if (estimated > ceilingBytes) {
+            throw new SemanticProjectionStore.ProjectionTooLargeException(estimated, ceilingBytes);
+        }
+        weight[0] = estimated;
         List<SemanticProjection.Point> points = new ArrayList<>(Math.min(pointCount, 16_384));
         for (int position = 0; position < pointCount; position++) {
             points.add(new SemanticProjection.Point(readString(input),
                     SemanticDocumentKind.valueOf(readString(input)), input.readFloat(), input.readFloat()));
         }
         return points;
+    }
+
+    /** A bound of the decoded heap: a fixed weight per point, and twice the file size for every string. */
+    static long estimatedWeightBytes(int pointCount, long fileBytes) {
+        return pointCount * POINT_WEIGHT_BYTES + 2L * Math.max(0L, fileBytes);
     }
 
     private static UnreadableProjectionException unreadable(Exception cause) {
@@ -305,6 +352,6 @@ public final class FileSemanticProjectionStore implements SemanticProjectionStor
         }
     }
 
-    private record CachedProjection(FileStamp stamp, SemanticProjection projection) {
+    private record CachedProjection(FileStamp stamp, SemanticProjection projection, long weightBytes) {
     }
 }

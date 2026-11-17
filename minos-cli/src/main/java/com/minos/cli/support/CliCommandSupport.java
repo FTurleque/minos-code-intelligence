@@ -5,6 +5,7 @@ import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
+import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.registry.DegradedEntry;
 import com.minos.domain.registry.UnreadableRegistryException;
@@ -78,7 +79,8 @@ public final class CliCommandSupport {
         for (int depth = 0; depth <= MAX_CAUSE_DEPTH && current != null; depth++) {
             if (current instanceof ProjectResolver.ResolutionException
                     || current instanceof UnreadableRegistryException
-                    || current instanceof SnapshotMemoryExhaustedException) {
+                    || current instanceof SnapshotMemoryExhaustedException
+                    || current instanceof SnapshotScratchSpaceExhaustedException) {
                 return true;
             }
             if (current.getCause() == current) return false;

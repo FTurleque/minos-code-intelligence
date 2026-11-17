@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -176,6 +177,71 @@ class FileSymbolSnapshotStoreViewBudgetTest {
         assertEquals(0L, budget.stats().reservedBytes());
     }
 
+    @Test
+    void aViewAboveTheCacheCeilingIsHeldAloneAndCountedAsResident(@TempDir Path root) throws Exception {
+        long weight = publishBoth(root);
+        QueryViewMemoryBudget budget = budgetOfOneViewAndAHalf(weight, LONG);
+        FileSymbolSnapshotStore store = store(root, budget, ActiveQueryBuildHook.NOOP, ceilingBelow(weight));
+
+        SnapshotReadView first = store.loadActiveReadView(projectA).orElseThrow();
+        SnapshotReadView second = store.loadActiveReadView(projectA).orElseThrow();
+
+        assertSame(first, second, "the held view serves the next read");
+        assertEquals(1L, store.cacheStats().fullSnapshotLoads());
+        assertEquals(0, store.cacheStats().entries());
+        assertEquals(weight, store.cacheStats().heldWeightBytes());
+        assertTrue(budget.stats().residentBytes() >= weight, "the held view is counted");
+        assertEquals(0L, budget.stats().reservedBytes());
+    }
+
+    @Test
+    void theCachedViewsGiveWayToAHeldView(@TempDir Path root) throws Exception {
+        long weight = publishBoth(root);
+        UUID small = UUID.randomUUID();
+        new FileSymbolSnapshotStore(root).publish(small, "small", FileSymbolSnapshotStoreTest.symbols(small));
+        QueryViewMemoryBudget budget = budgetOfOneViewAndAHalf(weight, LONG);
+        FileSymbolSnapshotStore store = store(root, budget, ActiveQueryBuildHook.NOOP, ceilingBelow(weight));
+        store.loadActiveReadView(small).orElseThrow();
+        assertEquals(1, store.cacheStats().entries());
+
+        store.loadActiveReadView(projectA).orElseThrow();
+
+        assertEquals(0, store.cacheStats().entries(), "the small view left the cache");
+        assertEquals(weight, store.cacheStats().heldWeightBytes());
+        QueryViewMemoryBudget.Stats stats = budget.stats();
+        assertTrue(stats.reservedBytes() + stats.residentBytes() <= stats.budgetBytes());
+    }
+
+    @Test
+    void aHeldViewIsReleasedToAdmitAnotherLoadWithoutWaiting(@TempDir Path root) throws Exception {
+        long weight = publishBoth(root);
+        QueryViewMemoryBudget budget = budgetOfOneViewAndAHalf(weight, LONG);
+        FileSymbolSnapshotStore store = store(root, budget, ActiveQueryBuildHook.NOOP, ceilingBelow(weight));
+        store.loadActiveReadView(projectA).orElseThrow();
+
+        SnapshotReadView other = store.loadActiveReadView(projectB).orElseThrow();
+
+        assertEquals(projectB, other.snapshot().projectId());
+        assertEquals(0L, budget.stats().waits(), "the held view was released, nothing waited");
+        assertEquals(weight, budget.stats().residentBytes(), "only B is resident");
+        assertEquals(0L, budget.stats().refusals());
+    }
+
+    @Test
+    void aPublicationOfTheProjectReleasesItsHeldView(@TempDir Path root) throws Exception {
+        long weight = publishBoth(root);
+        QueryViewMemoryBudget budget = budgetOfOneViewAndAHalf(weight, LONG);
+        FileSymbolSnapshotStore store = store(root, budget, ActiveQueryBuildHook.NOOP, ceilingBelow(weight));
+        store.loadActiveReadView(projectA).orElseThrow();
+
+        CodeKnowledgeSnapshot next = QueryViewWeightFixtures.repository(projectA, "next", 2,
+                List.<String[]>of(QueryViewWeightFixtures.ASCII));
+        store.publish(projectA, "next", next.symbols(), next.occurrences(), next.relationships());
+
+        assertEquals(0L, store.cacheStats().heldWeightBytes());
+        assertEquals(0L, budget.stats().residentBytes());
+    }
+
     /**
      * A project whose build lock is not the stripe of {@code other} (64 stripes, {@code FileSymbolSnapshotStore}):
      * on a shared stripe, B would wait for A's project lock instead of the budget.
@@ -212,8 +278,18 @@ class FileSymbolSnapshotStoreViewBudgetTest {
 
     private static FileSymbolSnapshotStore store(Path root, QueryViewMemoryBudget budget, ActiveQueryBuildHook hook)
             throws IOException {
+        return store(root, budget, hook, SnapshotLimits.production());
+    }
+
+    private static FileSymbolSnapshotStore store(Path root, QueryViewMemoryBudget budget, ActiveQueryBuildHook hook,
+                                                 SnapshotLimits limits) throws IOException {
         return new FileSymbolSnapshotStore(root, FileSymbolSnapshotStore.DEFAULT_MAX_QUERY_CACHE_ENTRIES,
-                SnapshotLimits.production(), FileSymbolSnapshotStore.DEFAULT_MAX_ACTIVE_QUERY_RETRIES, hook, budget);
+                limits, FileSymbolSnapshotStore.DEFAULT_MAX_ACTIVE_QUERY_RETRIES, hook, budget);
+    }
+
+    /** Production limits with a cache ceiling one byte below {@code weight}: such a view is above the ceiling. */
+    private static SnapshotLimits ceilingBelow(long weight) {
+        return SnapshotLimits.production().withMaxQueryCacheWeightBytes(weight - 1L);
     }
 
     private static CompletableFuture<SnapshotReadView> load(FileSymbolSnapshotStore store, UUID projectId) {

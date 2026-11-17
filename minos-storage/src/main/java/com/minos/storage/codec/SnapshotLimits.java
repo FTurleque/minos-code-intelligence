@@ -1,5 +1,7 @@
 package com.minos.storage.codec;
 
+import com.minos.store.SnapshotReadView;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Locale;
@@ -49,6 +51,10 @@ public record SnapshotLimits(
     public static final Duration VIEW_ADMISSION_WAIT = Duration.ofSeconds(30);
 
     private static final long PERCENT = 100L;
+    private static final long VIEW_BASE_WEIGHT_BYTES = 64L * 1024L;
+    private static final long SYMBOL_WEIGHT_BYTES = 1024L;
+    private static final long OCCURRENCE_WEIGHT_BYTES = 640L;
+    private static final long RELATIONSHIP_WEIGHT_BYTES = 1024L;
     private static final long MEBIBYTE = 1024L * 1024L;
     private static final SnapshotLimits PRODUCTION = new SnapshotLimits(
             SnapshotBinaryCodecSupport.MAX_PERSISTED_SNAPSHOT_BYTES,
@@ -123,15 +129,49 @@ public record SnapshotLimits(
         }
     }
 
-    /** Estimated weight of the view of the largest persistable snapshot of the current format. */
+    /**
+     * Estimated weight of the view of the largest persistable snapshot of the current format, from its persisted size
+     * alone: the term {@link #requireCacheCoversPersistable()} compares to the cache ceiling.
+     */
     public long largestPersistableViewWeightBytes() {
         return amplifiedBytes(SnapshotBinaryCodecSupport.FORMAT_VERSION_V3, maxPersistedBytes);
+    }
+
+    /**
+     * Estimated weight of the view of the largest persistable snapshot of the current format holding the given
+     * numbers of symbols, occurrences and relationships, derived index of incoming edges included: the weight both
+     * stores estimate for a snapshot of that size and of those counts.
+     */
+    public long largestPersistableViewWeightBytes(long symbols, long occurrences, long relationships) {
+        return viewWeightBytes(SnapshotBinaryCodecSupport.FORMAT_VERSION_V3, maxPersistedBytes,
+                symbols, occurrences, relationships);
+    }
+
+    /**
+     * Estimated weight of a view: the larger of a sum over the entity counts and of the amplified persisted size,
+     * plus the derived index of incoming edges, which lives as long as the view (AUD-PERF-11). Saturated at
+     * {@link Long#MAX_VALUE}.
+     */
+    public long viewWeightBytes(int formatVersion, long persistedBytes, long symbols, long occurrences,
+                                long relationships) {
+        long countWeight = VIEW_BASE_WEIGHT_BYTES;
+        countWeight = saturatingAdd(countWeight, saturatingMultiply(symbols, SYMBOL_WEIGHT_BYTES));
+        countWeight = saturatingAdd(countWeight, saturatingMultiply(occurrences, OCCURRENCE_WEIGHT_BYTES));
+        countWeight = saturatingAdd(countWeight, saturatingMultiply(relationships, RELATIONSHIP_WEIGHT_BYTES));
+        long persistedWeight = amplifiedBytes(formatVersion, persistedBytes);
+        return saturatingAdd(Math.max(countWeight, persistedWeight),
+                SnapshotReadView.incomingRelationshipsWeightBytes(Math.max(0L, relationships)));
     }
 
     /**
      * Refuses limits under which a snapshot of the current format that a store accepts could be refused by the
      * cache for its estimated weight alone: the cache ceiling must be at least the persisted ceiling times the
      * amplification of the current format. The message names the three values.
+     *
+     * <p>The invariant covers the amplified size only, neither the derived index of incoming edges nor the sum over
+     * the entity counts: the number of relationships of a persistable snapshot has no bound, so no constant ceiling
+     * could cover it. A view above the cache ceiling that the budget admits is held alone by its store and stays
+     * counted (AUD-PERF-06); {@link #largestPersistableViewWeightBytes(long, long, long)} gives its full weight.</p>
      */
     public void requireCacheCoversPersistable() {
         long required = largestPersistableViewWeightBytes();
@@ -141,6 +181,15 @@ public record SnapshotLimits(
                     + " bytes times current format amplification " + currentFormatAmplificationPercent
                     + " percent (" + required + " bytes)");
         }
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    private static long saturatingMultiply(long count, long weight) {
+        long value = Math.max(0L, count);
+        return value > Long.MAX_VALUE / weight ? Long.MAX_VALUE : value * weight;
     }
 
     /** A byte count in mebibytes: whole when exact, with two decimals otherwise. */

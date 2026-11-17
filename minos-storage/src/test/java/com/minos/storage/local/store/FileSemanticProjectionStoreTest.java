@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -227,6 +228,64 @@ class FileSemanticProjectionStoreTest {
         assertThrows(IllegalArgumentException.class, () -> store.prepare("a/b"));
         assertThrows(IllegalArgumentException.class, () -> store.read(" "));
         assertFalse(Files.exists(temp.resolve("projections")));
+    }
+
+    @Test
+    void aProjectionWithinItsShareIsDecodedOnceAndWeighedByItsEstimate() throws Exception {
+        Path root = temp.resolve("projections");
+        publish(new FileSemanticProjectionStore(root), projection(PROJECT, 500, 0.25f));
+        long heap = 64L * 1024L * 1024L * 1024L;
+        FileSemanticProjectionStore store = new FileSemanticProjectionStore(root, heap);
+        long fileBytes = Files.size(root.resolve(PROJECT).resolve(FileSemanticProjectionStore.FILE));
+
+        SemanticProjection first = store.read(PROJECT).orElseThrow();
+        SemanticProjection second = store.read(PROJECT).orElseThrow();
+
+        assertSame(first, second, "the second read is served by the cache");
+        assertEquals(FileSemanticProjectionStore.estimatedWeightBytes(500, fileBytes), store.cachedWeightBytes());
+        assertEquals(FileSemanticProjectionStore.DEFAULT_MAX_DECODED_WEIGHT_BYTES, store.maxDecodedWeightBytes());
+    }
+
+    @Test
+    void aProjectionHeavierThanItsShareIsRefusedBeforeDecodingWithoutAPath() throws Exception {
+        Path root = temp.resolve("projections");
+        publish(new FileSemanticProjectionStore(root), projection(PROJECT, 500, 0.25f));
+        // A heap of 100 KB: a share of 1 percent holds no projection of 500 points.
+        FileSemanticProjectionStore store = new FileSemanticProjectionStore(root, 100_000L);
+
+        SemanticProjectionStore.ProjectionTooLargeException refused = assertThrows(
+                SemanticProjectionStore.ProjectionTooLargeException.class, () -> store.read(PROJECT));
+
+        assertTrue(refused.getMessage().startsWith("semantic projection is too large for this process"),
+                refused.getMessage());
+        assertTrue(refused.getMessage().contains(store.maxDecodedWeightBytes() + " bytes"), refused.getMessage());
+        assertFalse(refused.getMessage().contains(temp.toString()), refused.getMessage());
+        assertEquals(0L, store.cachedWeightBytes(), "nothing is kept");
+    }
+
+    @Test
+    void aHeaderThatAnnouncesTooManyPointsIsUnreadableBeforeAnyEstimate() throws Exception {
+        Path root = temp.resolve("projections");
+        publish(new FileSemanticProjectionStore(root), projection(PROJECT, 3, 0.25f));
+        Path file = root.resolve(PROJECT).resolve(FileSemanticProjectionStore.FILE);
+        byte[] whole = Files.readAllBytes(file);
+        // The point count precedes the three points; each point is two strings and two floats.
+        int count = whole.length - 32 - pointBytes(projection(PROJECT, 3, 0.25f)) - 4;
+        java.nio.ByteBuffer.wrap(whole, count, 4).putInt(2_000_000);
+        Files.write(file, whole);
+
+        assertThrows(SemanticProjectionStore.UnreadableProjectionException.class,
+                () -> new FileSemanticProjectionStore(root, 100_000L).read(PROJECT));
+    }
+
+    /** Encoded size of all the points of {@code projection}: two strings and two floats each. */
+    private static int pointBytes(SemanticProjection projection) {
+        int total = 0;
+        for (SemanticProjection.Point point : projection.points()) {
+            total += 4 + point.stableKey().getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                    + 4 + point.kind().name().length() + 8;
+        }
+        return total;
     }
 
     private static void publish(SemanticProjectionStore store, SemanticProjection projection) throws IOException {
