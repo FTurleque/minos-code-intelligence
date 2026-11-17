@@ -203,6 +203,6 @@ Ni l'un ni l'autre n'est demandé par l'action de l'audit ; ils se décident sur
 
 ## Questions ouvertes
 
-- D1 : accord du propriétaire sur la migration 6 et son retour arrière (recommandation : oui).
-- Seuil d'acceptation du gain, à fixer sur la mesure « avant ».
-- La mesure « après » désigne-t-elle `embedding::text` comme coût dominant ? Si oui, changement distinct.
+- D1 retenue : compte tenu à l'écriture, migration 6 et son retour arrière non transparent.
+- Seuil d'acceptation du gain : aucun seuil chiffré, les gains se lisent tels que mesurés.
+- Coût de `embedding::text` : la mesure « après » ne l'établit pas comme coût dominant (une passe vaut 3,8 s sous PostgreSQL contre 0,48 s en local sur 25 000 documents, écart non attribué) ; un changement distinct ne se justifie que sur une mesure qui l'isole.
