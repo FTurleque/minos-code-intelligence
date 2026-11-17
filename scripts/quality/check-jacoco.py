@@ -188,13 +188,13 @@ SCOPES = {
             "com/minos/adapter/scip/runtime/install/ManagedToolInstallation": {"line": 0.90, "branch": 0.57},
             "com/minos/adapter/scip/runtime/install/BoundedZipExtraction": {"line": 0.90, "branch": 0.80},
             "com/minos/adapter/scip/runtime/install/ScipJavaClasspathInstallation": {"line": 0.85, "branch": 0.75},
-            # AUD-TST-03: module report of minos-provider-scip on pr-ci.yml run 44075151765 (main fc1002e0, 2026-11-17).
-            # ManagedPolyglotScipRuntimeManager: Linux 237/300 lines, 100/149 branches; Windows 234/300, 99/149.
-            # ScipJavaProcessPlanFactory: Linux 119/152, 39/54; Windows 113/152, 33/54. Floor = lower measure minus about
-            # 5 points; the branch floor keeps the trust-boundary minimum of TRUST_BOUNDARY_MINIMUMS.
+            # AUD-TST-03: aggregate report of pr-ci.yml run 44075151765 (main fc1002e0, 2026-11-17), every class the prefix
+            # matches (nested classes included, as this gate sums them). ManagedPolyglotScipRuntimeManager: Linux 239/302
+            # lines, 100/149 branches; Windows 236/302, 99/149. ScipJavaProcessPlanFactory: Linux 143/179, 55/74; Windows
+            # 138/179, 50/74. Floor = lower measure minus about 5 points, never under TRUST_BOUNDARY_MINIMUMS.
             "com/minos/adapter/scip/runtime/install/ManagedPolyglotScipRuntimeManager": {"line": 0.73, "branch": 0.61},
             "com/minos/adapter/scip/runtime/plan/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35},
-            "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.69, "branch": 0.56},
+            "com/minos/adapter/scip/runtime/plan/ScipJavaProcessPlanFactory": {"line": 0.72, "branch": 0.62},
         },
     },
     "m25-remote-distributed-indexing": {
@@ -232,12 +232,14 @@ SCOPES = {
         "line": 0.68,
         "branch": 0.48,
         "prefixMinimums": {
-            # AUD-TST-03: module report of minos-runtime-local on pr-ci.yml run 44075151765 (main fc1002e0, 2026-11-17).
-            # StrongProcessOwnershipIndexerExecutor: Linux 58/62 lines, 12/16 branches; Windows 44/62, 9/16.
+            # AUD-TST-03: aggregate report of pr-ci.yml run 44075151765 (main fc1002e0, 2026-11-17), nested classes included.
+            # StrongProcessOwnershipIndexerExecutor (8 classes): Linux 97/124 lines, 25/52 branches; Windows 67/124, 16/52.
+            # Its Linux cgroup transformer (16 branches) and the per-platform arms run on one system only: the branch floor
+            # holds the trust-boundary minimum and awaits decision D2 of the change (split the platform code).
             # ProviderProcessEnvironment once its rules of both systems are tested on each system: 59/59 lines, 40/40
             # branches (local Windows report of its own tests, 2026-11-17; Linux 51/58, 23/40 before those tests).
             # Floor = lower measure minus about 5 points, never under TRUST_BOUNDARY_MINIMUMS.
-            "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.66, "branch": 0.51},
+            "com/minos/runtime/local/StrongProcessOwnershipIndexerExecutor": {"line": 0.49, "branch": 0.50},
             "com/minos/runtime/local/process/ProviderProcessEnvironment": {"line": 0.95, "branch": 0.95},
         },
     },

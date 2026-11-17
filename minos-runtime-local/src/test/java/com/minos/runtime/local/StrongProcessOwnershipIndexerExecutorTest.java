@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -288,6 +289,70 @@ class StrongProcessOwnershipIndexerExecutorTest {
 
         assertTrue(sandboxReached.get(), "a managed-qualified sandbox must receive the copied request");
         assertTrue(failure.getMessage().contains("fixture sandbox reached"), failure.getMessage());
+    }
+
+    @Test
+    void anArtifactWhoseProvenanceDiffersFromTheRequestIsRefused() {
+        List<IndexingArtifact> forged = List.of(
+                new IndexingArtifact(Language.PYTHON, "fake-provider", temporary.resolve("index.scip"), Path.of("")),
+                new IndexingArtifact(Language.JAVA, "other-provider", temporary.resolve("index.scip"), Path.of("")),
+                new IndexingArtifact(Language.JAVA, "fake-provider", temporary.resolve("index.scip"), Path.of("module")));
+        for (IndexingArtifact artifact : forged) {
+            StrongProcessOwnershipIndexerExecutor executor = sandboxedExecutor("forged-" + forged.indexOf(artifact),
+                    returningBackend(artifact));
+            var submitted = request(temporary.resolve("forged-project-" + forged.indexOf(artifact)));
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> executor.execute(submitted));
+
+            assertEquals("local provider sandbox returned inconsistent artifact provenance", failure.getMessage());
+        }
+    }
+
+    @Test
+    void anArtifactFaithfulToTheRequestIsReturned() throws Exception {
+        IndexingArtifact faithful = new IndexingArtifact(
+                Language.JAVA, "fake-provider", temporary.resolve("index.scip"), Path.of(""));
+        StrongProcessOwnershipIndexerExecutor executor = sandboxedExecutor("faithful", returningBackend(faithful));
+
+        assertEquals(faithful, executor.execute(request(temporary.resolve("faithful-project"))));
+    }
+
+    @Test
+    void aCapabilityNeedsAMechanismName() {
+        assertThrows(IllegalArgumentException.class,
+                () -> StrongProcessOwnershipIndexerExecutor.Capability.available(" "));
+        assertThrows(IllegalArgumentException.class,
+                () -> StrongProcessOwnershipIndexerExecutor.Capability.unavailable(null, "diagnostic"));
+    }
+
+    private StrongProcessOwnershipIndexerExecutor sandboxedExecutor(String name, WorkerSandboxBackend backend) {
+        Path home = temporary.resolve(name + "-home");
+        ProcessIndexerExecutor delegate = new ProcessIndexerExecutor(
+                "fake-provider", home,
+                (request, runDirectory) -> {
+                    throw new AssertionError("the fixture sandbox never starts the delegate");
+                });
+        return new StrongProcessOwnershipIndexerExecutor(delegate, home, WorkerNetworkPolicy.ALLOW, selectedHome -> backend);
+    }
+
+    private static WorkerSandboxBackend returningBackend(IndexingArtifact artifact) {
+        WorkerSandboxBackend qualified = managedBackend(true, new AtomicBoolean());
+        return new WorkerSandboxBackend() {
+            @Override public String id() { return qualified.id(); }
+            @Override public WorkerIsolation isolation() { return qualified.isolation(); }
+            @Override public NetworkGuarantee networkGuarantee() { return qualified.networkGuarantee(); }
+            @Override public WorkerSandboxQualification qualification() { return qualified.qualification(); }
+            @Override public boolean enforcesNetworkDeny() { return true; }
+
+            @Override
+            public IndexingArtifact execute(
+                    IndexerExecutor delegate,
+                    IndexingExecutionRequest request,
+                    WorkerNetworkPolicy networkPolicy
+            ) {
+                return artifact;
+            }
+        };
     }
 
     private static WorkerSandboxBackend managedBackend(boolean enforcesNetworkDeny, AtomicBoolean reached) {
