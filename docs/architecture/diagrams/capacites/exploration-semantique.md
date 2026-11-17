@@ -257,6 +257,10 @@ stateDiagram-v2
 
 `ABANDONNEE` est borné (8 lectures) et visible dans le journal de la surface.
 
+La table de symboles de l'explorateur est tenue par la vue du snapshot (`WeakHashMap`) et part avec elle. Une
+projection dont le poids décodé estimé dépasse 1 % du tas est refusée avant décodage : état `ECHOUEE`, raison
+`PROJECTION_TOO_LARGE` (ADR DATA-0085, point 19).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

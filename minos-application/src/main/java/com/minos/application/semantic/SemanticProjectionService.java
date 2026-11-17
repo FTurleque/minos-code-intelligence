@@ -30,6 +30,8 @@ public final class SemanticProjectionService {
     public static final int MAX_POINTS_PAGE = 5_000;
     public static final String PREPARE_COMMAND = "minos semantic projection prepare";
     public static final String UNREADABLE = "PROJECTION_UNREADABLE";
+    /** Failure reason of a projection heavier, once decoded, than its share of the heap of this process. */
+    public static final String TOO_LARGE = "PROJECTION_TOO_LARGE";
     /** Phase reported once, when every pass is done and the projection is about to be published. */
     public static final String PUBLISH_PHASE = "publish";
     static final String PARAMETERS = "components=2;maxIterations=" + MAX_ITERATIONS + ";tolerance=" + PrincipalAxes.TOLERANCE;
@@ -134,6 +136,10 @@ public final class SemanticProjectionService {
             stored = store.read(projectId);
         } catch (SemanticProjectionStore.UnreadableProjectionException unreadable) {
             return new Reading(new Status(projectId, State.ECHOUEE, Optional.empty(), documents, command, UNREADABLE),
+                    Optional.empty());
+        } catch (SemanticProjectionStore.ProjectionTooLargeException tooLarge) {
+            // AUD-PERF-04: refused before decoding; a preparation with fewer points, or a larger heap, makes it readable.
+            return new Reading(new Status(projectId, State.ECHOUEE, Optional.empty(), documents, command, TOO_LARGE),
                     Optional.empty());
         }
         if (stored.isEmpty()) {
