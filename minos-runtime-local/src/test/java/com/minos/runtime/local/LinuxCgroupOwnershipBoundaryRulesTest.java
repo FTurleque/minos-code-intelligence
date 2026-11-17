@@ -72,7 +72,8 @@ class LinuxCgroupOwnershipBoundaryRulesTest {
         IndexerProcessPlan transformed = transformer.transform(plan(), temporary);
 
         assertEquals(List.of("enter", "provider"), transformed.command());
-        assertThrows(IllegalStateException.class, () -> transformer.transform(plan(), temporary));
+        IndexerProcessPlan second = plan();
+        assertThrows(IllegalStateException.class, () -> transformer.transform(second, temporary));
         assertDoesNotThrow(transformer::releaseContainment);
         assertTrue(job.closed);
         assertDoesNotThrow(transformer::releaseContainment, "a released transformer releases nothing more");

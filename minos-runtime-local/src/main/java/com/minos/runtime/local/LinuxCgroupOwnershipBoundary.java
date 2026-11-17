@@ -64,23 +64,31 @@ final class LinuxCgroupOwnershipBoundary implements StrongProcessOwnershipIndexe
     }
 
     private static OwnershipJob cgroupJob(Path root, String name) throws IOException {
-        LinuxCgroupJob job = LinuxCgroupJob.createOwnershipOnly(root, name);
-        return new OwnershipJob() {
-            @Override
-            public List<String> enterThenExec(Path shell, List<String> command) {
-                return job.enterThenExec(shell, command);
-            }
+        return new CgroupJobHandle(LinuxCgroupJob.createOwnershipOnly(root, name));
+    }
 
-            @Override
-            public void kill() {
-                job.kill();
-            }
+    /** Takes ownership of a created cgroup job: closing the handle closes the job. */
+    private static final class CgroupJobHandle implements OwnershipJob {
+        private final LinuxCgroupJob job;
 
-            @Override
-            public void close() {
-                job.close();
-            }
-        };
+        private CgroupJobHandle(LinuxCgroupJob job) {
+            this.job = job;
+        }
+
+        @Override
+        public List<String> enterThenExec(Path shell, List<String> command) {
+            return job.enterThenExec(shell, command);
+        }
+
+        @Override
+        public void kill() {
+            job.kill();
+        }
+
+        @Override
+        public void close() {
+            job.close();
+        }
     }
 
     /** The cgroup job that owns one provider tree. */
