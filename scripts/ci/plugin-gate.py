@@ -49,13 +49,17 @@ def in_scope(files: list[str]) -> bool:
 
 
 def changed_files(event: str, base: str, head: str, root: Path = ROOT) -> list[str] | None:
-    """Files changed by the event, or None when they cannot be determined."""
+    """Files changed by the event, or None when they cannot be determined.
+
+    ``--no-renames`` lists both paths of a rename: the path a file leaves counts as much as the path it reaches, so
+    moving a source out of a scoped or image path cannot make the event look out of scope (AUD-DEP-08).
+    """
     template = GIT_RANGES.get(event)
     if template is None or not base or not head or set(base) == {"0"}:
         return None
     try:
         completed = subprocess.run(
-            ["git", "diff", "--name-only", template.format(base=base, head=head)],
+            ["git", "diff", "--no-renames", "--name-only", template.format(base=base, head=head)],
             cwd=root, capture_output=True, text=True, check=True, timeout=120)
     except (OSError, subprocess.SubprocessError):
         return None
