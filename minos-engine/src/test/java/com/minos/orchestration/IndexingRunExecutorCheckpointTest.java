@@ -27,6 +27,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.List;
@@ -143,29 +144,85 @@ class IndexingRunExecutorCheckpointTest {
     void theRootScopeHoldsTheReferenceFingerprintCapturedByTheServiceOfTheRun(@TempDir Path temp) throws Exception {
         ProjectFingerprintService runService = new ProjectFingerprintService();
 
-        assertEquals("d".repeat(64), rootScopeCheckpoint(temp, runService, runService),
+        assertEquals("d".repeat(64), rootScopeCheckpoint(temp, runService, runService, new ArrayList<>()),
                 "the root scope is not hashed a second time");
+    }
+
+    @Test
+    void theExecutorReceivesTheReusableReferenceFingerprintOfTheRegisteredProject(@TempDir Path temp)
+            throws Exception {
+        ProjectFingerprintService runService = new ProjectFingerprintService();
+        List<IndexingExecutionRequest> requests = new ArrayList<>();
+
+        rootScopeCheckpoint(temp, runService, runService, requests);
+
+        assertEquals(List.of(Optional.of("d".repeat(64))),
+                requests.stream().map(IndexingExecutionRequest::registeredProjectFingerprint).toList());
+    }
+
+    @Test
+    void theExecutorReceivesTheRootScopeFingerprintCapturedByTheRun(@TempDir Path temp) throws Exception {
+        Path root = project(temp);
+        Path artifact = Files.writeString(temp.resolve("root.scip"), "root");
+        String expected = new ProjectFingerprintService().capture(root).projectSha256();
+        List<IndexingExecutionRequest> requests = new ArrayList<>();
+        IndexingLifecycleService lifecycle = lifecycle(new InMemoryIndexStateStore(),
+                recording(rootExecutor(artifact), requests));
+
+        IndexingRun run = lifecycle.execute(UUID.randomUUID(), root, negotiation(false));
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertEquals(List.of(Optional.of(expected)),
+                requests.stream().map(IndexingExecutionRequest::registeredProjectFingerprint).toList());
+    }
+
+    @Test
+    void nestedScopesAloneHandNoFingerprintAndCostNoExtraHash(@TempDir Path temp) throws Exception {
+        Path root = project(temp);
+        Path appArtifact = Files.writeString(temp.resolve("app.scip"), "app");
+        Path libArtifact = Files.writeString(temp.resolve("lib.scip"), "lib");
+        List<IndexingExecutionRequest> requests = new ArrayList<>();
+        IndexingLifecycleService lifecycle = lifecycle(new InMemoryIndexStateStore(),
+                recording(scopedExecutor(root, appArtifact, libArtifact, false), requests));
+
+        IndexingRun run = lifecycle.execute(UUID.randomUUID(), root, discovery(root), negotiation(false));
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertEquals(List.of(Optional.empty(), Optional.empty()),
+                requests.stream().map(IndexingExecutionRequest::registeredProjectFingerprint).toList());
+    }
+
+    private static IndexerExecutor recording(IndexerExecutor delegate, List<IndexingExecutionRequest> requests) {
+        return new IndexerExecutor() {
+            @Override public String indexerId() { return delegate.indexerId(); }
+            @Override public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                requests.add(request);
+                return delegate.execute(request);
+            }
+        };
     }
 
     @Test
     void aReferenceCapturedByAnotherInstanceIsNotPersistedForTheRootScope(@TempDir Path temp) throws Exception {
         ProjectFingerprintService runService = new ProjectFingerprintService();
 
-        String persisted = rootScopeCheckpoint(temp, runService, new ProjectFingerprintService());
+        String persisted = rootScopeCheckpoint(temp, runService, new ProjectFingerprintService(), new ArrayList<>());
 
         assertEquals(runService.capture(temp.resolve("project")).projectSha256(), persisted,
                 "the run captures the root scope again with its own service (fail-closed)");
     }
 
     private static String rootScopeCheckpoint(Path temp, ProjectFingerprintService runService,
-                                              ProjectFingerprintService capturedBy) throws Exception {
+                                              ProjectFingerprintService capturedBy,
+                                              List<IndexingExecutionRequest> requests) throws Exception {
         Path root = project(temp);
         Path artifact = Files.writeString(temp.resolve("root.scip"), "root");
         UUID projectId = UUID.randomUUID();
         InMemoryIndexStateStore store = new InMemoryIndexStateStore();
         store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
                 Optional.of("snapshot-old"), Optional.empty(), Instant.EPOCH, Optional.of("baseline")));
-        IndexingLifecycleService lifecycle = new IndexingLifecycleService(List.of(rootExecutor(artifact)),
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                List.of(recording(rootExecutor(artifact), requests)),
                 request -> "snapshot-" + request.runId(), (id, runId, snapshotId) -> { }, store,
                 ResumableRunMarkers.none(), ResumableArtifactPolicy.DEFAULT, CLOCK, runService);
         IndexerNegotiationResult negotiation = negotiation(true);

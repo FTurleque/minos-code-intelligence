@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Execution ports used by the indexing lifecycle without exposing a provider type.
@@ -232,6 +233,9 @@ public final class IndexingRuntimePorts {
      * construction whenever both roots are materialized and expose strong filesystem-object
      * identities. Local process execution requires this authorization and revalidates it
      * immediately before {@code ProcessBuilder.start()}.</p>
+     *
+     * <p>{@code registeredProjectFingerprint} is the SHA-256 of the whole registered project, when the run already
+     * knows it, so an executor that needs it as a provenance token does not hash the source tree again.</p>
      */
     public record IndexingExecutionRequest(
             UUID runId,
@@ -242,8 +246,11 @@ public final class IndexingRuntimePorts {
             IndexerSelection selection,
             IndexingMode mode,
             List<String> changedFiles,
-            Optional<ExecutionPathAuthorization> pathAuthorization
+            Optional<ExecutionPathAuthorization> pathAuthorization,
+            Optional<String> registeredProjectFingerprint
     ) {
+        private static final Pattern LOWER_CASE_SHA256 = Pattern.compile("[0-9a-f]{64}");
+
         public IndexingExecutionRequest {
             Objects.requireNonNull(runId, "runId");
             Objects.requireNonNull(projectId, "projectId");
@@ -273,6 +280,29 @@ public final class IndexingRuntimePorts {
             if (mode == IndexingMode.INCREMENTAL && changedFiles.isEmpty()) {
                 throw new IllegalArgumentException("INCREMENTAL execution requires changed files");
             }
+            registeredProjectFingerprint = Objects.requireNonNull(
+                    registeredProjectFingerprint, "registeredProjectFingerprint");
+            if (registeredProjectFingerprint.isPresent()
+                    && !LOWER_CASE_SHA256.matcher(registeredProjectFingerprint.orElseThrow()).matches()) {
+                throw new IllegalArgumentException(
+                        "registeredProjectFingerprint must be a lower-case hexadecimal SHA-256");
+            }
+        }
+
+        /** Request without a known fingerprint of the registered project: an executor that needs one captures it. */
+        public IndexingExecutionRequest(
+                UUID runId,
+                UUID projectId,
+                Path registeredProjectRoot,
+                Path projectRoot,
+                Path projectRelativeRoot,
+                IndexerSelection selection,
+                IndexingMode mode,
+                List<String> changedFiles,
+                Optional<ExecutionPathAuthorization> pathAuthorization
+        ) {
+            this(runId, projectId, registeredProjectRoot, projectRoot, projectRelativeRoot,
+                    selection, mode, changedFiles, pathAuthorization, Optional.empty());
         }
 
         /** Constructor preserving the historical request shape while capturing path identity. */
