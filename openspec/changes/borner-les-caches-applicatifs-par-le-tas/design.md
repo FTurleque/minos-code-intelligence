@@ -216,6 +216,123 @@ sequenceDiagram
     end
 ```
 
+## Mesure 1.1 (2026-11-17)
+
+[Existant vérifié] par exécution, poste Windows du mainteneur, JDK 21.0.13, `main` `fc1002e0`. Outil :
+`minos-bootstrap/src/test/java/com/minos/bootstrap/application/ApplicationCacheMeasurement.java`, lancé par
+`-Dtest=ApplicationCacheMeasurement` (nom hors des motifs Surefire, propriétés `minos.cacheMeasure.*`), sous
+`-Xmx4g` puis sous `-Xmx1076m` (1 128 267 776 octets, tas par défaut du plan de requête). Une exécution par
+configuration.
+
+**Méthode.** Projet réel : le snapshot actif du dépôt MINOS indexé sur le poste (348,6 Mio persistés, 67 671
+symboles, 503 030 occurrences, 26 005 relations), copié avec ses empreintes dans un `MINOS_HOME` neuf ; la vue du
+snapshot est chargée d'abord, pour n'être comptée dans aucun cache. Tas retenu = tas utilisé après cinq ramasse-miettes,
+avant et après l'étape ; pic = somme des pics des pools du tas depuis leur remise à zéro (majorant : les pools
+n'atteignent pas leur pic au même instant). Index sémantique : fournisseur `local-hash`. Projection : index
+synthétiques écrits directement dans le store, préparation de la projection, puis lecture par une seconde application
+(cache vide).
+
+| Cache | Poids estimé | Tas retenu | Estimé / retenu | Construction : pic au-dessus du tas de départ | Temps |
+|---|---|---|---|---|---|
+| Corpus hybride (projet réel, 1 entrée) | 193 986 704 o (185,0 Mio) | 137 896 032 o (131,5 Mio) | 1,41 | 310,6 Mio sous 1 076 Mio ; 623 à 711 Mio sous 4 Gio | 1re requête 10,0 à 12,0 s ; 2e (en cache) 53 à 64 ms |
+| Graphe de programme + empreintes Java (projet réel) | 17 651 854 + 1 536 980 o (18,3 Mio) | 5 555 536 o (5,3 Mio) | 3,45 | 693 Mio sous 1 076 Mio (majorant) ; graphe plafonné à 10 000 nœuds | 1er graphe 6,7 à 7,9 s ; 2e 3 à 4 ms |
+| Index vectoriel local, projet réel (136 819 documents, 32 dimensions, fichier de 111,6 Mo) | au-delà du plafond de 256 Mio : jamais gardé | 0 | — | 451 Mio sous 1 076 Mio, 320 Mio sous 4 Gio, **à chaque recherche** | 0,52 à 0,64 s par recherche |
+| Index vectoriel local au budget de construction (65 000 documents, 384 dimensions, 1 200 caractères, fichier de 186 Mo) | au-delà du plafond : jamais gardé | 0 | — | 463 à 479 Mio, **à chaque recherche** | 1,16 à 1,18 s par recherche |
+| Page de l'explorateur (`lookups`, projet réel) | 1 entrée (poids 1) | 2 784 888 à 3 310 192 o (2,7 à 3,2 Mio) au-delà de la vue, qu'elle partage | — | non mesuré | page 1 : 553 à 594 ms ; page 2 : 6 ms |
+| Projection décodée, 100 000 points | aucun poids | 11 620 808 o | — | 55 Mio | 1re page 353 ms ; suivante 7 ms |
+| Projection décodée, 250 000 points | aucun poids | 29 002 288 à 29 146 200 o | — | 161 à 175 Mio | 1re page 743 à 912 ms |
+| Projection décodée, 1 000 000 de points (préparation sous 2 Gio : refusée sous son budget par défaut de 256 Mio) | aucun poids | 116 271 288 o (110,9 Mio) | — | 567 Mio | 1re page 3,8 s ; suivante 5 ms |
+
+Constats tirés de la mesure :
+
+1. Chaque estimation majore le tas retenu (corpus 1,41 ; graphe et empreintes 3,45) : un plafond tiré d'une part du
+   tas borne bien ce que les caches retiennent.
+2. Le corpus hybride de ce dépôt retient 131,5 Mio, soit 12,2 % du tas par défaut ; il est estimé à 17,2 % du tas.
+3. Une projection retient **116,0 à 116,6 octets par point**, constant de 100 000 à 1 000 000 de points ; le pic de
+   décodage vaut environ 5 fois ce qui est retenu.
+4. Aucun index vectoriel local réaliste n'entre sous le plafond de 256 Mio : celui du dépôt réel (même à 32
+   dimensions) ni celui du budget de construction. Chaque recherche décode l'index entier, 451 à 479 Mio au-dessus du
+   tas de départ sous le tas par défaut. C'est le plus gros transitoire mesuré, et il n'est borné par rien.
+5. La construction d'un cache alloue bien plus qu'il ne retient (corpus : 2,4 fois sous 1 076 Mio ; graphe : plus de
+   100 fois son poids retenu, majorant). Une part du tas ne borne que le retenu, pas ce transitoire.
+6. `lookups` n'ajoute que 3 Mio à la vue qu'il partage ; ce qu'il coûte vraiment, c'est de garder le snapshot entier
+   en vie après l'éviction de la vue (non mesurable sans éviction ; c'est le défaut que D3 traite). Construire la table
+   coûte environ 0,55 s sur la première page.
+7. La synchronisation sémantique du dépôt réel est **refusée** à 384 et à 256 dimensions (« semantic vectors exceed
+   heap byte budget », plus de 98 000 documents) ; elle passe à 32 dimensions (136 819 documents).
+
+**Non mesuré, et pourquoi.**
+
+- PostgreSQL : les caches mesurés ne dépendent pas du stockage (corpus, graphe, empreintes, projection, `lookups`) ;
+  le store sémantique PostgreSQL n'a pas de cache d'index (`PostgresSemanticVectorStore`). Le transitoire du
+  rapatriement d'un snapshot PostgreSQL est mesuré par DATA-0081 (310 %). Aucune mesure PostgreSQL n'a été relancée.
+- Linux et le conteneur Docker (`--memory 3g`) : la mesure est faite sous `-Xmx1076m` sur Windows, pas dans l'image
+  de requête.
+- Un vrai modèle d'embeddings (384 ou 768 dimensions) sur le dépôt réel : la synchronisation le refuse (constat 7) ;
+  l'index synthétique au budget en tient lieu.
+- `lookups` après éviction de la vue, et la latence d'une page sans table (parcours des symboles, D3) : la seconde
+  demande de retirer la table, pas encore écrite.
+- Le graphe a été mesuré à la limite par défaut de 10 000 nœuds, et le fournisseur avancé ne rend aucune arête
+  sur ce dépôt (`graph.edges=0`).
+
+## Proposition de parts du tas (D2) et de décision D3, issue de la mesure 1.1
+
+[Proposition] à valider par le propriétaire (tâche 1.2). Contrainte, reprise de DATA-0081 : sous le tas par défaut,
+le budget des vues vaut 50 % et le décodage d'une vue qui le remplit monte à 0,84 du tas (pic de 1,68 fois le poids
+estimé). Il reste donc 16 % du tas, dont 5 % sont gardés pour le travail des requêtes : **11 % pour tous les caches**.
+
+**Option A (recommandée) : garder le budget des vues à 50 %, plafonner les caches à 11 % du tas.**
+
+| Cache | Part du tas | Sous 1 076 Mio | Effet mesuré |
+|---|---|---|---|
+| Corpus hybride | 6 % | 64,6 Mio | le corpus de ce dépôt (185 Mio estimés) n'est plus gardé : 10 à 12 s par requête hybride sous le tas par défaut ; il reste gardé à partir d'environ 3,0 Gio de tas (`MINOS_MCP_MEM_LIMIT=9g` à 35 %) |
+| Graphe de programme | 2 % | 21,5 Mio | le graphe mesuré (17,7 Mio estimés) reste gardé |
+| Empreintes Java | 1 % | 10,8 Mio | gardées (1,5 Mio) |
+| Projection | 1 % | 10,8 Mio | jusqu'à environ 88 000 points à 128 octets estimés par point ; au-delà, la projection est refusée avant décodage (D4) |
+| Vecteurs de requête | 1 % | 10,8 Mio | inchangé (plafond constant de 8 Mio) |
+| Index vectoriel local | 0 % gardé | — | inchangé dans les faits : il n'est déjà jamais gardé (constat 4) |
+
+Somme : 50 + 34 + 11 + 5 = 100 %. Garantie conservée : la vue V3 la plus lourde persistable (500 Mio estimés)
+reste admise sous le tas par défaut (DATA-0081 point 17, `M29DockerQueryImageContractTest`).
+
+**Option B : budget des vues à 40 %.** Marge de décodage 0,68 × 40 % = 27 % ; 27 % pour les caches et 5 % pour le travail des
+requêtes (corpus 18 %, soit 194 Mio, au-dessus des 185 Mio estimés ; graphe 2 % ; empreintes 1 % ; projection 5 %,
+soit environ 440 000 points ; vecteurs de requête 1 %). En contrepartie, le budget passe à 430 Mio sous le tas par défaut : la vue V3 la plus lourde
+persistable (500 Mio) est refusée, et un snapshot V3 au-delà d'environ 344 Mio persistés n'est plus lisible par le
+plan de requête par défaut. DATA-0081 point 17 et son test de contrat changent.
+
+**Option C : relever le tas du plan de requête** (`MINOS_MCP_MEM_LIMIT` ou `MaxRAMPercentage`). Elle est hors de ce
+changement et touche la contrainte des deux JVM par conteneur (DATA-0081 point 17).
+
+Recommandation : **A**. Elle garde la garantie publiée sur les vues. Elle borne les caches par construction, ce qui
+est sûr puisque les estimations majorent le retenu. La perte coûte de la latence, pas une erreur. Les parts restent
+réglables par une variable, et le corpus d'un gros dépôt revient en cache avec un plafond mémoire relevé.
+
+**Point ouvert, que la mesure rend prioritaire** (D9, non tranché ici) : le décodage complet d'un index vectoriel à
+chaque recherche (451 à 479 Mio) ne tient sous aucune des trois options à côté d'une vue chargée. Deux suites sont
+possibles :
+
+- refuser la recherche sur un index plus lourd que la part de décodage, ce qui, sous le tas par défaut, refuse tout
+  index réaliste ;
+- faire passer la recherche par une lecture en flux (pages du sprint 4), dans un changement distinct.
+
+La mesure plaide pour le flux.
+
+**D3 : proposition modifiée par la mesure.** Retirer la table pour un parcours des symboles à chaque page déplace le
+coût de construction mesuré (environ 0,55 s sur 67 671 symboles) sur **chaque** page, au lieu de la première seule
+(6 ms ensuite). Proposition : garder `lookups`, mais ne plus lui laisser tenir le snapshot.
+
+- Table bâtie depuis la vue courante et associée à l'identité de cette vue par une référence faible.
+- Table abandonnée dès que la vue est évincée ou remplacée.
+- Poids de 3 Mio compté dans une part de 1 % ajoutée à l'option A (somme 12 %, travail des requêtes ramené à 4 %).
+
+L'exigence « l'explorateur ne retient aucun symbole hors de la vue du snapshot » est tenue par cette référence
+faible, sans le coût du parcours. Si le propriétaire préfère D3 tel qu'écrit, la latence d'une page sans table reste
+à mesurer (tâche 7.2).
+
+**D7** (vecteurs en `float[]`) : la mesure ne le justifie pas seul. L'index réel à 384 dimensions pèserait encore
+plus de 256 Mio en `float[]`, et le transitoire de décodage resterait entier.
+
 ## Décisions
 
 ### D1 — Plafond dérivé du tas plutôt que locataire du budget
