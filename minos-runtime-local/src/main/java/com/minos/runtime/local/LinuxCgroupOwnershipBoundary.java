@@ -7,8 +7,12 @@ import com.minos.runtime.local.process.IndexerProcessPlan;
 import com.minos.runtime.local.process.ProcessIndexerExecutor;
 import com.minos.runtime.local.sandbox.LinuxCgroupJob;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Strong provider process ownership on Linux: the provider is started by a trusted POSIX shell that enters a delegated
@@ -19,10 +23,26 @@ final class LinuxCgroupOwnershipBoundary implements StrongProcessOwnershipIndexe
 
     static final String MECHANISM = "linux-cgroup-v2";
 
+    private final Supplier<Optional<Path>> delegatedRoot;
+    private final Supplier<Optional<Path>> trustedShell;
+    private final OwnershipJobFactory jobs;
+
+    LinuxCgroupOwnershipBoundary() {
+        this(LinuxCgroupJob::delegatedRoot, () -> CommandLocator.find("sh"), LinuxCgroupOwnershipBoundary::cgroupJob);
+    }
+
+    /** Package-private seam: the delegated root, the shell and the job are given, so every refusal is tested anywhere. */
+    LinuxCgroupOwnershipBoundary(Supplier<Optional<Path>> delegatedRoot, Supplier<Optional<Path>> trustedShell,
+                                 OwnershipJobFactory jobs) {
+        this.delegatedRoot = Objects.requireNonNull(delegatedRoot, "delegatedRoot");
+        this.trustedShell = Objects.requireNonNull(trustedShell, "trustedShell");
+        this.jobs = Objects.requireNonNull(jobs, "jobs");
+    }
+
     @Override
     public Capability capability() {
-        Optional<Path> root = LinuxCgroupJob.delegatedRoot();
-        Optional<Path> shell = CommandLocator.find("sh");
+        Optional<Path> root = delegatedRoot.get();
+        Optional<Path> shell = trustedShell.get();
         if (root.isPresent() && shell.isPresent()) {
             return Capability.available(MECHANISM);
         }
@@ -34,24 +54,61 @@ final class LinuxCgroupOwnershipBoundary implements StrongProcessOwnershipIndexe
 
     @Override
     public ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request) {
-        Path root = LinuxCgroupJob.delegatedRoot()
+        Path root = delegatedRoot.get()
                 .orElseThrow(() -> StrongProcessOwnershipIndexerExecutor.unavailable(
                         "delegated cgroup v2 ownership is unavailable"));
-        Path shell = CommandLocator.find("sh")
+        Path shell = trustedShell.get()
                 .orElseThrow(() -> StrongProcessOwnershipIndexerExecutor.unavailable(
                         "trusted POSIX sh required by cgroup ownership launcher is unavailable"));
-        return new CgroupTransformer(root, shell, "minos-provider-" + request.runId());
+        return new CgroupTransformer(jobs, root, shell, "minos-provider-" + request.runId());
+    }
+
+    private static OwnershipJob cgroupJob(Path root, String name) throws IOException {
+        LinuxCgroupJob job = LinuxCgroupJob.createOwnershipOnly(root, name);
+        return new OwnershipJob() {
+            @Override
+            public List<String> enterThenExec(Path shell, List<String> command) {
+                return job.enterThenExec(shell, command);
+            }
+
+            @Override
+            public void kill() {
+                job.kill();
+            }
+
+            @Override
+            public void close() {
+                job.close();
+            }
+        };
+    }
+
+    /** The cgroup job that owns one provider tree. */
+    interface OwnershipJob {
+        List<String> enterThenExec(Path shell, List<String> command);
+
+        void kill();
+
+        void close();
+    }
+
+    /** Creates the job of one provider run under the delegated root. */
+    @FunctionalInterface
+    interface OwnershipJobFactory {
+        OwnershipJob create(Path root, String name) throws IOException;
     }
 
     /** Single-use: one provider plan, one cgroup job, killed and released at most once each. */
     private static final class CgroupTransformer implements ProcessIndexerExecutor.ProcessPlanTransformer {
+        private final OwnershipJobFactory jobs;
         private final Path root;
         private final Path shell;
         private final String jobName;
-        private LinuxCgroupJob job;
+        private OwnershipJob job;
         private RuntimeException deferredContainmentFailure;
 
-        private CgroupTransformer(Path root, Path shell, String jobName) {
+        private CgroupTransformer(OwnershipJobFactory jobs, Path root, Path shell, String jobName) {
+            this.jobs = jobs;
             this.root = root;
             this.shell = shell;
             this.jobName = jobName;
@@ -61,7 +118,7 @@ final class LinuxCgroupOwnershipBoundary implements StrongProcessOwnershipIndexe
         public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
             if (job != null) throw new IllegalStateException("process ownership transformer is single-use");
             plan.requireNoSandboxMounts("Linux cgroup process ownership without an OS sandbox");
-            job = LinuxCgroupJob.createOwnershipOnly(root, jobName);
+            job = jobs.create(root, jobName);
             return plan.withCommand(job.enterThenExec(shell, plan.command()));
         }
 
