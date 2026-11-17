@@ -7,6 +7,7 @@
 - [x] 1.2 AUD-PERF-11 — Correction : remplacer `replaceAll("[^a-z0-9]", "")` par un `Pattern` compilé une fois, appliqué après `toLowerCase(Locale.ROOT)` (design D1) ; commentaire en anglais.
   - Fait : constante `NOT_ASCII_LOWER_ALPHANUMERIC`, sans commentaire : la Javadoc du fichier est en français et un commentaire anglais ferait de lui un fichier mixte refusé par `check-comment-language.py` ; la règle est expliquée en anglais dans le test. Vérifier : tests de 1.1 verts ; `python scripts/quality/check-comment-language.py`.
 - [x] 1.3 AUD-PERF-11 — Preuve : `./mvnw -B -ntp -pl minos-app -am test` vert sans golden régénéré (les tests de caractérisation comparent les sorties aux goldens ; un `git diff` des goldens ne prouve rien, la suite ne les réécrit pas) ; `python .claude/scripts/run_gates.py --fast` ; scope JaCoCo `global` inchangé sur la CI. Mesure de durée facultative, consignée « non mesuré » dans la PR si elle n'est pas faite.
+  - Preuve (2026-11-17, Windows) : `./mvnw -B -ntp -o -pl minos-app -am test` BUILD SUCCESS (15 modules, 49 min), aucun golden régénéré ; durée de dérivation non mesurée.
 - [ ] 1.4 AUD-PERF-11 — Documentation (reste, à l'archivage : `check-capability-dossiers.py` refuse une ligne qui nomme une exigence absente des spécifications de référence) : ajouter l'exigence à la traçabilité de `docs/architecture/diagrams/capacites/tests-lies-et-impact.md`. Vérifier : `python scripts/docs/check-capability-dossiers.py`.
 
 ## 2. Clôture
