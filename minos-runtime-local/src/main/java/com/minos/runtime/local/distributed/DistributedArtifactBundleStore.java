@@ -199,13 +199,7 @@ public final class DistributedArtifactBundleStore {
             Extracted extracted = extract(source, extraction, bundleBytes, maxBundleBytes);
             DistributedArtifactManifest manifest = decodeManifest(extracted.manifestBytes());
             Path artifact = extracted.artifact();
-            if (extracted.artifactSize() != manifest.artifactSize()
-                    || Files.size(artifact) != manifest.artifactSize()) {
-                throw new IOException("transported artifact size does not match its manifest");
-            }
-            if (!extracted.artifactSha256().equals(manifest.artifactSha256())) {
-                throw new IOException("transported artifact checksum does not match its manifest");
-            }
+            verifyAgainstManifest(extracted, manifest);
 
             String cacheKey = cacheKey(manifest);
             ReentrantLock operationLock = operationStripe(cacheKey);
@@ -255,6 +249,18 @@ public final class DistributedArtifactBundleStore {
             if (Files.exists(extraction)) {
                 deleteCacheTree(extraction);
             }
+        }
+    }
+
+    /** The extracted artifact must have the size and SHA-256 of its manifest, as written and as left on disk. */
+    private static void verifyAgainstManifest(Extracted extracted, DistributedArtifactManifest manifest)
+            throws IOException {
+        if (extracted.artifactSize() != manifest.artifactSize()
+                || Files.size(extracted.artifact()) != manifest.artifactSize()) {
+            throw new IOException("transported artifact size does not match its manifest");
+        }
+        if (!extracted.artifactSha256().equals(manifest.artifactSha256())) {
+            throw new IOException("transported artifact checksum does not match its manifest");
         }
     }
 
