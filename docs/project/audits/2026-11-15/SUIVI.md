@@ -96,7 +96,7 @@ Ordre : `compter-…`, `dimensionner-…`, `borner-…` (sa mesure 1.1 peut tour
 | AUD-TST-06 | `prouver-les-tests-temporises-par-un-signal` | Spécifié | Le test de cadence garde un fil réel et juge la borne haute sur le temps mesuré par `System.nanoTime()` ; les deux exigences en vigueur restent prouvées. L'égalité des périodes entre plugin et runtime est une limite déclarée. |
 | AUD-TST-03 | `relever-les-planchers-de-la-frontiere-des-providers` | Spécifié | Mesurer, tester, puis relever ; un plancher de classe est un seul nombre. Le plancher de 0,50 n'est pas garanti sur les deux systèmes. |
 | AUD-TST-08 | `tester-la-logique-d-interface-du-plugin` | Spécifié (constat partiel) | `docs/user/intellij-plugin.md:335` déclare déjà ces classes non couvertes par construction. Hors bornes, un réglage rend la valeur de repli. Seule l'analyse de la chaîne saisie reste à extraire ; quatre classes restent sans test. |
-| AUD-TST-10 | `actualiser-le-document-de-mutation` | Implémenté (PR à ouvrir) ; restent les mesures `code-audit.yml` (manuelles) | Le relevé daté du 8 octobre n'est pas régénéré : seule la source d'état est réalignée. Aucun PIT du plugin sur le poste. |
+| AUD-TST-10 | `actualiser-le-document-de-mutation` | Implémenté (PR #776) ; restent les mesures `code-audit.yml` (manuelles) | Le relevé daté du 8 octobre n'est pas régénéré : seule la source d'état est réalignée. Aucun PIT du plugin sur le poste. |
 
 Ordre : `normaliser-…`, `prouver-…`, `reduire-…`, `relever-…` (après `borner-la-couverture-des-zones-nouvelles` et `refuser-un-nom-de-secret-…`), `tester-…`, `actualiser-…`.
 
