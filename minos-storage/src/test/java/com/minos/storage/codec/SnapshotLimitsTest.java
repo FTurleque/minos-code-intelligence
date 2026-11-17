@@ -1,5 +1,6 @@
 package com.minos.storage.codec;
 
+import com.minos.store.SnapshotReadView;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -114,5 +115,30 @@ class SnapshotLimitsTest {
         assertThrows(IllegalArgumentException.class, () -> new SnapshotLimits(1L, 0L, 100L, 100L));
         assertThrows(IllegalArgumentException.class, () -> new SnapshotLimits(1L, 1L, 99L, 100L));
         assertThrows(IllegalArgumentException.class, () -> new SnapshotLimits(1L, 1L, 100L, 99L));
+    }
+
+    @Test
+    void withoutAnyEntityTheLargestPersistableViewIsTheAmplifiedCeilingPlusTheFixedPartOfTheIndex() {
+        SnapshotLimits production = SnapshotLimits.production();
+
+        assertEquals(production.largestPersistableViewWeightBytes()
+                        + SnapshotReadView.incomingRelationshipsWeightBytes(0L),
+                production.largestPersistableViewWeightBytes(0L, 0L, 0L));
+    }
+
+    @Test
+    void whenTheSumOverTheCountsDominatesTheWeightIsThatSumPlusTheIndex() {
+        SnapshotLimits small = SnapshotLimits.production().withMaxPersistedBytes(1_024L);
+        long counts = 64L * 1024L + 1_000L * 1_024L + 200L * 640L + 10L * 1_024L;
+        assertTrue(counts > small.largestPersistableViewWeightBytes());
+
+        assertEquals(counts + SnapshotReadView.incomingRelationshipsWeightBytes(10L),
+                small.largestPersistableViewWeightBytes(1_000L, 200L, 10L));
+    }
+
+    @Test
+    void theViewWeightSaturatesInsteadOfOverflowing() {
+        assertEquals(Long.MAX_VALUE, SnapshotLimits.production()
+                .viewWeightBytes(3, Long.MAX_VALUE / 2L, Long.MAX_VALUE, 0L, 0L));
     }
 }

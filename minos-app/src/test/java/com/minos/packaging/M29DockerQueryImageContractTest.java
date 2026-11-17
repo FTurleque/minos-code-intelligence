@@ -246,21 +246,64 @@ class M29DockerQueryImageContractTest {
     @Test
     void theDefaultQueryHeapGivesAViewBudgetThatHoldsTheHeaviestPersistableView() throws Exception {
         for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
-            String compose = text(name);
-            Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
-                    .matcher(compose);
-            assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
-            long memoryBytes = Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L;
-            int percent = maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp"));
-            long heap = memoryBytes * percent / 100L;
-            com.minos.storage.codec.QueryViewMemoryBudget budget = com.minos.storage.codec.QueryViewMemoryBudget.of(
-                    heap, com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
-                    com.minos.storage.codec.SnapshotLimits.VIEW_ADMISSION_WAIT);
+            com.minos.storage.codec.QueryViewMemoryBudget budget = defaultQueryBudget(name);
             long heaviest = com.minos.storage.codec.SnapshotLimits.production().largestPersistableViewWeightBytes();
 
             assertTrue(budget.budgetBytes() >= heaviest,
                     name + ": view budget " + budget.budgetBytes() + " < heaviest persistable view " + heaviest);
         }
+    }
+
+    /**
+     * AUD-PERF-06 — the documentation of the resource limits announces, for a V3 view of the persisted ceiling with
+     * no symbol and no occurrence, the largest number of relationships under which it fits the cache ceiling, then
+     * the view budget, derived index of incoming edges included. Both numbers are computed, never copied.
+     */
+    @Test
+    void theResourceLimitsAnnounceTheComputedRelationshipThresholds() throws Exception {
+        String documentation = text("docs/user/docker-runtime.md").replaceAll("(?<=\\d)[ \u00a0\u202f](?=\\d{3})", "");
+        for (String name : new String[]{"docker/compose-mcp.prod.yaml", "docker/compose-mcp.connected.yaml"}) {
+            com.minos.storage.codec.QueryViewMemoryBudget budget = defaultQueryBudget(name);
+            com.minos.storage.codec.SnapshotLimits limits = com.minos.storage.codec.SnapshotLimits.production();
+            long underCache = largestRelationshipCount(limits,
+                    budget.effectiveCacheCeiling(limits.maxQueryCacheWeightBytes()));
+            long underBudget = largestRelationshipCount(limits, budget.budgetBytes());
+
+            assertTrue(documentation.contains(Long.toString(underCache)), name
+                    + ": docs/user/docker-runtime.md must announce the computed threshold under the cache ceiling, "
+                    + underCache + " relationships");
+            assertTrue(documentation.contains(Long.toString(underBudget)), name
+                    + ": docs/user/docker-runtime.md must announce the computed threshold under the view budget, "
+                    + underBudget + " relationships");
+        }
+        assertTrue(documentation.contains("sans symbole ni occurrence"),
+                "the thresholds must state that they hold for a view with no symbol and no occurrence");
+    }
+
+    /** The view budget of one MCP JVM under the default memory limit and heap share of {@code compose}. */
+    private static com.minos.storage.codec.QueryViewMemoryBudget defaultQueryBudget(String name) throws IOException {
+        String compose = text(name);
+        Matcher limit = Pattern.compile("(?m)^x-limits-query:[^\\n]*\\n(?:  [^\\n]*\\n)*?  mem_limit: \"\\$\\{MINOS_MCP_MEM_LIMIT:-(\\d+)g}\"")
+                .matcher(compose);
+        assertTrue(limit.find(), name + ": the query role must declare a default memory limit in GiB");
+        long memoryBytes = Long.parseLong(limit.group(1)) * 1024L * 1024L * 1024L;
+        long heap = memoryBytes * maxRamPercentage(name, serviceBlocks(compose).get("minos-mcp")) / 100L;
+        return com.minos.storage.codec.QueryViewMemoryBudget.of(heap,
+                com.minos.storage.codec.QueryViewMemoryBudget.DEFAULT_PERCENT,
+                com.minos.storage.codec.SnapshotLimits.VIEW_ADMISSION_WAIT);
+    }
+
+    /** Largest relationship count whose V3 view of the persisted ceiling, without symbols or occurrences, fits. */
+    private static long largestRelationshipCount(com.minos.storage.codec.SnapshotLimits limits, long bound) {
+        assertTrue(limits.largestPersistableViewWeightBytes(0L, 0L, 0L) <= bound, "no relationship already exceeds " + bound);
+        long low = 0L;
+        long high = Integer.MAX_VALUE;
+        while (low < high) {
+            long middle = low + (high - low + 1L) / 2L;
+            if (limits.largestPersistableViewWeightBytes(0L, 0L, middle) <= bound) low = middle;
+            else high = middle - 1L;
+        }
+        return low;
     }
 
     private static int maxRamPercentage(String where, String text) {

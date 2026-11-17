@@ -64,10 +64,12 @@ def main() -> int:
             raise RuntimeError("SnapshotCompactionService.java: active pointer is still read before project lease")
         require("SnapshotRetentionService.java", retention, "RetentionResult applyPolicyLocked(")
 
-        # MNE-02: bounded, iterative PostgreSQL active resolution with explicit stale temp cleanup.
+        # MNE-02: bounded, iterative PostgreSQL active resolution; the copied payload is always deleted, and the payload
+        # asked for is the version whose size was reserved (AUD-PERF-05).
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
                 "MAX_ACTIVE_QUERY_RETRIES", "for (int attempt = 1; attempt <= MAX_ACTIVE_QUERY_RETRIES; attempt++)",
-                "Files.deleteIfExists(value.payload())")
+                "Files.deleteIfExists(row.payload())", "activeRow(projectId, metadata)",
+                '" AND s.snapshot_id=? AND s.sha256=?"')
         forbid("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
                "return loadActiveQueryView(projectId);", "return loadActiveReadView(projectId);")
 
@@ -86,10 +88,13 @@ def main() -> int:
         require("SnapshotLimits.java", snapshot_limits,
                 "currentFormatAmplificationPercent", "unmeasuredFormatAmplificationPercent",
                 "amplifiedBytes", "requireCacheCoversPersistable")
+        require("SnapshotLimits.java", snapshot_limits,
+                "long persistedWeight = amplifiedBytes(formatVersion, persistedBytes)",
+                "SnapshotReadView.incomingRelationshipsWeightBytes(")
         require("FileSymbolSnapshotStore.java", file_snapshot,
-                "limits.amplifiedBytes(descriptor.formatVersion(), Files.size(snapshot)")
+                "limits.viewWeightBytes(descriptor.formatVersion(), Files.size(snapshot)")
         require("PostgresCodeKnowledgeSnapshotStore.java", postgres_snapshot,
-                "limits.amplifiedBytes(formatVersion, persistedBytes)", "estimateWeight(metadata, payloadBytes, decoded.formatVersion())")
+                "limits.viewWeightBytes(formatVersion, persistedBytes", "estimateWeight(metadata, payloadBytes, decoded.formatVersion())")
 
         # MNE-05: preflight accounts length-delimited amplification before protobuf object materialization.
         require("ScipIngestionLimits.java", scip,

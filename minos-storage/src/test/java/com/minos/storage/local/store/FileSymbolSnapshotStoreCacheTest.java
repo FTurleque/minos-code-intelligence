@@ -54,7 +54,7 @@ class FileSymbolSnapshotStoreCacheTest {
     }
 
     @Test
-    void aViewHeavierThanTheCacheCeilingIsReloadedOnEveryRead(@TempDir Path root) throws Exception {
+    void aViewHeavierThanTheCacheCeilingIsHeldAloneAndLoadedOnce(@TempDir Path root) throws Exception {
         UUID projectId = UUID.randomUUID();
         CodeKnowledgeSnapshot snapshot = QueryViewWeightFixtures.repository(projectId, "refused", 20,
                 List.<String[]>of(QueryViewWeightFixtures.ASCII));
@@ -65,9 +65,10 @@ class FileSymbolSnapshotStoreCacheTest {
         SnapshotQueryView first = store.loadActiveQueryView(projectId).orElseThrow();
         SnapshotQueryView second = store.loadActiveQueryView(projectId).orElseThrow();
 
-        assertEquals(2, store.cacheStats().fullSnapshotLoads());
+        assertEquals(1, store.cacheStats().fullSnapshotLoads());
         assertEquals(0, store.cacheStats().entries());
-        assertTrue(first != second, "a view that is not admitted is rebuilt");
+        assertTrue(store.cacheStats().heldWeightBytes() > persisted, "the held view stays counted");
+        assertTrue(first == second, "the held view serves the second read");
     }
 
     @Test
