@@ -216,44 +216,173 @@ sequenceDiagram
     end
 ```
 
+## Mesure 1.1 (2026-11-17)
+
+[Existant vérifié] par exécution, poste Windows du mainteneur, JDK 21.0.13, `main` `fc1002e0`. Outil :
+`minos-bootstrap/src/test/java/com/minos/bootstrap/application/ApplicationCacheMeasurement.java`, lancé par
+`-Dtest=ApplicationCacheMeasurement` (nom hors des motifs Surefire, propriétés `minos.cacheMeasure.*`), sous
+`-Xmx4g` puis sous `-Xmx1076m` (1 128 267 776 octets, tas par défaut du plan de requête). Une exécution par
+configuration.
+
+**Méthode.** Projet réel : le snapshot actif du dépôt MINOS indexé sur le poste (348,6 Mio persistés, 67 671
+symboles, 503 030 occurrences, 26 005 relations), copié avec ses empreintes dans un `MINOS_HOME` neuf ; la vue du
+snapshot est chargée d'abord, pour n'être comptée dans aucun cache. Tas retenu = tas utilisé après cinq ramasse-miettes,
+avant et après l'étape ; pic = somme des pics des pools du tas depuis leur remise à zéro (majorant : les pools
+n'atteignent pas leur pic au même instant). Index sémantique : fournisseur `local-hash`. Projection : index
+synthétiques écrits directement dans le store, préparation de la projection, puis lecture par une seconde application
+(cache vide).
+
+| Cache | Poids estimé | Tas retenu | Estimé / retenu | Construction : pic au-dessus du tas de départ | Temps |
+|---|---|---|---|---|---|
+| Corpus hybride (projet réel, 1 entrée) | 193 986 704 o (185,0 Mio) | 137 896 032 o (131,5 Mio) | 1,41 | 310,6 Mio sous 1 076 Mio ; 623 à 711 Mio sous 4 Gio | 1re requête 10,0 à 12,0 s ; 2e (en cache) 53 à 64 ms |
+| Graphe de programme + empreintes Java (projet réel) | 17 651 854 + 1 536 980 o (18,3 Mio) | 5 555 536 o (5,3 Mio) | 3,45 | 693 Mio sous 1 076 Mio (majorant) ; graphe plafonné à 10 000 nœuds | 1er graphe 6,7 à 7,9 s ; 2e 3 à 4 ms |
+| Index vectoriel local, projet réel (136 819 documents, 32 dimensions, fichier de 111,6 Mo) | au-delà du plafond de 256 Mio : jamais gardé | 0 | — | 451 Mio sous 1 076 Mio, 320 Mio sous 4 Gio, **à chaque recherche** | 0,52 à 0,64 s par recherche |
+| Index vectoriel local au budget de construction (65 000 documents, 384 dimensions, 1 200 caractères, fichier de 186 Mo) | au-delà du plafond : jamais gardé | 0 | — | 463 à 479 Mio, **à chaque recherche** | 1,16 à 1,18 s par recherche |
+| Page de l'explorateur (`lookups`, projet réel) | 1 entrée (poids 1) | 2 784 888 à 3 310 192 o (2,7 à 3,2 Mio) au-delà de la vue, qu'elle partage | — | non mesuré | page 1 : 553 à 594 ms ; page 2 : 6 ms |
+| Projection décodée, 100 000 points | aucun poids | 11 620 808 o | — | 55 Mio | 1re page 353 ms ; suivante 7 ms |
+| Projection décodée, 250 000 points | aucun poids | 29 002 288 à 29 146 200 o | — | 161 à 175 Mio | 1re page 743 à 912 ms |
+| Projection décodée, 1 000 000 de points (préparation sous 2 Gio : refusée sous son budget par défaut de 256 Mio) | aucun poids | 116 271 288 o (110,9 Mio) | — | 567 Mio | 1re page 3,8 s ; suivante 5 ms |
+
+Constats tirés de la mesure :
+
+1. Chaque estimation majore le tas retenu (corpus 1,41 ; graphe et empreintes 3,45) : un plafond tiré d'une part du
+   tas borne bien ce que les caches retiennent.
+2. Le corpus hybride de ce dépôt retient 131,5 Mio, soit 12,2 % du tas par défaut ; il est estimé à 17,2 % du tas.
+3. Une projection retient **116,0 à 116,6 octets par point**, constant de 100 000 à 1 000 000 de points ; le pic de
+   décodage vaut environ 5 fois ce qui est retenu.
+4. Aucun index vectoriel local réaliste n'entre sous le plafond de 256 Mio : celui du dépôt réel (même à 32
+   dimensions) ni celui du budget de construction. Chaque recherche décode l'index entier, 451 à 479 Mio au-dessus du
+   tas de départ sous le tas par défaut. C'est le plus gros transitoire mesuré, et il n'est borné par rien.
+5. La construction d'un cache alloue bien plus qu'il ne retient (corpus : 2,4 fois sous 1 076 Mio ; graphe : plus de
+   100 fois son poids retenu, majorant). Une part du tas ne borne que le retenu, pas ce transitoire.
+6. `lookups` n'ajoute que 3 Mio à la vue qu'il partage ; ce qu'il coûte vraiment, c'est de garder le snapshot entier
+   en vie après l'éviction de la vue (non mesurable sans éviction ; c'est le défaut que D3 traite). Construire la table
+   coûte environ 0,55 s sur la première page.
+7. La synchronisation sémantique du dépôt réel est **refusée** à 384 et à 256 dimensions (« semantic vectors exceed
+   heap byte budget », plus de 98 000 documents) ; elle passe à 32 dimensions (136 819 documents).
+
+**Non mesuré, et pourquoi.**
+
+- PostgreSQL : les caches mesurés ne dépendent pas du stockage (corpus, graphe, empreintes, projection, `lookups`) ;
+  le store sémantique PostgreSQL n'a pas de cache d'index (`PostgresSemanticVectorStore`). Le transitoire du
+  rapatriement d'un snapshot PostgreSQL est mesuré par DATA-0081 (310 %). Aucune mesure PostgreSQL n'a été relancée.
+- Linux et le conteneur Docker (`--memory 3g`) : la mesure est faite sous `-Xmx1076m` sur Windows, pas dans l'image
+  de requête.
+- Un vrai modèle d'embeddings (384 ou 768 dimensions) sur le dépôt réel : la synchronisation le refuse (constat 7) ;
+  l'index synthétique au budget en tient lieu.
+- `lookups` après éviction de la vue, et la latence d'une page sans table (parcours des symboles, D3) : la seconde
+  demande de retirer la table, pas encore écrite.
+- Le graphe a été mesuré à la limite par défaut de 10 000 nœuds, et le fournisseur avancé ne rend aucune arête
+  sur ce dépôt (`graph.edges=0`).
+
+## Proposition de parts du tas (D2) et de décision D3, issue de la mesure 1.1
+
+[Proposition] à valider par le propriétaire (tâche 1.2). Contrainte, reprise de DATA-0081 : sous le tas par défaut,
+le budget des vues vaut 50 % et le décodage d'une vue qui le remplit monte à 0,84 du tas (pic de 1,68 fois le poids
+estimé). Il reste donc 16 % du tas, dont 5 % sont gardés pour le travail des requêtes : **11 % pour tous les caches**.
+
+**Option A (recommandée) : garder le budget des vues à 50 %, plafonner les caches à 11 % du tas.**
+
+| Cache | Part du tas | Sous 1 076 Mio | Effet mesuré |
+|---|---|---|---|
+| Corpus hybride | 6 % | 64,6 Mio | le corpus de ce dépôt (185 Mio estimés) n'est plus gardé : 10 à 12 s par requête hybride sous le tas par défaut ; il reste gardé à partir d'environ 3,0 Gio de tas (`MINOS_MCP_MEM_LIMIT=9g` à 35 %) |
+| Graphe de programme | 2 % | 21,5 Mio | le graphe mesuré (17,7 Mio estimés) reste gardé |
+| Empreintes Java | 1 % | 10,8 Mio | gardées (1,5 Mio) |
+| Projection | 1 % | 10,8 Mio | jusqu'à environ 88 000 points à 128 octets estimés par point ; au-delà, la projection est refusée avant décodage (D4) |
+| Vecteurs de requête | 1 % | 10,8 Mio | inchangé (plafond constant de 8 Mio) |
+| Index vectoriel local | 0 % gardé | — | inchangé dans les faits : il n'est déjà jamais gardé (constat 4) |
+
+Somme : 50 + 34 + 11 + 5 = 100 %. Garantie conservée : la vue V3 la plus lourde persistable (500 Mio estimés)
+reste admise sous le tas par défaut (DATA-0081 point 17, `M29DockerQueryImageContractTest`).
+
+**Option B : budget des vues à 40 %.** Marge de décodage 0,68 × 40 % = 27 % ; 27 % pour les caches et 5 % pour le travail des
+requêtes (corpus 18 %, soit 194 Mio, au-dessus des 185 Mio estimés ; graphe 2 % ; empreintes 1 % ; projection 5 %,
+soit environ 440 000 points ; vecteurs de requête 1 %). En contrepartie, le budget passe à 430 Mio sous le tas par défaut : la vue V3 la plus lourde
+persistable (500 Mio) est refusée, et un snapshot V3 au-delà d'environ 344 Mio persistés n'est plus lisible par le
+plan de requête par défaut. DATA-0081 point 17 et son test de contrat changent.
+
+**Option C : relever le tas du plan de requête** (`MINOS_MCP_MEM_LIMIT` ou `MaxRAMPercentage`). Elle est hors de ce
+changement et touche la contrainte des deux JVM par conteneur (DATA-0081 point 17).
+
+Recommandation : **A**. Elle garde la garantie publiée sur les vues. Elle borne les caches par construction, ce qui
+est sûr puisque les estimations majorent le retenu. La perte coûte de la latence, pas une erreur. Les parts restent
+réglables par une variable, et le corpus d'un gros dépôt revient en cache avec un plafond mémoire relevé.
+
+**Point ouvert, que la mesure rend prioritaire** (D9, non tranché ici) : le décodage complet d'un index vectoriel à
+chaque recherche (451 à 479 Mio) ne tient sous aucune des trois options à côté d'une vue chargée. Deux suites sont
+possibles :
+
+- refuser la recherche sur un index plus lourd que la part de décodage, ce qui, sous le tas par défaut, refuse tout
+  index réaliste ;
+- faire passer la recherche par une lecture en flux (pages du sprint 4), dans un changement distinct.
+
+La mesure plaide pour le flux.
+
+**D3 : proposition modifiée par la mesure.** Retirer la table pour un parcours des symboles à chaque page déplace le
+coût de construction mesuré (environ 0,55 s sur 67 671 symboles) sur **chaque** page, au lieu de la première seule
+(6 ms ensuite). Proposition : garder `lookups`, mais ne plus lui laisser tenir le snapshot.
+
+- Table bâtie depuis la vue courante et associée à l'identité de cette vue par une référence faible.
+- Table abandonnée dès que la vue est évincée ou remplacée.
+- Poids de 3 Mio compté dans une part de 1 % ajoutée à l'option A (somme 12 %, travail des requêtes ramené à 4 %).
+
+L'exigence « l'explorateur ne retient aucun symbole hors de la vue du snapshot » est tenue par cette référence
+faible, sans le coût du parcours. Si le propriétaire préfère D3 tel qu'écrit, la latence d'une page sans table reste
+à mesurer (tâche 7.2).
+
+**D7** (vecteurs en `float[]`) : la mesure ne le justifie pas seul. L'index réel à 384 dimensions pèserait encore
+plus de 256 Mio en `float[]`, et le transitoire de décodage resterait entier.
+
 ## Décisions
 
 ### D1 — Plafond dérivé du tas plutôt que locataire du budget
 
-[Proposition] — décision du propriétaire attendue. Chaque cache applique min(plafond configuré, part du tas).
-Alternative écartée : en faire des locataires du budget. Elle exige de remonter le contrat `Tenant` dans
-`minos-engine` et de câbler le budget par `minos-bootstrap`, et fait vider corpus et graphes à chaque chargement de
-vue sous pression (reconstructions en cascade). Compromis : les caches ne sont pas évincés sous pression ; leur somme
-est bornée par construction.
+[Décision] du propriétaire, 2026-11-17 (option A). Chaque cache applique min(plafond configuré, part du tas), par la
+primitive `HeapShare` (`minos-engine`, `com.minos.store.cache`). Alternative écartée : en faire des locataires du
+budget. Elle exige de remonter le contrat `Tenant` dans `minos-engine` et de câbler le budget par `minos-bootstrap`,
+et elle fait vider corpus et graphes à chaque chargement de vue sous pression (reconstructions en cascade).
+Compromis : les caches ne sont pas évincés sous pression ; leur somme est bornée par construction, et la mesure 1.1
+montre que chaque estimation majore le tas retenu.
 
-### D2 — Parts du tas fixées sur mesure
+### D2 — Parts du tas : option A, index vectoriel local à 2 %
 
-[Question] bloquante pour l'implémentation. Contrainte calculée : sous le tas par défaut, le budget (0,50) et le pic
-de décodage d'une vue (jusqu'à 0,84 du tas, DATA-0081) laissent de l'ordre de 0,16 du tas à tous les caches et au
-travail des requêtes. Recommandation : le propriétaire fixe les parts après la mesure 1.1, avec une somme des parts
-des caches qui ne dépasse pas cette marge sur le plan de requête par défaut ; à défaut de marge suffisante, la
-décision à prendre est celle de la fraction du budget des vues ou de `MaxRAMPercentage`, hors de ce changement. Les
-plafonds configurés actuels restent le maximum sous un grand tas.
+[Décision] du propriétaire, 2026-11-17 : l'option A de la section « Proposition de parts du tas », et 2 % pour
+l'index vectoriel local, pris sur la marge de travail des requêtes.
 
-### D3 — Les symboles d'une page sont lus dans la vue, sans table retenue
+| Terme | Part du tas | Sous 1 076 Mio |
+|---|---|---|
+| Budget des vues (`QueryViewMemoryBudget`, inchangé) | 50 % | 538 Mio |
+| Marge de décodage d'une vue (pic de 0,84 mesuré par DATA-0081) | 34 % | 366 Mio |
+| Corpus hybride | 6 % | 64,6 Mio |
+| Graphe de programme | 2 % | 21,5 Mio |
+| Empreintes Java | 1 % | 10,8 Mio |
+| Projection décodée | 1 % | 10,8 Mio |
+| Vecteurs de requête | 1 % | 10,8 Mio (plafond constant de 8 Mio) |
+| Index vectoriel local | 2 % | 21,5 Mio |
+| Travail des requêtes | 3 % | 32,3 Mio |
 
-[Proposition]. `lookups` et `SymbolLookup` sont supprimés. Un symbole est résolu par identifiant avec le lecteur de
-la vue ; le premier symbole de chaque fichier de la page est trouvé par un parcours des symboles de la vue, limité
-aux fichiers de la page, dont rien n'est gardé. Le poids estimé des vues ne change pas.
+Le pic de chargement d'une vue est couvert par les 34 % de la marge de décodage, qui s'ajoutent aux 50 % du budget :
+la marge de travail ne le porte pas, et passer cette marge de 5 à 3 % ne le découvre pas. Ce qu'aucune part ne couvre,
+c'est le transitoire de construction d'un cache (constat 5 de la mesure 1.1) et le décodage complet d'un index
+vectoriel trop lourd pour son cache (D9) : deux limites déclarées. Sous un grand tas, les plafonds configurés restent
+le maximum.
+
+### D3 — La table de symboles de l'explorateur est tenue par sa vue
+
+[Décision] du propriétaire, 2026-11-17 : variante (b) issue de la mesure 1.1. La table (`SymbolLookup`) est bâtie
+depuis la vue active (`loadActiveReadView`) et rangée dans une `WeakHashMap` indexée par cette vue : elle ne survit pas
+à la vue, et elle ne référence pas la vue en retour. Le service demande la vue au store à chaque page.
 
 Alternatives écartées :
 
+- **Parcours des symboles à chaque page, sans table** (D3 telle qu'elle était écrite) : il déplace sur chaque page
+  le coût de construction mesuré (environ 0,55 s sur 67 671 symboles), au lieu de la première seule.
 - **Index dérivé porté par `SnapshotReadView`** (premier symbole par fichier, compté dans le poids de la vue) : il
-  augmenterait le poids estimé de toute vue d'une borne par symbole. La marge de l'exigence en vigueur
-  distribution-docker › Le plan de requête Docker fixe le tas de sa JVM en proportion de sa limite mémoire est de
-  37,6 Mio sous le budget et de 12 Mio sous le plafond du cache pour la vue V3 la plus lourde (calculé) : sans
-  constante mesurée, rien ne garantit qu'elle tienne, et les assertions de poids exact des tests d'admission
-  (`PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest.java:60-61`, cas du store fichier) changeraient. À reprendre
-  seulement si la latence mesurée du parcours est inacceptable, avec une constante mesurée et la preuve que cette
-  marge tient.
-- **Pondérer `lookups` et le vider sur un signal du budget** : exige le câblage écarté en D1.
+  augmenterait le poids estimé de toute vue sans constante mesurée.
+- **Pondérer la table et la vider sur un signal du budget** : exige le câblage écarté en D1.
 
-Compromis : chaque page parcourt les symboles du snapshot (coût linéaire, mesuré en 1.1 et 7.2).
+Compromis : sans le changement `compter-toute-vue-admise-et-lier-le-rapatriement-postgresql`, une vue plus lourde que
+le plafond du cache est rechargée par le store à chaque page ; avec lui, elle est retenue seule et la table la suit.
 
 ### D4 — Une projection est estimée avant décodage et refusée au-delà de sa part
 
@@ -282,15 +411,11 @@ décisions des trois changements du sprint 5 ; le premier changement implément�
 « Mise en œuvre ». Le risque « vue encore tenue par une requête : la moitié du tas hors budget la couvre »
 (DATA-0081 `:118`) y est réécrit avec la marge réelle.
 
-### D7 — Vecteurs en `float[]` (renvoyé par le sprint 4) : ne pas changer le type du domaine
+### D7 — Vecteurs en `float[]` : non retenu dans ce lot
 
-[Proposition] — décision du propriétaire attendue (reportée ici par
-`paginer-l-index-semantique-local-sans-le-charger`, D4). `SemanticVector` (domaine) reste en `double[]`. Le format
-persisté local est déjà en `float32` et le budget de construction compte les vecteurs en `double[]`
-(`SemanticIndexBudget.java:56-61`) : garder en cache les valeurs `float` lues sur disque ne perdrait aucune
-précision. La mesure 1.1 relève le tas retenu par le cache de l'index vectoriel ; si sa part du tas se révèle
-contraignante, la suite proposée est un changement distinct qui compacte la seule représentation en cache du store
-local, sans toucher au type du domaine, avec la preuve que scores et goldens ne bougent pas. Non spécifié ici.
+[Décision] du propriétaire, 2026-11-17 (option A, sans D7). `SemanticVector` (domaine) reste en `double[]`. La mesure
+1.1 ne justifie pas le compactage seul : un index réaliste pèse encore plus que son cache en `float[]`, et le
+transitoire de décodage reste entier.
 
 ### D8 — Mémoire de travail de la préparation d'une projection : hors des caches, sans décision attendue
 
@@ -300,33 +425,32 @@ sprint le compte de cette mémoire. [Proposition] : elle n'est pas un cache mais
 bornée par `--max-memory-mb` ; elle n'entre ni dans les parts du tas ni dans le contrat du plan de requête, et l'ADR
 consolidé la nomme comme telle. Aucune exigence ici.
 
-### D9 — Un index vectoriel local est estimé avant son décodage complet
+### D9 — Décodage complet d'un index vectoriel : limite déclarée, hors de ce lot
 
-[Proposition] — décision du propriétaire attendue. Avant un décodage complet, le store estime une borne du poids en
-mémoire depuis les métadonnées de l'index (nombre de documents, dimensions) et la taille du fichier ; au-delà de la
-part du tas déclarée pour ce décodage, il refuse par une erreur explicite. Les lectures qui ne chargent pas l'index
-(pages, document, voisins en flux, livrées par `paginer-l-index-semantique-local-sans-le-charger`) restent servies ;
-ce changement en dépend. Alternatives : laisser le décodage hors plafond (l'issue reste une `OutOfMemoryError` sous
-un petit tas) — écartée ; faire passer la recherche sémantique elle-même par un parcours en flux — hors de ce lot,
-à proposer si la mesure montre que le refus touche un index d'usage courant. Compromis : sous le tas par défaut du
-plan de requête, un index proche du budget de construction est refusé pour la recherche complète au lieu d'être
-tenté.
+[Décision] du propriétaire, 2026-11-17 : hors périmètre. Une recherche sur un index local plus lourd que le plafond de
+son cache décode l'index entier à chaque requête (451 à 479 Mio au-dessus du tas de départ sous le tas par défaut,
+mesure 1.1). Refuser cet index sous le tas par défaut refuserait tout index réaliste ; la suite est une recherche en
+flux (pages du sprint 4), dans un changement distinct. L'exigence de refus de ce décodage est retirée du delta.
 
 ## Qualification des capacités
 
-- `recherche-semantique`, `program-graph-et-architecture` : **partielles** jusqu'à la décision D2 et la mesure 7.2
-  (mécanisme prouvé par tests à tas injecté ; valeurs de production non mesurées).
-- `exploration-semantique` : **partielle** (rétention prouvée par test de joignabilité ; refus de projection prouvé à
-  tas injecté ; octets par point non mesurés).
+- `recherche-semantique`, `program-graph-et-architecture` : **qualifiées** pour les plafonds (tests à tas injecté,
+  parts décidées sur mesure) ; **partielle** pour la recherche sur un index plus lourd que son cache (D9, limite
+  déclarée).
+- `exploration-semantique` : **qualifiée** (rétention prouvée par test de joignabilité ; refus de projection prouvé à
+  tas injecté ; 116 octets par point mesurés).
 - `distribution-docker` : **qualifiée** par test de contrat (lecture de fichiers), Windows et Linux.
 
 ## Risques et compromis
 
 - [Risque] Parts trop basses : corpus ou graphe reconstruit à chaque requête → mesure de latence 1.1 et 7.2,
   documentation, plafonds réglables par la taille du tas.
-- [Risque] Le parcours des symboles par page (D3) coûte en latence sur un gros snapshot → mesuré ; repli nommé en D3.
-- [Risque] Le refus d'un index trop lourd (D9) touche un index constructible sous un petit tas → message
-  actionnable, mesure 1.1 sur un index au budget de construction.
+- [Risque] Le corpus hybride d'un gros dépôt n'est plus gardé sous le tas par défaut (185 Mio estimés pour ce dépôt,
+  64,6 Mio de part) : 10 à 12 s par requête hybride → documenté ; un plafond mémoire relevé le rend à nouveau gardé.
+- [Risque] Une projection de plus d'environ 65 000 points (clés de 40 caractères) est refusée sous le tas par défaut → statut
+  `PROJECTION_TOO_LARGE`, documenté ; préparer moins de points ou relever le tas.
+- [Risque] Le transitoire de construction d'un cache et le décodage complet d'un index restent hors de toute part
+  (D2, D9).
 - [Risque] Test de joignabilité dépendant du ramasse-miettes → boucle bornée sur une référence faible, pas de délai
   fixe (AUD-TST-06, sprint 6).
 - [Risque] Collision de fichiers avec le sprint 4 → ordre d'implémentation, relecture des lignes.
@@ -360,17 +484,17 @@ ressources ») ; `docs/user/semantic-explorer.md` (refus d'une projection) ; dos
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| recherche-semantique › Les caches de la recherche sémantique sont plafonnés par une part du tas | Petit tas ; Grand tas ; Part invalide | D1, D2, composants | 2.1, 3.1, 3.2 | à écrire |
-| idem | Corpus plus lourd que le plafond effectif | D1 | 3.1, 3.2 | à écrire |
-| program-graph-et-architecture › Les caches du graphe de programme sont plafonnés par une part du tas | Petit tas ; Grand tas ; Graphe plus lourd | D1, D2 | 4.1, 4.2 | à écrire |
-| recherche-semantique › Un index vectoriel local plus lourd que sa part du tas n'est pas décodé en entier | Tient dans sa part ; Trop lourd ; Lecture paginée | D9 | 3.4, 3.5 | à écrire |
-| exploration-semantique › L'explorateur ne retient aucun symbole hors de la vue du snapshot | Deux pages ; Vue évincée ; Snapshot différent | D3, séquence | 5.1, 5.2 | à écrire |
-| exploration-semantique › Une projection plus lourde que sa part du tas est refusée avant décodage | Tient dans sa part ; Trop lourde ; En-tête incohérent | D4 | 6.1, 6.2 | à écrire |
-| distribution-docker › Le budget des vues et les caches applicatifs tiennent sous le tas par défaut du plan de requête | Somme sous le tas ; Part relevée ; Cache sans part | D5 | 7.1 | à écrire |
-| mesures (chiffres calculés de l'audit) | — | Performance et mesure | 1.1, 7.2 | manquante (manuelle) |
+| recherche-semantique › Les caches de la recherche sémantique sont plafonnés par une part du tas | Petit tas ; Grand tas | D1, D2 | 2.1, 3.1, 3.2 | `HybridQueryCostTest` (corpus, vecteurs de requête), `FileSemanticVectorStoreTest` (index local) — écrits |
+| idem | Corpus plus lourd que le plafond effectif | D1 | 3.1, 3.2 | `HybridQueryCostTest#aCorpusHeavierThanTheCeilingIsNotKeptAndTheAnswerIsTheSame`, `FileSemanticVectorStoreTest#anIndexHeavierThanTheCeilingIsNotKeptAndTheAnswerIsTheSame` — écrits |
+| idem | Part du tas invalide | D1 | 2.1 | `HeapShareTest#aShareOutsideOneToHundredPercentIsRefusedByName` — écrit |
+| program-graph-et-architecture › Les caches du graphe de programme sont plafonnés par une part du tas | Petit tas ; Grand tas ; Graphe plus lourd | D1, D2 | 4.1, 4.2 | `ProgramGraphCacheHeapShareTest` — écrit |
+| exploration-semantique › La table de symboles de l'explorateur ne survit pas à sa vue | Deux pages ; Vue évincée ; Snapshot différent | D3 | 5.1, 5.2 | `SemanticCorpusQueryServiceTest` (trois cas) — écrits |
+| exploration-semantique › Une projection plus lourde que sa part du tas est refusée avant décodage | Tient dans sa part ; Trop lourde ; En-tête incohérent | D4 | 6.1, 6.2 | `FileSemanticProjectionStoreTest` (trois cas) — écrits |
+| distribution-docker › Le budget des vues et les caches applicatifs tiennent sous le tas par défaut du plan de requête | Somme sous le tas ; Part relevée | D2, D5 | 7.1 | `M29DockerQueryImageContractTest#theViewBudgetAndTheApplicationCachesFitTheDefaultQueryHeap` — écrit |
+| idem | Cache pondéré ajouté sans part déclarée | D5 | 7.1 | `WeightedCacheInventoryTest` — écrit |
+| mesures | — | Mesure 1.1 | 1.1, 7.2 | 1.1 faite ; 7.2 (après correction) manquante |
 
 ## Questions ouvertes
 
-- D2 : parts du tas, fixées par le propriétaire après la mesure 1.1 (bloque les tâches 2 à 7, pas les exigences).
-- D1, D3, D7, D9 : décisions du propriétaire attendues, recommandations ci-dessus. D8 n'attend pas de décision.
-- Numéro de l'ADR consolidé : prochain numéro libre à l'écriture.
+- Aucune bloquante. D2, D3, D7 et D9 sont tranchées par le propriétaire le 2026-11-17 ; D8 n'attend pas de décision.
+- Non bloquante : la recherche en flux sur un index plus lourd que son cache (D9), dans un changement distinct.

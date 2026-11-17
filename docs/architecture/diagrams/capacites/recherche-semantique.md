@@ -84,6 +84,11 @@ chaque lecture (ils ne sont pas persistés). Une synchronisation écrit par `rep
 snapshot est promu entre-temps, elle est refusée et l'index précédent reste en place. L'indexation déclenche la
 synchronisation après promotion, sans la rendre fatale.
 
+Le corpus hybride, les vecteurs de requête et l'index vectoriel local gardent au plus le plus petit de leur plafond
+configuré et de leur part du tas (`HeapShare` : 6 %, 1 % et 2 %) ; une entrée plus lourde n'est pas gardée et la
+requête rend le même résultat. Une recherche sur un index local plus lourd que son cache le décode en entier à chaque
+requête : limite déclarée (ADR DATA-0085, point 19).
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |

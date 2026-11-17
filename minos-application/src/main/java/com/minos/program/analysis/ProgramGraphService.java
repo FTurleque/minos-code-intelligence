@@ -14,6 +14,7 @@ import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.cache.HeapShare;
 import com.minos.store.cache.WeightedLruCache;
 import com.minos.diagnostics.UsageException;
 
@@ -82,12 +83,23 @@ public final class ProgramGraphService {
 
     ProgramGraphService(ProjectResolver projectResolver, CodeKnowledgeSnapshotStore snapshotStore,
                         List<ProgramGraphProvider> providers, int maxCacheEntries, long maxCacheWeight) {
+        this(projectResolver, snapshotStore, providers, maxCacheEntries, maxCacheWeight, Runtime.getRuntime().maxMemory());
+    }
+
+    /**
+     * Test seam: the graph cache keeps the smaller of {@code maxCacheWeight} and its share of {@code maximumHeapBytes}
+     * (AUD-PERF-04); an explicit ceiling stays bounded by the share.
+     */
+    ProgramGraphService(ProjectResolver projectResolver, CodeKnowledgeSnapshotStore snapshotStore,
+                        List<ProgramGraphProvider> providers, int maxCacheEntries, long maxCacheWeight,
+                        long maximumHeapBytes) {
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.providers = normalizeProviders(providers);
         if (maxCacheEntries < 1) throw new IllegalArgumentException("maxCacheEntries must be greater than zero");
         if (maxCacheWeight < 1L) throw new IllegalArgumentException("maxCacheWeight must be greater than zero");
-        this.cache = new WeightedLruCache<>(maxCacheEntries, maxCacheWeight);
+        this.cache = new WeightedLruCache<>(maxCacheEntries,
+                HeapShare.PROGRAM_GRAPH.ceiling(maxCacheWeight, maximumHeapBytes));
     }
 
     public static List<ProgramGraphProvider> productionProviders() {

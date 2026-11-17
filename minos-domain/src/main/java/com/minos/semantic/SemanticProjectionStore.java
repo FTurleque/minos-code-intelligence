@@ -49,6 +49,22 @@ public interface SemanticProjectionStore {
         }
     }
 
+    /**
+     * The published projection would weigh more than this process gives it once decoded: it is refused before any
+     * point is decoded. The message gives the estimated weight and the ceiling in bytes, never a path.
+     */
+    final class ProjectionTooLargeException extends IOException {
+        private static final long serialVersionUID = 1L;
+        /** First words of every message of this refusal. */
+        public static final String MESSAGE_PREFIX = "semantic projection is too large for this process";
+
+        public ProjectionTooLargeException(long estimatedBytes, long ceilingBytes) {
+            super(MESSAGE_PREFIX + ": its decoded points need an estimated " + estimatedBytes
+                    + " bytes and its share of the heap is " + ceilingBytes
+                    + " bytes; prepare it with fewer points (--max-points) or raise the maximum heap");
+        }
+    }
+
     /** Another preparation of the same project holds the exclusive right to publish. */
     final class PreparationInProgressException extends IOException {
         private static final long serialVersionUID = 1L;

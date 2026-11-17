@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
+import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -31,5 +32,21 @@ class SnapshotMemoryRefusalCliTest {
         assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
         assertEquals("", output.toString());
         assertEquals("error: find-symbol failed: " + MESSAGE + "\n", error.toString());
+    }
+
+    @Test
+    void aScratchSpaceRefusalIsPrintedOnTheErrorOutputWithExitCodeOne() throws IOException {
+        SnapshotScratchSpaceExhaustedException refusal = new SnapshotScratchSpaceExhaustedException(300L, 200L);
+        FindSymbolCommand command = new FindSymbolCommand((projectId, criteria) -> {
+            throw refusal;
+        });
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+
+        int exitCode = command.run(new String[]{"project-1", "Greeting"}, output, error);
+
+        assertEquals(1, exitCode);
+        assertEquals("", output.toString());
+        assertEquals("error: find-symbol failed: " + refusal.getMessage() + "\n", error.toString());
     }
 }

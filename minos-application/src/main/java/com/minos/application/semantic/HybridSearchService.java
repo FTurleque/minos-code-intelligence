@@ -10,6 +10,7 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.cache.HeapShare;
 import com.minos.store.cache.WeightedLruCache;
 import com.minos.diagnostics.UsageException;
 
@@ -39,11 +40,18 @@ public final class HybridSearchService {
     private final SemanticDocumentFactory documentFactory;
     private final SemanticIndexService semanticIndex;
     private final SemanticSearchService semanticSearch;
-    private final WeightedLruCache<UUID, CachedCorpus> corpusCache =
-            new WeightedLruCache<>(DEFAULT_MAX_CORPUS_CACHE_ENTRIES, DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES);
+    private final WeightedLruCache<UUID, CachedCorpus> corpusCache;
 
     public HybridSearchService(ProjectResolver projects, CodeKnowledgeSnapshotStore snapshots,
                                SemanticIndexService semanticIndex, SemanticSearchService semanticSearch) {
+        this(projects, snapshots, semanticIndex, semanticSearch, Runtime.getRuntime().maxMemory());
+    }
+
+    /** Test seam: the corpus cache keeps the smaller of its ceiling and its share of {@code maximumHeapBytes}. */
+    HybridSearchService(ProjectResolver projects, CodeKnowledgeSnapshotStore snapshots,
+                        SemanticIndexService semanticIndex, SemanticSearchService semanticSearch, long maximumHeapBytes) {
+        this.corpusCache = new WeightedLruCache<>(DEFAULT_MAX_CORPUS_CACHE_ENTRIES,
+                HeapShare.HYBRID_CORPUS.ceiling(DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES, maximumHeapBytes));
         this.projects = Objects.requireNonNull(projects, "projects");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
         this.semanticIndex = Objects.requireNonNull(semanticIndex, "semanticIndex");
@@ -118,7 +126,7 @@ public final class HybridSearchService {
     public CorpusCacheStats corpusCacheStats() {
         synchronized (corpusCache) {
             return new CorpusCacheStats(corpusCache.size(), corpusCache.weight(),
-                    DEFAULT_MAX_CORPUS_CACHE_ENTRIES, DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES,
+                    DEFAULT_MAX_CORPUS_CACHE_ENTRIES, corpusCache.maximumWeight(),
                     corpusCache.evictions());
         }
     }
