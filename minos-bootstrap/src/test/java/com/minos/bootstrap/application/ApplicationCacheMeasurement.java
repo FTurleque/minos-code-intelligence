@@ -40,6 +40,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 /**
  * Measures what the application caches retain in the heap against the weight they estimate (AUD-PERF-04, task 1.1
  * of {@code borner-les-caches-applicatifs-par-le-tas}): hybrid corpus, program graph and Java fingerprints, local
@@ -65,6 +67,8 @@ import java.util.stream.Stream;
  * to {@code <work>/cache-measurements.txt}; nothing is written into the repository.</p>
  */
 @EnabledIfSystemProperty(named = "minos.cacheMeasure.work", matches = ".+")
+// The name must match no Surefire pattern, so that verify never runs the measurement (as LargeSnapshotMeasurement).
+@SuppressWarnings("java:S3577")
 class ApplicationCacheMeasurement {
 
     private static final String[] VERBS = {"read", "write", "parse", "index", "resolve", "render", "store", "load"};
@@ -82,25 +86,26 @@ class ApplicationCacheMeasurement {
     void measureTheCachesOnARealProject() throws Exception {
         UUID projectId = UUID.fromString(System.getProperty("minos.cacheMeasure.project"));
         Path home = copyProject(Path.of(System.getProperty("minos.cacheMeasure.sourceHome")), projectId);
-        record("jvm.maxHeap.bytes", Runtime.getRuntime().maxMemory());
+        report("jvm.maxHeap.bytes", Runtime.getRuntime().maxMemory());
         String id = projectId.toString();
-        record("vector.dimensions", VECTOR_DIMENSIONS);
+        report("vector.dimensions", VECTOR_DIMENSIONS);
         try (MinosApplication application = MinosApplication.builder(home)
                 .embeddingProvider(new LocalHashEmbeddingProvider(VECTOR_DIMENSIONS)).build()) {
             long started = System.nanoTime();
             SnapshotReadView view = application.snapshotStore().loadActiveReadView(projectId).orElseThrow();
-            record("snapshot.view.load.millis", millis(started));
-            record("snapshot.symbols", view.descriptor().symbolCount());
-            record("snapshot.occurrences", view.descriptor().occurrenceCount());
-            record("snapshot.relationships", view.descriptor().relationshipCount());
+            report("snapshot.view.load.millis", millis(started));
+            report("snapshot.symbols", view.descriptor().symbolCount());
+            report("snapshot.occurrences", view.descriptor().occurrenceCount());
+            report("snapshot.relationships", view.descriptor().relationshipCount());
 
             measureHybrid(application, id);
             measureProgramGraph(application, id);
             if (measureVectorIndex(application, id)) measureExplorerPages(application, id);
-            record("snapshot.view.kept", view.descriptor().snapshotId().length());
+            report("snapshot.view.kept", view.descriptor().snapshotId().length());
         } finally {
             flush();
         }
+        assertFalse(lines.isEmpty(), "nothing was measured");
     }
 
     /**
@@ -114,7 +119,7 @@ class ApplicationCacheMeasurement {
         int documents = Integer.getInteger("minos.cacheMeasure.indexDocuments");
         int dimensions = Integer.getInteger("minos.cacheMeasure.indexDimensions", 384);
         int contentChars = Integer.getInteger("minos.cacheMeasure.indexContentChars", 1200);
-        record("jvm.maxHeap.bytes", Runtime.getRuntime().maxMemory());
+        report("jvm.maxHeap.bytes", Runtime.getRuntime().maxMemory());
         String prefix = "index." + documents + "x" + dimensions + "x" + contentChars;
         try {
             Path root = Files.createDirectories(work.resolve(prefix + "-store"));
@@ -139,7 +144,7 @@ class ApplicationCacheMeasurement {
                     "snapshot-measure", provider.id(), provider.modelId(), dimensions, 1L, indexed));
             indexed.clear();
             try (Stream<Path> files = Files.walk(root)) {
-                record(prefix + ".files.bytes", files.filter(Files::isRegularFile)
+                report(prefix + ".files.bytes", files.filter(Files::isRegularFile)
                         .mapToLong(ApplicationCacheMeasurement::size).sum());
             }
             FileSemanticVectorStore store = new FileSemanticVectorStore(root);
@@ -147,24 +152,25 @@ class ApplicationCacheMeasurement {
             resetPeaks();
             long started = System.nanoTime();
             store.search(projectId, provider.embed("query", "snapshot store query"), 10, 0.0);
-            record(prefix + ".search.first.millis", millis(started));
-            record(prefix + ".search.first.peakAboveBefore.bytes", peakHeap() - before);
+            report(prefix + ".search.first.millis", millis(started));
+            report(prefix + ".search.first.peakAboveBefore.bytes", peakHeap() - before);
             long retained = settledHeap() - before;
             started = System.nanoTime();
             store.search(projectId, provider.embed("query", "program graph cache"), 10, 0.0);
-            record(prefix + ".search.second.millis", millis(started));
-            record(prefix + ".cache.estimate.bytes", store.cacheStats().weightBytes());
-            record(prefix + ".cache.entries", store.cacheStats().entries());
-            record(prefix + ".retained.bytes", retained);
+            report(prefix + ".search.second.millis", millis(started));
+            report(prefix + ".cache.estimate.bytes", store.cacheStats().weightBytes());
+            report(prefix + ".cache.entries", store.cacheStats().entries());
+            report(prefix + ".retained.bytes", retained);
         } finally {
             flush();
         }
+        assertFalse(lines.isEmpty(), "nothing was measured");
     }
 
     @Test
     @EnabledIfSystemProperty(named = "minos.cacheMeasure.projectionPoints", matches = ".+")
     void measureTheDecodedProjectionPerPoint() throws Exception {
-        record("jvm.maxHeap.bytes", Runtime.getRuntime().maxMemory());
+        report("jvm.maxHeap.bytes", Runtime.getRuntime().maxMemory());
         try {
             for (String size : System.getProperty("minos.cacheMeasure.projectionPoints").split(",")) {
                 measureProjection(Integer.parseInt(size.trim()));
@@ -172,6 +178,7 @@ class ApplicationCacheMeasurement {
         } finally {
             flush();
         }
+        assertFalse(lines.isEmpty(), "nothing was measured");
     }
 
     private void measureHybrid(MinosApplication application, String id) throws Exception {
@@ -180,15 +187,15 @@ class ApplicationCacheMeasurement {
         resetPeaks();
         long started = System.nanoTime();
         service.search(id, new HybridSearchService.HybridRequest("snapshot store query", 10, 0.0));
-        record("hybrid.first.millis", millis(started));
-        record("hybrid.first.peakAboveBefore.bytes", peakHeap() - before);
+        report("hybrid.first.millis", millis(started));
+        report("hybrid.first.peakAboveBefore.bytes", peakHeap() - before);
         long retained = settledHeap() - before;
         started = System.nanoTime();
         service.search(id, new HybridSearchService.HybridRequest("program graph cache", 10, 0.0));
-        record("hybrid.second.millis", millis(started));
-        record("hybrid.corpus.estimate.bytes", service.corpusCacheStats().weightBytes());
-        record("hybrid.corpus.entries", service.corpusCacheStats().entries());
-        record("hybrid.retained.bytes", retained);
+        report("hybrid.second.millis", millis(started));
+        report("hybrid.corpus.estimate.bytes", service.corpusCacheStats().weightBytes());
+        report("hybrid.corpus.entries", service.corpusCacheStats().entries());
+        report("hybrid.retained.bytes", retained);
     }
 
     private void measureProgramGraph(MinosApplication application, String id) throws Exception {
@@ -200,19 +207,19 @@ class ApplicationCacheMeasurement {
         resetPeaks();
         long started = System.nanoTime();
         var graph = service.getGraph(id);
-        record("graph.first.millis", millis(started));
-        record("graph.first.peakAboveBefore.bytes", peakHeap() - before);
-        record("graph.nodes", graph.nodes().size());
-        record("graph.edges", graph.edges().size());
-        record("graph.limitations", String.join(";", graph.limitations()));
+        report("graph.first.millis", millis(started));
+        report("graph.first.peakAboveBefore.bytes", peakHeap() - before);
+        report("graph.nodes", graph.nodes().size());
+        report("graph.edges", graph.edges().size());
+        report("graph.limitations", String.join(";", graph.limitations()));
         long retained = settledHeap() - before;
         started = System.nanoTime();
         service.getGraph(id);
-        record("graph.second.millis", millis(started));
-        record("graph.cache.estimate.bytes", service.cacheStats().weight());
-        record("graph.fingerprint.estimate.bytes", fingerprints.fingerprintCacheStats().weightBytes());
-        record("graph.fingerprint.entries", fingerprints.fingerprintCacheStats().entries());
-        record("graph.retained.bytes", retained);
+        report("graph.second.millis", millis(started));
+        report("graph.cache.estimate.bytes", service.cacheStats().weight());
+        report("graph.fingerprint.estimate.bytes", fingerprints.fingerprintCacheStats().weightBytes());
+        report("graph.fingerprint.entries", fingerprints.fingerprintCacheStats().entries());
+        report("graph.retained.bytes", retained);
     }
 
     /** Synchronises the semantic index of the project, then measures its decoding; false when it cannot be built. */
@@ -222,14 +229,14 @@ class ApplicationCacheMeasurement {
         try {
             report = application.semanticIndexService().synchronize(id);
         } catch (IOException refused) {
-            record("vector.sync.refused", refused.getMessage());
+            report("vector.sync.refused", refused.getMessage());
             return false;
         }
-        record("vector.sync.millis", millis(started));
-        record("vector.sync.state", report.state().name());
-        record("vector.documents", report.documentCount());
+        report("vector.sync.millis", millis(started));
+        report("vector.sync.state", report.state().name());
+        report("vector.documents", report.documentCount());
         try (Stream<Path> files = Files.walk(application.home().resolve("semantic-index"))) {
-            record("vector.files.bytes", files.filter(Files::isRegularFile).mapToLong(ApplicationCacheMeasurement::size).sum());
+            report("vector.files.bytes", files.filter(Files::isRegularFile).mapToLong(ApplicationCacheMeasurement::size).sum());
         }
         // A fresh store over the same files: its cache is empty, so the first search decodes the whole index.
         FileSemanticVectorStore store =
@@ -240,15 +247,15 @@ class ApplicationCacheMeasurement {
         resetPeaks();
         started = System.nanoTime();
         store.search(id, query, 10, 0.0);
-        record("vector.search.first.millis", millis(started));
-        record("vector.search.first.peakAboveBefore.bytes", peakHeap() - before);
+        report("vector.search.first.millis", millis(started));
+        report("vector.search.first.peakAboveBefore.bytes", peakHeap() - before);
         long retained = settledHeap() - before;
         started = System.nanoTime();
         store.search(id, provider.embed("query", "program graph cache"), 10, 0.0);
-        record("vector.search.second.millis", millis(started));
-        record("vector.cache.estimate.bytes", store.cacheStats().weightBytes());
-        record("vector.cache.entries", store.cacheStats().entries());
-        record("vector.retained.bytes", retained);
+        report("vector.search.second.millis", millis(started));
+        report("vector.cache.estimate.bytes", store.cacheStats().weightBytes());
+        report("vector.cache.entries", store.cacheStats().entries());
+        report("vector.retained.bytes", retained);
         return true;
     }
 
@@ -257,13 +264,13 @@ class ApplicationCacheMeasurement {
         long before = settledHeap();
         long started = System.nanoTime();
         var first = service.documents(id, new SemanticCorpusQueryService.DocumentsRequest(null, 50, null, null, null, null));
-        record("explorer.page1.millis", millis(started));
+        report("explorer.page1.millis", millis(started));
         long retained = settledHeap() - before;
         started = System.nanoTime();
         service.documents(id, new SemanticCorpusQueryService.DocumentsRequest(first.nextCursor(), 50,
                 null, null, null, null));
-        record("explorer.page2.millis", millis(started));
-        record("explorer.retained.bytes", retained);
+        report("explorer.page2.millis", millis(started));
+        report("explorer.retained.bytes", retained);
     }
 
     private void measureProjection(int points) throws Exception {
@@ -304,10 +311,10 @@ class ApplicationCacheMeasurement {
                     Long.getLong("minos.cacheMeasure.preparationMegabytes",
                             SemanticProjectionService.DEFAULT_MAX_MEMORY_MEGABYTES) * 1024L * 1024L),
                     SemanticProjectionService.Progress.NONE);
-            record("projection." + points + ".prepare.millis", millis(started));
-            record("projection." + points + ".points", report.pointCount());
+            report("projection." + points + ".prepare.millis", millis(started));
+            report("projection." + points + ".points", report.pointCount());
             Path file = home.resolve("semantic-projections").resolve(projectId).resolve("projection-v1.bin");
-            record("projection." + points + ".file.bytes", Files.size(file));
+            report("projection." + points + ".file.bytes", Files.size(file));
             // A second application over the same home: its projection store starts with an empty cache.
             try (MinosApplication reader = MinosApplication.builder(home).embeddingProvider(provider).build()) {
                 SemanticProjectionService readService = reader.semanticProjectionService();
@@ -315,16 +322,16 @@ class ApplicationCacheMeasurement {
                 resetPeaks();
                 started = System.nanoTime();
                 readService.points(projectId, 0, SemanticProjectionService.MAX_POINTS_PAGE);
-                record("projection." + points + ".firstPage.millis", millis(started));
-                record("projection." + points + ".decode.peakAboveBefore.bytes", peakHeap() - before);
+                report("projection." + points + ".firstPage.millis", millis(started));
+                report("projection." + points + ".decode.peakAboveBefore.bytes", peakHeap() - before);
                 long retained = settledHeap() - before;
-                record("projection." + points + ".retained.bytes", retained);
-                record("projection." + points + ".retained.bytesPerPoint",
+                report("projection." + points + ".retained.bytes", retained);
+                report("projection." + points + ".retained.bytesPerPoint",
                         String.format(Locale.ROOT, "%.1f", retained / (double) report.pointCount()));
                 started = System.nanoTime();
                 readService.points(projectId, SemanticProjectionService.MAX_POINTS_PAGE,
                         SemanticProjectionService.MAX_POINTS_PAGE);
-                record("projection." + points + ".secondPage.millis", millis(started));
+                report("projection." + points + ".secondPage.millis", millis(started));
             }
         }
     }
@@ -354,7 +361,7 @@ class ApplicationCacheMeasurement {
         }
     }
 
-    private void record(String key, Object value) {
+    private void report(String key, Object value) {
         String line = key + "=" + value;
         System.out.println("CACHE-MEASURE " + line);
         lines.add(line);
@@ -378,6 +385,8 @@ class ApplicationCacheMeasurement {
         return (System.nanoTime() - started) / 1_000_000L;
     }
 
+    /** The pause lets the concurrent collector finish before the heap is read; there is no condition to wait on. */
+    @SuppressWarnings("java:S2925")
     private static long settledHeap() throws InterruptedException {
         for (int round = 0; round < 5; round++) {
             System.gc();
