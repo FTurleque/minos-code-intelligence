@@ -3,6 +3,7 @@ package com.minos.cli.command;
 import com.minos.application.ProjectOperations;
 import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -27,7 +28,7 @@ class IndexCommandViaWslTest {
 
         int code = new IndexCommand(new StubProjects(), autonomous).run(new String[]{"demo", "--via-wsl"}, output, error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, code);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, code);
         assertTrue(error.toString().contains(AutonomousIndexOperations.VIA_WSL_UNAVAILABLE), error.toString());
         assertEquals("", output.toString());
         assertEquals(0, autonomous.localRuns + autonomous.plans, "nothing may be planned or executed locally");
@@ -42,7 +43,7 @@ class IndexCommandViaWslTest {
 
         int code = new IndexCommand(new StubProjects(), autonomous).run(new String[]{"demo", "--via-wsl"}, output, error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, code);
+        assertEquals(CliExitCodes.USAGE_ERROR, code);
         assertTrue(error.toString().startsWith("error: --via-wsl is only available on a Windows installation"),
                 error.toString());
         assertEquals("", output.toString());
@@ -59,7 +60,7 @@ class IndexCommandViaWslTest {
                 new String[]{"demo", "--via-wsl", "--scip", "index.scip", "--provider", "scip-java"},
                 new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, code);
+        assertEquals(CliExitCodes.USAGE_ERROR, code);
         assertTrue(error.toString().contains("--via-wsl cannot be combined with --scip"), error.toString());
         assertEquals(List.of(), autonomous.wslDistributions);
     }
@@ -72,7 +73,7 @@ class IndexCommandViaWslTest {
         int code = new IndexCommand(new StubProjects(), autonomous).run(
                 new String[]{"demo", "--via-wsl", "--dry-run"}, new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, code);
+        assertEquals(CliExitCodes.USAGE_ERROR, code);
         assertTrue(error.toString().contains("--via-wsl cannot be combined with --dry-run"), error.toString());
         assertEquals(0, autonomous.plans);
     }
@@ -83,13 +84,13 @@ class IndexCommandViaWslTest {
         IndexCommand command = new IndexCommand(new StubProjects(), autonomous);
 
         StringBuilder withoutRoute = new StringBuilder();
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 command.run(new String[]{"demo", "--wsl-distro", "Ubuntu"}, new StringBuilder(), withoutRoute));
         assertTrue(withoutRoute.toString().contains("--wsl-distro requires --via-wsl"), withoutRoute.toString());
 
         for (String invalid : new String[]{"Ubuntu;rm", "-d", "a b", "../x"}) {
             StringBuilder error = new StringBuilder();
-            assertEquals(FindSymbolCommand.USAGE_ERROR, command.run(
+            assertEquals(CliExitCodes.USAGE_ERROR, command.run(
                     new String[]{"demo", "--via-wsl", "--wsl-distro", invalid}, new StringBuilder(), error), invalid);
             assertTrue(error.toString().contains("--wsl-distro must be a WSL distribution name"), error.toString());
         }

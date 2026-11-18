@@ -7,6 +7,7 @@ import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.output.SymbolOutputFormat;
@@ -80,7 +81,7 @@ public final class RemoteIndexCommand {
                                 request, options.displayName(), options.provider(), options.workerId(),
                                 options.workerNetwork()), options.format())).append('\n');
                     }
-                    return FindSymbolCommand.SUCCESS;
+                    return CliExitCodes.SUCCESS;
                 });
     }
 

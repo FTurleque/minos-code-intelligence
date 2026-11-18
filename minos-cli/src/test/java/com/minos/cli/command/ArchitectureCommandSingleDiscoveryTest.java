@@ -2,6 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDetector;
 import com.minos.discovery.ProjectDiscoveryService;
@@ -75,7 +76,7 @@ class ArchitectureCommandSingleDiscoveryTest {
         int exitCode = new ArchitectureCommand(query)
                 .run(new String[]{PROJECT, "--format", "dot", "--module", "api"}, output, error);
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode, error::toString);
+        assertEquals(CliExitCodes.SUCCESS, exitCode, error::toString);
         assertEquals(expected + "\n", output.toString());
         assertEquals(List.of(1, 1), List.of(discoveries.get(), snapshotLoads.get()),
                 "project discoveries and active snapshot loads for one graph command with a module");

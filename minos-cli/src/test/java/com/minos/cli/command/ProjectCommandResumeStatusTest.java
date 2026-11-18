@@ -2,6 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.application.ProjectOperations;
 import com.minos.application.ResumableRunStatus;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -26,13 +27,13 @@ class ProjectCommandResumeStatusTest {
         ProjectCommand command = new ProjectCommand(new StubProjectOperations(), projectId -> Optional.of(summary));
 
         StringBuilder text = new StringBuilder();
-        assertEquals(FindSymbolCommand.SUCCESS, command.runIndexStatus(new String[]{"demo"}, text, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, command.runIndexStatus(new String[]{"demo"}, text, new StringBuilder()));
         assertTrue(text.toString().contains("resumableRunId: " + RUN_ID), text.toString());
         assertTrue(text.toString().contains("resumableTargets: 3/4"), text.toString());
         assertTrue(text.toString().contains("resumableCheckpointAgeSeconds: "), text.toString());
 
         StringBuilder json = new StringBuilder();
-        assertEquals(FindSymbolCommand.SUCCESS, command.runIndexStatus(
+        assertEquals(CliExitCodes.SUCCESS, command.runIndexStatus(
                 new String[]{"demo", "--format", "json"}, json, new StringBuilder()));
         assertTrue(json.toString().contains("\"resumableRunId\":\"" + RUN_ID + "\""), json.toString());
         assertTrue(json.toString().contains("\"resumableTargets\":3"), json.toString());
@@ -58,12 +59,12 @@ class ProjectCommandResumeStatusTest {
         CountingOperations operations = new CountingOperations();
         ProjectCommand command = new ProjectCommand(operations, projectId -> Optional.empty());
 
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 command.runIndexStatus(new String[]{"demo"}, new StringBuilder(), new StringBuilder()));
         assertEquals(1, operations.statusInspections);
         assertEquals(0, operations.fullInspections, "a status must not ask for the structure of the repository");
 
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 command.runInspectAlias(new String[]{"demo"}, new StringBuilder(), new StringBuilder()));
         assertEquals(1, operations.statusInspections);
         assertEquals(1, operations.fullInspections);
