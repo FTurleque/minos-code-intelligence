@@ -20,9 +20,6 @@ public final class ExplorerSession {
     public static final int EXECUTION_ERROR = 1;
     public static final int USAGE_ERROR = 2;
 
-    static final String TEAM_MODE_REFUSED = "minos explorer serve is not available when the team mode is enabled"
-            + " (MINOS_HOSTED_MODE): the exploration surface has no per-project authorization. Disable the team mode"
-            + " for this MINOS_HOME to explore its semantic index on this machine";
     static final String BIND_FAILED = "the exploration surface could not listen on the requested port;"
             + " choose another one with --port, or omit it to let the system pick a free port";
 
@@ -70,7 +67,7 @@ public final class ExplorerSession {
             return USAGE_ERROR;
         }
         if (application.teamControlPlane().isPresent()) {
-            say(error, "error: " + TEAM_MODE_REFUSED);
+            say(error, "error: " + ExplorerLaunchPolicy.TEAM_MODE_REFUSED);
             return USAGE_ERROR;
         }
         ListeningPolicy.Scope scope;

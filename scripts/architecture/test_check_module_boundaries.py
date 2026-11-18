@@ -1441,6 +1441,42 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
                      "minos-engine/io.PrivateLocalStorage", "is not in PROCESS_LAUNCHERS")
 
 
+class AssemblyClassesRuleTest(RatchetTreeTestCase):
+    """A20 — the production classes of minos-app are a closed list, each with its role (AUD-ARC-05)."""
+
+    LISTED = {"app.McpBackendRouter": "launch route", "integration.nexus.NexusExportBridgeMain": "bridge"}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-app", "com.minos.app", "McpBackendRouter", "final class McpBackendRouter { }")
+        self.write("minos-app", "com.minos.integration.nexus", "NexusExportBridgeMain",
+                   "public final class NexusExportBridgeMain { }")
+        self.write("minos-app", "com.minos.app", "Helper", "final class Helper { }", kind="test")
+
+    def check(self, listed=None):
+        return _MODULE.check_assembly_classes(self.root, listed=self.LISTED if listed is None else listed)
+
+    def test_the_listed_classes_are_accepted_and_test_classes_are_not_counted(self):
+        self.assertEqual(2, self.check())
+
+    def test_a_new_production_class_is_refused_with_its_name_and_the_advice(self):
+        self.write("minos-app", "com.minos.app", "LaunchPolicy", "final class LaunchPolicy { }")
+        self.refused(self.check, "A20", "minos-app/src/main/java/com/minos/app/LaunchPolicy.java",
+                     "app.LaunchPolicy", "application module or a surface")
+
+    def test_a_stale_entry_is_refused_with_the_request_to_remove_it(self):
+        self.refused(lambda: self.check({**self.LISTED, "app.Gone": "launch route"}), "A20",
+                     "ASSEMBLY_CLASSES entry app.Gone is no class of minos-app any more; remove it")
+
+    def test_an_entry_without_a_role_is_refused(self):
+        self.refused(lambda: self.check({**self.LISTED, "app.McpBackendRouter": " "}), "A20",
+                     "ASSEMBLY_CLASSES entry app.McpBackendRouter has no written role")
+
+    def test_the_real_assembly_matches_its_list(self):
+        self.assertEqual(len(_MODULE.ASSEMBLY_CLASSES), _MODULE.check_assembly_classes())
+        self.assertEqual(8, len(_MODULE.ASSEMBLY_CLASSES))
+
+
 class EngineConcreteCodeMeasureTest(RatchetTreeTestCase):
     """AUD-ARC-05 — the share of concrete code of minos-engine is measured (ADR 0068, Mise en oeuvre), never ratcheted."""
 
