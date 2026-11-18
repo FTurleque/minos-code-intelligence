@@ -1,11 +1,11 @@
 package com.minos.application;
 
+import com.minos.orchestration.IndexImportHistory;
+import com.minos.orchestration.IndexImportHistoryStore;
 import com.minos.orchestration.IndexStateStoreException;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
-import com.minos.io.DurableAtomicFile;
-import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.ProjectIndexState;
@@ -19,7 +19,6 @@ import com.minos.domain.registry.UnreadableRegistryException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.diagnostics.UsageException;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -28,8 +27,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Properties;
-import java.util.UUID;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
 /** Local application adapter over the selected MINOS storage backend. */
@@ -45,7 +42,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private final ProjectInspectionService inspectionService;
     private final ScipArtifactImporter scipArtifactImporter;
     private final PublishedSnapshotRetention retention;
-    private final Path historyDirectory;
+    private final IndexImportHistoryStore historyStore;
 
     public LocalProjectOperations(Path home) throws IOException { this(MinosApplication.open(home), true); }
     public LocalProjectOperations(MinosApplication application) { this(application, false); }
@@ -61,7 +58,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         this.inspectionService = value.projectInspectionService();
         this.scipArtifactImporter = value.scipArtifactImporter();
         this.retention = new PublishedSnapshotRetention(value.retentionService());
-        this.historyDirectory = home.resolve("cli-index-history");
+        this.historyStore = value.indexImportHistoryStore();
     }
 
     @Override public ProjectView addProject(Path rootPath, String displayName) throws IOException {
@@ -145,7 +142,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         // protects it twice, and a state left pending still protects the snapshot it names.
         String importDiagnostic = diagnostic(commitOutcome.diagnostic(), retention.compact(project.id()).orElse(null));
         try {
-            writeHistory(historyDirectory, project.id(), new IndexHistory(
+            historyStore.write(project.id(), new IndexImportHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
         } catch (IOException failure) {
             // CLI history is secondary evidence. The active snapshot remains authoritative, so the import
@@ -211,38 +208,11 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 view.lastSuccessfulIndexAt(), view.providerId(), view.providerVersion());
     }
 
-    static void writeHistory(Path historyDirectory, UUID projectId, IndexHistory history) throws IOException {
-        DurableAtomicFile.ensureDirectory(historyDirectory, "CLI import history directory");
-        Path target = historyDirectory.resolve(projectId + ".properties");
-        Path temporary = PrivateLocalStorage.createPrivateTempFile(historyDirectory, projectId + ".", ".tmp");
-        Properties properties = new Properties();
-        properties.setProperty("snapshotId", history.snapshotId());
-        properties.setProperty("providerId", history.providerId());
-        properties.setProperty("providerVersion", history.providerVersion() == null ? "" : history.providerVersion());
-        properties.setProperty("completedAt", history.completedAt().toString());
-        try {
-            ByteArrayOutputStream content = new ByteArrayOutputStream();
-            properties.store(content, "MINOS project index history");
-            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
-            DurableAtomicFile.replace(temporary, target, "CLI import history replacement");
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
 
     private record CommitOutcome(IndexImportCommitStatus status, String diagnostic) {
         private CommitOutcome {
             Objects.requireNonNull(status, "status");
-        }
-    }
-
-    record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
-        IndexHistory {
-            if (snapshotId == null || snapshotId.isBlank()) throw new IllegalArgumentException("snapshotId must not be blank");
-            ProviderId.require(providerId);
-            Objects.requireNonNull(completedAt, "completedAt");
         }
     }
 

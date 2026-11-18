@@ -79,6 +79,18 @@ class DefaultMinosApplicationComposerTest {
         }
     }
 
+    /** The import history is the file store of the home, whatever the backend, and a reading creates nothing. */
+    @Test
+    void theImportHistoryStoreIsTheFileStoreOfTheHomeAndAReadingCreatesNothing(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        com.minos.orchestration.IndexImportHistoryStore store =
+                new DefaultMinosApplicationComposer().indexImportHistoryStore(home);
+
+        assertInstanceOf(com.minos.storage.home.FileIndexImportHistoryStore.class, store);
+        assertEquals(java.util.Optional.empty(), store.read(java.util.UUID.randomUUID()));
+        assertEquals(false, java.nio.file.Files.exists(home.resolve("cli-index-history")));
+    }
+
     /** The production probe queries the real host; the "decision" cause follows the enumeration. */
     @Test
     void productionWorkerSandboxProbeAndCommandLocatorAreTheRealHostOnes(@TempDir Path temp) {

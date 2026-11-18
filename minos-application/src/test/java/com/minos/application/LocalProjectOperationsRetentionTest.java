@@ -221,6 +221,7 @@ class LocalProjectOperationsRetentionTest {
         return port(type, (name, arguments) -> switch (name) {
             case "id" -> "in-memory";
             case "close" -> null;
+            case "indexImportHistoryStore" -> ImportHistoryStores.inMemory();
             default -> throw new UnsupportedOperationException(type.getSimpleName() + "." + name);
         });
     }

@@ -23,6 +23,7 @@ import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IncrementalIndexingPlanner;
+import com.minos.orchestration.IndexImportHistoryStore;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
@@ -85,6 +86,7 @@ public final class MinosApplication implements AutoCloseable {
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
     private final Optional<TeamControlPlane> teamControlPlane;
     private final MinosApplicationComposer compositionRoot;
+    private final IndexImportHistoryStore indexImportHistoryStore;
     private SemanticProjectionService semanticProjectionService;
 
     /**
@@ -183,8 +185,11 @@ public final class MinosApplication implements AutoCloseable {
         if (graphProviders.isEmpty()) throw new IllegalArgumentException("programGraphProviders must not be empty");
         Optional<EmbeddingProvider> semanticProvider = Objects.requireNonNull(embeddingProvider, "embeddingProvider");
 
+        this.indexImportHistoryStore = Objects.requireNonNull(
+                Objects.requireNonNull(compositionRoot, "compositionRoot").indexImportHistoryStore(this.home),
+                "indexImportHistoryStore");
         ProjectInspectionService projectInspectionService = new ProjectInspectionService(
-                this.home, projectRegistry, snapshotStore, indexStateStore, discoveryService, this.indexerDescriptors);
+                indexImportHistoryStore, projectRegistry, snapshotStore, indexStateStore, discoveryService, this.indexerDescriptors);
         ProjectQueryService projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
         ProjectArchitectureQuery architectureQuery =
                 LocalProjectArchitectureQuery.defaults(projectRegistry, snapshotStore, discoveryService);
@@ -303,6 +308,9 @@ public final class MinosApplication implements AutoCloseable {
     // Queries (ADR 0045: derived services grouped in Queries).
     /** Git facts port, read by LocalProjectGitQuery; the surfaces use ProjectGitQuery. */
     GitIntelligence gitIntelligence() { return gitIntelligence; }
+    /** The import history port, for the operations of this package; not part of the facade. */
+    IndexImportHistoryStore indexImportHistoryStore() { return indexImportHistoryStore; }
+
     public ProjectInspectionService projectInspectionService() { return queries.projectInspectionService(); }
     public ProjectQueryService projectQueryService() { return queries.projectQueryService(); }
     public ProjectArchitectureQuery architectureQuery() { return queries.architectureQuery(); }

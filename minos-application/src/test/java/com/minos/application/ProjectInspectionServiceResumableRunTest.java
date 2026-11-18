@@ -92,7 +92,7 @@ class ProjectInspectionServiceResumableRunTest {
     }
 
     private ProjectInspectionService service(Path home, IndexStateStore states) {
-        return new ProjectInspectionService(home, new UnusedRegistry(),
+        return new ProjectInspectionService(ImportHistoryStores.none(), new UnusedRegistry(),
                 new ActiveSnapshotReadCostTest.CountingSnapshotStore(
                         new CodeKnowledgeSnapshot(projectId, "snapshot", List.of(), List.of(), List.of())),
                 states, new ProjectDiscoveryService(), List.of());
