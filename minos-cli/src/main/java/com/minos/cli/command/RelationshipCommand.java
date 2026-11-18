@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.domain.CodeEntityRef;
@@ -68,7 +69,7 @@ public final class RelationshipCommand {
                     output.append(CodeIntelligenceResultRenderer.renderRelationships(
                                     relationships, limitations, options.format()))
                             .append('\n');
-                    return FindSymbolCommand.SUCCESS;
+                    return CliExitCodes.SUCCESS;
                 });
     }
 

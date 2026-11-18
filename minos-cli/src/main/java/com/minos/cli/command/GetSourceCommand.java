@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.context.SourceExcerpt;
@@ -34,7 +35,7 @@ public final class GetSourceCommand {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             SourceExcerpt source = query.getSource(options.projectId(), options.fileId());
             output.append(CodeSearchRenderer.renderSource(source, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         });
     }
 

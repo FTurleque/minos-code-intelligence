@@ -5,6 +5,7 @@ import com.minos.application.WorkerSandboxDiagnosis;
 import com.minos.application.WslJavaDiagnosis;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.output.SymbolOutputFormat;
@@ -154,7 +155,7 @@ public final class DoctorCommand {
             } else {
                 renderText(output, providers, commands, privateStorage, sandbox, wslJava, ready);
             }
-            return ready ? FindSymbolCommand.SUCCESS : FindSymbolCommand.EXECUTION_ERROR;
+            return ready ? CliExitCodes.SUCCESS : CliExitCodes.EXECUTION_ERROR;
         });
     }
 

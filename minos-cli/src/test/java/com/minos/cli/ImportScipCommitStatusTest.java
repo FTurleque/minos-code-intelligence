@@ -1,9 +1,9 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.command.ImportScipCommand;
 import com.minos.application.ProjectOperations;
 
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -49,7 +49,7 @@ class ImportScipCommitStatusTest {
                 "demo", "--file", "index.scip", "--provider", "scip-java"
         }, output, error);
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
         assertTrue(output.toString().contains("commitStatus: " + status.name()));
         assertTrue(error.toString().contains(expectedWarning));
         assertFalse(error.toString().contains("import-scip failed"));

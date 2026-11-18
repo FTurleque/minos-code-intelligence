@@ -1,7 +1,7 @@
 package com.minos.app;
 
 import com.minos.application.MinosApplication;
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.mcp.MinosMcpServer;
 
@@ -75,7 +75,7 @@ final class McpBackendRouter {
         return switch (configuration.backend()) {
             case NATIVE -> {
                 nativeRunner.run(validatedHome);
-                yield FindSymbolCommand.SUCCESS;
+                yield CliExitCodes.SUCCESS;
             }
             case DOCKER -> dockerTransport.run(configuration);
         };

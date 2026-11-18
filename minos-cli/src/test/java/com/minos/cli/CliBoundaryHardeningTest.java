@@ -1,10 +1,10 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.command.IndexCommand;
 import com.minos.cli.command.ToolsCommand;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectOperations;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -28,7 +28,7 @@ class CliBoundaryHardeningTest {
 
         int exit = new ToolsCommand(operations).run(new String[]{"list"}, new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exit);
         assertEquals("error: tools failed: IllegalArgumentException\n", error.toString());
         assertFalse(error.toString().contains("private-user"));
         assertFalse(error.toString().contains("Usage:"));
@@ -47,7 +47,7 @@ class CliBoundaryHardeningTest {
         int exit = new ToolsCommand(operations)
                 .run(new String[]{"list", "--format", "json"}, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
         assertTrue(output.toString().contains("internal diagnostic redacted"), output.toString());
         assertFalse(output.toString().contains("private-user"));
     }
@@ -66,7 +66,7 @@ class CliBoundaryHardeningTest {
         int exit = new IndexCommand(new StubProjectOperations(), operations)
                 .run(new String[]{"demo"}, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
         assertTrue(output.toString().contains("diagnostic: internal diagnostic redacted"), output.toString());
         assertFalse(output.toString().contains("private-user"));
     }
@@ -84,7 +84,7 @@ class CliBoundaryHardeningTest {
         int exit = new IndexCommand(new StubProjectOperations(), operations)
                 .run(new String[]{"demo", "--dry-run", "--format", "json"}, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
         assertTrue(output.toString().contains("internal diagnostic redacted"), output.toString());
         assertFalse(output.toString().contains("private-user"));
     }

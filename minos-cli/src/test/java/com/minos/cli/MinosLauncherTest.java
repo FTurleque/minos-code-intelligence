@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
@@ -54,7 +54,7 @@ class MinosLauncherTest {
                 "--format", "json"
         }, output, error);
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertTrue(output.toString().contains("\"qualifiedName\":\"com.minos.GreetingService\""));
         assertEquals("", error.toString());
     }
@@ -179,7 +179,7 @@ class MinosLauncherTest {
                 new StringBuilder()
         );
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertTrue(output.toString().contains("Usage: minos <command>"));
         assertFalse(Files.exists(absentHome));
     }

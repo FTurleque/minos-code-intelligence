@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -58,7 +58,7 @@ class ExplorerCommandLineTest {
                 throw new AssertionError("the route is resolved on a usage error: " + String.join(" ", arguments));
             });
 
-            assertEquals(FindSymbolCommand.USAGE_ERROR, exit, String.join(" ", arguments));
+            assertEquals(CliExitCodes.USAGE_ERROR, exit, String.join(" ", arguments));
             assertTrue(error.toString().startsWith("error: "), error.toString());
             assertTrue(error.toString().contains("Usage: minos explorer serve [--port <n>]"), error.toString());
         }
@@ -81,7 +81,7 @@ class ExplorerCommandLineTest {
         for (String[] arguments : new String[][] {{"explorer", "--help"}, {"explorer", "serve", "--help"}}) {
             Launch launch = launch(absentHome, arguments);
 
-            assertEquals(FindSymbolCommand.SUCCESS, launch.exit(), launch.error());
+            assertEquals(CliExitCodes.SUCCESS, launch.exit(), launch.error());
             assertEquals(ExplorerCommandLine.USAGE, launch.output().strip().replace("\r\n", "\n"));
             assertEquals("", launch.error());
             assertFalse(Files.exists(absentHome), "the help must not create MINOS_HOME");
@@ -95,10 +95,10 @@ class ExplorerCommandLineTest {
         Launch launch = launch(absentHome, "explorer", "serve");
         Launch usage = launch(absentHome, "explorer", "serve", "--port", "many");
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, launch.exit(), launch.error());
+        assertEquals(CliExitCodes.EXECUTION_ERROR, launch.exit(), launch.error());
         assertEquals("error: MINOS bootstrap failed: " + ExplorerCommandLine.MISSING, launch.error().strip());
         assertFalse(launch.error().contains(root.toString()), launch.error());
-        assertEquals(FindSymbolCommand.USAGE_ERROR, usage.exit());
+        assertEquals(CliExitCodes.USAGE_ERROR, usage.exit());
         assertFalse(Files.exists(absentHome), "a missing entry point must not create MINOS_HOME");
     }
 
