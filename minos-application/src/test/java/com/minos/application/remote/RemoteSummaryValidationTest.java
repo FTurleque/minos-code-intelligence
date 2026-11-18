@@ -20,10 +20,10 @@ class RemoteSummaryValidationTest {
 
     @Test
     void artifactEvidenceAcceptsTheRootScopeButNotAMissingOne() {
-        assertEquals("", artifact("a".repeat(64), "").projectRelativeRoot());
+        String digest = "a".repeat(64);
+        assertEquals("", artifact(digest, "").projectRelativeRoot());
 
-        NullPointerException failure = assertThrows(NullPointerException.class,
-                () -> artifact("a".repeat(64), null));
+        NullPointerException failure = assertThrows(NullPointerException.class, () -> artifact(digest, null));
         assertEquals("projectRelativeRoot", failure.getMessage());
     }
 
