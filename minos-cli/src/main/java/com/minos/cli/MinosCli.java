@@ -31,6 +31,7 @@ import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.application.dynamic.RuntimeIntelligenceService;
 import com.minos.application.team.TeamControlPlane;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.impact.ProjectImpactQuery;
 
 import java.io.IOException;
@@ -253,24 +254,24 @@ public final class MinosCli {
         Objects.requireNonNull(error, "error");
         if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         if (arguments.length == 0) {
             error.append("error: command is required\n").append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
         String command = arguments[0];
         Route route = routes.get(command);
         if (route == null) {
             error.append("error: unknown command: ").append(command).append('\n');
             error.append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
         String[] commandArguments = Arrays.copyOfRange(arguments, 1, arguments.length);
         // --help est servi par la route elle-même : il ne dépend pas du câblage et ne touche aucun service.
         if (commandArguments.length == 1 && CliCommandSupport.isHelp(commandArguments[0])) {
             output.append(route.usage()).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         return route.handler().run(commandArguments, output, error);
     }
@@ -279,7 +280,7 @@ public final class MinosCli {
 
     private static int unavailable(String command, Appendable error) throws IOException {
         error.append("error: ").append(command).append(" is not configured in this CLI bootstrap\n");
-        return FindSymbolCommand.EXECUTION_ERROR;
+        return CliExitCodes.EXECUTION_ERROR;
     }
 
     /** Collaborateurs de {@link MinosCli} ; chaque mutateur refuse {@code null}, un collaborateur absent n'est simplement pas fourni. */

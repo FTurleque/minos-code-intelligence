@@ -1,8 +1,8 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.application.MinosApplication;
 import com.minos.bootstrap.ResumableRunFixtures;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,7 +30,7 @@ class MinosCliRunnerResumeStatusTest {
             int exitCode = MinosCliRunner.run(application,
                     new String[]{"index-status", ResumableRunFixtures.PROJECT_NAME, "--format", "json"}, output, error);
 
-            assertEquals(FindSymbolCommand.SUCCESS, exitCode, error.toString());
+            assertEquals(CliExitCodes.SUCCESS, exitCode, error.toString());
             assertTrue(output.toString().contains("\"resumableRunId\":\"" + runId + "\""), output.toString());
             assertTrue(output.toString().contains("\"resumableRunPhase\":\"PROVIDER_EXECUTION\""), output.toString());
             assertTrue(output.toString().contains("\"resumableTargets\":1"), output.toString());

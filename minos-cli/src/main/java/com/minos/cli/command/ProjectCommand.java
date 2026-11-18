@@ -2,6 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.cli.operations.IndexResumeStatusSource;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectOperations;
@@ -63,7 +64,7 @@ public final class ProjectCommand {
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         if (arguments.length == 0) {
             return usageError("project subcommand is required", error);
@@ -103,15 +104,15 @@ public final class ProjectCommand {
                         inspection = inspector.inspect(options.project());
                     } catch (UnreadableRegistryException unreadable) {
                         error.append("error: ").append(label).append(" failed: ").append(unreadable.getMessage()).append('\n');
-                        return FindSymbolCommand.PARTIAL_RESULT;
+                        return CliExitCodes.PARTIAL_RESULT;
                     }
                     output.append(render.apply(inspection.project(), options.format())).append('\n');
                     if (inspection.unreadable().isEmpty()) {
-                        return FindSymbolCommand.SUCCESS;
+                        return CliExitCodes.SUCCESS;
                     }
                     error.append("warning: ").append(UnreadableRegistryException.describe(inspection.unreadable().size()))
                             .append(", so this name cannot be proven unique\n");
-                    return FindSymbolCommand.PARTIAL_RESULT;
+                    return CliExitCodes.PARTIAL_RESULT;
                 });
     }
 
@@ -140,7 +141,7 @@ public final class ProjectCommand {
                 CliCommandSupport.reportingCause("project add"), options -> {
                     ProjectOperations.ProjectView project = operations.addProject(options.path(), options.name());
                     output.append(renderProject(project, options.format())).append('\n');
-                    return FindSymbolCommand.SUCCESS;
+                    return CliExitCodes.SUCCESS;
                 });
     }
 
@@ -151,11 +152,11 @@ public final class ProjectCommand {
                     ProjectOperations.ProjectInventory inventory = operations.inventory();
                     output.append(renderProjects(inventory, format)).append('\n');
                     if (inventory.degraded().isEmpty()) {
-                        return FindSymbolCommand.SUCCESS;
+                        return CliExitCodes.SUCCESS;
                     }
                     error.append("warning: project inventory is partial: " + inventory.degraded().size()
                             + " of " + inventory.projects().size() + " entries are degraded\n");
-                    return FindSymbolCommand.PARTIAL_RESULT;
+                    return CliExitCodes.PARTIAL_RESULT;
                 });
     }
 
@@ -232,7 +233,7 @@ public final class ProjectCommand {
 
     private static int usageError(String message, Appendable error) throws IOException {
         error.append("error: ").append(message).append('\n').append(USAGE).append('\n');
-        return FindSymbolCommand.USAGE_ERROR;
+        return CliExitCodes.USAGE_ERROR;
     }
 
     private static String nullable(String value) {

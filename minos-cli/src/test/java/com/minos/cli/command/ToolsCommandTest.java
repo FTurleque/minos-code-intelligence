@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -19,7 +20,7 @@ class ToolsCommandTest {
 
         int exit = command.run(new String[]{"verify", "--format", "json"}, new StringBuilder(), new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
     }
 
     @Test
@@ -32,7 +33,7 @@ class ToolsCommandTest {
 
         int exit = command.run(new String[]{"verify", "--all", "--format", "json"}, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exit);
         assertTrue(output.toString().contains("\"id\":\"optional\""));
         assertTrue(output.toString().contains("\"state\":\"BLOCKED\""));
     }
@@ -46,7 +47,7 @@ class ToolsCommandTest {
 
         int exit = command.run(new String[]{"verify", "--all"}, new StringBuilder(), new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
     }
 
     @Test
@@ -58,7 +59,7 @@ class ToolsCommandTest {
 
         int exit = command.run(new String[]{"verify", "--all"}, new StringBuilder(), new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit,
+        assertEquals(CliExitCodes.SUCCESS, exit,
                 "a capability the selected backend never provides must not block installation/verification");
     }
 
@@ -73,7 +74,7 @@ class ToolsCommandTest {
 
         int exit = command.run(new String[]{"verify"}, new StringBuilder(), new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
     }
 
     @Test
@@ -88,7 +89,7 @@ class ToolsCommandTest {
 
         int exit = command.run(new String[]{"verify", "--all"}, new StringBuilder(), new StringBuilder());
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exit);
     }
 
     @Test
@@ -98,7 +99,7 @@ class ToolsCommandTest {
 
         int exit = command.run(new String[]{"list", "--all"}, new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, exit);
+        assertEquals(CliExitCodes.USAGE_ERROR, exit);
         assertTrue(error.toString().contains("--all is only valid with tools verify"));
     }
 

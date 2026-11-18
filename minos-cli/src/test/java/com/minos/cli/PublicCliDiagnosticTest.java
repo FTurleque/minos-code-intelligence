@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.storage.home.ProjectPathMappingStore;
 import org.junit.jupiter.api.Test;
@@ -57,7 +57,7 @@ class PublicCliDiagnosticTest {
                 new String[]{"configure-project-paths", "D:/other-projects", "/workspace/projects"},
                 new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exitCode);
         assertTrue(error.toString().startsWith("error: refusing to replace an existing project path mapping implicitly; "
                 + "run configure-project-paths --replace"), error.toString());
         assertFalse(error.toString().contains(store.file().toString()));

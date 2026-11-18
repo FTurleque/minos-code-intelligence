@@ -4,6 +4,7 @@ import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -119,7 +120,7 @@ class RemoteIndexCommandTest {
                 "--name", "demo", "--worker", "worker-one", "--worker-network", "allow"
         }, output, error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exit);
         assertEquals("", output.toString());
         String line = error.toString();
         assertTrue(line.startsWith("error: remote index failed: remote index is refused before any materialization"), line);

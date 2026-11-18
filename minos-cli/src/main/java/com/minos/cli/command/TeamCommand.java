@@ -4,6 +4,7 @@ import com.minos.application.team.TeamControlPlane;
 import com.minos.application.team.TeamRetentionPolicy;
 import com.minos.application.team.TeamRole;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliOptions;
 import com.minos.output.HostedControlPlaneRenderer;
 import com.minos.output.json.DeterministicJson;
@@ -89,7 +90,7 @@ public final class TeamCommand {
         Objects.requireNonNull(arguments, "arguments");
         if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         if (arguments.length == 0) return usageError("team operation is required", error);
         String rendered;
@@ -99,10 +100,10 @@ public final class TeamCommand {
             return usageError(exception.trusted ? exception.getMessage() : safeMessage(exception), error);
         } catch (IllegalArgumentException | SecurityException | IllegalStateException | IOException exception) {
             error.append("error: ").append(safeMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
+            return CliExitCodes.EXECUTION_ERROR;
         }
         output.append(rendered).append('\n');
-        return FindSymbolCommand.SUCCESS;
+        return CliExitCodes.SUCCESS;
     }
 
     public static String usage() { return USAGE; }
@@ -331,7 +332,7 @@ public final class TeamCommand {
 
     private static int usageError(String message, Appendable error) throws IOException {
         error.append("error: ").append(message).append('\n').append(USAGE).append('\n');
-        return FindSymbolCommand.USAGE_ERROR;
+        return CliExitCodes.USAGE_ERROR;
     }
 
     private static String safeMessage(Exception exception) {

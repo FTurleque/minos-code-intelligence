@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.cli.support.LazyApplication;
@@ -51,7 +52,7 @@ public final class NexusExportCommand {
 
         if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
 
         Path root;
@@ -60,7 +61,7 @@ public final class NexusExportCommand {
         } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n');
             error.append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
 
         NexusExportContract.ExportSnapshot snapshot;
@@ -72,11 +73,11 @@ public final class NexusExportCommand {
             error.append("error: nexus-export failed: ")
                     .append(exportFailureMessage(exception))
                     .append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
+            return CliExitCodes.EXECUTION_ERROR;
         }
 
         output.append(CliJson.render(snapshotJson(snapshot))).append('\n');
-        return FindSymbolCommand.SUCCESS;
+        return CliExitCodes.SUCCESS;
     }
 
     public static String usage() {
