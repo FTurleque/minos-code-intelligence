@@ -54,14 +54,15 @@ final class IndexingRunResumption {
         ResumeTrace trace = new ResumeTrace(
                 resume.attempt(), resume.reused().size(), resume.remaining().size(), Optional.empty());
         IndexingRunContext context = new IndexingRunContext(
-                run.id(), run.projectId(), run.createdAt(), previous, plan, ports, Optional.of(trace), true);
+                new IndexingRunContext.Identity(run.id(), run.projectId(), run.createdAt()), previous, plan, ports,
+                Optional.of(trace), true);
         return new IndexingRunResumption(resume, context, root).run(plan, mode, changedFiles);
     }
 
     private ResumedAttempt run(List<IndexingExecutionTarget> plan, IndexingMode mode, List<String> changedFiles) {
         for (ReusedTarget reused : resume.reused()) {
             IndexerExecution execution = reused.execution();
-            context.record(reused.target(), new IndexingArtifact(execution.language(), execution.indexerId(),
+            context.recordTarget(reused.target(), new IndexingArtifact(execution.language(), execution.indexerId(),
                     execution.finalArtifact(), reused.target().projectRelativeRoot()), execution);
         }
         // ADR 0039 §4: interrupted in PROMOTION with every artifact still valid AND the reused targets

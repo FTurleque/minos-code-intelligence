@@ -34,6 +34,8 @@ import static com.minos.diagnostics.PublicErrorMessages.leafName;
  * {@link IndexingRunOutcomes}, and {@link IndexingRunResumption} for a resumed attempt.</p>
  */
 final class IndexingRunExecutor {
+    /** Every phase of a run logs under the name of this class, the entry point of the run. */
+    static final System.Logger LOGGER = System.getLogger(IndexingRunExecutor.class.getName());
 
     private IndexingRunExecutor() { }
 
@@ -87,7 +89,8 @@ final class IndexingRunExecutor {
         }
 
         IndexingRunContext context = new IndexingRunContext(
-                UUID.randomUUID(), projectId, createdAt, previous, targets, ports, trace, false);
+                new IndexingRunContext.Identity(UUID.randomUUID(), projectId, createdAt), previous, targets, ports,
+                trace, false);
         IndexingTargetExecution execution = new IndexingTargetExecution(context, root);
         IndexingSnapshotPublication publication = new IndexingSnapshotPublication(context, execution);
         IndexingRunOutcomes outcomes = new IndexingRunOutcomes(context);

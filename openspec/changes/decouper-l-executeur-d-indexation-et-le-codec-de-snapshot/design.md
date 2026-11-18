@@ -38,7 +38,7 @@ Découpage arrêté (tâche 1.1), chaque méthode hors bloc ayant une seule clas
 | Classe | Contenu | Lignes |
 |---|---|---|
 | `IndexingRunExecutor` | `execute`, ordre des refus, `validateExecutionRoot`, `reconcilePreviousState`, `RunRequest`, `Collaborators`, enchaînement des phases | 181 |
-| `IndexingRunContext` | état du run (`RunContext`), `Ports`, `holdRunDirectory`, `publishInProgress`, `running`, `portable`, journal au nom de `IndexingRunExecutor` | 177 |
+| `IndexingRunContext` | état du run (`RunContext`), `Ports`, `holdRunDirectory`, `publishInProgress`, `running`, `portable`, identité du run (`Identity`) ; le journal est déclaré par `IndexingRunExecutor` | 177 |
 | `IndexingTargetExecution` | `executeProviders`, `executeProvider`, `registeredProjectFingerprint`, `captureScopeFingerprint`, `checkpoint`, `requireExecutor`, `requireExecutionRoot`, `scopedChangedFiles`, `validateArtifact`, `requireInsideRunDirectory`, `requireArtifactsStillInsideRunDirectory`, `awaitReadable`, `ValidatedProjectRoot` | 281 |
 | `IndexingSnapshotPublication` | mise en place (confinement revérifié d'abord), promotion, `recoverUncertainPromotion`, `authoritativeTargetIsActive` | 74 |
 | `IndexingRunOutcomes` | `persistSuccess`, `resumeSuffix`, `persistTerminalFailure`, `isInterruption`, `interruptedRun`, `persistInterruption`, `holdAgainstRetention`, `persistFailure`, `failedRun`, `persistCommittedFailure`, `persistUncommittedFailure`, `persist`, `failureMessage` | 269 |

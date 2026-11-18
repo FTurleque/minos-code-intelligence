@@ -31,9 +31,6 @@ import java.util.UUID;
  * {@link IndexingSnapshotPublication}, {@link IndexingRunOutcomes}, {@link IndexingRunResumption}) read and update it.
  */
 final class IndexingRunContext {
-    /** Every phase logs under the name of {@link IndexingRunExecutor}, the entry point of the run. */
-    static final System.Logger LOGGER = System.getLogger(IndexingRunExecutor.class.getName());
-
     final UUID runId;
     final UUID projectId;
     final Instant createdAt;
@@ -53,18 +50,16 @@ final class IndexingRunContext {
     private final Map<IndexingExecutionTarget, IndexerExecution> executionsByTarget = new LinkedHashMap<>();
 
     IndexingRunContext(
-            UUID runId,
-            UUID projectId,
-            Instant createdAt,
+            Identity identity,
             ProjectIndexState previous,
             List<IndexingExecutionTarget> plan,
             Ports ports,
             Optional<ResumeTrace> trace,
             boolean resumed
     ) {
-        this.runId = runId;
-        this.projectId = projectId;
-        this.createdAt = createdAt;
+        this.runId = identity.runId();
+        this.projectId = identity.projectId();
+        this.createdAt = identity.createdAt();
         this.previous = previous;
         this.plan = List.copyOf(plan).stream().distinct().toList();
         this.ports = ports;
@@ -72,7 +67,7 @@ final class IndexingRunContext {
         this.resumed = resumed;
     }
 
-    void record(IndexingExecutionTarget target, IndexingArtifact artifact, IndexerExecution execution) {
+    void recordTarget(IndexingExecutionTarget target, IndexingArtifact artifact, IndexerExecution execution) {
         artifactsByTarget.put(target, artifact);
         executionsByTarget.put(target, execution);
     }
@@ -122,7 +117,7 @@ final class IndexingRunContext {
         try {
             ports.markers().mark(runId);
         } catch (IOException | RuntimeException failure) {
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not hold the run directory of indexing run "
+            IndexingRunExecutor.LOGGER.log(System.Logger.Level.WARNING, "MINOS could not hold the run directory of indexing run "
                     + runId + " against retention: " + failure.getClass().getSimpleName());
         }
     }
@@ -148,6 +143,10 @@ final class IndexingRunContext {
 
     static String portable(Path path) {
         return path == null ? "" : path.normalize().toString().replace('\\', '/');
+    }
+
+    /** Which run this is: its identifier, its project and the instant it was created. */
+    record Identity(UUID runId, UUID projectId, Instant createdAt) {
     }
 
     /** The validated ports of one run, checked in the order of the refusals of {@link IndexingRunExecutor#execute}. */

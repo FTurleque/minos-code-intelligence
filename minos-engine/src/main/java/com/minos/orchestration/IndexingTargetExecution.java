@@ -83,7 +83,7 @@ final class IndexingTargetExecution {
                 material, artifactPath, relative, selection.indexer().version(), mode, scopedChangedFiles,
                 context.ports.clock().instant());
         if (checkpoint.withheldReason().isPresent()) context.withheldCheckpoints++;
-        context.record(target,
+        context.recordTarget(target,
                 new IndexingArtifact(artifact.language(), artifact.indexerId(), artifactPath, relative),
                 new IndexerExecution(artifact.language(), artifact.indexerId(), artifactPath, checkpoint.checkpoint()));
         context.ports.stateStore().saveRun(context.running(
