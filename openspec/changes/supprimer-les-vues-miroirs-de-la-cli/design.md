@@ -163,10 +163,10 @@ Aucune capacité nouvelle.
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| surfaces-publiques › La CLI ne recopie pas à l'identique un résumé applicatif | Miroirs supprimés | D1, classDiagram | 1.2 | recherche textuelle |
+| surfaces-publiques › La CLI ne recopie pas à l'identique un résumé applicatif | Miroirs supprimés | D1, classDiagram | 1.2 | `RemoteIndexOperationsShapeTest` ; recherche textuelle |
 | idem | Sortie de la commande distante inchangée | Contrats | 1.1, 1.2 | `RemoteIndexCommandTest`, `LocalRemoteIndexOperationsIntegrationTest` (existants) |
-| idem | Preuve d'artefact invalide refusée | Sécurité | 1.1 | test d'`ArtifactEvidenceSummary` (existant ou à écrire dans `minos-application`) |
-| surfaces-publiques › Une vue conservée de la CLI couvre toutes les composantes de son résumé | les quatre scénarios | D2 | 2.1 | `CliViewParityTest`, à écrire |
+| idem | Preuve d'artefact invalide refusée | Sécurité | 1.1 | `RemoteSummaryValidationTest` (`minos-application`) |
+| surfaces-publiques › Une vue conservée de la CLI couvre toutes les composantes de son résumé | les quatre scénarios | D2 | 2.1 | `CliViewParityTest` (parité des cinq couples ; composante ajoutée, exclusion sans raison, exclusion et correspondance périmées refusées) |
 
 ## Questions ouvertes
 

@@ -1,5 +1,7 @@
 package com.minos.cli.command;
 
+import com.minos.application.remote.ArtifactEvidenceSummary;
+import com.minos.application.remote.RemoteMaterializationSummary;
 import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.cli.operations.AutonomousIndexOperations;
@@ -22,7 +24,7 @@ class RemoteIndexCommandTest {
         AtomicReference<RemoteSourceRequest> captured = new AtomicReference<>();
         RemoteIndexOperations operations = new StubOperations() {
             @Override
-            public RemoteMaterializationView materialize(RemoteSourceRequest request) {
+            public RemoteMaterializationSummary materialize(RemoteSourceRequest request) {
                 captured.set(request);
                 return materialization(false);
             }
@@ -159,8 +161,8 @@ class RemoteIndexCommandTest {
         assertFalse(error.toString().contains("token@"));
     }
 
-    private static RemoteIndexOperations.RemoteMaterializationView materialization(boolean hit) {
-        return new RemoteIndexOperations.RemoteMaterializationView(
+    private static RemoteMaterializationSummary materialization(boolean hit) {
+        return new RemoteMaterializationSummary(
                 "GITHUB",
                 "https://github.com/acme/demo.git",
                 "refs/heads/main",
@@ -199,7 +201,7 @@ class RemoteIndexCommandTest {
                 true,
                 null
         );
-        RemoteIndexOperations.ArtifactEvidence artifact = new RemoteIndexOperations.ArtifactEvidence(
+        ArtifactEvidenceSummary artifact = new ArtifactEvidenceSummary(
                 "scip-java", "0.13.1", "JAVA", "worker-one",
                 "PROCESS_EPHEMERAL_WORKSPACE", "ALLOW", false,
                 "a".repeat(64), "b".repeat(64), "c".repeat(64), false,
@@ -251,7 +253,7 @@ class RemoteIndexCommandTest {
 
     private static class StubOperations implements RemoteIndexOperations {
         @Override
-        public RemoteMaterializationView materialize(RemoteSourceRequest request) {
+        public RemoteMaterializationSummary materialize(RemoteSourceRequest request) {
             throw new AssertionError("unexpected materialize call");
         }
 
