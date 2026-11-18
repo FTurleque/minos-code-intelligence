@@ -166,14 +166,14 @@ supportée** par des tests automatiques, déclarée.
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| client-intellij › La présentation des réponses du CLI par le plugin est testée hors des classes d'interface | Emplacements collectés dans une réponse imbriquée | D2 | 1.1, 1.2 | à écrire |
-| idem | Champ absent | D2 | 1.1, 1.2 | à écrire |
+| client-intellij › La présentation des réponses du CLI par le plugin est testée hors des classes d'interface | Emplacements collectés dans une réponse imbriquée | D2 | 1.1, 1.2 | `MinosResultPresentationTest#locationsOfANestedResponseAreCollectedInDocumentOrderWithTheirPath`, `MinosResultPresentationTest#aMalformedLocationIsSkippedWithoutHidingTheOthers` |
+| idem | Champ absent | D2 | 1.1, 1.2 | `MinosResultPresentationTest#theConnectionLineNamesTheProjectItsIndexStateAndProvider`, `MinosResultPresentationTest#theArchitectureSummaryShowsItsCountsAndFallsBackOnMissingFields`, `MinosResultPresentationTest#theModuleSummaryShowsItsFieldsAndFallsBackOnMissingOnes` |
 | idem | Champ requis absent d'une action avancée | État vérifié | — | `MinosJsonFieldsTest` — existant |
-| idem | Réglage hors bornes ou non numérique | D2 | 1.3 | `MinosSettingsRulesTest` — à étendre |
-| idem | Réglage saisi avec des espaces | D2 | 1.3 | `MinosSettingsRulesTest` — à étendre |
-| idem | Dépendance à l'interface réintroduite | D2 | 1.2 | `PlatformFreeLogicTest` — à étendre |
-| client-intellij › Les planchers de couverture du plugin suivent sa mesure | Tests de présentation supprimés | D3 | 2.1 | copie locale sous Linux — à consigner |
-| idem | Dépôt réel après le changement | D3 | 2.1 | job `IntelliJ plugin (gate)` — manquante jusqu'à la PR |
+| idem | Réglage hors bornes ou non numérique | D2 | 1.3 | `MinosSettingsRulesTest#aTypedTimeoutIsReadTrimmedAndFallsBackWhenOutOfBoundsOrNotANumber`, `#aTypedGraphSizeIsReadTrimmedAndFallsBackWhenOutOfBoundsOrNotANumber` |
+| idem | Réglage saisi avec des espaces | D2 | 1.3 | `MinosSettingsRulesTest` (valeurs `"  45 "`, `" 200"`) |
+| idem | Dépendance à l'interface réintroduite | D2 | 1.2 | `PlatformFreeLogicTest` (liste étendue, refus de `javax.swing`) |
+| client-intellij › Les planchers de couverture du plugin suivent sa mesure | Tests de présentation supprimés | D3 | 2.1 | calcul sur copie du rapport Linux du run 44107036156 : 0,363 < 0,37 et 0,370 < 0,38 (tâche 2.1) ; non rejoué par Gradle |
+| idem | Dépôt réel après le changement | D3 | 2.1 | job `IntelliJ plugin (gate)` de la PR #774 — à relire après relèvement |
 | idem | Mesure non consignée | D3 | 2.1 | relecture de `build.gradle.kts` |
 
 ## Questions ouvertes
