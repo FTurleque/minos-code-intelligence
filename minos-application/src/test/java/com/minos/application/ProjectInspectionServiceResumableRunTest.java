@@ -70,9 +70,10 @@ class ProjectInspectionServiceResumableRunTest {
     @Test
     void anIdentifierThatIsNotAUuidOffersNothingInsteadOfFailing() {
         ReadOnlyStateStore states = new ReadOnlyStateStore();
+        ProjectInspectionService service = service(states);
 
-        assertEquals(Optional.empty(), service(states).resumableRun("pas-un-uuid"));
-        assertThrows(NullPointerException.class, () -> service(states).resumableRun(null));
+        assertEquals(Optional.empty(), service.resumableRun("pas-un-uuid"));
+        assertThrows(NullPointerException.class, () -> service.resumableRun(null));
         assertEquals(List.of(), states.refused);
     }
 
