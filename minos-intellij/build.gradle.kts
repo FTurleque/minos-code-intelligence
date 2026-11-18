@@ -137,21 +137,22 @@ tasks {
         dependsOn(jacocoTestReport)
         executionData.setFrom(jacocoTestReport.get().executionData)
         classDirectories.setFrom(jacocoTestReport.get().classDirectories)
-        // Measured on Linux (WSL Ubuntu, JDK 21) on 2026-10-15: plugin line 637/1776 (0.359), branch 336/940 (0.357);
-        // protocol/ line 459/922 (0.498), branch 238/568 (0.419). Windows measures more (0.390 / 0.381, protocol/
-        // 0.557 / 0.458: the strong process launcher runs there). Floor = Linux measure minus 2 points, rounded down to the
-        // hundredth (0.339 -> 0.33, 0.337 -> 0.33, 0.478 -> 0.47, 0.399 -> 0.39), raised with the coverage, never
-        // lowered without a reason written in docs/project/audits/2026-10-10/SUIVI.md.
+        // Measured on Linux (job "IntelliJ 2026.1 / Java 21" of intellij-plugin.yml, run 44107036156, head f0119bf6,
+        // 2026-11-17): plugin line 705/1803 (0.391), branch 386/956 (0.404); protocol/ line 468/946 (0.495), branch
+        // 249/588 (0.424). Windows measures more (0.433 / 0.438, protocol/ 0.575 / 0.480: the strong process launcher runs
+        // there). Floor = Linux measure minus 2 points, rounded down to the hundredth (0.371 -> 0.37, 0.384 -> 0.38,
+        // 0.475 -> 0.47, 0.404 -> 0.40), raised with the coverage, never lowered without a reason written in the
+        // follow-up of the current audit.
         violationRules {
             rule {
-                limit { counter = "LINE"; minimum = "0.33".toBigDecimal() }
-                limit { counter = "BRANCH"; minimum = "0.33".toBigDecimal() }
+                limit { counter = "LINE"; minimum = "0.37".toBigDecimal() }
+                limit { counter = "BRANCH"; minimum = "0.38".toBigDecimal() }
             }
             rule {
                 element = "PACKAGE"
                 includes = listOf("com.minos.intellij.protocol")
                 limit { counter = "LINE"; minimum = "0.47".toBigDecimal() }
-                limit { counter = "BRANCH"; minimum = "0.39".toBigDecimal() }
+                limit { counter = "BRANCH"; minimum = "0.40".toBigDecimal() }
             }
         }
     }
