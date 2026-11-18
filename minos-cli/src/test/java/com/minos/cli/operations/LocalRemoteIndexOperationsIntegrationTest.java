@@ -2,7 +2,6 @@ package com.minos.cli.operations;
 
 import com.minos.cli.QualifiedSandboxForTests;
 import com.minos.application.MinosApplication;
-import com.minos.application.remote.RemoteIndexingUseCase;
 import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;

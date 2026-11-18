@@ -40,8 +40,9 @@ class ProgramGraphProviderAssemblyTest {
     void anEmptyProductionListIsRefusedBeforeAnyCompletion() {
         AtomicInteger completions = new AtomicInteger();
 
-        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> builder(List.of(), completions).build());
+        MinosApplication.Builder builder = builder(List.of(), completions);
+
+        IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, builder::build);
 
         assertEquals("programGraphProviders must not be empty", refusal.getMessage());
         assertEquals(0, completions.get());

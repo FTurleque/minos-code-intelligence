@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The indexing use case is built from its collaborators: a missing one is refused by its name. */
@@ -35,7 +36,6 @@ class ProjectIndexingDependenciesTest {
     void aUseCaseBuiltFromItsCollaboratorsAloneAcceptsTheIdentityDecorator(@TempDir Path temp) throws Exception {
         ProjectIndexingUseCase.Dependencies dependencies = new IndexingFixture(temp).dependencies();
 
-        assertEquals(ProjectIndexingUseCase.class,
-                new ProjectIndexingUseCase(dependencies, UnaryOperator.identity()).getClass());
+        assertNotNull(new ProjectIndexingUseCase(dependencies, UnaryOperator.identity()));
     }
 }

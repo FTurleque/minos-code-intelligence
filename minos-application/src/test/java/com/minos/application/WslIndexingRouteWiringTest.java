@@ -1,6 +1,5 @@
 package com.minos.application;
 
-import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligence;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;

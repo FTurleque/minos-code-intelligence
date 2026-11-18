@@ -72,11 +72,12 @@ class LearnedEmbeddingProviderSettingsTest {
         RecordingComposer composer = new RecordingComposer(Optional.empty());
         MinosApplication.Builder builder = builder(composer);
 
+        Map<String, String> properties = Map.of(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, "ollama",
+                MinosApplication.SEMANTIC_MODEL_PROPERTY, "code-embed",
+                MinosApplication.SEMANTIC_DIMENSIONS_PROPERTY, "384");
+
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> withSettings(
-                Map.of(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, "ollama",
-                        MinosApplication.SEMANTIC_MODEL_PROPERTY, "code-embed",
-                        MinosApplication.SEMANTIC_DIMENSIONS_PROPERTY, "384"),
-                settings -> MinosApplicationRuntimeConfiguration.apply(settings, builder)));
+                properties, settings -> MinosApplicationRuntimeConfiguration.apply(settings, builder)));
 
         assertEquals("unsupported semantic provider: ollama", refusal.getMessage());
         assertEquals(1, composer.requests.size());
@@ -87,9 +88,11 @@ class LearnedEmbeddingProviderSettingsTest {
     void anUnknownProviderIsRefusedWithoutAskingTheRoot() {
         RecordingComposer composer = new RecordingComposer(Optional.of(proxy(EmbeddingProvider.class)));
 
+        Map<String, String> properties = Map.of(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, "remote-embedder");
+        MinosApplication.Builder builder = builder(composer);
+
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> withSettings(
-                Map.of(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, "remote-embedder"),
-                settings -> MinosApplicationRuntimeConfiguration.apply(settings, builder(composer))));
+                properties, settings -> MinosApplicationRuntimeConfiguration.apply(settings, builder)));
 
         assertEquals("unsupported semantic provider: remote-embedder", refusal.getMessage());
         assertTrue(composer.requests.isEmpty());
@@ -99,11 +102,13 @@ class LearnedEmbeddingProviderSettingsTest {
     void anInvalidSettingIsRefusedBeforeTheRootIsAsked() {
         RecordingComposer composer = new RecordingComposer(Optional.of(proxy(EmbeddingProvider.class)));
 
+        Map<String, String> properties = Map.of(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, "ollama",
+                MinosApplication.SEMANTIC_MODEL_PROPERTY, "code-embed",
+                MinosApplication.SEMANTIC_DIMENSIONS_PROPERTY, "zero");
+        MinosApplication.Builder builder = builder(composer);
+
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> withSettings(
-                Map.of(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, "ollama",
-                        MinosApplication.SEMANTIC_MODEL_PROPERTY, "code-embed",
-                        MinosApplication.SEMANTIC_DIMENSIONS_PROPERTY, "zero"),
-                settings -> MinosApplicationRuntimeConfiguration.apply(settings, builder(composer))));
+                properties, settings -> MinosApplicationRuntimeConfiguration.apply(settings, builder)));
 
         assertEquals("semantic dimensions must be a positive integer", refusal.getMessage());
         assertTrue(composer.requests.isEmpty());
