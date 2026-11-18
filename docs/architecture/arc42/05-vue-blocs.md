@@ -15,7 +15,8 @@
 flowchart TB
     clients(["Développeur, IDE, agent IA"])
     app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, route MCP"]
-    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus · minos-explorer"]
+    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-explorer"]
+    contract["<b>Module de contrat</b><br/>minos-nexus : contrat JSON NEXUS"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
     application["<b>minos-application</b><br/>services applicatifs"]
     adapters["<b>Adaptateurs</b><br/>minos-storage (local · PostgreSQL optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
@@ -26,6 +27,8 @@ flowchart TB
     app --> surfaces
     app --> bootstrap
     surfaces --> application
+    surfaces -->|"minos-cli"| contract
+    contract --> application
     surfaces -.->|"ouvrent l'application (ServiceLoader)"| bootstrap
     bootstrap --> application
     bootstrap -->|"câble"| adapters
@@ -38,6 +41,8 @@ flowchart TB
 
 Lecture : les flèches descendent vers le cœur ; `minos-bootstrap` est le seul module non adaptateur qui connaît
 des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne dépendent pas des adaptateurs.
+Aucune surface ne dépend d'une autre surface : `minos-nexus`, qui traduit un résultat applicatif dans le contrat
+JSON NEXUS, est un module de contrat, entre l'application et les surfaces ; seule `minos-cli` en dépend.
 
 ---
 
@@ -94,7 +99,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Sources** : `minos-application/src/main/java/com/minos/`.
 
 ### minos-nexus
-- **Responsabilité** : export read-only du snapshot normalisé au format contrat JSON NEXUS. Le cas d'usage `KnowledgeExportUseCase` (`minos-application`) sélectionne les faits et résout les chemins ; `NexusExportService` les traduit dans le contrat.
+- **Responsabilité** : module de contrat (ni surface ni adaptateur) : export read-only du snapshot normalisé au format contrat JSON NEXUS. Le cas d'usage `KnowledgeExportUseCase` (`minos-application`) sélectionne les faits et résout les chemins ; `NexusExportService` les traduit dans le contrat. Un module de contrat ne dépend que de `minos-domain` et de `minos-application`, et de `minos-bootstrap` en portée test ; aucun adaptateur, ni la racine de composition, ni l'application ne dépend de lui. `NexusSemanticSignalService` (contrat v2 du signal sémantique) n'est qualifié par aucun client.
 - **Types clés** : `NexusExportContract`, `NexusExportService`.
 - **Dépendances** : `minos-domain`, `minos-application`, `minos-bootstrap` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
 - **Sources** : `minos-nexus/src/main/java/`.
