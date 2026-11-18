@@ -221,8 +221,11 @@ Selon les fonctionnalités utilisées :
 ├── index-state/
 ├── staged-snapshots/
 ├── runs/
+├── cli-index-history/
 └── tools/
 ```
+
+`cli-index-history/` garde l'historique du dernier import SCIP de chaque projet. `minos-application` le lit et l'écrit par le port `com.minos.orchestration.IndexImportHistoryStore` (`minos-engine`) ; l'implémentation fichier, `com.minos.storage.home.FileIndexImportHistoryStore` (`minos-storage`), seule détentrice du nom du dossier, des clés et des bornes de lecture, est fournie par `MinosApplicationComposer.indexImportHistoryStore(home)` pour tout backend, PostgreSQL compris.
 
 Le code de requête dépend uniquement du snapshot MINOS actif, jamais du fichier SCIP brut.
 
