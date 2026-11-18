@@ -84,8 +84,9 @@ class LocalRemoteIndexOperationsRefusalTest {
                     null));
             assertEquals("untrustedCodeSandbox", failure.getMessage());
             // Nor can the runtime itself be left out of the remote indexing.
+            RemoteRepositoryMaterializer unusedMaterializer = refusingMaterializer(new AtomicInteger());
             NullPointerException noRuntime = assertThrows(NullPointerException.class, () -> RemoteIndexingUseCases.wired(
-                    application, refusingMaterializer(new AtomicInteger()), (RemoteIndexingRuntime) null));
+                    application, unusedMaterializer, (RemoteIndexingRuntime) null));
             assertEquals("remoteIndexingRuntime", noRuntime.getMessage());
         }
     }
