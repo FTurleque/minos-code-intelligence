@@ -36,10 +36,10 @@ public final class FileIndexImportHistoryStore implements IndexImportHistoryStor
     private static final String PROVIDER_VERSION = "providerVersion";
     private static final String COMPLETED_AT = "completedAt";
 
-    private final Path directory;
+    private final Path historyDirectory;
 
     public FileIndexImportHistoryStore(Path minosHome) {
-        this.directory = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize()
+        this.historyDirectory = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize()
                 .resolve(DIRECTORY);
     }
 
@@ -59,18 +59,21 @@ public final class FileIndexImportHistoryStore implements IndexImportHistoryStor
     @Override
     public void write(UUID projectId, IndexImportHistory history) throws IOException {
         Objects.requireNonNull(history, "history");
-        DurableAtomicFile.ensureDirectory(directory, "CLI import history directory");
-        Path target = file(projectId);
-        Path temporary = PrivateLocalStorage.createPrivateTempFile(directory, projectId + ".", ".tmp");
         Properties properties = new Properties();
         properties.setProperty(SNAPSHOT_ID, history.snapshotId());
         properties.setProperty(PROVIDER_ID, history.providerId());
         properties.setProperty(PROVIDER_VERSION, history.providerVersion() == null ? "" : history.providerVersion());
         properties.setProperty(COMPLETED_AT, history.completedAt().toString());
+        byte[] content;
+        try (ByteArrayOutputStream rendered = new ByteArrayOutputStream()) {
+            properties.store(rendered, "MINOS project index history");
+            content = rendered.toByteArray();
+        }
+        DurableAtomicFile.ensureDirectory(historyDirectory, "CLI import history directory");
+        Path target = file(projectId);
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(historyDirectory, projectId + ".", ".tmp");
         try {
-            ByteArrayOutputStream content = new ByteArrayOutputStream();
-            properties.store(content, "MINOS project index history");
-            PrivateLocalStorage.writePrivateFile(temporary, content.toByteArray());
+            PrivateLocalStorage.writePrivateFile(temporary, content);
             DurableAtomicFile.replace(temporary, target, "CLI import history replacement");
         } finally {
             Files.deleteIfExists(temporary);
@@ -78,7 +81,7 @@ public final class FileIndexImportHistoryStore implements IndexImportHistoryStor
     }
 
     private Path file(UUID projectId) {
-        return directory.resolve(Objects.requireNonNull(projectId, "projectId") + ".properties");
+        return historyDirectory.resolve(Objects.requireNonNull(projectId, "projectId") + ".properties");
     }
 
     private static String required(Properties properties, String key, Path file) {

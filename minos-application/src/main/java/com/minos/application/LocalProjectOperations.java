@@ -34,7 +34,6 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private static final System.Logger LOGGER = System.getLogger(LocalProjectOperations.class.getName());
 
     private final MinosApplication ownedApplication;
-    private final Path home;
     private final ProjectRegistry registry;
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
@@ -50,7 +49,6 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private LocalProjectOperations(MinosApplication application, boolean ownsApplication) {
         MinosApplication value = Objects.requireNonNull(application, "application");
         this.ownedApplication = ownsApplication ? value : null;
-        this.home = value.home();
         this.registry = value.projectRegistry();
         this.projectResolver = new ProjectResolver(registry);
         this.snapshotStore = value.snapshotStore();

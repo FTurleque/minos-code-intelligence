@@ -65,8 +65,9 @@ class FileIndexImportHistoryStoreTest {
         Files.writeString(directory.resolve(project + ".properties"),
                 "providerId=scip-java\ncompletedAt=" + COMPLETED_AT + "\n", StandardCharsets.ISO_8859_1);
 
-        IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> new FileIndexImportHistoryStore(home).read(project));
+        FileIndexImportHistoryStore store = new FileIndexImportHistoryStore(home);
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> store.read(project));
 
         assertEquals("missing index property 'snapshotId' in " + project + ".properties", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(home.toString()), refusal.getMessage());
