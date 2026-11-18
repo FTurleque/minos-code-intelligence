@@ -45,9 +45,10 @@ class HostedModeTest {
             Path home = home(value);
             String rule = classify(MinosRuntimeSettings.load(home));
             if (rule.startsWith("unsupported")) {
+                MinosRuntimeSettings settings = MinosRuntimeSettings.load(home);
+                MinosApplication.Builder builder = MinosApplication.builder(home);
                 IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                        () -> MinosApplicationRuntimeConfiguration.apply(MinosRuntimeSettings.load(home),
-                                MinosApplication.builder(home)));
+                        () -> MinosApplicationRuntimeConfiguration.apply(settings, builder));
                 assertEquals(rule, refusal.getMessage());
             } else {
                 MinosApplication.Builder builder = MinosApplication.builder(home);
@@ -59,8 +60,10 @@ class HostedModeTest {
 
     @Test
     void theUnsupportedValueIsNamedInTheRefusal() throws Exception {
+        MinosRuntimeSettings settings = settings("sometimes");
+
         IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
-                () -> HostedMode.from(settings("sometimes")));
+                () -> HostedMode.from(settings));
 
         assertTrue(refusal.getMessage().contains("sometimes"), refusal.getMessage());
     }

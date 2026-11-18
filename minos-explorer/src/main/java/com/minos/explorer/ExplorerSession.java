@@ -20,6 +20,8 @@ public final class ExplorerSession {
     public static final int EXECUTION_ERROR = 1;
     public static final int USAGE_ERROR = 2;
 
+    private static final String ERROR_PREFIX = "error: ";
+
     static final String BIND_FAILED = "the exploration surface could not listen on the requested port;"
             + " choose another one with --port, or omit it to let the system pick a free port";
 
@@ -63,18 +65,18 @@ public final class ExplorerSession {
         Objects.requireNonNull(application, "application");
         Objects.requireNonNull(error, "error");
         if (port < 0 || port > 65_535) {
-            say(error, "error: --port must be between 0 and 65535");
+            say(error, ERROR_PREFIX + "--port must be between 0 and 65535");
             return USAGE_ERROR;
         }
         if (application.teamControlPlane().isPresent()) {
-            say(error, "error: " + ExplorerLaunchPolicy.TEAM_MODE_REFUSED);
+            say(error, ERROR_PREFIX + ExplorerLaunchPolicy.TEAM_MODE_REFUSED);
             return USAGE_ERROR;
         }
         ListeningPolicy.Scope scope;
         try {
             scope = ListeningPolicy.resolve(environment);
         } catch (IllegalArgumentException refused) {
-            say(error, "error: " + refused.getMessage());
+            say(error, ERROR_PREFIX + refused.getMessage());
             return USAGE_ERROR;
         }
         InternalFailureReporter reporter = new InternalFailureReporter(
@@ -91,7 +93,7 @@ public final class ExplorerSession {
             say(error, "MINOS explorer stopped.");
             return SUCCESS;
         } catch (IOException bindFailure) {
-            say(error, "error: " + BIND_FAILED);
+            say(error, ERROR_PREFIX + BIND_FAILED);
             return EXECUTION_ERROR;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
