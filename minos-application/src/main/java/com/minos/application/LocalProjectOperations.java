@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.application.indexing.PublishedSnapshotRetention;
 import com.minos.orchestration.IndexImportHistory;
 import com.minos.orchestration.IndexImportHistoryStore;
 import com.minos.orchestration.IndexStateStoreException;

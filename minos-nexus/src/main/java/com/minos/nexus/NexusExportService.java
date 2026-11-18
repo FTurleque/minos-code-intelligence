@@ -35,7 +35,7 @@ public final class NexusExportService {
     private final KnowledgeExportUseCase exports;
 
     public NexusExportService(MinosApplication application) {
-        this.exports = KnowledgeExportUseCase.of(Objects.requireNonNull(application, "application"));
+        this.exports = Objects.requireNonNull(application, "application").knowledgeExport();
     }
 
     public NexusExportContract.ExportSnapshot export(Path projectRoot) throws IOException {
