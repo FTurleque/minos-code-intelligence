@@ -30,6 +30,23 @@ class MinosSettingsRulesTest {
     }
 
     @Test
+    void aTypedTimeoutIsReadTrimmedAndFallsBackWhenOutOfBoundsOrNotANumber() {
+        assertEquals(45, MinosSettingsRules.timeoutSeconds("  45 "));
+        assertEquals(MinosSettingsState.DEFAULT_TIMEOUT_SECONDS, MinosSettingsRules.timeoutSeconds("301"));
+        assertEquals(MinosSettingsState.DEFAULT_TIMEOUT_SECONDS, MinosSettingsRules.timeoutSeconds("thirty"));
+        assertEquals(MinosSettingsState.DEFAULT_TIMEOUT_SECONDS, MinosSettingsRules.timeoutSeconds(""));
+        assertEquals(MinosSettingsState.DEFAULT_TIMEOUT_SECONDS, MinosSettingsRules.timeoutSeconds((String) null));
+    }
+
+    @Test
+    void aTypedGraphSizeIsReadTrimmedAndFallsBackWhenOutOfBoundsOrNotANumber() {
+        assertEquals(200, MinosSettingsRules.maxGraphNodes(" 200"));
+        assertEquals(MinosSettingsState.DEFAULT_MAX_GRAPH_NODES, MinosSettingsRules.maxGraphNodes("501"));
+        assertEquals(MinosSettingsState.DEFAULT_MAX_GRAPH_NODES, MinosSettingsRules.maxGraphNodes("12.5"));
+        assertEquals(-1, MinosSettingsRules.parsedOr("many", -1));
+    }
+
+    @Test
     void aGraphSizeOutsideTenToFiveHundredNodesFallsBackToTheDefault() {
         assertEquals(10, MinosSettingsRules.maxGraphNodes(10));
         assertEquals(500, MinosSettingsRules.maxGraphNodes(500));

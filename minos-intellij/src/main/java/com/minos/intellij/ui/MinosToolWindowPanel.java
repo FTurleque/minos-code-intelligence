@@ -2,7 +2,6 @@ package com.minos.intellij.ui;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
@@ -15,13 +14,13 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
-import com.minos.intellij.navigation.MinosLocation;
 import com.minos.intellij.navigation.MinosNavigation;
 import com.minos.intellij.protocol.MinosCliClient;
 import com.minos.intellij.protocol.MinosProjectNotRegisteredException;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.settings.MinosSettingsState;
 import com.minos.intellij.task.MinosBackgroundTask;
+import com.minos.intellij.ui.MinosResultPresentation.ResultLocation;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.DefaultListModel;
@@ -36,7 +35,6 @@ import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.concurrent.Callable;
 
 public final class MinosToolWindowPanel {
@@ -51,8 +49,8 @@ public final class MinosToolWindowPanel {
     private final JBLabel connection = new JBLabel("MINOS: checking…");
     private final JBTextArea projectStatus = textArea();
     private final JBTextArea resultArea = textArea();
-    private final DefaultListModel<LocationEntry> resultLocations = new DefaultListModel<>();
-    private final JBList<LocationEntry> resultLocationList = new JBList<>(resultLocations);
+    private final DefaultListModel<ResultLocation> resultLocations = new DefaultListModel<>();
+    private final JBList<ResultLocation> resultLocationList = new JBList<>(resultLocations);
     private final JBTextArea graphDetails = textArea();
     private final JBTextArea gitArea = textArea();
     private final ArchitectureGraphPanel graph = new ArchitectureGraphPanel();
@@ -69,7 +67,7 @@ public final class MinosToolWindowPanel {
         tabs.addTab("Git Activity", new JBScrollPane(gitArea));
         root.add(tabs, BorderLayout.CENTER);
 
-        graph.setSelectionListener(module -> graphDetails.setText(moduleSummary(module)));
+        graph.setSelectionListener(module -> graphDetails.setText(MinosResultPresentation.moduleSummary(module)));
         graphFilter.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent event) { updateFilter(); }
             @Override public void removeUpdate(DocumentEvent event) { updateFilter(); }
@@ -109,7 +107,7 @@ public final class MinosToolWindowPanel {
             combined.add("index", status);
             return combined;
         }, result -> {
-            connection.setText(connectionText(result));
+            connection.setText(MinosResultPresentation.connectionText(result));
             projectStatus.setText(PRETTY.toJson(result));
             projectStatus.setCaretPosition(0);
             tabs.setSelectedIndex(0);
@@ -120,7 +118,7 @@ public final class MinosToolWindowPanel {
         resultArea.setText(title + "\n\n" + PRETTY.toJson(result));
         resultArea.setCaretPosition(0);
         resultLocations.clear();
-        collectLocations(result, "$", resultLocations);
+        MinosResultPresentation.locations(result).forEach(resultLocations::addElement);
         tabs.setSelectedIndex(2);
     }
 
@@ -133,7 +131,7 @@ public final class MinosToolWindowPanel {
         } else {
             graphFilter.setText("");
         }
-        graphDetails.setText(architectureSummary(architecture, graph.visibleNodeCount(), maxNodes));
+        graphDetails.setText(MinosResultPresentation.architectureSummary(architecture, graph.visibleNodeCount(), maxNodes));
         graphDetails.setCaretPosition(0);
         tabs.setSelectedIndex(1);
     }
@@ -234,7 +232,7 @@ public final class MinosToolWindowPanel {
     }
 
     private void openSelectedLocation() {
-        LocationEntry selected = resultLocationList.getSelectedValue();
+        ResultLocation selected = resultLocationList.getSelectedValue();
         if (selected == null) {
             return;
         }
@@ -254,7 +252,7 @@ public final class MinosToolWindowPanel {
         graph.setFilter(graphFilter.getText());
         if (currentArchitecture != null) {
             int maxNodes = MinosSettingsState.getInstance(project).value().maxGraphNodes;
-            graphDetails.setText(architectureSummary(currentArchitecture, graph.visibleNodeCount(), maxNodes));
+            graphDetails.setText(MinosResultPresentation.architectureSummary(currentArchitecture, graph.visibleNodeCount(), maxNodes));
         }
     }
 
@@ -290,33 +288,6 @@ public final class MinosToolWindowPanel {
         });
     }
 
-    private static void collectLocations(JsonElement element, String path, DefaultListModel<LocationEntry> target) {
-        if (element == null || element.isJsonNull()) {
-            return;
-        }
-        if (element.isJsonObject()) {
-            JsonObject object = element.getAsJsonObject();
-            if (isLocation(object)) {
-                try {
-                    target.addElement(new LocationEntry(path, MinosLocation.from(object)));
-                } catch (RuntimeException ignored) {
-                    // Keep malformed optional evidence from breaking the complete result view.
-                }
-            }
-            for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
-                collectLocations(entry.getValue(), path + "." + entry.getKey(), target);
-            }
-        } else if (element.isJsonArray()) {
-            for (int index = 0; index < element.getAsJsonArray().size(); index++) {
-                collectLocations(element.getAsJsonArray().get(index), path + "[" + index + "]", target);
-            }
-        }
-    }
-
-    private static boolean isLocation(JsonObject object) {
-        return object.has("fileId") && object.has("startLine") && object.has("startColumn");
-    }
-
     private static JButton button(String text, Runnable action) {
         JButton button = new JButton(text);
         button.addActionListener(event -> action.run());
@@ -330,71 +301,8 @@ public final class MinosToolWindowPanel {
         return area;
     }
 
-    private static String connectionText(JsonObject result) {
-        JsonElement project = result.get("project");
-        if (project != null && project.isJsonObject()) {
-            JsonObject projectObject = project.getAsJsonObject();
-            String name = text(projectObject, "name", "?");
-            JsonObject index = result.has("index") && result.get("index").isJsonObject()
-                    ? result.getAsJsonObject("index")
-                    : new JsonObject();
-            return "MINOS: connected — " + name + " — " + text(index, "state", "UNKNOWN")
-                    + " — provider " + text(index, "providerId", "-");
-        }
-        return "MINOS: connected — IntelliJ project is not registered";
-    }
-
-    private static String architectureSummary(JsonObject architecture, int visibleNodes, int maxNodes) {
-        return String.join("\n",
-                "Project: " + text(architecture, "projectName", "?"),
-                "Snapshot: " + text(architecture, "snapshotId", "?"),
-                "Nature: " + text(architecture, "nature", "?"),
-                "Modules: " + integer(architecture, "moduleCount"),
-                "Visible nodes: " + visibleNodes + " (bound " + maxNodes + ")",
-                "Relationships: " + integer(architecture, "relationshipCount"),
-                "Edges shown are the moduleDependencies returned by MINOS architecture JSON.",
-                "Select a node for module details; hover a node for incoming/outgoing edge evidence."
-        );
-    }
-
-    private static String moduleSummary(JsonObject module) {
-        return String.join("\n",
-                "Module: " + text(module, "name", "?"),
-                "Id: " + text(module, "id", "?"),
-                "Path: " + text(module, "relativePath", ""),
-                "Build systems: " + json(module, "buildSystems"),
-                "Languages: " + json(module, "languages"),
-                "Source roots: " + integer(module, "sourceRootCount"),
-                "Symbols: " + integer(module, "symbolCount"),
-                "Namespaces: " + integer(module, "namespaceCount")
-        );
-    }
-
-    private static String text(JsonObject object, String name, String fallback) {
-        JsonElement value = object.get(name);
-        return value == null || value.isJsonNull() ? fallback : value.getAsString();
-    }
-
-    private static String json(JsonObject object, String name) {
-        JsonElement value = object.get(name);
-        return value == null ? "[]" : value.toString();
-    }
-
-    private static int integer(JsonObject object, String name) {
-        JsonElement value = object.get(name);
-        return value == null || value.isJsonNull() ? 0 : value.getAsInt();
-    }
-
     @FunctionalInterface
     private interface ContextOperation {
         JsonObject execute(MinosProjectService.Context context) throws Exception;
-    }
-
-    private record LocationEntry(String sourcePath, MinosLocation location) {
-        @Override
-        public String toString() {
-            return location.fileId() + ":" + location.startLine() + ":" + location.startColumn()
-                    + " — " + sourcePath;
-        }
     }
 }
