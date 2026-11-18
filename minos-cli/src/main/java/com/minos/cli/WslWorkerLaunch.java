@@ -1,8 +1,8 @@
 package com.minos.cli;
 
 import com.minos.application.WslIndexingWorker;
-import com.minos.cli.command.FindSymbolCommand;
 
+import com.minos.cli.support.CliExitCodes;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.InvalidPathException;
@@ -39,7 +39,7 @@ final class WslWorkerLaunch {
         if (arguments.length != 3 || arguments[2].isBlank()) {
             err.println("error: internal wsl-worker expects exactly one request file or "
                     + WslIndexingWorker.PROBE_OPTION);
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
         boolean probe = WslIndexingWorker.PROBE_OPTION.equals(arguments[2]);
         Path request = null;
@@ -48,13 +48,13 @@ final class WslWorkerLaunch {
                 request = Path.of(arguments[2]);
             } catch (InvalidPathException invalid) {
                 err.println("error: internal wsl-worker request is not a valid path");
-                return FindSymbolCommand.USAGE_ERROR;
+                return CliExitCodes.USAGE_ERROR;
             }
         }
         Optional<WslIndexingWorker> worker = workers.apply(home);
         if (worker.isEmpty()) {
             err.println("error: the WSL worker runs only inside a Linux distribution");
-            return FindSymbolCommand.EXECUTION_ERROR;
+            return CliExitCodes.EXECUTION_ERROR;
         }
         StringBuilder status = new StringBuilder();
         int code = probe ? worker.orElseThrow().probe(status) : worker.orElseThrow().run(request, status);

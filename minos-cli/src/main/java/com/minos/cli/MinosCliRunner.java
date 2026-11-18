@@ -1,6 +1,5 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.command.IdeCommand;
 import com.minos.cli.command.IdeIntelligenceCommand;
 import com.minos.cli.command.NexusExportCommand;
@@ -12,6 +11,7 @@ import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.cli.operations.LocalRemoteIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.LazyApplication;
 import com.minos.application.LocalProjectGitQuery;
 import com.minos.application.LocalProjectOperations;
@@ -172,15 +172,15 @@ public final class MinosCliRunner {
         if (isRetrievalCommand(command)) {
             output.append(RetrievalStatusCommand.usage(retrievalMode(command))).append('\n');
             if (SEMANTIC_COMMAND.equals(command)) output.append(SemanticProjectionCommand.USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         if (MCP_COMMAND.equals(command)) {
             output.append(MCP_USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         if (ExplorerCommandLine.NAME.equals(command)) {
             output.append(ExplorerCommandLine.USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         // project add|list|inspect --help keeps its own usage; any other form shows the command's usage.
         boolean projectOperation = arguments.length == 3 && ProjectCommand.NAME.equals(command)
