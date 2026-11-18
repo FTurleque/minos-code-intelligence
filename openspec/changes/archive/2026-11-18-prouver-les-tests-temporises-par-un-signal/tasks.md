@@ -32,7 +32,7 @@
 ## 6. Clôture
 
 - [x] 6.1 AUD-TST-06 — Mettre à jour la matrice de traçabilité du design ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 6.2 AUD-TST-06 — (reste, à l'archivage) Contrôler les dossiers de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 6.2 AUD-TST-06 — (reste, à l'archivage) Contrôler les dossiers de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 - [x] 6.3 AUD-TST-06 — Valider ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`.
 - [x] 6.4 AUD-TST-06 — Lister les documents à mettre à jour avant archivage (`docs/developer/testing.md`, dossiers de capacité, `docs/project/audits/2026-11-15/SUIVI.md`) ; vérifier que chacun est fait ou nommé comme reste.
 
