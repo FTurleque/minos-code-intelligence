@@ -208,4 +208,15 @@ class SemanticProjectionCommandLineTest {
                 ResolutionStatus.RESOLVED, new Origin("fixture", "TEST", "1", "run-1", OriginType.OTHER),
                 false, false, Set.of());
     }
+
+    /**
+     * The projection state the command serializes is frozen for contract version 1 (ARCH-0086): the four French values
+     * stay, in this order; a renamed value fails here once the repository is recompiled.
+     */
+    @Test
+    void theSerializedProjectionStatesOfVersionOneAreFrozen() {
+        assertEquals(List.of("ABSENTE", "PRETE", "PERIMEE", "ECHOUEE"),
+                java.util.Arrays.stream(SemanticProjectionService.State.values()).map(Enum::name).toList(),
+                "field state");
+    }
 }

@@ -286,27 +286,27 @@ final class ExplorerServer implements AutoCloseable {
         Map<String, String> parameters;
         try {
             if (!path.startsWith(ExplorerContract.API_PREFIX)) {
-                return ExplorerApi.Answer.error(404, "NOT_FOUND", "the API lives under " + ExplorerContract.API_PREFIX);
+                return ExplorerApi.Answer.error(404, ExplorerErrorCode.NOT_FOUND, "the API lives under " + ExplorerContract.API_PREFIX);
             }
             segments = segments(path.substring(ExplorerContract.API_PREFIX.length()));
             parameters = parameters(exchange.getRequestURI().getRawQuery());
         } catch (UsageException malformed) {
-            return ExplorerApi.Answer.error(400, "INVALID_REQUEST", "the request address is not valid");
+            return ExplorerApi.Answer.error(400, ExplorerErrorCode.INVALID_REQUEST, "the request address is not valid");
         }
         if ("POST".equals(method)) {
             String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
             if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("application/json")) {
-                return ExplorerApi.Answer.error(415, "UNSUPPORTED_MEDIA_TYPE", "the body must be application/json");
+                return ExplorerApi.Answer.error(415, ExplorerErrorCode.UNSUPPORTED_MEDIA_TYPE, "the body must be application/json");
             }
         }
         int stuck = abandonedReads.get();
         if (stuck >= MAX_ABANDONED_READS) {
             // Reads that ignored their interruption still hold their threads: refuse rather than pile up more.
             diagnostics.abandonedReads(stuck, MAX_ABANDONED_READS);
-            return ExplorerApi.Answer.error(503, "BUSY", "too many requests at once; retry");
+            return ExplorerApi.Answer.error(503, ExplorerErrorCode.BUSY, "too many requests at once; retry");
         }
         if (!apiCalls.tryAcquire()) {
-            return ExplorerApi.Answer.error(503, "BUSY", "too many requests at once; retry");
+            return ExplorerApi.Answer.error(503, ExplorerErrorCode.BUSY, "too many requests at once; retry");
         }
         String route = routeLabel(segments);
         Read read = new Read();
@@ -323,21 +323,21 @@ final class ExplorerServer implements AutoCloseable {
             });
         } catch (RejectedExecutionException stopping) {
             apiCalls.release();
-            return ExplorerApi.Answer.error(503, "BUSY", "too many requests at once; retry");
+            return ExplorerApi.Answer.error(503, ExplorerErrorCode.BUSY, "too many requests at once; retry");
         }
         try {
             return pending.get(requestTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException slow) {
             pending.cancel(true);
             if (read.abandon()) {
-                return ExplorerApi.Answer.error(503, "TIMEOUT", "the request took too long and was abandoned; retry");
+                return ExplorerApi.Answer.error(503, ExplorerErrorCode.TIMEOUT, "the request took too long and was abandoned; retry");
             }
             return completedOrInternal(pending, route);
         } catch (InterruptedException interrupted) {
             pending.cancel(true);
             read.abandon();
             Thread.currentThread().interrupt();
-            return ExplorerApi.Answer.error(503, "BUSY", "the surface is stopping");
+            return ExplorerApi.Answer.error(503, ExplorerErrorCode.BUSY, "the surface is stopping");
         } catch (ExecutionException failed) {
             return internalError(route, failed.getCause());
         }
@@ -348,19 +348,19 @@ final class ExplorerServer implements AutoCloseable {
         try {
             ExplorerApi.Answer answer = pending.get();
             return answer != null ? answer
-                    : ExplorerApi.Answer.error(503, "TIMEOUT", "the request took too long and was abandoned; retry");
+                    : ExplorerApi.Answer.error(503, ExplorerErrorCode.TIMEOUT, "the request took too long and was abandoned; retry");
         } catch (ExecutionException failed) {
             return internalError(route, failed.getCause());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            return ExplorerApi.Answer.error(503, "BUSY", "the surface is stopping");
+            return ExplorerApi.Answer.error(503, ExplorerErrorCode.BUSY, "the surface is stopping");
         } catch (java.util.concurrent.CancellationException cancelled) {
-            return ExplorerApi.Answer.error(503, "TIMEOUT", "the request took too long and was abandoned; retry");
+            return ExplorerApi.Answer.error(503, ExplorerErrorCode.TIMEOUT, "the request took too long and was abandoned; retry");
         }
     }
 
     private ExplorerApi.Answer internalError(String route, Throwable failure) {
-        return ExplorerApi.Answer.error(500, "INTERNAL_ERROR",
+        return ExplorerApi.Answer.error(500, ExplorerErrorCode.INTERNAL_ERROR,
                 ExplorerApi.INTERNAL_ERROR + " (ref " + diagnostics.internalFailure(route, failure) + ")");
     }
 

@@ -18,8 +18,8 @@ Commit relu : `89be3fb4` (`main`).
 | Version du contrat HTTP : `"1"`, préfixe `/api/v1/` ; « an incompatible change publishes a new prefix beside this one » | `minos-explorer/src/main/java/com/minos/explorer/ExplorerContract.java:6-10` |
 | L'API HTTP sérialise par `.name()` | `minos-explorer/src/main/java/com/minos/explorer/ExplorerApi.java:192`, `:205`, `:266`, `:298` |
 | Une erreur est `{"error": {"code", "message"}}` | `ExplorerApi.java:74-76` |
-| Codes émis par l'API : `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `DOCUMENT_NOT_FOUND`, `INDEX_CHANGED`, codes de `ProjectResolver.ErrorCode`, `INVALID_REQUEST`, `INTERNAL_ERROR` | `ExplorerApi.java:111-138` ; `minos-application/src/main/java/com/minos/application/resolution/ProjectResolver.java:26` |
-| Codes émis par le serveur : `NOT_FOUND` (`:255`), `INVALID_REQUEST` (`:260`), `UNSUPPORTED_MEDIA_TYPE` (`:265`), `BUSY` (trois sites : `:269`, `:283`, `:293`), `TIMEOUT` (`:289`), `INTERNAL_ERROR` (`:296`) | `minos-explorer/src/main/java/com/minos/explorer/ExplorerServer.java:255-296` |
+| Codes émis par l'API (relevé au `72c8d91c`, après le sprint 3) : `NOT_FOUND` (`:113`), `METHOD_NOT_ALLOWED` (`:115`), `DOCUMENT_NOT_FOUND` (`:129`), `INDEX_CHANGED` (`:131`), les trois codes de `ProjectResolver.ErrorCode` (`PROJECT_NOT_FOUND`, `PROJECT_REFERENCE_AMBIGUOUS`, `INVALID_PROJECT_REFERENCE`, `:134`), `INVALID_REQUEST` (`:136`), `INTERNAL_ERROR` (`:139`) | `minos-explorer/src/main/java/com/minos/explorer/ExplorerApi.java:113-139` ; `minos-application/src/main/java/com/minos/application/resolution/ProjectResolver.java:26` |
+| Codes émis par le serveur (relevé au `72c8d91c`) : `NOT_FOUND` (`:289`), `INVALID_REQUEST` (`:294`), `UNSUPPORTED_MEDIA_TYPE` (`:299`), `BUSY` (cinq sites : `:306`, `:309`, `:326`, `:340`, `:356`), `TIMEOUT` (trois sites : `:333`, `:351`, `:358`), `INTERNAL_ERROR` (`:363`). Liste fermée : douze codes | `minos-explorer/src/main/java/com/minos/explorer/ExplorerServer.java:289-363` |
 | La nature de document (`SYMBOL`, `FILE`, `CHUNK`) est sérialisée par `.name()` pour les points de la projection | `minos-explorer/src/main/java/com/minos/explorer/ExplorerApi.java:266` ; `minos-domain/src/main/java/com/minos/semantic/SemanticDocumentKind.java:4` |
 | Les causes de péremption que la page traduit sont des éléments du champ `limitations`, liste de chaînes produite par les services applicatifs | `minos-explorer/src/main/resources/com/minos/explorer/web/app.js:22-25` ; `ExplorerApi.java:156`, `:174`, `:193`, `:212`, `:246` |
 | Les refus de garde (hôte, origine, jeton) ne portent que le statut 401 ou 403, sans corps de raison | `minos-explorer/src/main/java/com/minos/explorer/RequestGuard.java:29-31` |
@@ -147,7 +147,7 @@ Le serveur ne produit aucun texte destiné à l'utilisateur ; la page ne lit que
 
 ### D1 — Langue des constantes : anglais pour le neuf, v1 figé
 
-Statut : [Proposition], à trancher par le propriétaire. ADR à écrire (domaine ARCH, prochain numéro libre à l'écriture) : « Langue des constantes des contrats publics ».
+Statut : [Décision] du propriétaire, 2026-11-17 : option A. ADR : [ARCH-0086](../../../docs/architecture/adr/ARCH-0086-langue-des-constantes-des-contrats-publics.md) « Langue des constantes des contrats publics ».
 
 Le sujet passe le filtre des ADR : choix entre options réelles, qui contraint durablement trois surfaces publiques, coûteux à inverser une fois une release publiée.
 
@@ -195,16 +195,16 @@ ADR nouveau et son entrée dans `docs/architecture/adr/README.md` et `docs/archi
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › Les valeurs d'énumération du contrat v1 de l'explorateur sont figées | Dépôt réel | D2 | 1.2 | tests de contrat des trois surfaces : à écrire |
-| idem | Constante renommée dans v1 | D2 | 1.2 | à écrire (mutation consignée) |
-| idem | Valeur française ajoutée | D2 | 1.2 | à écrire |
-| exploration-semantique › Toute erreur de l'API de l'explorateur porte un code d'une liste fermée | Route inconnue | D3, diagramme | 2.1 | `ExplorerRoutesTest` : à compléter |
-| idem | Code renommé | D3 | 2.1 | à écrire (mutation consignée) |
-| idem | Code de résolution de projet non repris | D3 | 2.1 | à écrire |
-| exploration-semantique › La page de l'explorateur traduit le code d'erreur | Serveur occupé | D4, diagramme | 3.1, 3.2 | test du front : à écrire |
-| idem | Code inconnu de la page | D4 | 3.1, 3.2 | à écrire |
-| idem | Code de la liste sans libellé | D4 | 3.1 | à écrire |
+| exploration-semantique › Les valeurs d'énumération du contrat v1 de l'explorateur sont figées | Dépôt réel | D2 | 1.2 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerContractValuesTest.java#everySerializedFieldKeepsItsVersionOneValues`, `SemanticExplorationApiContractTest#theSerializedValuesOfVersionOneAreFrozenFieldByField`, `SemanticProjectionCommandLineTest#theSerializedProjectionStatesOfVersionOneAreFrozen` |
+| idem | Constante renommée dans v1 | D2 | 1.2 | mêmes tests ; mutation `PRETE` → `READY` consignée en tâche 1.2 |
+| idem | Valeur française ajoutée | D2 | 1.2 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerContractValuesTest.java#theFrenchValuesFormAClosedListOfEight` ; mutation consignée en tâche 1.2 |
+| exploration-semantique › Toute erreur de l'API de l'explorateur porte un code d'une liste fermée | Route inconnue | D3, diagramme | 2.1 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerRoutesTest.java#anUnknownProjectOrRouteIsNotFoundAndNoMethodButGetAndTheSearchPostIsAccepted` |
+| idem | Code renommé | D3 | 2.1 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerContractValuesTest.java#theErrorCodesAreTheClosedListOfVersionOne` ; mutation `BUSY` → `OVERLOADED` consignée en tâche 2.1 |
+| idem | Code de résolution de projet non repris | D3 | 2.1 | `minos-explorer/src/test/java/com/minos/explorer/ExplorerContractValuesTest.java#everyProjectResolutionCodeHasTheErrorCodeOfTheSameName` (aucune mutation exécutée : un code ajouté au résolveur sans code de même nom lève à `valueOf`) |
+| exploration-semantique › La page de l'explorateur traduit le code d'erreur | Serveur occupé | D4, diagramme | 3.1, 3.2 | `minos-explorer/src/test/js/labels.test.mjs` « a busy server is shown by the French label of its code… » |
+| idem | Code inconnu de la page | D4 | 3.1, 3.2 | `minos-explorer/src/test/js/labels.test.mjs` « a code the page does not translate, or no code… » |
+| idem | Code de la liste sans libellé | D4 | 3.1 | `minos-explorer/src/test/js/labels.test.mjs` « every error code of the closed list has a label in the page… » |
 
 ## Questions ouvertes
 
-- D1 : option A (recommandée), B ou C. Attendue du propriétaire avant l'implémentation.
+Aucune : D1 est tranchée (option A, 2026-11-17).

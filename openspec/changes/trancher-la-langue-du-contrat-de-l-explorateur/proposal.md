@@ -43,7 +43,7 @@ Aucune.
 | Les erreurs portent déjà `code` et `message` | [Existant vérifié] | `ExplorerApi.java:74-76` |
 | La page affiche `message` | [Existant vérifié] | `minos-explorer/src/main/resources/com/minos/explorer/web/app.js:99`, `:124` |
 | Aucune release ne contient `minos-explorer` | [Existant vérifié] | `git log --oneline v1.3.0 -- minos-explorer` : 0 commit ; 11 depuis |
-| Anglais pour le neuf, v1 figé | [Proposition] | design D1, à trancher par le propriétaire |
+| Anglais pour le neuf, v1 figé | [Décision] | design D1, propriétaire, 2026-11-17 ; ARCH-0086 |
 
 ## Impact
 
@@ -56,4 +56,4 @@ Aucune.
 
 ## Questions ouvertes
 
-- Bloquante avant implémentation : D1 (trois options, recommandation dans le design). Les specs décrivent l'option recommandée ; elles restent vraies si le propriétaire choisit en plus de publier un contrat v2.
+Aucune : le propriétaire a retenu l'option A de D1 le 2026-11-17 (ARCH-0086).

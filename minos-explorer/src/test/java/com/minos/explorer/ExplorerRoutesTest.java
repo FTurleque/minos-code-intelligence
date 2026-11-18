@@ -246,7 +246,10 @@ class ExplorerRoutesTest {
         RawHttp.Response unknownRoute = RawHttp.get(port, "/api/v1/indexes", bearer);
 
         assertEquals(404, unknownProject.status(), unknownProject.body());
+        assertTrue(unknownProject.body().contains("\"code\":\"PROJECT_NOT_FOUND\""), unknownProject.body());
         assertEquals(404, unknownRoute.status());
+        assertTrue(unknownRoute.body().contains("\"code\":\"NOT_FOUND\""), unknownRoute.body());
+        assertTrue(unknownRoute.body().matches(".*\"message\":\"[^\"]+\".*"), "a non-empty diagnostic: " + unknownRoute.body());
         assertEquals(Map.of("GET", List.of("projects", "projects/{project}/documents",
                         "projects/{project}/documents/{stableKey}",
                         "projects/{project}/documents/{stableKey}/neighbors",

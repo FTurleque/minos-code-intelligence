@@ -56,6 +56,7 @@
 | [SEC-0083](../adr/SEC-0083-filtres-git-a-la-materialisation-d-un-depot-distant.md) | Filtres Git à la matérialisation d'un dépôt distant | Proposed | 2026-11-15 | Complète la décision du 2026-10-13 sur les filtres de l'analyse locale |
 | [SEC-0084](../adr/SEC-0084-journal-de-diagnostic-prive-et-opt-in-des-echecs-internes.md) | Journal de diagnostic privé et opt-in des échecs internes : ligne stderr corrélée, pile dans un fichier privé par échec, façade de `minos-application` | Accepted | 2026-11-15 | Changement OpenSpec `tracer-les-echecs-internes-des-surfaces` (audit AUD-QUA-02) |
 | [DATA-0085](../adr/DATA-0085-port-de-connaissance-et-persistance-des-snapshots-vues-comptees.md) | Port de connaissance et persistance des snapshots : vue admise toujours comptée, charge utile PostgreSQL par identité | Proposed | 2026-11-17 | Remplacera DATA-0081 à son acceptation (audit AUD-PERF-05, AUD-PERF-06) |
+| [ARCH-0086](../adr/ARCH-0086-langue-des-constantes-des-contrats-publics.md) | Langue des constantes des contrats publics | Accepted | 2026-11-17 | Changement OpenSpec `trancher-la-langue-du-contrat-de-l-explorateur` (audit AUD-QUA-03) ; contrat v1 de l'explorateur figé |
 
 ## ADR archivés
 

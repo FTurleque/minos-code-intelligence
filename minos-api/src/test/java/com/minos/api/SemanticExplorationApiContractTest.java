@@ -11,6 +11,10 @@ import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
 import org.junit.jupiter.api.BeforeEach;
+import com.minos.application.semantic.SemanticCorpusQueryService;
+import com.minos.application.semantic.SemanticIndexService;
+import com.minos.application.semantic.SemanticProjectionService;
+import com.minos.semantic.SemanticDocumentKind;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -253,5 +257,34 @@ class SemanticExplorationApiContractTest {
                 ResolutionStatus.RESOLVED,
                 new Origin("fixture", "TEST", "1", "run-1", OriginType.OTHER),
                 false, false, Set.of());
+    }
+
+    /**
+     * The values the semantic exploration API serializes, field by field, for contract version 1 (ARCH-0086): a value
+     * added, removed or renamed fails here. The eight French values form a closed list of asserted size.
+     */
+    @Test
+    void theSerializedValuesOfVersionOneAreFrozenFieldByField() {
+        assertEquals(List.of("DISABLED", "NO_ACTIVE_SNAPSHOT", "MISSING", "STALE", "READY"),
+                java.util.Arrays.stream(SemanticIndexService.State.values()).map(Enum::name).toList(),
+                "field indexState");
+        List<String> projectionStates = java.util.Arrays.stream(SemanticProjectionService.State.values())
+                .map(Enum::name).toList();
+        List<String> divergences = java.util.Arrays.stream(SemanticCorpusQueryService.Divergence.values())
+                .map(Enum::name).toList();
+        assertEquals(List.of("ABSENTE", "PRETE", "PERIMEE", "ECHOUEE"), projectionStates, "field projection state");
+        assertEquals(List.of("IDENTIQUE", "DIFFERENTE", "SOURCE_INTROUVABLE", "NON_COMPARABLE"), divergences,
+                "field divergence");
+        assertEquals(List.of("SEMANTIC", "HYBRID"),
+                java.util.Arrays.stream(SemanticCorpusQueryService.SearchMode.values()).map(Enum::name).toList(),
+                "field search mode");
+        assertEquals(List.of("COSINE_SIMILARITY", "HYBRID_SCORE"),
+                java.util.Arrays.stream(SemanticCorpusQueryService.ScoreKind.values()).map(Enum::name).toList(),
+                "field scoreKind");
+        assertEquals(List.of("SYMBOL", "FILE", "CHUNK"),
+                java.util.Arrays.stream(SemanticDocumentKind.values()).map(Enum::name).toList(), "field kind");
+        List<String> french = new ArrayList<>(projectionStates);
+        french.addAll(divergences);
+        assertEquals(8, french.size(), "the closed list of French values counts exactly eight values");
     }
 }

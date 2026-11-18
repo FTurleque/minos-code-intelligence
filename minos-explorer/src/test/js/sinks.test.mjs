@@ -97,17 +97,17 @@ test("search results, the map texts and the hover render hostile values as text"
   assertNoMarkupAndNoFailure(page);
 });
 
-test("an API error message is shown as text in the banner", async () => {
+test("an API error code is shown as text in the banner, and its message is not shown", async () => {
   const page = createPage({
     hash: "#token=" + TOKEN,
-    api: hostileApi({ status: 400, body: { error: { code: "INVALID_REQUEST", message: HOSTILE } } })
+    api: hostileApi({ status: 400, body: { error: { code: HOSTILE, message: "message " + HOSTILE } } })
   });
   await settle();
 
   page.$("query").value = "find";
   page.$("go").dispatch("click");
   await settle();
-  assert.equal(page.$("banner").textContent, HOSTILE);
+  assert.equal(page.$("banner").textContent, "La requête a échoué (code " + HOSTILE + ").");
   assert.equal(page.$("banner").hidden, false);
   assert.deepEqual(page.log.markup, []);
 });

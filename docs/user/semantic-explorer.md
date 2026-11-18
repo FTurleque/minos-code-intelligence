@@ -184,6 +184,13 @@ tokens) et non le produit d'un modèle de langage (limite `LOCAL_HASH_EMBEDDING_
 Aucune option n'élargit l'écoute. Aucune réponse, erreur ni ligne de journal ne contient la racine absolue d'un
 projet.
 
+**Codes d'erreur.** Toute erreur de l'API porte un code d'une liste fermée, en anglais : `BUSY`,
+`DOCUMENT_NOT_FOUND`, `INDEX_CHANGED`, `INTERNAL_ERROR`, `INVALID_PROJECT_REFERENCE`, `INVALID_REQUEST`,
+`METHOD_NOT_ALLOWED`, `NOT_FOUND`, `PROJECT_NOT_FOUND`, `PROJECT_REFERENCE_AMBIGUOUS`, `TIMEOUT`,
+`UNSUPPORTED_MEDIA_TYPE`. La page affiche le libellé français du code ; le message anglais qui l'accompagne est un
+diagnostic pour les développeurs et n'est jamais affiché. Un code que la page ne connaît pas s'affiche sous la forme
+« La requête a échoué (code …). ». Les refus `401` et `403` ne portent pas de code.
+
 **Lignes de la commande.** La sortie d'erreur de `minos explorer serve` porte, avec le préfixe `explorer: ` :
 `refused request: <raison>` (`host`, `origin` ou `token`) à la première requête refusée de chaque raison, puis au plus
 une ligne `refused requests: <raison> (<n> since the previous line)` par raison et par minute ; `request failed (route=…,

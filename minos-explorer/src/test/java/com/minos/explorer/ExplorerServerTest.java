@@ -296,7 +296,7 @@ class ExplorerServerTest {
             try {
                 return ExplorerApi.Answer.ok(Map.of("length", body.read().length()));
             } catch (IOException | IllegalArgumentException refused) {
-                return ExplorerApi.Answer.error(400, "INVALID_REQUEST", refused.getMessage());
+                return ExplorerApi.Answer.error(400, ExplorerErrorCode.INVALID_REQUEST, refused.getMessage());
             }
         };
         Map<String, String> json = new java.util.LinkedHashMap<>(bearer());

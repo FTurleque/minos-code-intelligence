@@ -176,7 +176,7 @@ class SemanticExplorerBenchmarkSmokeTest {
             ExplorerApi.Route route = ExplorerApi.Route.matching(segments);
             if (route == ExplorerApi.Route.DOCUMENTS || route == ExplorerApi.Route.DOCUMENT
                     || route == ExplorerApi.Route.NEIGHBORS || route == ExplorerApi.Route.SEARCH) {
-                return ExplorerApi.Answer.error(500, "INTERNAL_ERROR", ExplorerApi.INTERNAL_ERROR);
+                return ExplorerApi.Answer.error(500, ExplorerErrorCode.INTERNAL_ERROR, ExplorerApi.INTERNAL_ERROR);
             }
             return real.answer(method, segments, parameters, body, failures);
         };

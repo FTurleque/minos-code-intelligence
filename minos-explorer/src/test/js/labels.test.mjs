@@ -1,7 +1,7 @@
 // Translation of the v1 contract constants into the page's labels, the pure helpers, and how an API error is shown.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPage, detailOf, documentOf, listOf, project, routes, settle, TOKEN } from "./harness.mjs";
+import { createPage, detailOf, documentOf, HOSTILE, listOf, project, routes, settle, TOKEN } from "./harness.mjs";
 
 // The constants of the v1 contract the page translates, in one table (SemanticIndexService.State, the projection
 // states, the divergences and the stale causes of the semantic API). A renamed constant must change here and in
@@ -157,14 +157,52 @@ test("empty search messages and the storage note of the state banner", () => {
   assert.ok(c.stateBanner().startsWith("Ce navigateur refuse le stockage de l'onglet (SecurityError)"));
 });
 
-test("an API error is shown by its message whatever its code (characterised), other failures by a fixed text", async () => {
+// The closed list of the error codes of the v1 API (ExplorerErrorCode in minos-explorer, ARCH-0086). A code added to
+// the list needs a label in ERROR_LABELS, and every label names a code of the list.
+const ERROR_CODES = [
+  "BUSY", "DOCUMENT_NOT_FOUND", "INDEX_CHANGED", "INTERNAL_ERROR", "INVALID_PROJECT_REFERENCE", "INVALID_REQUEST",
+  "METHOD_NOT_ALLOWED", "NOT_FOUND", "PROJECT_NOT_FOUND", "PROJECT_REFERENCE_AMBIGUOUS", "TIMEOUT",
+  "UNSUPPORTED_MEDIA_TYPE"
+];
+const ENGLISH_DIAGNOSTIC = "too many requests at once; retry";
+
+test("every error code of the closed list has a label in the page, and every label an error code", () => {
+  const labels = createPage().evaluate("ERROR_LABELS");
+  for (const code of ERROR_CODES) assert.ok(typeof labels[code] === "string" && labels[code], "no label for " + code);
+  for (const code of Object.keys(labels)) assert.ok(ERROR_CODES.includes(code), "ERROR_LABELS." + code + " is not a code");
+});
+
+test("a busy server is shown by the French label of its code, and its English message appears nowhere", async () => {
+  const page = createPage({
+    hash: "#token=" + TOKEN,
+    api: routes([["GET", /^projects$/, { status: 503, body: { error: { code: "BUSY", message: ENGLISH_DIAGNOSTIC } } }]])
+  });
+  await settle();
+  assert.equal(page.$("banner").hidden, false);
+  assert.equal(page.$("banner").textContent, page.evaluate("ERROR_LABELS").BUSY);
+  assert.ok(!page.log.texts.some(text => text.includes(ENGLISH_DIAGNOSTIC)), "the English message reached the page");
+});
+
+test("a code the page does not translate, or no code, gives the generic French message inserted as text", () => {
   const page = createPage({ api: routes([["GET", /^projects$/, { body: { projects: [] } }]]) });
   const ApiError = page.evaluate("ApiError");
 
-  page.context.report(new ApiError(400, "INVALID_REQUEST", "Requête invalide."));
-  assert.equal(page.$("banner").textContent, "Requête invalide.");
-  page.context.report(new ApiError(400, "A_CODE_THE_PAGE_DOES_NOT_KNOW", "Message du serveur."));
-  assert.equal(page.$("banner").textContent, "Message du serveur.", "an unknown code is shown by its message");
+  page.context.report(new ApiError(400, "A_CODE_THE_PAGE_DOES_NOT_KNOW", "Server message."));
+  assert.equal(page.$("banner").textContent, "La requête a échoué (code A_CODE_THE_PAGE_DOES_NOT_KNOW).");
+  page.context.report(new ApiError(400, HOSTILE, "Server message."));
+  assert.equal(page.$("banner").textContent, "La requête a échoué (code " + HOSTILE + ").");
+  assert.equal(page.$("banner").children.length, 0, "the code is text, never markup");
+  assert.deepEqual(page.log.markup, []);
+  page.context.report(new ApiError(500, null, "Server message."));
+  assert.equal(page.$("banner").textContent, "La requête a échoué (sans code, statut 500).");
+});
+
+test("an API error is shown by the label of its code, other failures by a fixed text", async () => {
+  const page = createPage({ api: routes([["GET", /^projects$/, { body: { projects: [] } }]]) });
+  const ApiError = page.evaluate("ApiError");
+
+  page.context.report(new ApiError(400, "INVALID_REQUEST", "invalid request"));
+  assert.equal(page.$("banner").textContent, page.evaluate("ERROR_LABELS").INVALID_REQUEST);
   page.context.report(new Error("internal"));
   assert.equal(page.$("banner").textContent,
     "La surface d'exploration ne répond pas. Vérifiez que « minos explorer serve » est toujours lancé.");
@@ -175,4 +213,9 @@ test("an API error is shown by its message whatever its code (characterised), ot
   await settle();
   assert.ok(page.$("banner").textContent.startsWith("L'index a changé pendant la consultation"));
   assert.deepEqual(page.log.requests.map(request => request.url), ["api/v1/projects"], "the projects are read again");
+
+  page.context.report(new ApiError(409, null, "changed"));
+  await settle();
+  assert.ok(page.$("banner").textContent.startsWith("L'index a changé pendant la consultation"), "a 409 without code");
+  assert.equal(page.log.requests.length, 2, "a 409 without code reads the projects again too");
 });
