@@ -1,7 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.WslIndexingWorker;
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -61,7 +61,7 @@ class WslWorkerLaunchTest {
         assertEquals("", streams.err());
 
         Streams unavailable = new Streams();
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, WslWorkerLaunch.run(
+        assertEquals(CliExitCodes.EXECUTION_ERROR, WslWorkerLaunch.run(
                 new String[]{"internal", "wsl-worker", "--probe"}, composer(Optional.empty()), home,
                 unavailable.out, unavailable.err));
         assertTrue(unavailable.err().contains("only inside a Linux distribution"), unavailable.err());
@@ -70,12 +70,12 @@ class WslWorkerLaunchTest {
     @Test
     void aMissingRequestIsAUsageErrorAndAHostWithoutWorkerRefuses() throws Exception {
         Streams usage = new Streams();
-        assertEquals(FindSymbolCommand.USAGE_ERROR, WslWorkerLaunch.run(new String[]{"internal", "wsl-worker"},
+        assertEquals(CliExitCodes.USAGE_ERROR, WslWorkerLaunch.run(new String[]{"internal", "wsl-worker"},
                 composer(Optional.empty()), home, usage.out, usage.err));
         assertTrue(usage.err().contains("exactly one request file or --probe"), usage.err());
 
         Streams unavailable = new Streams();
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, WslWorkerLaunch.run(
+        assertEquals(CliExitCodes.EXECUTION_ERROR, WslWorkerLaunch.run(
                 new String[]{"internal", "wsl-worker", "request.properties"},
                 composer(Optional.empty()), home, unavailable.out, unavailable.err));
         assertTrue(unavailable.err().contains("only inside a Linux distribution"), unavailable.err());

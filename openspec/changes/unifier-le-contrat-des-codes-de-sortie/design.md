@@ -139,9 +139,9 @@ Aucune capacité nouvelle.
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
 | surfaces-publiques › Les codes de sortie de la CLI ont une seule définition | Aucun alias dans une commande | D1 | 1.2 | recherche textuelle ; compilation |
-| idem | Valeurs inchangées | Contrats | 1.1 | à écrire |
+| idem | Valeurs inchangées | Contrats | 1.1 | `CliExitCodesTest#exitCodesKeepTheirPublishedValues` ; `CliExitCodesTest#noCommandDeclaresAnExitCodeAlias` |
 | idem | Sorties caractérisées inchangées | Vérification | 1.3 | `git diff --exit-code` |
-| surfaces-publiques › Les codes de sortie de la surface d'exploration suivent ceux de la CLI | Parité ; Valeur divergente refusée ; Code inconnu refusé | D2 | 2.1 | `ExitCodeContractParityTest`, à écrire |
+| surfaces-publiques › Les codes de sortie de la surface d'exploration suivent ceux de la CLI | Parité ; Valeur divergente refusée ; Code inconnu refusé | D2 | 2.1 | `ExitCodeContractParityTest` (`explorerExitCodesFollowTheCliContract`, `divergentValueIsRefusedByName`, `codeUnknownToTheCliIsRefusedByName`) |
 
 ## Questions ouvertes
 
