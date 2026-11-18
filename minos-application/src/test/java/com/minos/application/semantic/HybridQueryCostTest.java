@@ -22,6 +22,7 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SymbolSnapshot;
+import com.minos.store.cache.HeapShare;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -55,6 +56,7 @@ class HybridQueryCostTest {
     private SemanticIndexService index;
     private SemanticSearchService semanticSearch;
     private HybridSearchService hybrid;
+    private ProjectResolver resolver;
     private String project;
 
     @BeforeEach
@@ -66,7 +68,7 @@ class HybridQueryCostTest {
                 List.of(symbol(project, "alpha"), symbol(project, "beta")), List.of(), List.of()));
         vectors = new CountingVectorStore(new SemanticVectorStore.IndexSnapshot(project, SNAPSHOT_ID, "fake", "model",
                 2, 1_000L, List.of(indexed(project, "alpha", SNAPSHOT_ID), indexed(project, "beta", SNAPSHOT_ID))));
-        ProjectResolver resolver = new ProjectResolver(registry);
+        resolver = new ProjectResolver(registry);
         index = new SemanticIndexService(resolver, snapshots, vectors, Optional.of(new FixedEmbeddingProvider()));
         semanticSearch = new SemanticSearchService(index);
         hybrid = new HybridSearchService(resolver, snapshots, index, semanticSearch);
@@ -121,6 +123,45 @@ class HybridQueryCostTest {
 
     private static HybridSearchService.HybridRequest request() {
         return new HybridSearchService.HybridRequest("alpha", 5, 0.0);
+    }
+
+    @Test
+    void underASmallHeapTheCorpusAndQueryCeilingsAreTheirShares() {
+        long heap = 1_128_267_776L;
+        SemanticSearchService search = new SemanticSearchService(index, heap);
+        HybridSearchService service = new HybridSearchService(resolver, snapshots, index, search, heap);
+
+        assertEquals(HeapShare.HYBRID_CORPUS.ceiling(HybridSearchService.DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES, heap),
+                service.corpusCacheStats().maximumWeightBytes());
+        assertEquals(HeapShare.QUERY_VECTORS.ceiling(SemanticSearchService.MAX_QUERY_CACHE_WEIGHT_BYTES, heap),
+                search.queryCacheMaximumWeightBytes());
+    }
+
+    @Test
+    void underALargeHeapTheCorpusAndQueryCeilingsAreTheConfiguredOnes() {
+        long heap = 64L * 1024L * 1024L * 1024L;
+        SemanticSearchService search = new SemanticSearchService(index, heap);
+        HybridSearchService service = new HybridSearchService(resolver, snapshots, index, search, heap);
+
+        assertEquals(HybridSearchService.DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES,
+                service.corpusCacheStats().maximumWeightBytes());
+        assertEquals(SemanticSearchService.MAX_QUERY_CACHE_WEIGHT_BYTES, search.queryCacheMaximumWeightBytes());
+    }
+
+    @Test
+    void aCorpusHeavierThanTheCeilingIsNotKeptAndTheAnswerIsTheSame() throws Exception {
+        // A heap of 100 bytes: a share of 6 bytes holds no corpus.
+        HybridSearchService tiny = new HybridSearchService(resolver, snapshots, index,
+                new SemanticSearchService(index, 100L), 100L);
+
+        HybridSearchService.HybridResponse first = tiny.search(project, request());
+        HybridSearchService.HybridResponse second = tiny.search(project, request());
+        HybridSearchService.HybridResponse kept = hybrid.search(project, request());
+
+        assertEquals(kept.hits(), first.hits());
+        assertEquals(kept.hits(), second.hits());
+        assertEquals(0L, tiny.corpusCacheStats().weightBytes());
+        assertEquals(0, tiny.corpusCacheStats().entries());
     }
 
     private static Symbol symbol(String projectId, String name) {

@@ -2,24 +2,24 @@
 
 ## ADDED Requirements
 
-### Requirement: L'explorateur ne retient aucun symbole hors de la vue du snapshot
-Le service d'exploration SHALL résoudre les symboles d'une page par la vue active que rend le store de snapshots. Il SHALL NOT garder de table de symboles entre deux requêtes : une vue que le store ne retient plus et qu'aucune requête n'utilise SHALL NOT rester joignable depuis le service. Les pages rendues SHALL rester identiques.
+### Requirement: La table de symboles de l'explorateur ne survit pas à sa vue
+Le service d'exploration SHALL résoudre les symboles d'une page depuis la vue active que rend le store de snapshots. La table de symboles qu'il bâtit pour une vue SHALL être tenue par cette vue seule : une vue que le store ne retient plus et qu'aucune requête n'utilise SHALL NOT rester joignable depuis le service, ni sa table. Les pages rendues SHALL rester identiques.
 
 #### Scenario: Deux pages consécutives du même projet
 - **GIVEN** un projet indexé dont le snapshot actif est celui de l'index sémantique
 - **WHEN** deux pages de documents sont demandées de suite
-- **THEN** le store de snapshots ne charge la vue qu'une fois
-- **AND** les deux pages portent les mêmes symboles qu'avant ce changement
+- **THEN** la vue est demandée au store pour chaque page et le store ne la charge qu'une fois
+- **AND** les deux pages portent les mêmes symboles
 
 #### Scenario: Vue évincée du store
-- **GIVEN** une page servie pour un projet, puis l'éviction des vues du store par le budget de mémoire
+- **GIVEN** une page servie pour un projet, puis l'éviction de la vue par le store
 - **WHEN** aucune requête n'est en cours et une collecte du ramasse-miettes a eu lieu
-- **THEN** le snapshot de la vue évincée n'est plus joignable depuis le service d'exploration
+- **THEN** la vue évincée n'est plus joignable depuis le service d'exploration
 
 #### Scenario: Snapshot actif différent de celui de l'index
 - **GIVEN** un index sémantique construit sur un snapshot qui n'est plus le snapshot actif
 - **WHEN** une page de documents est demandée
-- **THEN** les symboles sont rendus non résolus, comme avant ce changement, et aucune vue n'est chargée
+- **THEN** les symboles sont rendus non résolus et aucune vue n'est demandée au store
 
 ### Requirement: Une projection plus lourde que sa part du tas est refusée avant décodage
 La lecture d'une projection SHALL estimer son poids décodé depuis son en-tête avant de décoder ses points. Une projection dont le poids estimé dépasse la part du tas déclarée pour elle SHALL être refusée par une erreur d'E/S explicite, sans chemin, qui donne le poids estimé et le plafond en octets ; elle SHALL NOT être décodée. Le poids d'une projection gardée en cache SHALL être celui de cette estimation.

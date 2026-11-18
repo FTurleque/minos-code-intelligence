@@ -275,6 +275,70 @@ L'action de retrait de pgAdmin SHALL supprimer son conteneur, son volume de conf
 - **THEN** le conteneur, le volume de pgAdmin et le rôle d'inspection n'existent plus
 - **AND** le nombre de lignes de `semantic_documents` et le volume PostgreSQL sont inchangés
 
+### Requirement: Le contrat de l'image de requête publie les seuils de relations calculés
+Le test de contrat de l'image de requête SHALL calculer, index des arêtes entrantes compris, pour la limite mémoire par défaut et pour une vue sans symbole ni occurrence, le plus grand nombre de relations sous lequel une vue au format courant de la taille du plafond de persistance tient sous le plafond du cache, puis sous le budget de mémoire des vues. Il SHALL échouer si la documentation utilisateur des limites de ressources n'annonce pas ces deux nombres et leur hypothèse.
+
+#### Scenario: Seuils annoncés égaux aux seuils calculés
+- **GIVEN** les deux fichiers compose, les limites de snapshot de production et `docs/user/docker-runtime.md`
+- **WHEN** le test de contrat calcule les deux seuils et lit la documentation
+- **THEN** la documentation annonce les deux nombres calculés, dit qu'ils valent pour une vue sans symbole ni occurrence, et le test passe
+
+#### Scenario: Réglage modifié sans mise à jour de la documentation
+- **GIVEN** une valeur de `MaxRAMPercentage`, de limite mémoire par défaut ou de plafond qui change l'un des seuils, la documentation restant inchangée
+- **WHEN** le test de contrat s'exécute
+- **THEN** il échoue en nommant le seuil calculé et la valeur annoncée
+
+### Requirement: La zone de travail PostgreSQL du plan de requête est dimensionnée pour le nombre déclaré de JVM
+Chaque service du plan de requête qui monte la zone de travail PostgreSQL SHALL lui donner une taille au moins égale au nombre déclaré de JVM simultanées multiplié par la plus grande charge utile PostgreSQL admissible sous le budget de mémoire des vues par défaut. La somme des tas de ces JVM et de cette taille SHALL rester sous la limite mémoire par défaut du service. La documentation utilisateur SHALL annoncer ce nombre de JVM.
+
+#### Scenario: Taille suffisante pour le nombre déclaré de JVM
+- **GIVEN** `docker/compose-mcp.connected.yaml`, les limites de snapshot de production et le nombre de JVM annoncé par `docs/user/docker-runtime.md`
+- **WHEN** le test de contrat calcule la plus grande charge utile admissible par JVM et lit la taille de la zone de `minos-mcp` et de `minos-explorer`
+- **THEN** chaque taille est supérieure ou égale au produit calculé
+- **AND** la somme des tas et de la taille de la zone ne dépasse pas la limite mémoire par défaut du rôle requêtes
+
+#### Scenario: Zone réduite sous la borne
+- **GIVEN** une taille de zone inférieure au produit calculé dans l'un des deux services
+- **WHEN** le test de contrat s'exécute
+- **THEN** il échoue en nommant le service, la taille déclarée et la taille minimale calculée
+
+#### Scenario: Nombre de JVM non annoncé
+- **GIVEN** une documentation utilisateur qui n'annonce plus le nombre de JVM simultanées retenu
+- **WHEN** le test de contrat s'exécute
+- **THEN** il échoue en nommant la page et la valeur attendue
+
+### Requirement: Le réglage de taille de la zone de travail survit à la régénération du fichier d'environnement
+Une taille de zone de travail PostgreSQL réglée dans le fichier d'environnement du runtime Docker SHALL être reportée dans le fichier régénéré par une mise à jour ou une réinstallation, au même titre que les plafonds de ressources. Une valeur qui n'est pas une taille strictement positive SHALL être refusée en nommant la variable, sans rien écrire.
+
+#### Scenario: Valeur reprise
+- **GIVEN** un fichier d'environnement existant qui règle la taille de la zone de travail
+- **WHEN** la fonction de reprise des réglages des scripts d'installation le lit
+- **THEN** la ligne de ce réglage figure parmi les lignes reportées, dans les deux scripts qui portent la fonction
+
+#### Scenario: Valeur invalide refusée
+- **GIVEN** un fichier d'environnement dont la taille de zone vaut `0`, est vide ou n'est pas une taille
+- **WHEN** la fonction de reprise le lit
+- **THEN** elle échoue par une erreur qui nomme la variable
+- **AND** aucun fichier d'environnement n'est écrit
+
+### Requirement: Le budget des vues et les caches applicatifs tiennent sous le tas par défaut du plan de requête
+Sous la limite mémoire et le pourcentage de tas par défaut du plan de requête, la somme du budget de mémoire des vues, de la marge de décodage d'une vue déclarée et des plafonds effectifs de tous les caches applicatifs pondérés SHALL être inférieure ou égale au tas maximal de la JVM. Le test de contrat de l'image de requête SHALL calculer cette somme depuis les fichiers compose et les valeurs du code, et SHALL échouer en nommant chaque terme quand elle dépasse le tas.
+
+#### Scenario: Somme sous le tas par défaut
+- **GIVEN** les deux fichiers compose, le pourcentage de tas déclaré, la marge de décodage et les parts du tas déclarées dans le code
+- **WHEN** le test de contrat calcule le tas par défaut, le budget des vues, la marge de décodage et le plafond effectif de chaque cache, en stockage local puis PostgreSQL
+- **THEN** la somme est inférieure ou égale au tas
+
+#### Scenario: Part relevée au-delà du tas
+- **GIVEN** une part du tas, une marge ou un plafond relevé de sorte que la somme dépasse le tas par défaut
+- **WHEN** le test de contrat s'exécute
+- **THEN** il échoue en nommant le tas, le budget des vues, la marge de décodage et le plafond effectif de chaque cache
+
+#### Scenario: Cache pondéré ajouté sans part déclarée
+- **GIVEN** un cache pondéré construit en production sans passer par la part du tas, qu'il soit un cache LRU pondéré ou un cache nommé dans la liste fermée du recensement
+- **WHEN** le test qui recense les caches pondérés s'exécute
+- **THEN** il échoue en nommant la classe qui construit ce cache
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [distribution-docker](../../../docs/architecture/diagrams/capacites/distribution-docker.md)

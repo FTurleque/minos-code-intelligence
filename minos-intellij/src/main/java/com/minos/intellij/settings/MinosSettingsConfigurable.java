@@ -56,14 +56,14 @@ public final class MinosSettingsConfigurable implements Configurable {
         MinosSettingsState.Settings state = MinosSettingsState.getInstance(project).value();
         return !state.executable.equals(executable.getText().trim())
                 || !state.minosHome.equals(home.getText().trim())
-                || state.timeoutSeconds != parseInt(timeout.getText(), -1)
-                || state.maxGraphNodes != parseInt(maxGraphNodes.getText(), -1);
+                || state.timeoutSeconds != MinosSettingsRules.parsedOr(timeout.getText(), -1)
+                || state.maxGraphNodes != MinosSettingsRules.parsedOr(maxGraphNodes.getText(), -1);
     }
 
     @Override
     public void apply() {
-        int parsedTimeout = bounded(timeout.getText(), 1, 300, MinosSettingsState.DEFAULT_TIMEOUT_SECONDS);
-        int parsedGraph = bounded(maxGraphNodes.getText(), 10, 500, MinosSettingsState.DEFAULT_MAX_GRAPH_NODES);
+        int parsedTimeout = MinosSettingsRules.timeoutSeconds(timeout.getText());
+        int parsedGraph = MinosSettingsRules.maxGraphNodes(maxGraphNodes.getText());
         MinosSettingsState.getInstance(project).update(executable.getText(), home.getText(), parsedTimeout, parsedGraph);
         reset();
     }
@@ -106,18 +106,5 @@ public final class MinosSettingsConfigurable implements Configurable {
         constraints.anchor = GridBagConstraints.NORTHWEST;
         constraints.insets = new Insets(4, 4, 4, 4);
         return constraints;
-    }
-
-    private static int bounded(String value, int minimum, int maximum, int fallback) {
-        int parsed = parseInt(value, fallback);
-        return parsed >= minimum && parsed <= maximum ? parsed : fallback;
-    }
-
-    private static int parseInt(String value, int fallback) {
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
     }
 }

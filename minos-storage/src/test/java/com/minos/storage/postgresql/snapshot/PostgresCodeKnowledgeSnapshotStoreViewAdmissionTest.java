@@ -17,13 +17,13 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Admission of a view to the cache of the PostgreSQL store follows the estimated weight of its format, as in the
  * file store: a V3 payload (measured amplification) fits a cache that a V2 payload of the same shape
- * (conservative amplification) does not. The cache ceiling is lowered to 1.5 times the payload size, between
+ * (conservative amplification) does not, and is held alone, still counted, above it. The cache ceiling is lowered to 1.5 times the payload size, between
  * the two estimates. A cache miss is a full load of the payload: the store has no other load counter.
  */
 class PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest extends PostgresTestSupport {
@@ -62,7 +62,7 @@ class PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest extends PostgresTestSu
     }
 
     @Test
-    void aV2ViewIsEstimatedWithTheConservativeAmplificationAndIsNotAdmittedWhereV3Is() throws Exception {
+    void aV2ViewIsEstimatedWithTheConservativeAmplificationAndIsHeldAloneWhereV3IsCached() throws Exception {
         UUID projectId = UUID.randomUUID();
         List<Symbol> symbols = new ArrayList<>(symbols(projectId));
         // An unpaired surrogate has no UTF-8 form: the store keeps the snapshot whole, in V2.
@@ -73,30 +73,48 @@ class PostgresCodeKnowledgeSnapshotStoreViewAdmissionTest extends PostgresTestSu
         store.publish(projectId, "v2", symbols, List.of(), List.of());
 
         SnapshotReadView first = store.loadActiveReadView(projectId).orElseThrow();
-        store.loadActiveReadView(projectId).orElseThrow();
+        SnapshotReadView second = store.loadActiveReadView(projectId).orElseThrow();
 
         assertEquals(2, first.descriptor().formatVersion());
-        assertEquals(2L, store.queryCacheStats().misses(), "unmeasured format: reloaded on every read");
-        assertEquals(0, store.queryCacheStats().entries());
+        assertSame(first, second);
+        assertEquals(1L, store.queryCacheStats().misses(), "the held view serves the second read");
+        assertEquals(0, store.queryCacheStats().entries(), "unmeasured format: the view is above the cache ceiling");
+        assertTrue(store.queryCacheStats().heldWeightBytes() > persisted * 3L / 2L);
     }
 
     @Test
-    void aViewHeavierThanTheCacheCeilingIsNotCachedAndStillReadCorrectly() throws Exception {
+    void aViewHeavierThanTheCacheCeilingIsHeldAloneAndStillReadCorrectly() throws Exception {
         UUID projectId = UUID.randomUUID();
         List<Symbol> symbols = symbols(projectId);
         CodeKnowledgeSnapshot snapshot = new CodeKnowledgeSnapshot(projectId, "heavy", symbols, List.of(), List.of());
         long persisted = new SnapshotCodecV3().encodedSize(snapshot);
-        // Below the measured estimate of the view: refused by the cache.
+        // Below the measured estimate of the view: held alone, counted.
         PostgresCodeKnowledgeSnapshotStore store = storeWithCacheCeiling(persisted);
         store.publish(projectId, "heavy", symbols, List.of(), List.of());
 
         SnapshotReadView first = store.loadActiveReadView(projectId).orElseThrow();
         SnapshotReadView second = store.loadActiveReadView(projectId).orElseThrow();
 
-        assertEquals(2L, store.queryCacheStats().misses());
-        assertEquals(0L, store.queryCacheStats().hits());
+        assertEquals(1L, store.queryCacheStats().misses());
+        assertEquals(1L, store.queryCacheStats().hits());
         assertEquals(0, store.queryCacheStats().entries());
-        assertNotSame(first, second, "a view that is not admitted is rebuilt");
+        assertSame(first, second, "the held view serves the second read");
+        assertTrue(store.queryCacheStats().heldWeightBytes() > persisted);
         assertEquals(snapshot, second.snapshot());
+    }
+
+    @Test
+    void theLimitsGiveTheWeightTheStoreEstimatesForASnapshotOfTheCeilingSize() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        CodeKnowledgeSnapshot snapshot = PersistedSizeFixtures.withTail(projectId, "exact", 0, 200_000);
+        SnapshotLimits limits = SnapshotLimits.production()
+                .withMaxPersistedBytes(new SnapshotCodecV3().encodedSize(snapshot));
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir, limits);
+        store.publish(projectId, "exact", snapshot.symbols(), List.of(), List.of());
+
+        store.loadActiveReadView(projectId).orElseThrow();
+
+        assertEquals(limits.largestPersistableViewWeightBytes(snapshot.symbols().size(), 0L, 0L),
+                store.queryCacheStats().weightBytes());
     }
 }

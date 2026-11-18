@@ -20,6 +20,8 @@ import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
+import com.minos.store.SnapshotDescriptor;
+import com.minos.store.SnapshotReadView;
 import com.minos.store.SnapshotQueryView;
 import com.minos.store.SymbolSnapshot;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -670,8 +673,55 @@ class SemanticCorpusQueryServiceTest {
         }
     }
 
+    @Test
+    void twoPagesReadTheViewOfTheStoreAndKeepTheSameSymbols() throws Exception {
+        SemanticCorpusQueryService.DocumentsRequest request =
+                new SemanticCorpusQueryService.DocumentsRequest(null, 50, null, null, null, null);
+
+        SemanticCorpusQueryService.DocumentsPage first = corpus.documents(projectId, request);
+        SemanticCorpusQueryService.DocumentsPage second = corpus.documents(projectId, request);
+
+        assertEquals(first.documents(), second.documents());
+        assertTrue(first.documents().stream().anyMatch(SemanticCorpusQueryService.DocumentSummary::symbolResolved));
+        assertEquals(2, snapshots.readViewCalls, "the view is asked of the store for each page");
+        assertEquals(1, snapshots.viewBuilds, "the store loads it once");
+    }
+
+    @Test
+    void anEvictedViewIsNoLongerReachableFromTheService() throws Exception {
+        corpus.documents(projectId, new SemanticCorpusQueryService.DocumentsRequest(null, 50, null, null, null, null));
+        WeakReference<SnapshotReadView> served = new WeakReference<>(snapshots.view);
+
+        snapshots.evict();
+
+        for (int attempt = 0; attempt < 50 && served.get() != null; attempt++) {
+            System.gc();
+            Thread.onSpinWait();
+        }
+        assertNull(served.get(), "the service keeps neither the evicted view nor anything that holds it");
+    }
+
+    @Test
+    void anIndexOfAnotherSnapshotLeavesTheSymbolsUnresolvedWithoutAskingForTheView() throws Exception {
+        snapshots.active = new CodeKnowledgeSnapshot(projectUuid, "snapshot-2", snapshots.active.symbols(),
+                List.of(), List.of());
+
+        SemanticCorpusQueryService.DocumentsPage page = corpus.documents(projectId,
+                new SemanticCorpusQueryService.DocumentsRequest(null, 50, null, null, null, null));
+
+        assertFalse(page.documents().stream().anyMatch(SemanticCorpusQueryService.DocumentSummary::symbolResolved));
+        assertEquals(0, snapshots.readViewCalls);
+    }
+
+    /**
+     * Serves one read view per active snapshot and counts the calls, like a store that caches it; {@link #evict()}
+     * drops the view as the memory budget would.
+     */
     private static final class FixedSnapshotStore implements CodeKnowledgeSnapshotStore {
         private CodeKnowledgeSnapshot active;
+        private SnapshotReadView view;
+        private int readViewCalls;
+        private int viewBuilds;
 
         private FixedSnapshotStore(CodeKnowledgeSnapshot active) {
             this.active = active;
@@ -680,6 +730,28 @@ class SemanticCorpusQueryServiceTest {
         @Override
         public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) {
             return Optional.ofNullable(active);
+        }
+
+        @Override
+        public Optional<SnapshotReadView> loadActiveReadView(UUID projectId) {
+            readViewCalls++;
+            if (active == null) return Optional.empty();
+            if (view == null || view.snapshot() != active) {
+                viewBuilds++;
+                view = SnapshotReadView.indexed(new SnapshotDescriptor(3, active.snapshotId(), "fixture",
+                        "f".repeat(64), active.symbols().size(), active.occurrences().size(),
+                        active.relationships().size()), active);
+            }
+            return Optional.of(view);
+        }
+
+        @Override
+        public Optional<String> activeSnapshotId(UUID projectId) {
+            return Optional.ofNullable(active).map(CodeKnowledgeSnapshot::snapshotId);
+        }
+
+        void evict() {
+            view = null;
         }
 
         @Override
