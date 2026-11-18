@@ -13,7 +13,6 @@ import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -40,11 +39,11 @@ class ProjectInspectionServiceResumableRunTest {
     private final UUID runId = UUID.randomUUID();
 
     @Test
-    void theResumableRunIsReadWithoutAnyWriteOrLease(@TempDir Path home) {
+    void theResumableRunIsReadWithoutAnyWriteOrLease() {
         ReadOnlyStateStore states = new ReadOnlyStateStore();
         states.seed(interruptedRun(2), failedState(Optional.of(runId)));
 
-        Optional<ResumableRunStatus> status = service(home, states).resumableRun(projectId.toString());
+        Optional<ResumableRunStatus> status = service(states).resumableRun(projectId.toString());
 
         assertTrue(status.isPresent());
         ResumableRunStatus run = status.orElseThrow();
@@ -59,21 +58,21 @@ class ProjectInspectionServiceResumableRunTest {
     }
 
     @Test
-    void aProjectWithoutResumableRunOffersNothing(@TempDir Path home) {
+    void aProjectWithoutResumableRunOffersNothing() {
         ReadOnlyStateStore states = new ReadOnlyStateStore();
         states.seed(interruptedRun(1), failedState(Optional.empty()));
 
-        assertEquals(Optional.empty(), service(home, states).resumableRun(projectId.toString()));
-        assertEquals(Optional.empty(), service(home, states).resumableRun(UUID.randomUUID().toString()));
+        assertEquals(Optional.empty(), service(states).resumableRun(projectId.toString()));
+        assertEquals(Optional.empty(), service(states).resumableRun(UUID.randomUUID().toString()));
         assertEquals(List.of(), states.refused);
     }
 
     @Test
-    void anIdentifierThatIsNotAUuidOffersNothingInsteadOfFailing(@TempDir Path home) {
+    void anIdentifierThatIsNotAUuidOffersNothingInsteadOfFailing() {
         ReadOnlyStateStore states = new ReadOnlyStateStore();
 
-        assertEquals(Optional.empty(), service(home, states).resumableRun("pas-un-uuid"));
-        assertThrows(NullPointerException.class, () -> service(home, states).resumableRun(null));
+        assertEquals(Optional.empty(), service(states).resumableRun("pas-un-uuid"));
+        assertThrows(NullPointerException.class, () -> service(states).resumableRun(null));
         assertEquals(List.of(), states.refused);
     }
 
@@ -91,7 +90,7 @@ class ProjectInspectionServiceResumableRunTest {
                 () -> new ResumableRunStatus(runId, "PROVIDER_EXECUTION", null, 1, 2));
     }
 
-    private ProjectInspectionService service(Path home, IndexStateStore states) {
+    private ProjectInspectionService service(IndexStateStore states) {
         return new ProjectInspectionService(ImportHistoryStores.none(), new UnusedRegistry(),
                 new ActiveSnapshotReadCostTest.CountingSnapshotStore(
                         new CodeKnowledgeSnapshot(projectId, "snapshot", List.of(), List.of(), List.of())),

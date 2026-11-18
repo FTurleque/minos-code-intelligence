@@ -41,9 +41,9 @@ class ProjectInspectionServiceRefusalMessageTest {
         IllegalStateException portRefusal =
                 new IllegalStateException("missing index property 'snapshotId' in " + projectId + ".properties");
         ProjectInspectionService service = service(projectId, ImportHistoryStores.failing(portRefusal));
+        RegisteredProject project = project(projectId);
 
-        IllegalStateException refusal = assertThrows(IllegalStateException.class,
-                () -> service.statusView(project(projectId)));
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> service.statusView(project));
 
         assertEquals("missing index property 'snapshotId' in " + projectId + ".properties", refusal.getMessage());
         assertFalse(refusal.getMessage().contains(temp.toString()), refusal.getMessage());
@@ -72,9 +72,13 @@ class ProjectInspectionServiceRefusalMessageTest {
 
     @Test
     void aMissingHistoryPortIsRefusedByName() {
+        ProjectRegistry registry = unusedRegistry();
+        ActiveSnapshotReadCostTest.CountingSnapshotStore snapshots = snapshots(UUID.randomUUID());
+        EmptyStateStore states = new EmptyStateStore();
+        ProjectDiscoveryService discovery = new ProjectDiscoveryService();
+
         NullPointerException refusal = assertThrows(NullPointerException.class,
-                () -> new ProjectInspectionService(null, unusedRegistry(), snapshots(UUID.randomUUID()),
-                        new EmptyStateStore(), new ProjectDiscoveryService(), List.of()));
+                () -> new ProjectInspectionService(null, registry, snapshots, states, discovery, List.of()));
 
         assertEquals("historyStore", refusal.getMessage());
     }
