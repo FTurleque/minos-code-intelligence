@@ -252,18 +252,20 @@ final class SnapshotEntityCodec {
 
     private static void writeSymbolReference(SnapshotEncodingSink output, SymbolReference reference)
             throws IOException {
-        if (reference instanceof ResolvedSymbolReference resolved) {
+        if (reference instanceof ResolvedSymbolReference(String symbolId)) {
             output.writeByte(1);
-            output.writeString(resolved.symbolId());
+            output.writeString(symbolId);
             return;
         }
-        if (reference instanceof UnresolvedSymbolReference unresolved) {
+        if (reference instanceof UnresolvedSymbolReference(String displayName, String qualifiedNameCandidate,
+                                                           String language, String reason,
+                                                           Set<ProviderReference> providerReferences)) {
             output.writeByte(2);
-            output.writeString(unresolved.displayName());
-            output.writeString(unresolved.qualifiedNameCandidate());
-            output.writeString(unresolved.language());
-            output.writeString(unresolved.reason());
-            writeProviderReferences(output, unresolved.providerReferences());
+            output.writeString(displayName);
+            output.writeString(qualifiedNameCandidate);
+            output.writeString(language);
+            output.writeString(reason);
+            writeProviderReferences(output, providerReferences);
             return;
         }
         throw new IOException("unsupported symbol reference type: " + reference.getClass().getName());

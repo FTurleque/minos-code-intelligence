@@ -108,7 +108,7 @@ Découpage arrêté pour `com.minos.storage.codec` (tâche 1.1) :
 | `SnapshotBinaryCodecSupport` | constantes de format et plafonds des comptes de premier niveau, cadre V1/V2/V3 (en-tête, taille de fichier, ouverture confinée et bornée, lecture authentifiée en une passe), tailles encodées, `fromLegacy` | 427 |
 | `SnapshotEntityCodec` | écriture et lecture de chaque entité du snapshot (symbole, occurrence, relation, référence de symbole, preuve, référence d'entité, localisation, origine, références de provider) et leurs plafonds | 438 |
 | `SnapshotStringEncoding` | encodage des chaînes d'un format (UTF-16 ou UTF-8), longueur UTF-8 exacte, refus du substitut isolé | 50 |
-| `SnapshotEncodingSink` | puits d'une passe d'encodage : flux réel (`StreamSink`) ou compteur (`CountingSink`) | 70 |
+| `SnapshotEncodingSink`, `SnapshotEncodingSinkCounter` | puits d'une passe d'encodage : flux réel (`StreamSink`) ou compteur | 70 |
 | `SnapshotInput` | lecteur borné d'une passe de décodage : chaînes partagées (ADR 0047), chaînes requises, compteurs, énumérations | 114 |
 
 Le codage des entités ne reçoit pas la version : la disposition des champs est la même dans les trois formats, seule l'encodage des chaînes change, porté par le puits et le lecteur. Les quatre délégations statiques de cadre (`readHeaderVersion`, `writeString`, `readString`, `readRequiredString`, `readCount` sur `DataInputStream` ou `DataOutputStream`) n'avaient d'appelant que dans la classe : les classes extraites appellent `SnapshotBinaryPrimitives` directement.

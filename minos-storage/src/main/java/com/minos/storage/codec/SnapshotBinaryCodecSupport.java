@@ -8,7 +8,6 @@ import com.minos.domain.SymbolOccurrence;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedOutputStream;
 import com.minos.io.Sha256;
-import com.minos.storage.codec.SnapshotEncodingSink.CountingSink;
 import com.minos.storage.codec.SnapshotEncodingSink.StreamSink;
 import com.minos.storage.codec.SnapshotStringEncoding.UnpairedSurrogateException;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -100,14 +99,14 @@ final class SnapshotBinaryCodecSupport {
 
     /** Exact length of {@link #writeSymbolSnapshotV1}'s output: the same traversal, counted instead of written. */
     static long encodedSymbolSnapshotV1Size(SymbolSnapshot snapshot) throws IOException {
-        CountingSink counter = new CountingSink(SnapshotStringEncoding.UTF16_CHARS);
+        SnapshotEncodingSinkCounter counter = new SnapshotEncodingSinkCounter(SnapshotStringEncoding.UTF16_CHARS);
         writeSymbolSnapshotV1Body(counter, snapshot);
         return counter.bytes();
     }
 
     /** Exact length of {@link #writeKnowledgeSnapshotV2}'s output: the same traversal, counted instead of written. */
     static long encodedKnowledgeSnapshotV2Size(CodeKnowledgeSnapshot snapshot) throws IOException {
-        CountingSink counter = new CountingSink(SnapshotStringEncoding.UTF16_CHARS);
+        SnapshotEncodingSinkCounter counter = new SnapshotEncodingSinkCounter(SnapshotStringEncoding.UTF16_CHARS);
         writeKnowledgeSnapshotBody(counter, snapshot, FORMAT_VERSION_V2);
         return counter.bytes();
     }
@@ -117,7 +116,7 @@ final class SnapshotBinaryCodecSupport {
      * surrogate: such a snapshot has no exact UTF-8 form and is written in V2, which preserves it.
      */
     static long encodedKnowledgeSnapshotV3Size(CodeKnowledgeSnapshot snapshot) throws IOException {
-        CountingSink counter = new CountingSink(SnapshotStringEncoding.UTF8);
+        SnapshotEncodingSinkCounter counter = new SnapshotEncodingSinkCounter(SnapshotStringEncoding.UTF8);
         try {
             writeKnowledgeSnapshotBody(counter, snapshot, FORMAT_VERSION_V3);
         } catch (UnpairedSurrogateException unencodable) {

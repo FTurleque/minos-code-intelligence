@@ -21,8 +21,10 @@ enum SnapshotStringEncoding {
     /** Exact UTF-8 length; refuses an unpaired surrogate rather than let it degrade to a replacement byte. */
     static long utf8Length(String value) throws UnpairedSurrogateException {
         long length = 0L;
-        for (int index = 0; index < value.length(); index++) {
+        int index = 0;
+        while (index < value.length()) {
             char current = value.charAt(index);
+            int units = 1;
             if (current < 0x80) {
                 length += 1;
             } else if (current < 0x800) {
@@ -32,12 +34,13 @@ enum SnapshotStringEncoding {
                     throw new UnpairedSurrogateException();
                 }
                 length += 4;
-                index++;
+                units = 2;
             } else if (Character.isLowSurrogate(current)) {
                 throw new UnpairedSurrogateException();
             } else {
                 length += 3;
             }
+            index += units;
         }
         return length;
     }

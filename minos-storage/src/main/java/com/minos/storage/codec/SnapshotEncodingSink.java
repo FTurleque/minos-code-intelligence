@@ -7,7 +7,7 @@ import java.io.IOException;
  * Destination of one encoding pass. The writers traverse a snapshot once, against either the real stream or a
  * counter: the computed size and the written size cannot drift apart.
  */
-sealed interface SnapshotEncodingSink permits SnapshotEncodingSink.StreamSink, SnapshotEncodingSink.CountingSink {
+sealed interface SnapshotEncodingSink permits SnapshotEncodingSink.StreamSink, SnapshotEncodingSinkCounter {
 
     void writeInt(int value) throws IOException;
 
@@ -41,30 +41,6 @@ sealed interface SnapshotEncodingSink permits SnapshotEncodingSink.StreamSink, S
             byte[] bytes = SnapshotStringEncoding.utf8(value);
             output.writeInt(bytes.length);
             output.write(bytes);
-        }
-    }
-
-    /** Counts the bytes {@link StreamSink} would write, with the same string checks, and writes nothing. */
-    final class CountingSink implements SnapshotEncodingSink {
-        private final SnapshotStringEncoding encoding;
-        private long bytes;
-
-        CountingSink(SnapshotStringEncoding encoding) { this.encoding = encoding; }
-
-        long bytes() { return bytes; }
-
-        @Override public void writeInt(int value) { bytes += Integer.BYTES; }
-        @Override public void writeLong(long value) { bytes += Long.BYTES; }
-        @Override public void writeByte(int value) { bytes += Byte.BYTES; }
-        @Override public void writeBoolean(boolean value) { bytes += Byte.BYTES; }
-        @Override public void writeDouble(double value) { bytes += Double.BYTES; }
-        @Override public void writeString(String value) throws IOException {
-            bytes += Integer.BYTES;
-            if (value == null) return;
-            SnapshotBinaryPrimitives.requireWritableString(value);
-            bytes += encoding == SnapshotStringEncoding.UTF16_CHARS
-                    ? (long) Character.BYTES * value.length()
-                    : SnapshotStringEncoding.utf8Length(value);
         }
     }
 }
