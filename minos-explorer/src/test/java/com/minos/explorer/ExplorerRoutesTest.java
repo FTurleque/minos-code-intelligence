@@ -249,7 +249,8 @@ class ExplorerRoutesTest {
         assertTrue(unknownProject.body().contains("\"code\":\"PROJECT_NOT_FOUND\""), unknownProject.body());
         assertEquals(404, unknownRoute.status());
         assertTrue(unknownRoute.body().contains("\"code\":\"NOT_FOUND\""), unknownRoute.body());
-        assertTrue(unknownRoute.body().matches(".*\"message\":\"[^\"]+\".*"), "a non-empty diagnostic: " + unknownRoute.body());
+        assertTrue(unknownRoute.body().contains("\"message\":\"") && !unknownRoute.body().contains("\"message\":\"\""),
+                "a non-empty diagnostic: " + unknownRoute.body());
         assertEquals(Map.of("GET", List.of("projects", "projects/{project}/documents",
                         "projects/{project}/documents/{stableKey}",
                         "projects/{project}/documents/{stableKey}/neighbors",
