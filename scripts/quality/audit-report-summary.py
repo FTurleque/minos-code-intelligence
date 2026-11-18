@@ -4,6 +4,7 @@
     python scripts/quality/audit-report-summary.py spotbugs
     python scripts/quality/audit-report-summary.py pit --module minos-engine
     python scripts/quality/audit-report-summary.py pit --all
+    python scripts/quality/audit-report-summary.py mutation-status --check
     python scripts/quality/audit-report-summary.py dependency-check target/dependency-check/dependency-check-report.json
 
 ``spotbugs`` lists, per module, the findings of ``spotbugsXml.xml`` by priority and pattern, and the number of
@@ -17,6 +18,11 @@ has no coverage). PIT itself only fails on that when ``failWhenNoMutations`` is 
 to switch off for modules without mutable code; this check is what makes an empty analysis visible again. It never
 judges the score. Timeouts, memory and run errors are listed apart from kills: PIT counts them as detected, but they
 prove that a mutant broke the test JVM, not that an assertion caught it.
+
+``mutation-status --check`` compares the mutation status table of ``docs/developer/quality/code-audit-couverture.md``
+(found by its column header) with the modules of the root ``pom.xml`` plus the IntelliJ plugin, and exits 1 naming
+every module missing from the table and every row naming a module that no longer exists. ``--self-test`` runs it on
+mutated copies.
 
 ``dependency-check`` reads a Dependency-Check JSON report and prints the data-source timestamps (freshness), the
 analysis exceptions, the number of dependencies and the vulnerabilities. It exits 1 on any analysis exception: an
@@ -237,6 +243,102 @@ def dependency_check(report: Path) -> int:
     return 1 if exceptions else 0
 
 
+MUTATION_DOCUMENT = Path("docs") / "developer" / "quality" / "code-audit-couverture.md"
+MUTATION_TABLE_HEADER = "| Module | Statut PIT | Système | Exécution | Raison |"
+PLUGIN_MODULE = "minos-intellij"
+POM_NAMESPACE = {"m": "http://maven.apache.org/POM/4.0.0"}
+
+
+def reactor_modules(root: Path) -> list[str]:
+    """The modules the root pom.xml declares, in declaration order."""
+    project = ET.parse(root / "pom.xml").getroot()
+    return [module.text.strip() for module in project.findall("m:modules/m:module", POM_NAMESPACE) if module.text]
+
+
+def mutation_table_modules(text: str) -> list[str] | None:
+    """The first cell of every row of the mutation status table, or None when the table is not in ``text``."""
+    lines = text.splitlines()
+    try:
+        start = next(index for index, line in enumerate(lines) if line.strip() == MUTATION_TABLE_HEADER)
+    except StopIteration:
+        return None
+    modules: list[str] = []
+    for line in lines[start + 2:]:
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            break
+        modules.append(stripped.strip("|").split("|")[0].strip().strip("`"))
+    return modules
+
+
+def mutation_status_problems(root: Path) -> list[str]:
+    """What the mutation status table lacks or names in excess against the reactor and the plugin; empty if exact."""
+    document = root / MUTATION_DOCUMENT
+    if not document.is_file():
+        return [f"mutation status document not found: {MUTATION_DOCUMENT.as_posix()}"]
+    listed = mutation_table_modules(document.read_text(encoding="utf-8"))
+    if listed is None:
+        return [f"mutation status table not found in {MUTATION_DOCUMENT.as_posix()} (header {MUTATION_TABLE_HEADER!r})"]
+    expected = reactor_modules(root) + [PLUGIN_MODULE]
+    problems = [f"missing: {module}" for module in expected if module not in listed]
+    problems += [f"unknown: {module}" for module in listed if module not in expected]
+    problems += [f"duplicate: {module}" for module in sorted(set(listed)) if listed.count(module) > 1]
+    return problems
+
+
+def mutation_status(root: Path, check: bool) -> int:
+    problems = mutation_status_problems(root)
+    for problem in problems:
+        print(f"MUTATION STATUS: {problem}", file=sys.stderr)
+    if problems:
+        return 1 if check else 0
+    print(f"MUTATION STATUS TABLE SUCCESS ({len(reactor_modules(root))} reactor modules and {PLUGIN_MODULE})")
+    return 0
+
+
+def mutation_status_self_test() -> int:
+    """Runs the table check on mutated copies of a minimal repository."""
+    import tempfile
+
+    pom = ('<project xmlns="http://maven.apache.org/POM/4.0.0"><modules>'
+           '<module>minos-domain</module><module>minos-storage</module></modules></project>')
+    table = "\n".join([
+        "Intro.", "", MUTATION_TABLE_HEADER, "|---|---|---|---|---|",
+        "| `minos-domain` | **exécuté** | Ubuntu | E1 | |",
+        "| `minos-storage` | non exécuté | — | — | fusionné |",
+        "| `minos-intellij` | **exécuté** | Ubuntu | E2 | |", "", "After.",
+    ])
+    cases = {
+        "exact table": (pom, table, []),
+        "module added to the reactor without a row": (
+            pom.replace("</modules>", "<module>minos-explorer</module></modules>"), table, ["missing: minos-explorer"]),
+        "vanished module still named": (
+            pom, table.replace("| `minos-intellij`", "| `minos-storage-local` | **exécuté** | Windows | E27 | |\n"
+                                                     "| `minos-intellij`"), ["unknown: minos-storage-local"]),
+        "table not found": (pom, "No table here.", None),
+    }
+    failures: list[str] = []
+    for label, (pom_text, document_text, wanted) in cases.items():
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "pom.xml").write_text(pom_text, encoding="utf-8")
+            (root / MUTATION_DOCUMENT).parent.mkdir(parents=True)
+            (root / MUTATION_DOCUMENT).write_text(document_text, encoding="utf-8")
+            problems = mutation_status_problems(root)
+            if wanted is None:
+                ok = len(problems) == 1 and problems[0].startswith("mutation status table not found")
+            else:
+                ok = problems == wanted
+            if not ok:
+                failures.append(f"{label}: got {problems}")
+    for failure in failures:
+        print(f"SELF-TEST FAILURE: {failure}", file=sys.stderr)
+    if failures:
+        return 1
+    print(f"MUTATION STATUS SELF-TEST SUCCESS ({len(cases)} cases)")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=ROOT)
@@ -251,6 +353,10 @@ def main() -> int:
     target = pit_command.add_mutually_exclusive_group(required=True)
     target.add_argument("--module", help="module whose target/pit-reports is read, e.g. minos-engine")
     target.add_argument("--all", action="store_true", help="every module with compiled production classes")
+    mutation_command = commands.add_parser("mutation-status")
+    mutation_command.add_argument("--check", action="store_true",
+                                  help="exit 1 when the mutation status table differs from the reactor modules")
+    mutation_command.add_argument("--self-test", action="store_true", help="verify the check on mutated copies")
     dependency_check_command = commands.add_parser("dependency-check")
     dependency_check_command.add_argument("report", type=Path, help="dependency-check-report.json")
     args = parser.parse_args()
@@ -258,6 +364,8 @@ def main() -> int:
         return spotbugs(args.root, args.top, args.reports_dir, args.strict, args.baseline_dir)
     if args.command == "pit":
         return pit(args.root, args.module, args.all)
+    if args.command == "mutation-status":
+        return mutation_status_self_test() if args.self_test else mutation_status(args.root, args.check)
     return dependency_check(args.report)
 
 

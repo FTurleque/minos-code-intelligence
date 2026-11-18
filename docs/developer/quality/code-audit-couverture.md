@@ -26,6 +26,8 @@ Audit du **8 octobre 2026** avec les cinq outils SpotBugs, PIT, ArchUnit, OWASP 
 
 ### 2.1 Modules et composants
 
+> Relevé du 8 octobre 2026 : cet inventaire nomme les modules du reactor de cette date. Le reactor actuel et l'état de la mutation de chaque module sont au tableau d'état du § 5.2.
+
 | Composant | Build | Sources prod (`.java`) | Classes compilées | Fichiers de test | Tests exécutés (sautés) |
 |---|---|---|---|---|---|
 | `minos-domain` | Maven | 37 | 43 | 6 | 22 (0) |
@@ -263,25 +265,27 @@ Lecture du tableau :
 - `minos-application` (1 585 mutants sans couverture) est surtout testé depuis `minos-cli`, `minos-api` et `minos-app` : même limite inter-modules.
 - Survivants qualifiés : [code-audit-constats.md](code-audit-constats.md), fiche H07.
 
-**Statut PIT par module — source unique** (AUD-TST-11, corrigé le 2026-10-15, complété le 2026-10-16). Les autres sections de ce document renvoient à ce tableau au lieu de recompter : les 14 modules du réacteur sont exécutés (`minos-runtime-local` sans ses classes propres à Windows) ainsi que le plugin IntelliJ. Avant correction, le document portait trois décomptes incompatibles (« 6 complets, 1 partiel, 1 interrompu, 6 non exécutés » au § 3.3, « 11 sur 14 » ici, « 3 sur 14 » au § 7). Les exécutions E20 à E30 ont tourné sur le poste Windows le 8 octobre ; E33 à E38 par `code-audit.yml` sous Ubuntu 24.04 le 16 octobre.
+**Statut PIT par module — source unique** (AUD-TST-11). Les autres sections de ce document renvoient à ce tableau au lieu de recompter, et `python scripts/quality/audit-report-summary.py mutation-status --check` (job `invariants`) le tient aligné sur les modules du `pom.xml` racine et le plugin. 12 modules sur 14 du réacteur sont exécutés (`minos-runtime-local` sans ses classes propres à Windows), ainsi que le plugin IntelliJ ; `minos-storage` et `minos-explorer` ne le sont pas. Les exécutions E20 à E30 ont tourné sur le poste Windows le 8 octobre ; E33 à E38 par `code-audit.yml` sous Ubuntu 24.04 le 16 octobre.
 
 | Module | Statut PIT | Système | Exécution | Raison |
 |---|---|---|---|---|
 | `minos-domain` | **exécuté** | Windows (poste) | E20 | |
 | `minos-engine` | **exécuté** | Windows (poste) | E20 | |
 | `minos-runtime-local` | **exécuté** (classes propres à Windows **non analysées**) | Ubuntu 24.04 (`code-audit.yml`) | E33 | 2 045 mutants, aucun `RUN_ERROR` (le rejeu remplace E20 et ses 560 mutants non analysés). Les quatre classes propres à Windows portent 228 mutants, dont 211 sans couverture sous Linux (`WindowsAppContainerWorkerSandboxBackend`, `WindowsExecutionPathIdentityProvider`, `WindowsJobObjectProcessOwnership`) : non analysées tant qu'aucune machine Windows jetable n'a rejoué le module (D2) |
-| `minos-storage-local` | **exécuté** | Windows (poste) | E27 | |
+| `minos-storage` | non exécuté | — | — | Module issu de la fusion de `minos-storage-local` et `minos-storage-postgresql`, sans rapport PIT propre ; voir « Mesures antérieures à la fusion » sous le tableau |
 | `minos-provider-scip` | **exécuté** | Windows (poste) | E27 | |
 | `minos-integration-git` | **exécuté** | Windows (poste) | E27 | |
 | `minos-application` | **exécuté** | Windows (poste) | E27 | |
-| `minos-storage-postgresql` | **exécuté** | Windows (poste) | E30 | 2 fils, tests du module seulement (E27 interrompu) |
 | `minos-nexus` | **exécuté** | Windows (poste) | E28 | |
 | `minos-api` | **exécuté** | Windows (poste) | E29 | ses seuls tests |
 | `minos-mcp` | **exécuté** | Windows (poste) | E29 | ses seuls tests |
+| `minos-explorer` | non exécuté | — | — | Module créé après les exécutions consignées ; jamais muté |
 | `minos-cli` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`) | E38 | classes du module seules (`target_classes`) ; E28 (poste, chien de garde) et E32 (`-am` sans restriction, délai dépassé) n'ont pas produit de rapport |
 | `minos-bootstrap` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`) | E35 | classes du module seules (`target_classes`) ; E32 sans restriction coupé par le délai |
 | `minos-app` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`) | E37 | classes du module seules, tests `com.minos.*Test` : les `ShadedJar*IT` exigent le jar ombré et arrêtent PIT (E36) |
 | `minos-intellij` | **exécuté** | Ubuntu 24.04 (`code-audit.yml`, job du plugin) | E34 | E21 (poste, incident H23) écarté. **Jamais sur un poste** : voir § 7.1, cause probable de H23 |
+
+**Mesures antérieures à la fusion.** E27 (`minos-storage-local`) et E30 (`minos-storage-postgresql`, 2 fils, tests du module seulement, E27 interrompu) mesurent les deux modules d'origine de `minos-storage`, avec leurs résultats au tableau par module ci-dessus. Elles ne s'additionnent pas pour tenir lieu d'une mesure de `minos-storage` : ce module reste « non exécuté » jusqu'à un rapport PIT complet de `code-audit.yml`, cité avec son exécution, son système et le commit muté.
 
 **Résultats des exécutions sous Ubuntu 24.04** (`code-audit.yml`, `develop` `0e5f14a7`, 2026-10-16 ; sortie de `audit-report-summary.py pit --module <module>` sur les artefacts téléchargés ; mêmes colonnes que le tableau ci-dessus) :
 
@@ -347,6 +351,8 @@ Pendant le PIT de `minos-runtime-local`, le poste a changé d'état ; c'est le c
 | PIT de code qui modifie l'hôte | le PIT de `minos-runtime-local` exerce sous Windows des lanceurs qui accordent des droits sur des fichiers réels ; un mutant ou un timeout peut laisser ces droits en place | rejouer ce module dans une machine jetable (VM, runner éphémère), jamais sur un poste de travail |
 
 ### 7.3 Point de reprise
+
+> Relevé du 8 octobre 2026 : les commandes ci-dessous visent les modules du reactor de cette date. L'état courant de la mutation par module est au tableau d'état du § 5.2.
 
 État au 8 octobre 2026, 19 h 30 : inventaire, Gitleaks, SpotBugs (réacteur et plugin), ArchUnit, Dependency-Check (réacteur et plugin), contrôles complémentaires et revérification des constats **terminés** ; PIT : état par module au § 5.2 (`minos-cli`, `minos-bootstrap`, `minos-app` et la reprise de `minos-runtime-local` **à faire sur une machine jetable** : leurs tests laissent des autorisations AppContainer sur l'hôte, H22) ; plugin IntelliJ **non muté** ; passe `crossModule` **non exécutée**. Trois entrées `S-1-15-2-…` laissées sur le JDK par E28 sont à retirer par l'utilisateur.
 
