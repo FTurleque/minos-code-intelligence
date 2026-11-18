@@ -330,6 +330,76 @@ Sous Windows, le lanceur du plugin SHALL refuser, avant toute modification, un d
 - **WHEN** le plugin lance une commande MINOS
 - **THEN** le dossier est réservé à son propriétaire et la commande démarre
 
+### Requirement: La cadence du superviseur du plugin est jugée sur le temps réellement mesuré
+Le test de cadence du superviseur de processus du plugin SHALL observer un superviseur réel attaché à un processus factice, ouvrir sa fenêtre après une première énumération observée et la phase initiale, et comparer le nombre d'énumérations à la durée mesurée par l'horloge monotone : au moins une, au plus 15 par seconde mesurée, même borne que le runtime local. Il SHALL NOT tenir la durée de son propre sommeil pour la durée de la fenêtre.
+
+#### Scenario: Fenêtre réelle dans le plugin
+- **GIVEN** un superviseur réel attaché à un processus factice vivant qui compte ses énumérations, après une première énumération observée et la phase initiale
+- **WHEN** une fenêtre d'au moins deux secondes mesurées se termine
+- **THEN** le nombre d'énumérations de la fenêtre est d'au moins une et d'au plus 15 par seconde mesurée
+
+#### Scenario: Cadence trop élevée dans le plugin
+- **GIVEN** le verdict de cadence du plugin appelé avec 40 énumérations et 2 secondes mesurées
+- **WHEN** il est évalué
+- **THEN** il lève une erreur d'assertion qui donne le nombre, la durée et la borne
+
+#### Scenario: Superviseur qui n'énumère plus
+- **GIVEN** le verdict de cadence du plugin appelé avec aucune énumération et 2 secondes mesurées
+- **WHEN** il est évalué
+- **THEN** il lève une erreur d'assertion
+
+### Requirement: La présentation des réponses du CLI par le plugin est testée hors des classes d'interface
+Les textes et listes que le plugin tire d'une réponse JSON du CLI (état de connexion, résumé d'architecture et de module, emplacements navigables, champ requis d'une action avancée) et l'analyse des réglages saisis SHALL être calculés par des classes sans type `com.intellij` ni `javax.swing`, testées en JUnit simple. Une réponse sans le champ attendu SHALL donner le texte de repli ou l'erreur de protocole existants, jamais une exception non gérée.
+
+#### Scenario: Emplacements collectés dans une réponse imbriquée
+- **GIVEN** une réponse JSON du CLI qui contient deux emplacements à des profondeurs différentes et un objet qui n'en est pas un
+- **WHEN** la logique extraite collecte les emplacements
+- **THEN** elle rend les deux emplacements, dans l'ordre du document, avec leur chemin d'origine
+- **AND** aucun composant Swing ni projet n'est instancié
+
+#### Scenario: Champ absent
+- **GIVEN** une réponse d'état sans le champ lu par le résumé
+- **WHEN** le texte est calculé
+- **THEN** il contient le texte de repli existant
+
+#### Scenario: Champ requis absent d'une action avancée
+- **GIVEN** une réponse du CLI sans le champ exigé par une action avancée
+- **WHEN** la logique extraite le lit
+- **THEN** elle lève l'erreur de protocole existante, qui nomme le champ
+
+#### Scenario: Réglage hors bornes ou non numérique
+- **GIVEN** une valeur de réglage saisie au-delà du maximum, puis une valeur non numérique
+- **WHEN** la logique extraite l'analyse
+- **THEN** elle rend la valeur de repli dans les deux cas
+
+#### Scenario: Réglage saisi avec des espaces
+- **GIVEN** une valeur de réglage dans les bornes, saisie entourée d'espaces
+- **WHEN** la logique extraite l'analyse
+- **THEN** elle rend la valeur saisie
+
+#### Scenario: Dépendance à l'interface réintroduite
+- **GIVEN** une classe de présentation extraite qui importe un type `com.intellij` ou `javax.swing`
+- **WHEN** `./gradlew --no-daemon test` est exécuté
+- **THEN** le test de garde des classes sans plateforme échoue en nommant la classe
+
+### Requirement: Les planchers de couverture du plugin suivent sa mesure
+Les planchers de lignes et de branches déclarés dans `build.gradle.kts`, pour le plugin et pour le paquet `protocol`, SHALL valoir la mesure Linux qui les fonde moins deux points, arrondie au centième inférieur ; la mesure, sa date et son système SHALL être écrits à côté. Un changement qui ajoute des tests au plugin SHALL relever les planchers dans le même changement. Un plancher SHALL NOT être abaissé sans raison écrite dans le suivi de l'audit en cours.
+
+#### Scenario: Tests de présentation supprimés
+- **GIVEN** une copie du plugin où les classes de test de la présentation extraite sont supprimées
+- **WHEN** `./gradlew --no-daemon test jacocoTestCoverageVerification` est exécuté sous Linux
+- **THEN** le build échoue en nommant la règle violée, la mesure et le plancher
+
+#### Scenario: Dépôt réel après le changement
+- **GIVEN** le plugin au HEAD du changement
+- **WHEN** la même commande est exécutée sous Linux
+- **THEN** elle réussit, et les planchers du plugin sont supérieurs à 0,33
+
+#### Scenario: Mesure non consignée
+- **GIVEN** `minos-intellij/build.gradle.kts`
+- **WHEN** on lit le commentaire qui précède les planchers
+- **THEN** il donne les décomptes couverts sur total, la date et le système de la mesure qui fonde chaque plancher
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [client-intellij](../../../docs/architecture/diagrams/capacites/client-intellij.md)
