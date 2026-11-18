@@ -165,13 +165,13 @@ fusionné et archivé dans cet état, les tâches manuelles restant nommées.
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| audit-qualite-code › Le tableau d'état de la mutation suit la liste des modules du reactor | Dépôt réel après le changement | D1, D2 | 1.1, 1.2, 1.3 | contrôle — à écrire |
-| idem | Module ajouté au reactor sans ligne d'état | D2 | 1.1 | auto-test — à écrire |
-| idem | Module disparu encore nommé | D2 | 1.1 | auto-test — à écrire ; rouge au HEAD |
-| idem | Tableau d'état introuvable | D2 | 1.1 | auto-test — à écrire |
-| audit-qualite-code › Une mesure de mutation antérieure à une fusion de modules n'est pas reportée sur le module fusionné | Module fusionné sans rapport | D1 | 1.2 | relecture du tableau |
-| idem | Module nouveau sans rapport | D1 | 1.2 | relecture du tableau |
-| idem | Rapport produit par le workflow d'audit | D3 | 2.1, 2.2 | manquante jusqu'aux exécutions manuelles |
+| audit-qualite-code › Le tableau d'état de la mutation suit la liste des modules du reactor | Dépôt réel après le changement | D1, D2 | 1.1, 1.2, 1.3 | `audit-report-summary.py mutation-status --check` vert (14 modules et le plugin), job `invariants` |
+| idem | Module ajouté au reactor sans ligne d'état | D2 | 1.1 | `audit-report-summary.py mutation-status --self-test`, cas « module added to the reactor without a row » |
+| idem | Module disparu encore nommé | D2 | 1.1 | `audit-report-summary.py mutation-status --self-test`, cas « vanished module still named » ; contrôle rouge au HEAD |
+| idem | Tableau d'état introuvable | D2 | 1.1 | `audit-report-summary.py mutation-status --self-test`, cas « table not found » |
+| audit-qualite-code › Une mesure de mutation antérieure à une fusion de modules n'est pas reportée sur le module fusionné | Module fusionné sans rapport | D1 | 1.2 | ligne `minos-storage` « non exécuté » et note « Mesures antérieures à la fusion » |
+| idem | Module nouveau sans rapport | D1 | 1.2 | ligne `minos-explorer` « non exécuté » avec sa raison |
+| idem | Rapport produit par le workflow d'audit | D3 | 2.1, 2.2 | manquante : exécutions manuelles 2.1 et 2.2 non faites |
 
 ## Questions ouvertes
 
