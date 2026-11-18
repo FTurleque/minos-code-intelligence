@@ -86,7 +86,7 @@ stateDiagram-v2
 
 États de `ProjectIndexState.Availability`
 (`minos-engine/src/main/java/com/minos/orchestration/ProjectIndexState.java:75-82`) ; transitions posées par
-`IndexingRunExecutor`. Invariants : `READY` et `STALE` exigent un snapshot actif ; un run reprenable n'existe
+l'exécuteur de run (`IndexingRunExecutor` et ses phases, dont `IndexingRunOutcomes` pour les issues). Invariants : `READY` et `STALE` exigent un snapshot actif ; un run reprenable n'existe
 qu'en `STALE` ou `FAILED`. Le réconciliateur d'état ramène un état incohérent à `READY`, `STALE` ou `FAILED`.
 
 ## Traçabilité

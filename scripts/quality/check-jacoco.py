@@ -343,10 +343,26 @@ SCOPES = {
     # -> promote -> persist, with commit-uncertain recovery and failure rollback). It is exercised
     # almost entirely indirectly through IndexingLifecycleService's test suite rather than directly,
     # so nothing previously stopped that indirect coverage from silently eroding.
+    # AUD-ARC-09 (audit of 2026-11-15): the executor keeps the entry point and the order of the phases; each phase is a
+    # class of its own with a class floor (measure minus about 5 points), measured on Windows, JDK 21, minos-engine
+    # module report of 2026-11-18: IndexingRunContext 63/63 lines, 10/12 branches (0.833); IndexingTargetExecution
+    # 100/119 (0.840), 40/54 (0.741); IndexingSnapshotPublication 29/32 (0.906), 6/10 (0.600); IndexingRunOutcomes
+    # 113/120 (0.942), 39/50 (0.780). With the executor and IndexingRunResumption, the run covers 445/485 lines and
+    # 137/175 branches, against 420/460 and 137/175 for the single class it replaces.
     "critical-orchestration": {
-        "prefixes": ("com/minos/orchestration/IndexingRunExecutor",),
+        "prefixes": (
+            "com/minos/orchestration/IndexingRunExecutor", "com/minos/orchestration/IndexingRunContext",
+            "com/minos/orchestration/IndexingTargetExecution", "com/minos/orchestration/IndexingSnapshotPublication",
+            "com/minos/orchestration/IndexingRunOutcomes",
+        ),
         "line": 0.75,
         "branch": 0.55,
+        "prefixMinimums": {
+            "com/minos/orchestration/IndexingRunContext": {"line": 0.95, "branch": 0.78},
+            "com/minos/orchestration/IndexingTargetExecution": {"line": 0.79, "branch": 0.69},
+            "com/minos/orchestration/IndexingSnapshotPublication": {"line": 0.85, "branch": 0.55},
+            "com/minos/orchestration/IndexingRunOutcomes": {"line": 0.89, "branch": 0.73},
+        },
     },
     # R1 (ADR 0039): resuming an interrupted indexing run. The planner decides which artifacts are
     # reused (fail-closed on every discrepancy), the reconciler turns abandoned runs into
@@ -357,9 +373,15 @@ SCOPES = {
             "com/minos/orchestration/IndexingResumePlanner",
             "com/minos/orchestration/AuthoritativeProjectStateReconciler",
             "com/minos/orchestration/IndexingRunExecutor",
+            # AUD-ARC-09: the resumption of an interrupted run, out of the executor; 77/83 lines (0.928), 24/28
+            # branches (0.857) on the measure of critical-orchestration above.
+            "com/minos/orchestration/IndexingRunResumption",
         ),
         "line": 0.75,
         "branch": 0.55,
+        "prefixMinimums": {
+            "com/minos/orchestration/IndexingRunResumption": {"line": 0.88, "branch": 0.80},
+        },
     },
 }
 
@@ -373,6 +395,11 @@ ZONE_SCOPES = {
     "wsl-lane": (),
     "semantic-projection": (),
     "storage-codec-and-state": ("com/minos/storage/codec/QueryViewMemoryBudget",),
+    "critical-orchestration": (
+        "com/minos/orchestration/IndexingRunContext", "com/minos/orchestration/IndexingTargetExecution",
+        "com/minos/orchestration/IndexingSnapshotPublication", "com/minos/orchestration/IndexingRunOutcomes",
+    ),
+    "resume-orchestration": ("com/minos/orchestration/IndexingRunResumption",),
 }
 
 

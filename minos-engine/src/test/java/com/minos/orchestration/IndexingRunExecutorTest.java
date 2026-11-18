@@ -32,7 +32,7 @@ class IndexingRunExecutorTest {
             }
         }, 150, TimeUnit.MILLISECONDS);
         try {
-            assertTrue(IndexingRunExecutor.awaitReadable(artifact),
+            assertTrue(IndexingTargetExecution.awaitReadable(artifact),
                     "the artifact must become visible within the retry window");
         } finally {
             scheduler.shutdown();
@@ -42,6 +42,6 @@ class IndexingRunExecutorTest {
     @Test
     void awaitReadableFailsClosedWhenTheArtifactNeverAppears(@TempDir Path temp) throws InterruptedException {
         Path artifact = temp.resolve("never-written.scip");
-        assertFalse(IndexingRunExecutor.awaitReadable(artifact));
+        assertFalse(IndexingTargetExecution.awaitReadable(artifact));
     }
 }
