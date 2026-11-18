@@ -2,6 +2,7 @@ package com.minos.bootstrap.application;
 
 import com.minos.application.ProjectInspectionService;
 import com.minos.discovery.ProjectDiscoveryService;
+import com.minos.storage.home.FileIndexImportHistoryStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.local.registry.LocalProjectRegistry;
@@ -37,7 +38,7 @@ class ProjectInspectionSnapshotConsistencyTest {
                 Optional.of("stale metadata")));
         FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
         ProjectInspectionService inspection = new ProjectInspectionService(
-                home,
+                new FileIndexImportHistoryStore(home),
                 registry,
                 snapshots,
                 states,
