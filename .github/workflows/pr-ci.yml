@@ -234,6 +234,12 @@ jobs:
       - name: Comment language gate self-test
         run: python scripts/quality/check-comment-language.py --self-test
 
+      - name: Mutation status table follows the reactor modules
+        run: python scripts/quality/audit-report-summary.py mutation-status --check
+
+      - name: Mutation status table check self-test
+        run: python scripts/quality/audit-report-summary.py mutation-status --self-test
+
       - name: Partial-result consumer gate (heuristic, see its docstring for what it cannot see)
         run: python scripts/quality/check-partial-result-consumers.py
 
