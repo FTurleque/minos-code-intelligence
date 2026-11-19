@@ -1578,6 +1578,26 @@ class EmbeddedAdapterRuleTest(RatchetTreeTestCase):
         self.refused(lambda: self.check(adapters={**self.ADAPTERS, "FileProgramGraphProvider": " "}), "A19",
                      "EMBEDDED_ADAPTER_CLASSES entry FileProgramGraphProvider has no written justification")
 
+    def without_ollama(self):
+        return {name: reason for name, reason in self.ADAPTERS.items() if name != "OllamaEmbeddingProvider"}
+
+    def test_an_api_user_missing_from_the_adapters_is_refused_with_the_class_and_the_list(self):
+        self.refused(lambda: self.check(adapters=self.without_ollama()), "A19",
+                     "OllamaEmbeddingProvider names java.net.HttpURLConnection",
+                     "missing from EMBEDDED_ADAPTER_CLASSES")
+
+    def test_an_api_user_missing_from_the_adapters_is_refused_even_when_another_source_names_it(self):
+        self.write("minos-application", "com.minos.application", "MinosApplicationRuntimeConfiguration",
+                   "final class MinosApplicationRuntimeConfiguration { OllamaEmbeddingProvider provider; }",
+                   imports=("com.minos.application.semantic.OllamaEmbeddingProvider",))
+        self.refused(lambda: self.check(adapters=self.without_ollama()), "A19",
+                     "OllamaEmbeddingProvider names java.net.HttpURLConnection",
+                     "missing from EMBEDDED_ADAPTER_CLASSES")
+
+    def test_every_api_user_listed_as_an_adapter_is_accepted_and_an_adapter_may_name_no_api(self):
+        self.assertTrue({name.rsplit(".", 1)[-1] for name in self.API_USERS} <= set(self.ADAPTERS))
+        self.assertEqual((2, 3), self.check())
+
     def test_the_real_tree_matches_both_tables(self):
         self.assertEqual((len(_MODULE.INFRASTRUCTURE_API_USERS), len(_MODULE.EMBEDDED_ADAPTER_CLASSES)),
                          _MODULE.check_embedded_adapters())
