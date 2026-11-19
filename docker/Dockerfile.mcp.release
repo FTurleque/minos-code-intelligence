@@ -157,10 +157,18 @@ RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
 
 # scip-java's Maven build is executed at runtime against a writable staging copy of the project.
 # Package an exact Maven distribution and verify it against a checksum owned by this Dockerfile.
+# The Apache archive serves the same bytes while Maven Central answers 404 or 429; whichever mirror served the file,
+# the checksum decides, and a mismatch fails without trying the other mirror.
 RUN set -eux; \
     maven_archive="apache-maven-${MAVEN_VERSION}-bin.zip"; \
-    maven_base="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"; \
-    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "/tmp/${maven_archive}" "${maven_base}/${maven_archive}"; \
+    for maven_url in \
+      "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}/${maven_archive}" \
+      "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/${maven_archive}"; do \
+      if curl --retry 5 --retry-all-errors --retry-delay 5 --max-time 120 -fsSLo "/tmp/${maven_archive}" "${maven_url}"; then \
+        break; \
+      fi; \
+      rm -f "/tmp/${maven_archive}"; \
+    done; \
     printf '%s  %s\n' "${MAVEN_ZIP_SHA256}" "/tmp/${maven_archive}" | sha256sum -c -; \
     unzip -q "/tmp/${maven_archive}" -d /opt; \
     ln -s "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn; \

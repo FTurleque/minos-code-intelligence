@@ -47,8 +47,9 @@ for tool in json.load(open(sys.argv[1], encoding="utf-8"))["artifacts"]:
     echo "the tool catalog pins no Maven 3.9.x" >&2
     exit 1
   fi
-  curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 120 -fsSLo "$WORK/maven.zip" "$url"
-  printf '%s  %s\n' "$sha256" "$WORK/maven.zip" | sha256sum -c -
+  # The Apache archive serves the same pinned bytes while Maven Central answers 404 or 429.
+  bash "$REPOSITORY_ROOT/scripts/ci/fetch-verified.sh" "$sha256" "$WORK/maven.zip" "$url" \
+    "https://archive.apache.org/dist/maven/maven-3/$version/binaries/apache-maven-$version-bin.zip"
   sudo unzip -q -o "$WORK/maven.zip" -d /usr/local
   sudo chmod 755 "/usr/local/apache-maven-$version/bin/mvn"
   export PATH="/usr/local/apache-maven-$version/bin:$PATH"
@@ -70,7 +71,13 @@ chmod 700 "$WORK" "$QUALIFICATION_REPOSITORY"
 
 # 1. Trusted population, outside the sandbox, on a throwaway copy of the fixture.
 cp -R "$REPOSITORY_ROOT/fixtures/java/java-simple" "$WORK/populate"
-mvn -B -ntp -f "$WORK/populate/pom.xml" "-Dmaven.repo.local=$QUALIFICATION_REPOSITORY" clean verify -DskipTests
+# The repository starts empty, so every plugin comes from Maven Central, which answers 429 to a busy runner: fewer
+# parallel downloads, and more patient retries of a "too many requests" answer than the resolver's default of 3.
+mvn -B -ntp -f "$WORK/populate/pom.xml" "-Dmaven.repo.local=$QUALIFICATION_REPOSITORY" \
+  -Daether.connector.basic.threads=2 \
+  -Daether.connector.http.retryHandler.count=10 \
+  -Daether.connector.http.retryHandler.interval=10000 \
+  clean verify -DskipTests
 rm -rf "$WORK/populate"
 # The designated repository must look like a Maven repository: no settings or hidden entry at its root.
 find "$QUALIFICATION_REPOSITORY" -maxdepth 1 -mindepth 1 \( -name '.*' -o -name 'settings*.xml' \) -exec rm -rf {} +
@@ -99,9 +106,9 @@ if [[ -z "$COURSIER_COMMIT" || -z "$COURSIER_SHA256" ]]; then
   exit 1
 fi
 mkdir -p "$WORK/bin"
-COURSIER_URL="https://raw.githubusercontent.com/coursier/launchers/${COURSIER_COMMIT}/cs-x86_64-pc-linux.gz"
-curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "$WORK/cs.gz" "$COURSIER_URL"
-printf '%s  %s\n' "$COURSIER_SHA256" "$WORK/cs.gz" | sha256sum -c -
+bash "$REPOSITORY_ROOT/scripts/ci/fetch-verified.sh" "$COURSIER_SHA256" "$WORK/cs.gz" \
+  "https://raw.githubusercontent.com/coursier/launchers/${COURSIER_COMMIT}/cs-x86_64-pc-linux.gz" \
+  "https://github.com/coursier/launchers/raw/${COURSIER_COMMIT}/cs-x86_64-pc-linux.gz"
 gunzip -c "$WORK/cs.gz" > "$WORK/bin/cs"
 chmod 755 "$WORK/bin/cs"
 export PATH="$WORK/bin:$PATH"
