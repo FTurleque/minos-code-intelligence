@@ -82,6 +82,8 @@ chaque PR par `scripts/quality/check-jacoco.py` (capacité `controles-de-fusion`
 | Dependency-Check distingue une erreur d'un résultat | configuration et runs manuels consignés ; aucun test | V1 | `pom.xml`, `.github/workflows/code-audit.yml` (job `dependency-check`) | partielle |
 | Les composants hors du réacteur Maven restent visibles | matrice sans gate ; Dependency-Check du plugin absent (E7) | V1 | `docs/developer/quality/code-audit-couverture.md` | partielle |
 | Gitleaks couvre l'historique complet et ne publie aucun secret | historique complet et rédaction prouvés ; clone miroir et qualification manuels | — | `.github/workflows/secret-scan.yml`, `.gitleaks.toml` | partielle |
+| Le tableau d'état de la mutation suit la liste des modules du reactor | 4/4 | — | `scripts/quality/audit-report-summary.py#mutation_status_problems`, `scripts/quality/audit-report-summary.py#mutation_status_self_test` (`mutation-status --check` et `--self-test`, job `invariants`) | couverte |
+| Une mesure de mutation antérieure à une fusion de modules n'est pas reportée sur le module fusionné | 2/3 ; « Rapport produit par le workflow d'audit » attend une exécution de `.github/workflows/code-audit.yml` sur `main` | — | `docs/developer/quality/code-audit-couverture.md` (lignes `minos-storage` et `minos-explorer` « non exécuté »), `scripts/quality/audit-report-summary.py#mutation_status_self_test` | partielle |
 
 Les gardes statiques portent leur auto-test en option (`--self-test`), exécuté par le job `invariants`.
 

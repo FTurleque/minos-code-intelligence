@@ -347,6 +347,20 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
+### Fournisseurs embarqués câblés par la racine de composition ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), version 1.3.0
+
+Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.application.MinosApplicationComposer` gagne trois méthodes abstraites, qu'une implémentation tierce du port doit ajouter (rupture de source) :
+
+- `Optional<EmbeddingProvider> embeddingProvider(EmbeddingProviderSettings settings)` : fournisseur d'embeddings appris pour des réglages déjà validés ; vide quand l'identifiant n'est pas fourni, et l'ouverture refuse alors le réglage (« unsupported semantic provider ») ;
+- `List<ProgramGraphProvider> programGraphProviders(ProjectFingerprintSnapshotStore fingerprints)` : liste de production des fournisseurs du graphe de programme ;
+- `List<ProgramGraphProvider> completeProgramGraphProviders(List<ProgramGraphProvider> requested)` : complétion d'une liste (analyseur de sources Java à côté du fournisseur de relations, lecteur de sidecar toujours).
+
+La classe interne `com.minos.program.analysis.ProgramGraphService` perd son constructeur `(ProjectRegistry, CodeKnowledgeSnapshotStore)` et ses deux méthodes statiques `productionProviders` ; son constructeur à liste explicite ne complète plus la liste reçue (rupture de source et binaire). Remplacement : `MinosApplication.open(home).programGraphService()`, ou le constructeur à liste explicite avec une liste complétée par `new DefaultMinosApplicationComposer().completeProgramGraphProviders(...)`.
+
+### Port de l'historique d'import, version 1.3.0
+
+Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.application.MinosApplicationComposer` gagne la méthode abstraite `IndexImportHistoryStore indexImportHistoryStore(Path home)` : une implémentation tierce du port doit l'ajouter (rupture de source) ; celle de `minos-bootstrap` rend `com.minos.storage.home.FileIndexImportHistoryStore`. Le premier paramètre des deux constructeurs publics de `com.minos.application.ProjectInspectionService` passe de `Path home` à `IndexImportHistoryStore historyStore` (rupture de source et binaire) ; remplacement : `new FileIndexImportHistoryStore(home)`, ou `MinosApplication.open(home).projectInspectionService()`. Le format du fichier d'historique ne change pas.
+
 ### Adaptateurs de stockage dans un seul artefact, version 1.3.0
 
 Les backends de stockage local et PostgreSQL sont livrés dans un seul artefact Maven, `com.minos:minos-storage`, à la place de `com.minos:minos-storage-local` et `com.minos:minos-storage-postgresql` ([ADR 0068](../architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 4). Le nom des classes ne change pas, ni les packages `com.minos.storage.local.*` et `com.minos.storage.postgresql.*`, à l'exception des classes partagées par les deux backends (section suivante). Le service `StorageBackendProvider` du backend PostgreSQL est déclaré par l'assemblage `minos-app` : le JAR distribué `minos-code-intelligence-*-all.jar` le contient, et un hôte qui dépend de `com.minos:minos-api` n'a que le backend local, comme avant. Un projet qui déclarait l'un des deux anciens artefacts déclare `minos-storage` ; il reçoit alors le pilote PostgreSQL et Jackson dans son graphe de dépendances, que le backend local ne charge pas. Aucun artefact de relocation n'est publié : MINOS ne publie pas ses modules dans un dépôt Maven.

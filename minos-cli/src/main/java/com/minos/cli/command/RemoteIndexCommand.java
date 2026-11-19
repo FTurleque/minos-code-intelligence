@@ -1,10 +1,13 @@
 package com.minos.cli.command;
 
+import com.minos.application.remote.ArtifactEvidenceSummary;
+import com.minos.application.remote.RemoteMaterializationSummary;
 import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.RemoteIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.output.SymbolOutputFormat;
@@ -78,7 +81,7 @@ public final class RemoteIndexCommand {
                                 request, options.displayName(), options.provider(), options.workerId(),
                                 options.workerNetwork()), options.format())).append('\n');
                     }
-                    return FindSymbolCommand.SUCCESS;
+                    return CliExitCodes.SUCCESS;
                 });
     }
 
@@ -87,7 +90,7 @@ public final class RemoteIndexCommand {
     }
 
     private static String renderMaterialization(
-            RemoteIndexOperations.RemoteMaterializationView value,
+            RemoteMaterializationSummary value,
             SymbolOutputFormat format
     ) {
         Map<String, Object> map = materializationMap(value);
@@ -122,7 +125,7 @@ public final class RemoteIndexCommand {
         lines.add("projectName: " + value.projectName());
         lines.add("status: " + value.execution().status());
         lines.add("activeSnapshotId: " + nullable(value.execution().activeSnapshotId()));
-        for (RemoteIndexOperations.ArtifactEvidence artifact : value.artifacts()) {
+        for (ArtifactEvidenceSummary artifact : value.artifacts()) {
             lines.add("artifact[" + artifact.providerId() + "]: PASS sha256=" + artifact.artifactSha256()
                     + " worker=" + artifact.workerId()
                     + " isolation=" + artifact.isolation()
@@ -133,7 +136,7 @@ public final class RemoteIndexCommand {
         return String.join("\n", lines);
     }
 
-    private static Map<String, Object> materializationMap(RemoteIndexOperations.RemoteMaterializationView value) {
+    private static Map<String, Object> materializationMap(RemoteMaterializationSummary value) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("host", value.host());
         map.put("repository", value.repository());
@@ -161,7 +164,7 @@ public final class RemoteIndexCommand {
         return map;
     }
 
-    private static Map<String, Object> artifactMap(RemoteIndexOperations.ArtifactEvidence value) {
+    private static Map<String, Object> artifactMap(ArtifactEvidenceSummary value) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("providerId", value.providerId());
         map.put("providerVersion", value.providerVersion());

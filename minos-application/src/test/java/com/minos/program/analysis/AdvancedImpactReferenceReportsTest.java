@@ -136,7 +136,7 @@ class AdvancedImpactReferenceReportsTest {
             project = registry.registerProject(Files.createDirectories(root.resolve("project")), "advanced-reference");
             CodeKnowledgeSnapshot reference = ImpactReferenceFixture.snapshot();
             snapshots.publish(project.id(), ImpactReferenceFixture.SNAPSHOT_ID, List.of());
-            graphs = new ProgramGraphService(registry, snapshots, List.of(new SyntheticProvider()));
+            graphs = new ProgramGraphService(registry, snapshots, TestProgramGraphProviders.completed(List.of(new SyntheticProvider())));
             ImpactAnalysisService impacts = new ImpactAnalysisService();
             ProjectImpactQuery baseline = (ignored, request) -> impacts.analyze(reference, request);
             service = new AdvancedImpactService(baseline, graphs);

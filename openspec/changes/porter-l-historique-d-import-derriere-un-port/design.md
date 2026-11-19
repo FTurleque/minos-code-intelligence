@@ -177,12 +177,12 @@ Aucune capacité produit nouvelle. Windows et Linux : qualifié par les tests de
 |---|---|---|---|---|
 | frontieres-de-modules › L'historique d'import est lu et écrit par un port | Littéral absent de l'application ; Un seul détenteur du format | vue de composants | 2.2 | recherche textuelle |
 | idem | Import réussi écrit l'historique sans avertissement | Traitements | 2.2 | `ImportHistoryFailureTest` (existant) |
-| idem | Inspection après import | D5 | 2.1 | test de `minos-bootstrap`, à écrire |
+| idem | Inspection après import | D5 | 2.1 | `ImportHistoryInspectionTest` (`minos-bootstrap`) ; `DefaultMinosApplicationComposerTest#theImportHistoryStoreIsTheFileStoreOfTheHomeAndAReadingCreatesNothing` |
 | idem | Port non exposé par la façade | Responsabilités | 2.2 | `check-module-boundaries.py` (A11) |
-| frontieres-de-modules › Le format de l'historique d'import reste lisible | Fichier d'une version antérieure ; Projet sans historique ; Écriture atomique et privée | Persistance | 1.1 | `FileIndexImportHistoryStoreTest`, à écrire |
-| frontieres-de-modules › Un historique d'import illisible est refusé sans fuite | Clé obligatoire manquante | Erreurs, D5 | 1.1 | `FileIndexImportHistoryStoreTest`, à écrire |
-| idem | Refus du port relayé par l'inspection | D5 | 2.2 | `ProjectInspectionServiceRefusalMessageTest` (à adapter) |
-| idem | Fichier hors bornes | Erreurs | 1.1 | à écrire |
+| frontieres-de-modules › Le format de l'historique d'import reste lisible | Fichier d'une version antérieure ; Projet sans historique ; Écriture atomique et privée | Persistance | 1.1 | `FileIndexImportHistoryStoreTest` (format antérieur, projet sans historique, écriture privée, Latin-1, version vide, remplacement sans temporaire) |
+| frontieres-de-modules › Un historique d'import illisible est refusé sans fuite | Clé obligatoire manquante | Erreurs, D5 | 1.1 | `FileIndexImportHistoryStoreTest#aHistoryWithoutASnapshotIdIsRefusedByItsLeafName` |
+| idem | Refus du port relayé par l'inspection | D5 | 2.2 | `ProjectInspectionServiceRefusalMessageTest#theRefusalOfTheHistoryPortIsRelayedWithoutAPath` |
+| idem | Fichier hors bornes | Erreurs | 1.1 | `FileIndexImportHistoryStoreTest#aHistoryBeyondTheByteBoundIsRefused` |
 | idem | Dossier d'historique inutilisable | Traitements | 2.2 | `ImportHistoryFailureTest` (existant) |
 
 ## Questions ouvertes

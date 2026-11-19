@@ -53,7 +53,8 @@ class ProgramGraphServiceConcurrencyTest {
                         project.id().toString(), snapshot.snapshotId(), Set.of(), List.of(), List.of(), List.of());
             }
         };
-        ProgramGraphService service = new ProgramGraphService(registry, snapshots, List.of(blocking));
+        ProgramGraphService service = new ProgramGraphService(registry, snapshots,
+                new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(List.of(blocking)));
 
         try (var executor = Executors.newFixedThreadPool(2)) {
             var firstFuture = executor.submit(() -> service.getGraph(first.id().toString()));

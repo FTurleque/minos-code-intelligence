@@ -129,7 +129,8 @@ class ProgramGraphAnalysisTest {
         store.publish(project.id(), "snapshot-advanced", List.of(rootSymbol, advancedSymbol), List.of(), List.of());
 
         ProgramGraphProvider provider = new FixtureProvider();
-        ProgramGraphService graphs = new ProgramGraphService(registry, store, List.of(provider));
+        ProgramGraphService graphs = new ProgramGraphService(registry, store,
+                new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(List.of(provider)));
         AdvancedImpactService impacts = new AdvancedImpactService(new LocalProjectImpactQuery(registry, store), graphs);
 
         AdvancedImpactService.AdvancedImpactReport impact = impacts.analyze(
@@ -160,7 +161,8 @@ class ProgramGraphAnalysisTest {
                 Set.of(OccurrenceRole.REFERENCE), ResolutionStatus.RESOLVED, ORIGIN, Set.of());
         FileSymbolSnapshotStore store = new FileSymbolSnapshotStore(temp.resolve("snapshots"));
         store.publish(project.id(), "snapshot-advanced", List.of(rootSymbol, advancedSymbol), List.of(reference), List.of());
-        ProgramGraphService graphs = new ProgramGraphService(registry, store, List.of(new FixtureProvider()));
+        ProgramGraphService graphs = new ProgramGraphService(registry, store,
+                new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(List.of(new FixtureProvider())));
         AdvancedImpactService impacts = new AdvancedImpactService(new LocalProjectImpactQuery(registry, store), graphs);
 
         AdvancedImpactService.AdvancedImpactReport report = impacts.analyze(

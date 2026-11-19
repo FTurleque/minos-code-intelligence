@@ -1,13 +1,13 @@
 package com.minos.application;
 
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
-import com.minos.application.semantic.OllamaEmbeddingProvider;
 import com.minos.storage.MinosRuntimeSettings;
 
 import java.net.URI;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Applies one immutable runtime settings snapshot to a MINOS application builder. */
 final class MinosApplicationRuntimeConfiguration {
@@ -32,31 +32,39 @@ final class MinosApplicationRuntimeConfiguration {
             return;
         }
         if ("ollama".equals(provider) || "local-ollama".equals(provider)) {
-            String model = requiredSetting(
-                    settings, MinosApplication.SEMANTIC_MODEL_PROPERTY, MinosApplication.SEMANTIC_MODEL_ENV);
-            int dimensions = parsePositiveInt(requiredSetting(
-                    settings,
-                    MinosApplication.SEMANTIC_DIMENSIONS_PROPERTY,
-                    MinosApplication.SEMANTIC_DIMENSIONS_ENV), "semantic dimensions");
-            String endpointValue = setting(
-                    settings, MinosApplication.SEMANTIC_ENDPOINT_PROPERTY, MinosApplication.SEMANTIC_ENDPOINT_ENV);
-            URI endpoint = endpointValue == null || endpointValue.isBlank()
-                    ? OllamaEmbeddingProvider.DEFAULT_ENDPOINT
-                    : URI.create(endpointValue.trim());
-            String timeoutValue = setting(
-                    settings,
-                    MinosApplication.SEMANTIC_TIMEOUT_SECONDS_PROPERTY,
-                    MinosApplication.SEMANTIC_TIMEOUT_SECONDS_ENV);
-            Duration timeout = timeoutValue == null || timeoutValue.isBlank()
-                    ? OllamaEmbeddingProvider.DEFAULT_TIMEOUT
-                    : Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds"));
-            builder.embeddingProvider(new OllamaEmbeddingProvider(
-                    endpoint, model, dimensions, timeout, settings.runtimeLocation()));
+            MinosApplicationComposer.EmbeddingProviderSettings learned = learnedProviderSettings(settings);
+            builder.embeddingProvider(builder.resolvedComposer().embeddingProvider(learned)
+                    .orElseThrow(() -> new IllegalArgumentException("unsupported semantic provider: " + configured)));
             return;
         }
         if (!"disabled".equals(provider)) {
             throw new IllegalArgumentException("unsupported semantic provider: " + configured);
         }
+    }
+
+    /** Reads and validates the settings of the learned provider before the composition root is asked for it. */
+    private static MinosApplicationComposer.EmbeddingProviderSettings learnedProviderSettings(
+            MinosRuntimeSettings settings) {
+        String model = requiredSetting(
+                settings, MinosApplication.SEMANTIC_MODEL_PROPERTY, MinosApplication.SEMANTIC_MODEL_ENV);
+        int dimensions = parsePositiveInt(requiredSetting(
+                settings,
+                MinosApplication.SEMANTIC_DIMENSIONS_PROPERTY,
+                MinosApplication.SEMANTIC_DIMENSIONS_ENV), "semantic dimensions");
+        String endpointValue = setting(
+                settings, MinosApplication.SEMANTIC_ENDPOINT_PROPERTY, MinosApplication.SEMANTIC_ENDPOINT_ENV);
+        Optional<URI> endpoint = endpointValue == null || endpointValue.isBlank()
+                ? Optional.empty()
+                : Optional.of(URI.create(endpointValue.trim()));
+        String timeoutValue = setting(
+                settings,
+                MinosApplication.SEMANTIC_TIMEOUT_SECONDS_PROPERTY,
+                MinosApplication.SEMANTIC_TIMEOUT_SECONDS_ENV);
+        Optional<Duration> timeout = timeoutValue == null || timeoutValue.isBlank()
+                ? Optional.empty()
+                : Optional.of(Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds")));
+        return new MinosApplicationComposer.EmbeddingProviderSettings(
+                "ollama", model, dimensions, endpoint, timeout, settings.runtimeLocation());
     }
 
     private static void configureHostedMode(MinosRuntimeSettings settings, MinosApplication.Builder builder) {

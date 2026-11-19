@@ -1,8 +1,8 @@
 package com.minos.app;
 
 import com.minos.application.MinosApplicationComposers;
-import com.minos.cli.command.FindSymbolCommand;
 
+import com.minos.cli.support.CliExitCodes;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,7 +80,7 @@ final class DockerMcpTransport {
         if (exitCode != 0 && exitCode != 130) {
             throw new IOException("Docker MCP STDIO session failed with exit code " + exitCode);
         }
-        return exitCode == 130 ? FindSymbolCommand.SUCCESS : exitCode;
+        return exitCode == 130 ? CliExitCodes.SUCCESS : exitCode;
     }
 
     /** ADR 0042: host command lookup and invocation through the composition root (real host). */

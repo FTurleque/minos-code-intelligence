@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -25,7 +25,7 @@ class MinosCliTest {
                 "find-symbol", "project-1", "Greeting", "--format", "json"
         }, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertEquals("project-1", projectId.get());
         assertEquals("{\"count\":0,\"symbols\":[]}\n", output.toString());
     }
@@ -39,7 +39,7 @@ class MinosCliTest {
 
         int exitCode = cli.run(new String[]{"--help"}, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertEquals(MinosCli.usage() + "\n", output.toString());
     }
 
@@ -49,7 +49,7 @@ class MinosCliTest {
 
         StringBuilder missingError = new StringBuilder();
         int missingExitCode = cli.run(new String[]{}, new StringBuilder(), missingError);
-        assertEquals(FindSymbolCommand.USAGE_ERROR, missingExitCode);
+        assertEquals(CliExitCodes.USAGE_ERROR, missingExitCode);
         assertTrue(missingError.toString().startsWith("error: command is required\n"));
 
         StringBuilder unknownError = new StringBuilder();
@@ -58,7 +58,7 @@ class MinosCliTest {
                 new StringBuilder(),
                 unknownError
         );
-        assertEquals(FindSymbolCommand.USAGE_ERROR, unknownExitCode);
+        assertEquals(CliExitCodes.USAGE_ERROR, unknownExitCode);
         assertTrue(unknownError.toString().startsWith("error: unknown command: unknown\n"));
     }
 }

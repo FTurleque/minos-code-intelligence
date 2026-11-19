@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliOptions;
 import com.minos.architecture.ArchitectureModuleSelection;
 import com.minos.architecture.ProjectArchitectureQuery;
@@ -37,7 +38,7 @@ public final class ArchitectureCommand {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             String rendered = options.format().isGraph() ? renderGraph(options) : renderReport(options);
             output.append(rendered).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         });
     }
 

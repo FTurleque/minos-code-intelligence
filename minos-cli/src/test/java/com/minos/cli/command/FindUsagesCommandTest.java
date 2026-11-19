@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.application.ProjectSymbolQuery;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.OccurrenceRole;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -68,7 +69,7 @@ class FindUsagesCommandTest {
                 error
         );
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, code);
+        assertEquals(CliExitCodes.USAGE_ERROR, code);
         assertEquals(0, calls.get());
         assertTrue(error.toString().contains("limit must be between 1 and 1000"));
     }
@@ -89,7 +90,7 @@ class FindUsagesCommandTest {
                 error
         );
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, code);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, code);
         assertEquals("error: find-usages failed: snapshot unavailable\n", error.toString());
     }
 

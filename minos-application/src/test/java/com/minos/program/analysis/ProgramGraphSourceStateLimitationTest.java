@@ -69,7 +69,8 @@ class ProgramGraphSourceStateLimitationTest {
     void sourceProviderWithoutFingerprintStoreStillHashesOnEveryCallAndDeclaresNothing(@TempDir Path root)
             throws Exception {
         ProgramGraphSourceFixture fixture = new ProgramGraphSourceFixture(root, 3);
-        ProgramGraphService service = fixture.service(ProgramGraphService.productionProviders());
+        ProgramGraphService service = fixture.service(
+                List.of(new RelationshipProgramGraphProvider(), new JavaSourceProgramGraphProvider()));
         String project = fixture.project.id().toString();
 
         ProgramGraph first = service.getGraph(project);
