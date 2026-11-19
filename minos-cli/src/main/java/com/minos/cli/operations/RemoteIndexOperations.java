@@ -1,5 +1,7 @@
 package com.minos.cli.operations;
 
+import com.minos.application.remote.ArtifactEvidenceSummary;
+import com.minos.application.remote.RemoteMaterializationSummary;
 import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 
@@ -11,7 +13,7 @@ import static com.minos.domain.Preconditions.requireText;
 /** CLI port for opt-in immutable remote materialization and worker-backed indexing. */
 public interface RemoteIndexOperations {
 
-    RemoteMaterializationView materialize(RemoteSourceRequest request) throws Exception;
+    RemoteMaterializationSummary materialize(RemoteSourceRequest request) throws Exception;
 
     RemoteIndexView index(
             RemoteSourceRequest request,
@@ -21,64 +23,17 @@ public interface RemoteIndexOperations {
             WorkerNetworkChoice workerNetwork
     ) throws Exception;
 
-    record RemoteMaterializationView(
-            String host,
-            String repository,
-            String reference,
-            String commit,
-            String repositoryRoot,
-            String projectRoot,
-            String cacheKey,
-            boolean cacheHit,
-            String materializedAt
-    ) {
-        public RemoteMaterializationView {
-            requireText(host, "host");
-            requireText(repository, "repository");
-            requireText(reference, "reference");
-            requireText(commit, "commit");
-            requireText(repositoryRoot, "repositoryRoot");
-            requireText(projectRoot, "projectRoot");
-            requireText(cacheKey, "cacheKey");
-            requireText(materializedAt, "materializedAt");
-        }
-    }
-
-    record ArtifactEvidence(
-            String providerId,
-            String providerVersion,
-            String language,
-            String workerId,
-            String isolation,
-            String networkPolicy,
-            boolean networkDenyEnforced,
-            String artifactSha256,
-            String bundleSha256,
-            String cacheKey,
-            boolean cacheHit,
-            String projectRelativeRoot
-    ) {
-        public ArtifactEvidence {
-            requireText(providerId, "providerId");
-            requireText(providerVersion, "providerVersion");
-            requireText(language, "language");
-            requireText(workerId, "workerId");
-            requireText(isolation, "isolation");
-            requireText(networkPolicy, "networkPolicy");
-            requireText(artifactSha256, "artifactSha256");
-            requireText(bundleSha256, "bundleSha256");
-            requireText(cacheKey, "cacheKey");
-            // projectRelativeRoot is "" for root scope — requireNonNull, not requireText
-            Objects.requireNonNull(projectRelativeRoot, "projectRelativeRoot");
-        }
-    }
-
+    /**
+     * The remote indexing as the command shows it. The materialization and the artifact evidence are the
+     * application summaries themselves; the execution is the CLI view, which sanitizes its diagnostic.
+     * {@code CliViewParityTest} keeps this view exhaustive against {@code RemoteIndexSummary}.
+     */
     record RemoteIndexView(
-            RemoteMaterializationView materialization,
+            RemoteMaterializationSummary materialization,
             String projectId,
             String projectName,
             AutonomousIndexOperations.IndexExecutionView execution,
-            List<ArtifactEvidence> artifacts
+            List<ArtifactEvidenceSummary> artifacts
     ) {
         public RemoteIndexView {
             Objects.requireNonNull(materialization, "materialization");
