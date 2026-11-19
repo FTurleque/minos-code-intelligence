@@ -28,7 +28,7 @@ snapshots par le même codec »
 ```mermaid
 sequenceDiagram
   autonumber
-  participant X as "IndexingRunExecutor"
+  participant X as "IndexingSnapshotPublication"
   participant LC as "ScipProjectSnapshotLifecycle"
   participant ST as "FileSymbolSnapshotStore"
   participant SR as "SnapshotRepository / ActiveSnapshotRepository"

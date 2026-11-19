@@ -29,6 +29,37 @@ Commit relu : `89be3fb4` (`main`).
 | Scopes JaCoCo par préfixe `com/minos/orchestration/IndexingRunExecutor` : `critical-orchestration` (ligne 0,75, branche 0,55) et `resume-orchestration` | `scripts/quality/check-jacoco.py:281-298` |
 | Documents qui citent le nom | `docs/architecture/arc42/05-vue-blocs.md:55`, `docs/architecture/arc42/06-vue-execution.md:53`, `docs/developer/architecture.md:100`, `docs/architecture/diagrams/capacites/decouverte-et-negociation.md:89`, `:105`, `docs/architecture/diagrams/capacites/persistance-snapshots.md:31`, `docs/architecture/diagrams/seq-indexation-nominale.md:47`, `docs/architecture/adr/BE-0039-reprise-indexation-apres-interruption.md:21`, `:27`, `:87`, `:168`, `:181`, `:189` |
 
+### Lot `minos-engine` : relevé et mesures
+
+Relu au `03c0fc90` (`main`, après la fusion de `reduire-les-lectures-de-la-voie-wsl`, 2026-11-18) : 1 041 lignes ; `registeredProjectFingerprint` (AUD-PERF-07) s'ajoute à l'exécution des cibles. `IndexingResumePlanner` appelle aussi `scopedChangedFiles` en production. Les numéros de ligne du tableau ci-dessus sont ceux du `89be3fb4`.
+
+Découpage arrêté (tâche 1.1), chaque méthode hors bloc ayant une seule classe d'accueil :
+
+| Classe | Contenu | Lignes |
+|---|---|---|
+| `IndexingRunExecutor` | `execute`, ordre des refus, `validateExecutionRoot`, `reconcilePreviousState`, `RunRequest`, `Collaborators`, enchaînement des phases | 181 |
+| `IndexingRunContext` | état du run (`RunContext`), `Ports`, `holdRunDirectory`, `publishInProgress`, `running`, `portable`, identité du run (`Identity`) ; le journal est déclaré par `IndexingRunExecutor` | 177 |
+| `IndexingTargetExecution` | `executeProviders`, `executeProvider`, `registeredProjectFingerprint`, `captureScopeFingerprint`, `checkpoint`, `requireExecutor`, `requireExecutionRoot`, `scopedChangedFiles`, `validateArtifact`, `requireInsideRunDirectory`, `requireArtifactsStillInsideRunDirectory`, `awaitReadable`, `ValidatedProjectRoot` | 281 |
+| `IndexingSnapshotPublication` | mise en place (confinement revérifié d'abord), promotion, `recoverUncertainPromotion`, `authoritativeTargetIsActive` | 74 |
+| `IndexingRunOutcomes` | `persistSuccess`, `resumeSuffix`, `persistTerminalFailure`, `isInterruption`, `interruptedRun`, `persistInterruption`, `holdAgainstRetention`, `persistFailure`, `failedRun`, `persistCommittedFailure`, `persistUncommittedFailure`, `persist`, `failureMessage` | 269 |
+| `IndexingRunResumption` | `executeResumed`, `reverifyReusedArtifacts`, `existingRunDirectory`, `resumeStagedPromotion`, `ResumedAttempt`, `ResumeAborted` | 187 |
+
+`holdRunDirectory`, appelée par le run neuf et par la reprise, vit dans le contexte du run, comme `publishInProgress` et `running` : aucune phase n'appelle l'exécuteur en retour.
+
+Mesures (Windows 10, JDK Microsoft 21.0.12, `./mvnw -B -ntp -pl minos-engine -am verify "-Dtest=com/minos/**/*Test"`, rapport du module) :
+
+| Classe | Avant (`03c0fc90`) lignes / branches | Après lignes / branches |
+|---|---|---|
+| `IndexingRunExecutor` | 420/460 / 137/175 | 63/68 / 18/21 |
+| `IndexingRunContext` | — | 63/63 / 10/12 |
+| `IndexingTargetExecution` | — | 100/119 / 40/54 |
+| `IndexingSnapshotPublication` | — | 29/32 / 6/10 |
+| `IndexingRunOutcomes` | — | 113/120 / 39/50 |
+| `IndexingRunResumption` | — | 77/83 / 24/28 |
+| Total | 420/460 / 137/175 | 445/485 / 137/175 |
+
+Les 40 lignes et 38 branches manquées sont les mêmes avant et après ; les 25 lignes comptées en plus sont les constructeurs et les champs des objets de phase. Scopes : `critical-orchestration` 0,915 / 0,769, `resume-orchestration` 0,934 / 0,815.
+
 ### `SnapshotBinaryCodecSupport` (`minos-storage/src/main/java/com/minos/storage/codec/SnapshotBinaryCodecSupport.java`)
 
 | Fait | Preuve |
@@ -48,7 +79,24 @@ Commit relu : `89be3fb4` (`main`).
 | Scope JaCoCo `storage-codec-and-state` : préfixe `com/minos/storage/codec/SnapshotBinaryCodecSupport` ; le scope `persistence-cache-indexes` prend tout nom commençant par `com/minos/storage/codec/SnapshotCodec` | `scripts/quality/check-jacoco.py:27-29`, `:66` |
 | Un script d'historique affirme des appels `SnapshotBinaryCodecSupport.writeSymbolSnapshotV1` dans `SnapshotCodecV1` ; aucun workflow ne l'exécute (seul un filtre de chemins le cite) | `scripts/history/m15/run-s6.ps1:127-139` ; `.github/workflows/docker-release-validation.yml:9`, `:15` |
 
-Non mesuré : la couverture actuelle par plage de lignes des blocs à extraire (tâche 1.2) ; aucun build exécuté pendant la spécification.
+Relu au `72c8d91c` (`main`, 2026-11-17) : 1 106 lignes, aucun numéro de ligne n'a bougé.
+
+### Mesures du lot `minos-storage`
+
+Poste Windows 10, JDK Microsoft 21.0.12, `./mvnw -B -ntp -pl minos-storage -am verify "-Dtest=com/minos/storage/**/*Test" "-Dsurefire.failIfNoSpecifiedTests=false"`, rapport `minos-storage/target/site/jacoco/jacoco.xml` (classes imbriquées comprises) :
+
+| Classe | Avant (`72c8d91c`) lignes / branches | Après lignes / branches |
+|---|---|---|
+| `SnapshotBinaryCodecSupport` | 505/541 / 123/143 | 169/188 / 35/42 |
+| `SnapshotEntityCodec` | — | 231/243 / 45/53 |
+| `SnapshotInput` | — | 44/47 / 22/26 |
+| `SnapshotEncodingSink` (deux implémentations comprises) | — | 31/31 / 8/8 |
+| `SnapshotStringEncoding` | — | 22/23 / 13/14 |
+| Total des cinq classes | 505/541 / 123/143 | 497/532 / 123/143 |
+
+Longueurs : `SnapshotBinaryCodecSupport.java` passe de 1 106 à 427 lignes (cible 500). Scope `storage-codec-and-state` après découpage, sur le rapport du module : ligne 0,924, branche 0,797. Les neuf lignes de moins sont les délégations de cadre retirées. Chaque classe nouvelle a son préfixe et un plancher de classe (mesure moins environ 5 points) dans `check-jacoco.py`.
+
+La couverture se mesure par classe, non par plage de lignes : le rapport JaCoCo ne donne pas de compteur par bloc, et la somme des classes du lot se compare à la classe d'origine.
 
 ## Écarts
 
@@ -84,14 +132,17 @@ Cible [Proposition] pour `com.minos.orchestration` :
 
 L'affectation des quatorze méthodes hors bloc est une proposition ; elle est arrêtée en tâche 1.1, chaque méthode ayant une seule classe d'accueil. Une méthode appelée par deux phases va dans la phase qui en porte la règle, l'autre l'appelle.
 
-Cible [Proposition] pour `com.minos.storage.codec` :
+Découpage arrêté pour `com.minos.storage.codec` (tâche 1.1) :
 
-| Classe | Responsabilité |
-|---|---|
-| `SnapshotBinaryCodecSupport` | constantes de format et plafonds, cadre V1/V2/V3 (en-tête, taille de fichier, ouverture confinée et bornée), tailles encodées, `fromLegacy` |
-| `SnapshotEntityCodec` | écriture et lecture de chaque entité du snapshot, paramétrées par la version |
-| `SnapshotStringEncoding` | puits d'encodage (flux et compteur), UTF-16 et UTF-8, refus du substitut isolé |
-| `SnapshotInput` | lecteur borné, compteurs et chaînes requis |
+| Classe | Responsabilité | Lignes |
+|---|---|---|
+| `SnapshotBinaryCodecSupport` | constantes de format et plafonds des comptes de premier niveau, cadre V1/V2/V3 (en-tête, taille de fichier, ouverture confinée et bornée, lecture authentifiée en une passe), tailles encodées, `fromLegacy` | 427 |
+| `SnapshotEntityCodec` | écriture et lecture de chaque entité du snapshot (symbole, occurrence, relation, référence de symbole, preuve, référence d'entité, localisation, origine, références de provider) et leurs plafonds | 438 |
+| `SnapshotStringEncoding` | encodage des chaînes d'un format (UTF-16 ou UTF-8), longueur UTF-8 exacte, refus du substitut isolé | 50 |
+| `SnapshotEncodingSink`, `SnapshotEncodingSinkCounter` | puits d'une passe d'encodage : flux réel (`StreamSink`) ou compteur | 70 |
+| `SnapshotInput` | lecteur borné d'une passe de décodage : chaînes partagées (ADR 0047), chaînes requises, compteurs, énumérations | 114 |
+
+Le codage des entités ne reçoit pas la version : la disposition des champs est la même dans les trois formats, seule l'encodage des chaînes change, porté par le puits et le lecteur. Les quatre délégations statiques de cadre (`readHeaderVersion`, `writeString`, `readString`, `readRequiredString`, `readCount` sur `DataInputStream` ou `DataOutputStream`) n'avaient d'appelant que dans la classe : les classes extraites appellent `SnapshotBinaryPrimitives` directement.
 
 Les chaînes exigées par `check-mne.py` et `check-audit-remediation-v2.py` restent dans `SnapshotBinaryCodecSupport.java` : l'ouverture du fichier, les deux flux bornés et le plafond persisté y demeurent (D4).
 

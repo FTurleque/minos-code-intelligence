@@ -28,9 +28,16 @@ SCOPES = {
     # on pr-ci.yml run 43650742311 (main 89be3fb4, 2026-11-14), aggregate report of each system: Linux line 0.924 /
     # branch 0.797, Windows 0.924 / 0.798; the floor of the scope is kept. QueryViewMemoryBudget: 115/122 lines
     # (0.943), 59/68 branches (0.868) on both systems; class floor = measure minus about 5 points.
+    # AUD-ARC-09 (audit of 2026-11-15): the snapshot codec is split by responsibility; each class has a class floor
+    # (measure minus about 5 points), measured on Windows, JDK 21, minos-storage module report of 2026-11-18:
+    # SnapshotEntityCodec 231/243 lines (0.951), 45/53 branches (0.849); SnapshotInput 44/47 (0.936), 22/26 (0.846);
+    # SnapshotEncodingSink 31/31, 8/8; SnapshotStringEncoding 22/23 (0.957), 13/14 (0.929). The five classes of the
+    # codec cover 497/532 lines and 123/143 branches.
     "storage-codec-and-state": {
         "prefixes": (
             "com/minos/storage/codec/SnapshotBinaryCodecSupport", "com/minos/storage/codec/SnapshotBinaryPrimitives",
+            "com/minos/storage/codec/SnapshotEntityCodec", "com/minos/storage/codec/SnapshotInput",
+            "com/minos/storage/codec/SnapshotEncodingSink", "com/minos/storage/codec/SnapshotStringEncoding",
             "com/minos/storage/local/orchestration/FileIndexStateStore",
             "com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore",
             "com/minos/storage/local/registry/LocalProjectRegistry",
@@ -39,6 +46,10 @@ SCOPES = {
         "line": 0.89, "branch": 0.73,
         "prefixMinimums": {
             "com/minos/storage/codec/QueryViewMemoryBudget": {"line": 0.89, "branch": 0.81},
+            "com/minos/storage/codec/SnapshotEntityCodec": {"line": 0.90, "branch": 0.80},
+            "com/minos/storage/codec/SnapshotInput": {"line": 0.88, "branch": 0.80},
+            "com/minos/storage/codec/SnapshotEncodingSink": {"line": 0.95, "branch": 0.95},
+            "com/minos/storage/codec/SnapshotStringEncoding": {"line": 0.90, "branch": 0.88},
         },
     },
     # AUD-TST-01 (audit of 2026-11-15): the semantic explorer module and the corpus service behind its routes. Measured
@@ -343,10 +354,26 @@ SCOPES = {
     # -> promote -> persist, with commit-uncertain recovery and failure rollback). It is exercised
     # almost entirely indirectly through IndexingLifecycleService's test suite rather than directly,
     # so nothing previously stopped that indirect coverage from silently eroding.
+    # AUD-ARC-09 (audit of 2026-11-15): the executor keeps the entry point and the order of the phases; each phase is a
+    # class of its own with a class floor (measure minus about 5 points), measured on Windows, JDK 21, minos-engine
+    # module report of 2026-11-18: IndexingRunContext 63/63 lines, 10/12 branches (0.833); IndexingTargetExecution
+    # 100/119 (0.840), 40/54 (0.741); IndexingSnapshotPublication 29/32 (0.906), 6/10 (0.600); IndexingRunOutcomes
+    # 113/120 (0.942), 39/50 (0.780). With the executor and IndexingRunResumption, the run covers 445/485 lines and
+    # 137/175 branches, against 420/460 and 137/175 for the single class it replaces.
     "critical-orchestration": {
-        "prefixes": ("com/minos/orchestration/IndexingRunExecutor",),
+        "prefixes": (
+            "com/minos/orchestration/IndexingRunExecutor", "com/minos/orchestration/IndexingRunContext",
+            "com/minos/orchestration/IndexingTargetExecution", "com/minos/orchestration/IndexingSnapshotPublication",
+            "com/minos/orchestration/IndexingRunOutcomes",
+        ),
         "line": 0.75,
         "branch": 0.55,
+        "prefixMinimums": {
+            "com/minos/orchestration/IndexingRunContext": {"line": 0.95, "branch": 0.78},
+            "com/minos/orchestration/IndexingTargetExecution": {"line": 0.79, "branch": 0.69},
+            "com/minos/orchestration/IndexingSnapshotPublication": {"line": 0.85, "branch": 0.55},
+            "com/minos/orchestration/IndexingRunOutcomes": {"line": 0.89, "branch": 0.73},
+        },
     },
     # R1 (ADR 0039): resuming an interrupted indexing run. The planner decides which artifacts are
     # reused (fail-closed on every discrepancy), the reconciler turns abandoned runs into
@@ -357,9 +384,15 @@ SCOPES = {
             "com/minos/orchestration/IndexingResumePlanner",
             "com/minos/orchestration/AuthoritativeProjectStateReconciler",
             "com/minos/orchestration/IndexingRunExecutor",
+            # AUD-ARC-09: the resumption of an interrupted run, out of the executor; 77/83 lines (0.928), 24/28
+            # branches (0.857) on the measure of critical-orchestration above.
+            "com/minos/orchestration/IndexingRunResumption",
         ),
         "line": 0.75,
         "branch": 0.55,
+        "prefixMinimums": {
+            "com/minos/orchestration/IndexingRunResumption": {"line": 0.88, "branch": 0.80},
+        },
     },
 }
 
@@ -372,7 +405,16 @@ ZONE_SCOPES = {
     ),
     "wsl-lane": (),
     "semantic-projection": (),
-    "storage-codec-and-state": ("com/minos/storage/codec/QueryViewMemoryBudget",),
+    "storage-codec-and-state": (
+        "com/minos/storage/codec/QueryViewMemoryBudget", "com/minos/storage/codec/SnapshotEntityCodec",
+        "com/minos/storage/codec/SnapshotInput", "com/minos/storage/codec/SnapshotEncodingSink",
+        "com/minos/storage/codec/SnapshotStringEncoding",
+    ),
+    "critical-orchestration": (
+        "com/minos/orchestration/IndexingRunContext", "com/minos/orchestration/IndexingTargetExecution",
+        "com/minos/orchestration/IndexingSnapshotPublication", "com/minos/orchestration/IndexingRunOutcomes",
+    ),
+    "resume-orchestration": ("com/minos/orchestration/IndexingRunResumption",),
 }
 
 

@@ -97,7 +97,7 @@ Le port `IndexStateStore` (`minos-engine`, `com.minos.orchestration`) a un type 
 - **panne de stockage** (type du port) : échec d'E/S ou SQL, contenu d'état illisible ou incohérent (propriété manquante, identité ou nom de fichier inattendus, compteur invalide), bail de cycle de vie non obtenu (délai, interruption, connexion) ou non rendu ;
 - **violation d'invariant** (`IllegalStateException`, inchangée) : bail libéré par un autre thread, profondeur négative, second bail d'un autre projet sur le même thread, store sans bail qualifié.
 
-Les appelants (`ProjectIndexStateReconciler`, `IndexingRunExecutor`, `LocalProjectOperations`) n'attrapent que le type du port : un défaut de programmation remonte tel quel. Un message du port ne contient jamais de chemin absolu (au plus le nom du fichier d'état).
+Les appelants (`ProjectIndexStateReconciler`, `IndexingRunOutcomes`, `LocalProjectOperations`) n'attrapent que le type du port : un défaut de programmation remonte tel quel. Un message du port ne contient jamais de chemin absolu (au plus le nom du fichier d'état).
 
 ## Intelligence
 
