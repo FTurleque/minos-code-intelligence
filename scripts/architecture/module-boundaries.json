@@ -1,0 +1,263 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "name": "minos-domain",
+      "family": "core"
+    },
+    {
+      "name": "minos-engine",
+      "family": "core"
+    },
+    {
+      "name": "minos-runtime-local",
+      "family": "adapter"
+    },
+    {
+      "name": "minos-storage",
+      "family": "adapter"
+    },
+    {
+      "name": "minos-provider-scip",
+      "family": "adapter"
+    },
+    {
+      "name": "minos-integration-git",
+      "family": "adapter"
+    },
+    {
+      "name": "minos-application",
+      "family": "application"
+    },
+    {
+      "name": "minos-bootstrap",
+      "family": "composition"
+    },
+    {
+      "name": "minos-nexus",
+      "family": "contract"
+    },
+    {
+      "name": "minos-cli",
+      "family": "surface"
+    },
+    {
+      "name": "minos-api",
+      "family": "surface"
+    },
+    {
+      "name": "minos-mcp",
+      "family": "surface"
+    },
+    {
+      "name": "minos-explorer",
+      "family": "surface"
+    },
+    {
+      "name": "minos-app",
+      "family": "assembly"
+    }
+  ],
+  "allowedDependencies": {
+    "minos-domain": [],
+    "minos-engine": [
+      "minos-domain"
+    ],
+    "minos-runtime-local": [
+      "minos-domain",
+      "minos-engine"
+    ],
+    "minos-storage": [
+      "minos-domain",
+      "minos-engine"
+    ],
+    "minos-provider-scip": [
+      "minos-domain",
+      "minos-engine",
+      "minos-runtime-local",
+      "minos-storage"
+    ],
+    "minos-integration-git": [
+      "minos-domain",
+      "minos-engine"
+    ],
+    "minos-application": [
+      "minos-domain",
+      "minos-engine"
+    ],
+    "minos-bootstrap": [
+      "minos-application",
+      "minos-domain",
+      "minos-engine",
+      "minos-integration-git",
+      "minos-provider-scip",
+      "minos-runtime-local",
+      "minos-storage"
+    ],
+    "minos-nexus": [
+      "minos-application",
+      "minos-bootstrap",
+      "minos-domain"
+    ],
+    "minos-cli": [
+      "minos-application",
+      "minos-bootstrap",
+      "minos-domain",
+      "minos-engine",
+      "minos-nexus"
+    ],
+    "minos-api": [
+      "minos-application",
+      "minos-bootstrap",
+      "minos-domain",
+      "minos-engine"
+    ],
+    "minos-mcp": [
+      "minos-application",
+      "minos-bootstrap",
+      "minos-domain",
+      "minos-engine"
+    ],
+    "minos-explorer": [
+      "minos-application",
+      "minos-bootstrap",
+      "minos-domain",
+      "minos-engine"
+    ],
+    "minos-app": [
+      "minos-api",
+      "minos-application",
+      "minos-bootstrap",
+      "minos-cli",
+      "minos-domain",
+      "minos-engine",
+      "minos-explorer",
+      "minos-integration-git",
+      "minos-mcp",
+      "minos-nexus",
+      "minos-provider-scip",
+      "minos-runtime-local",
+      "minos-storage"
+    ]
+  },
+  "testOnlyDependencies": [
+    {
+      "module": "minos-provider-scip",
+      "dependency": "minos-storage",
+      "reason": "the SCIP provider receives its snapshot stores through engine ports (SH-06); its tests keep the real file store of minos-storage"
+    }
+  ],
+  "engineTypesNamedBySurface": {
+    "minos-api": {
+      "query.RelationshipResult": {
+        "files": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      },
+      "query.SymbolResult": {
+        "files": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      },
+      "query.UsageResult": {
+        "files": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      }
+    },
+    "minos-cli": {
+      "query.RelationshipResult": {
+        "files": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      },
+      "query.SymbolResult": {
+        "files": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      },
+      "query.UsageResult": {
+        "files": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      },
+      "runtime.MinosVersion": {
+        "files": 1,
+        "reason": "ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of the transverse core lot, 2026-10-25)"
+      }
+    },
+    "minos-mcp": {
+      "runtime.MinosVersion": {
+        "files": 1,
+        "reason": "ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of the transverse core lot, 2026-10-25)"
+      }
+    },
+    "minos-nexus": {},
+    "minos-explorer": {}
+  },
+  "engineTypesUsedBySurfaceBytecode": {
+    "minos-api": {
+      "query.RelationshipResult": {
+        "classes": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      },
+      "query.SymbolResult": {
+        "classes": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      },
+      "query.UsageResult": {
+        "classes": 1,
+        "reason": "published read model returned by the application port ProjectSymbolQuery (ADR 0057, point 6, decision D4 = a of AUD-ARC-01); the surface converts it into its public DTOs"
+      }
+    },
+    "minos-cli": {
+      "runtime.MinosVersion": {
+        "classes": 1,
+        "reason": "ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of the transverse core lot, 2026-10-25)"
+      }
+    },
+    "minos-mcp": {
+      "runtime.MinosVersion": {
+        "classes": 1,
+        "reason": "ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of the transverse core lot, 2026-10-25)"
+      }
+    },
+    "minos-nexus": {},
+    "minos-explorer": {}
+  },
+  "embeddedAdapterClasses": {
+    "OllamaEmbeddingProvider": "learned embedding client (HTTP), supplied by MinosApplicationComposer.embeddingProvider",
+    "FileProgramGraphProvider": "program sidecar reader, added by MinosApplicationComposer.completeProgramGraphProviders",
+    "FingerprintConstrainedJavaProgramGraphProvider": "production Java analyser bound to the source fingerprints, supplied by MinosApplicationComposer.programGraphProviders",
+    "SourceStateKeyMemo": "source state memo of the fingerprint-constrained analyser (names JavaProgramGraphEngine.SourceStateKey)",
+    "JavaAstParser": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaAstSupport": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaControlFlowAnalyzer": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaDefUseAnalyzer": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaInterproceduralFlowResolver": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaProgramGraphAssembler": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaProgramGraphContext": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaProgramGraphEngine": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaProgramModel": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaSecurityRules": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaSourceProgramGraphProvider": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaSourceWorkspace": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)",
+    "JavaTaintAnalyzer": "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)"
+  },
+  "infrastructureApiUsers": [
+    "application.semantic.OllamaEmbeddingProvider",
+    "program.analysis.JavaAstParser",
+    "program.analysis.JavaAstSupport",
+    "program.analysis.JavaControlFlowAnalyzer",
+    "program.analysis.JavaDefUseAnalyzer",
+    "program.analysis.JavaProgramGraphAssembler",
+    "program.analysis.JavaProgramGraphContext",
+    "program.analysis.JavaProgramModel",
+    "program.analysis.JavaSecurityRules",
+    "program.analysis.JavaTaintAnalyzer"
+  ],
+  "assemblyClasses": {
+    "app.DockerMcpTransport": "transport: STDIO session of minos mcp relayed to the Docker runtime",
+    "app.ExplorerLaunchRouteProvider": "launch route: minos explorer serve, wiring of the explorer launch policy",
+    "app.McpBackend": "home backend configuration: the execution backends",
+    "app.McpBackendConfiguration": "home backend configuration: the versioned value",
+    "app.McpBackendConfigurationStore": "home backend configuration: its persistence",
+    "app.McpBackendRouter": "launch route: minos mcp, native or Docker",
+    "app.McpLaunchRouteProvider": "launch route: minos mcp entry point registered by ServiceLoader",
+    "integration.nexus.NexusExportBridgeMain": "assembly: NEXUS export bridge entry point"
+  }
+}

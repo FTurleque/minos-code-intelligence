@@ -2041,44 +2041,59 @@ class RuntimeServiceEdgeTest(RatchetTreeTestCase):
 
 
 class ArchitectureTestPolicyRuleTest(unittest.TestCase):
-    """A17 — ALLOWED_DEPENDENCIES and the ALLOWED table of ModuleArchitectureTest stay identical (ADR 0058)."""
+    """A17 — ModuleArchitectureTest reads module-boundaries.json and declares no policy table again (ADR 0058)."""
 
-    ALLOWED = {"minos-a": frozenset(), "minos-b": frozenset({"minos-a"})}
+    READING = ("class ModuleArchitectureTest {\n"
+               "    // The policy: scripts/architecture/module-boundaries.json, read by ModuleBoundaryPolicy.\n"
+               "    private static final ModuleBoundaryPolicy POLICY = ModuleBoundaryPolicy.load(Path.of(\"\"));\n"
+               "    private static final Map<String, Set<String>> ALLOWED = POLICY.allowed();\n}\n")
 
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.test = Path(directory.name) / "ModuleArchitectureTest.java"
-
-    def write(self, entries):
-        body = ",\n".join(f'            Map.entry("{module}", Set.of({", ".join(chr(34) + d + chr(34) for d in deps)}))'
-                          for module, deps in entries)
-        self.test.write_text("class ModuleArchitectureTest {\n    private static final Map<String, Set<String>> ALLOWED = "
-                             f"Map.ofEntries(\n{body});\n}}\n", encoding="utf-8")
+        self.reader = Path(directory.name) / "ModuleBoundaryPolicy.java"
+        self.reader.write_text('class ModuleBoundaryPolicy { static final Path FILE = Path.of("scripts", '
+                               '"architecture", "module-boundaries.json"); }\n', encoding="utf-8")
 
     def check(self):
-        return _MODULE.check_architecture_test_policy(self.test, self.ALLOWED)
+        return _MODULE.check_architecture_test_policy(self.test, self.reader)
 
-    def test_identical_tables_are_accepted(self):
-        self.write([("minos-a", []), ("minos-b", ["minos-a"])])
-        self.assertEqual(2, self.check())
+    def test_a_test_that_reads_the_policy_is_accepted(self):
+        self.test.write_text(self.READING, encoding="utf-8")
+        self.assertEqual(len(_MODULE.ALLOWED_DEPENDENCIES), self.check())
 
-    def test_an_extra_edge_in_the_java_table_is_refused(self):
-        self.write([("minos-a", ["minos-b"]), ("minos-b", ["minos-a"])])
-        with self.assertRaisesRegex(RuntimeError, r"A17 .*minos-a.*minos-b"):
+    def test_a_copied_allowed_table_is_refused(self):
+        self.test.write_text(self.READING.replace("POLICY.allowed();", 'Map.ofEntries(\n'
+                             '            Map.entry("minos-domain", Set.of()));'), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*ModuleArchitectureTest.java.*ALLOWED"):
             self.check()
 
-    def test_a_module_missing_from_the_java_table_is_refused(self):
-        self.write([("minos-b", ["minos-a"])])
-        with self.assertRaisesRegex(RuntimeError, r"A17 .*minos-a"):
+    def test_a_copied_module_set_is_refused(self):
+        self.test.write_text(self.READING.replace(
+            "}\n", '    private static final Set<String> SURFACES = Set.of("minos-cli", "minos-api");\n}\n'),
+            encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*SURFACES"):
             self.check()
 
-    def test_an_unreadable_table_is_refused_instead_of_passing(self):
-        self.test.write_text("class ModuleArchitectureTest { }\n", encoding="utf-8")
-        with self.assertRaisesRegex(RuntimeError, r"A17 .*ALLOWED"):
+    def test_a_test_that_no_longer_reads_the_policy_is_refused(self):
+        self.test.write_text("class ModuleArchitectureTest {\n    private static final Map<String, Set<String>> ALLOWED = "
+                             "Map.of();\n}\n", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*no longer reads"):
             self.check()
 
-    def test_the_real_tables_are_identical(self):
+    def test_a_reader_that_no_longer_names_the_file_is_refused(self):
+        self.test.write_text(self.READING, encoding="utf-8")
+        self.reader.write_text('class ModuleBoundaryPolicy { static final Path FILE = Path.of("policy.json"); }\n',
+                               encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*module-boundaries.json"):
+            self.check()
+
+    def test_a_missing_test_is_refused(self):
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*missing"):
+            self.check()
+
+    def test_the_real_test_reads_the_single_source(self):
         self.assertEqual(len(_MODULE.ALLOWED_DEPENDENCIES), _MODULE.check_architecture_test_policy())
 
 
@@ -2287,6 +2302,89 @@ class UnreferencedProductionTypeRuleTest(unittest.TestCase):
         deprived = {key: reason for key, reason in _MODULE.UNREFERENCED_PRODUCTION_TYPES.items() if key != entry}
         with self.assertRaisesRegex(RuntimeError, r"A15 .*com\.minos\.nexus\.NexusSemanticSignalService"):
             _MODULE.check_unreferenced_production_types(declared=deprived)
+
+
+
+class PolicySourceTest(unittest.TestCase):
+    """AUD-ARC-04: the shared boundary policy is read from scripts/architecture/module-boundaries.json, fail-closed."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.path = self.root / "scripts" / "architecture" / "module-boundaries.json"
+        self.path.parent.mkdir(parents=True)
+        self.real = _MODULE.POLICY_FILE.read_text(encoding="utf-8")
+
+    def write(self, text: str) -> None:
+        self.path.write_text(text, encoding="utf-8")
+
+    def mutated(self, change) -> None:
+        import json
+        policy = json.loads(self.real)
+        change(policy)
+        self.write(json.dumps(policy))
+
+    def refused(self, *fragments):
+        with self.assertRaises(RuntimeError) as raised:
+            _MODULE.load_policy(self.path, self.root)
+        message = str(raised.exception)
+        self.assertIn("scripts/architecture/module-boundaries.json", message)
+        self.assertNotIn(str(self.root), message, "the message names the file relatively to the repository")
+        for fragment in fragments:
+            self.assertIn(fragment, message)
+
+    def test_the_real_policy_is_the_source_of_the_guard_tables(self):
+        policy = _MODULE.load_policy()
+        self.assertEqual(_MODULE.MODULES, policy.modules)
+        self.assertEqual(dict(_MODULE.ALLOWED_DEPENDENCIES), policy.allowed_dependencies)
+        self.assertEqual(_MODULE.ENGINE_TYPES_NAMED_BY_SURFACE, policy.engine_types_named_by_surface)
+        self.assertEqual(_MODULE.CONTRACT_MODULES, frozenset({"minos-nexus"}))
+        self.assertIn("minos-cli", _MODULE.SURFACE_MODULES)
+
+    def test_a_missing_file_is_refused(self):
+        self.refused("missing")
+
+    def test_an_unparsable_file_is_refused(self):
+        self.write("{ not json")
+        self.refused("not valid JSON")
+
+    def test_an_unknown_key_is_refused(self):
+        self.mutated(lambda policy: policy.__setitem__("alowedDependencies", policy.pop("allowedDependencies")))
+        self.refused("unknown key", "alowedDependencies")
+
+    def test_a_duplicated_key_is_refused(self):
+        self.write(self.real.replace('"version": 1,', '"version": 1,\n  "version": 1,', 1))
+        self.refused("duplicated key", "version")
+
+    def test_a_missing_section_is_refused(self):
+        self.mutated(lambda policy: policy.pop("testOnlyDependencies"))
+        self.refused("missing section", "testOnlyDependencies")
+
+    def test_an_unknown_family_is_refused(self):
+        self.mutated(lambda policy: policy["modules"][0].__setitem__("family", "kernel"))
+        self.refused("unknown family", "kernel")
+
+    def test_an_unknown_module_in_an_edge_is_refused(self):
+        self.mutated(lambda policy: policy["allowedDependencies"]["minos-cli"].append("minos-inconnu"))
+        self.refused("minos-inconnu", "allowedDependencies.minos-cli")
+
+    def test_a_debt_entry_without_reason_is_refused(self):
+        self.mutated(lambda policy: policy["engineTypesNamedBySurface"]["minos-cli"]["runtime.MinosVersion"]
+                     .__setitem__("reason", " "))
+        self.refused("reason", "runtime.MinosVersion")
+
+    def test_an_engine_debt_keyed_by_an_adapter_is_refused(self):
+        self.mutated(lambda policy: policy["engineTypesUsedBySurfaceBytecode"].__setitem__("minos-storage", {}))
+        self.refused("minos-storage", "neither a surface nor a contract module")
+
+    def test_an_edge_removed_from_the_file_fails_the_dependency_policy(self):
+        self.mutated(lambda policy: policy["allowedDependencies"]["minos-cli"].remove("minos-nexus"))
+        policy = _MODULE.load_policy(self.path, self.root)
+        with mock.patch.object(_MODULE, "ALLOWED_DEPENDENCIES", policy.allowed_dependencies):
+            with self.assertRaises(RuntimeError) as raised:
+                _MODULE.check_dependency_policy(scoped_graph(minos_cli={"minos-nexus": "compile"}))
+        self.assertIn("minos-cli", str(raised.exception))
+        self.assertIn("minos-nexus", str(raised.exception))
 
 
 if __name__ == "__main__":
