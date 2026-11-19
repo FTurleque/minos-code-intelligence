@@ -1,10 +1,10 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectGitQuery;
 import com.minos.application.ProjectOperations;
 import com.minos.application.ProjectSymbolQuery;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -32,7 +32,7 @@ class MinosCliBuilderTest {
 
         for (String command : OPTIONAL_COMMANDS) {
             StringBuilder error = new StringBuilder();
-            assertEquals(FindSymbolCommand.EXECUTION_ERROR, cli.run(new String[]{command}, new StringBuilder(), error), command);
+            assertEquals(CliExitCodes.EXECUTION_ERROR, cli.run(new String[]{command}, new StringBuilder(), error), command);
             assertEquals("error: " + command + " is not configured in this CLI bootstrap\n", error.toString(), command);
         }
     }
@@ -86,13 +86,13 @@ class MinosCliBuilderTest {
 
     private static void assertUnconfigured(MinosCli cli, String command) throws IOException {
         StringBuilder error = new StringBuilder();
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, cli.run(new String[]{command}, new StringBuilder(), error), command);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, cli.run(new String[]{command}, new StringBuilder(), error), command);
         assertEquals("error: " + command + " is not configured in this CLI bootstrap\n", error.toString(), command);
     }
 
     private static void assertWired(MinosCli cli, String command) throws IOException {
         StringBuilder error = new StringBuilder();
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 cli.run(new String[]{command, "--a4-unknown-option"}, new StringBuilder(), error), command + ": " + error);
     }
 

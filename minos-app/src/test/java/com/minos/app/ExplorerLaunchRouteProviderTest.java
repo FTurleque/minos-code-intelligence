@@ -2,7 +2,7 @@ package com.minos.app;
 
 import com.minos.application.MinosApplication;
 import com.minos.cli.ExplorerLaunchRoute;
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.storage.MinosRuntimeSettings;
 import com.minos.storage.StorageBackend;
@@ -111,7 +111,7 @@ class ExplorerLaunchRouteProviderTest {
 
             int exit = refusing().run(home, 0, error);
 
-            assertEquals(FindSymbolCommand.USAGE_ERROR, exit, value);
+            assertEquals(CliExitCodes.USAGE_ERROR, exit, value);
             assertTrue(error.toString().startsWith("error: minos explorer serve is not available when the team mode"),
                     error.toString());
             assertTrue(error.toString().contains("MINOS_HOSTED_MODE"), error.toString());
@@ -147,7 +147,7 @@ class ExplorerLaunchRouteProviderTest {
 
         int exit = refusing().run(home, 0, error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, exit);
+        assertEquals(CliExitCodes.USAGE_ERROR, exit);
         assertTrue(error.toString().contains("Docker backend"), error.toString());
         assertTrue(error.toString().contains("profile explorer"), error.toString());
         assertFalse(error.toString().contains(temp.toString()), "absolute path in the refusal");

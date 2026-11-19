@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -57,7 +58,7 @@ class DoctorCommandTest {
         int exit = doctor.run(new String[0], output, new StringBuilder());
 
         String text = output.toString();
-        assertEquals(FindSymbolCommand.SUCCESS, exit, "a closed-by-decision remote path is not an ACTION_REQUIRED");
+        assertEquals(CliExitCodes.SUCCESS, exit, "a closed-by-decision remote path is not an ACTION_REQUIRED");
         assertTrue(text.contains("workerSandbox[managedLocalProvider]: linux-bubblewrap-cgroup2-v5 AVAILABLE"), text);
         assertTrue(text.contains("workerSandbox[untrustedCode]: native-process-ephemeral-workspace-v1 UNAVAILABLE"), text);
         assertTrue(text.contains("workerSandbox[remoteIndexing]: UNAVAILABLE (decision: ADR 0041)"), text);
@@ -79,8 +80,8 @@ class DoctorCommandTest {
         StringBuilder first = new StringBuilder();
         StringBuilder second = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[]{"--format", "json"}, first, new StringBuilder()));
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[]{"--format", "json"}, second, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[]{"--format", "json"}, first, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[]{"--format", "json"}, second, new StringBuilder()));
 
         String json = first.toString();
         assertEquals(json, second.toString(), "doctor JSON must be deterministic");
@@ -128,8 +129,8 @@ class DoctorCommandTest {
         StringBuilder text = new StringBuilder();
         StringBuilder json = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[0], text, new StringBuilder()));
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[]{"--format", "json"}, json, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[0], text, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[]{"--format", "json"}, json, new StringBuilder()));
 
         assertTrue(text.toString().contains("workerSandbox[managedLocalProvider]: native-process-ephemeral-workspace-v1 UNAVAILABLE"), text.toString());
         assertTrue(text.toString().contains("workerSandbox[remoteIndexing]: UNAVAILABLE\n"), text.toString());
@@ -150,7 +151,7 @@ class DoctorCommandTest {
         int exit = doctor.run(new String[0], output, new StringBuilder());
 
         String text = output.toString();
-        assertEquals(FindSymbolCommand.SUCCESS, exit, text);
+        assertEquals(CliExitCodes.SUCCESS, exit, text);
         assertTrue(text.contains("workerSandbox[remoteIndexing]: UNAVAILABLE"), text);
         // Either an OS backend exists here and is rejected by decision, or a prerequisite is missing:
         // the report must say which, and only the former cites the ADR.

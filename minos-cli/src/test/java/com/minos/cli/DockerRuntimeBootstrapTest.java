@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.registry.ProjectMount;
 import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.storage.home.ProjectPathMappingStore;
@@ -32,8 +32,8 @@ class DockerRuntimeBootstrapTest {
                 new String[]{"configure-project-paths", "N:\\workspace-dev", "/workspace/projects/"},
                 output, error);
 
-        assertEquals(FindSymbolCommand.SUCCESS, first);
-        assertEquals(FindSymbolCommand.SUCCESS, second);
+        assertEquals(CliExitCodes.SUCCESS, first);
+        assertEquals(CliExitCodes.SUCCESS, second);
         assertEquals("", error.toString());
         assertTrue(output.toString().contains("mapping created"));
         assertTrue(output.toString().contains("already matches"));
@@ -51,7 +51,7 @@ class DockerRuntimeBootstrapTest {
                 new String[]{"configure-project-paths", "D:/other-projects", "/workspace/projects"},
                 new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exitCode);
         assertTrue(error.toString().contains("refusing to replace"));
         assertTrue(error.toString().contains("--replace"), error.toString());
         assertEquals("N:/workspace-dev", store.loadOptional().orElseThrow().hostRoot());
@@ -68,7 +68,7 @@ class DockerRuntimeBootstrapTest {
                 new String[]{"configure-project-paths", "--replace", "D:/other-projects", "/workspace/projects"},
                 output, error);
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertEquals("", error.toString());
         assertTrue(output.toString().contains("mapping replaced"), output.toString());
         assertTrue(output.toString().contains("detached: 0"), output.toString());
@@ -86,8 +86,8 @@ class DockerRuntimeBootstrapTest {
                 new String[]{"configure-project-paths", "--replace", "N:/workspace-dev", "/workspace/projects"},
                 output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
-        assertEquals(FindSymbolCommand.SUCCESS, again);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, again);
         assertTrue(output.toString().contains("mapping created"), output.toString());
         assertTrue(output.toString().contains("already matches"), output.toString());
     }
@@ -100,7 +100,7 @@ class DockerRuntimeBootstrapTest {
                 new String[]{"configure-project-paths", "--force", "D:/other-projects", "/workspace/projects"},
                 new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, exitCode);
+        assertEquals(CliExitCodes.USAGE_ERROR, exitCode);
         assertTrue(error.toString().contains("[--replace]"), error.toString());
     }
 
@@ -111,7 +111,7 @@ class DockerRuntimeBootstrapTest {
         int exitCode = DockerRuntimeBootstrap.run(home, new String[]{"configure-project-paths"},
                 new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, exitCode);
+        assertEquals(CliExitCodes.USAGE_ERROR, exitCode);
         assertTrue(error.toString().contains("expected configure-project-paths"));
     }
 
@@ -125,10 +125,10 @@ class DockerRuntimeBootstrapTest {
         StringBuilder output = new StringBuilder();
         StringBuilder error = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS, bootstrap(home, output, error, "init-project-mounts", "/workspace/projects"));
-        assertEquals(FindSymbolCommand.SUCCESS, bootstrap(home, output, error, "init-project-mounts", "/workspace/projects"));
+        assertEquals(CliExitCodes.SUCCESS, bootstrap(home, output, error, "init-project-mounts", "/workspace/projects"));
+        assertEquals(CliExitCodes.SUCCESS, bootstrap(home, output, error, "init-project-mounts", "/workspace/projects"));
         StringBuilder listing = new StringBuilder();
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 bootstrap(home, listing, error, "list-project-mounts", "--format", "json"));
 
         assertEquals("", error.toString());
@@ -142,11 +142,11 @@ class DockerRuntimeBootstrapTest {
     void listWithoutMappingSaysFormatZero(@TempDir Path home) throws Exception {
         StringBuilder listing = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 bootstrap(home, listing, new StringBuilder(), "list-project-mounts", "--format", "json"));
 
         assertEquals("{\"formatVersion\":0,\"containerRoot\":null,\"mounts\":[]}\n", listing.toString());
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 bootstrap(home, new StringBuilder(), new StringBuilder(), "list-project-mounts"));
     }
 
@@ -156,14 +156,14 @@ class DockerRuntimeBootstrapTest {
         StringBuilder error = new StringBuilder();
         bootstrap(home, output, error, "init-project-mounts", "/workspace/projects");
 
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 bootstrap(home, output, error, "add-project-mount", "app", "D:\\src\\it's #1:app"));
         StringBuilder listing = new StringBuilder();
         bootstrap(home, listing, error, "list-project-mounts", "--format", "json");
         assertEquals("{\"formatVersion\":2,\"containerRoot\":\"/workspace/projects\",\"mounts\":"
                 + "[{\"name\":\"app\",\"path\":\"app\",\"hostRoot\":\"D:/src/it's #1:app\"}]}\n", listing.toString());
 
-        assertEquals(FindSymbolCommand.SUCCESS, bootstrap(home, output, error, "remove-project-mount", "app"));
+        assertEquals(CliExitCodes.SUCCESS, bootstrap(home, output, error, "remove-project-mount", "app"));
         assertEquals("", error.toString());
         assertTrue(output.toString().contains("mount added: app (1 of 64 mounts)"), output.toString());
         assertTrue(output.toString().contains("mount removed: app"), output.toString());
@@ -177,13 +177,13 @@ class DockerRuntimeBootstrapTest {
         byte[] before = Files.readAllBytes(store.file());
         StringBuilder error = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 bootstrap(home, new StringBuilder(), error, "add-project-mount", "App", "D:/autre"));
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 bootstrap(home, new StringBuilder(), error, "add-project-mount", "sub", "D:/src/app/sub"));
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 bootstrap(home, new StringBuilder(), error, "add-project-mount", "rel", "relative/folder"));
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 bootstrap(home, new StringBuilder(), error, "remove-project-mount", "absent"));
 
         assertArrayEquals(before, Files.readAllBytes(store.file()));
@@ -196,9 +196,9 @@ class DockerRuntimeBootstrapTest {
         new ProjectPathMappingStore(home).save(ProjectPathMapping.singleRoot("N:/workspace-dev", "/workspace/projects"));
         StringBuilder error = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR,
+        assertEquals(CliExitCodes.EXECUTION_ERROR,
                 bootstrap(home, new StringBuilder(), error, "add-project-mount", "app", "D:/src/app"));
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR,
+        assertEquals(CliExitCodes.EXECUTION_ERROR,
                 bootstrap(home, new StringBuilder(), error, "init-project-mounts", "/workspace/projects"));
 
         assertTrue(error.toString().contains("migrate-project-mounts"), error.toString());
@@ -218,13 +218,13 @@ class DockerRuntimeBootstrapTest {
         registry.registerProject(root, "Whole root");
 
         StringBuilder plan = new StringBuilder();
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 bootstrap(home, plan, new StringBuilder(), "migrate-project-mounts", "--dry-run"));
         assertTrue(plan.toString().startsWith("{\"outcome\":\"PLANNED\""), plan.toString());
         assertEquals(1, new ProjectPathMappingStore(home).loadFormatVersion().orElseThrow());
 
         StringBuilder output = new StringBuilder();
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 bootstrap(home, output, new StringBuilder(), "migrate-project-mounts", "--skip", "team/b"));
 
         assertTrue(output.toString().startsWith("{\"outcome\":\"MIGRATED\",\"mounts\":[{\"name\":\"a\""),
@@ -233,7 +233,7 @@ class DockerRuntimeBootstrapTest {
         assertTrue(output.toString().contains("{\"project\":\"Whole root\",\"reason\":\"ROOT\"}"), output.toString());
         ProjectPathMapping table = new ProjectPathMappingStore(home).loadOptional().orElseThrow();
         assertEquals(List.of(new ProjectMount("a", root.resolve("a").toString())), table.mounts());
-        assertEquals(FindSymbolCommand.USAGE_ERROR,
+        assertEquals(CliExitCodes.USAGE_ERROR,
                 bootstrap(home, new StringBuilder(), new StringBuilder(), "migrate-project-mounts", "--skip"));
     }
 
@@ -250,7 +250,7 @@ class DockerRuntimeBootstrapTest {
                 new StringBuilder(), error);
 
         assertTrue(refusal.getMessage().contains("AddProject"), refusal.getMessage());
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, configure);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, configure);
         assertTrue(error.toString().contains("AddProject"), error.toString());
         assertTrue(new ProjectPathMappingStore(home).loadOptional().orElseThrow().mountTable());
     }
@@ -259,8 +259,8 @@ class DockerRuntimeBootstrapTest {
     void anUnknownCommandIsAUsageError(@TempDir Path home) throws Exception {
         StringBuilder error = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, bootstrap(home, new StringBuilder(), error, "mount-everything"));
-        assertEquals(FindSymbolCommand.USAGE_ERROR, bootstrap(home, new StringBuilder(), error));
+        assertEquals(CliExitCodes.USAGE_ERROR, bootstrap(home, new StringBuilder(), error, "mount-everything"));
+        assertEquals(CliExitCodes.USAGE_ERROR, bootstrap(home, new StringBuilder(), error));
         assertTrue(error.toString().contains("add-project-mount"), error.toString());
     }
 }

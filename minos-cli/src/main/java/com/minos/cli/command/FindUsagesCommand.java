@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.ProjectSymbolQuery;
 import com.minos.output.CodeIntelligenceResultRenderer;
@@ -44,7 +45,7 @@ public final class FindUsagesCommand {
             ));
             output.append(CodeIntelligenceResultRenderer.renderUsages(usages, options.format()))
                     .append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         });
     }
 

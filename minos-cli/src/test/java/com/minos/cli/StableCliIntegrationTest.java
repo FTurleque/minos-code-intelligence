@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.Symbol;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
@@ -106,7 +106,7 @@ class StableCliIntegrationTest {
     void explicitScipImportRequiresAnArtifact(@TempDir Path home) throws Exception {
         CommandResult result = run(home, "import-scip", "missing-project", "--provider", "scip-typescript");
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, result.exitCode());
+        assertEquals(CliExitCodes.USAGE_ERROR, result.exitCode());
         assertTrue(result.error().contains("--file is required"), result.error());
         assertEquals("", result.output());
     }

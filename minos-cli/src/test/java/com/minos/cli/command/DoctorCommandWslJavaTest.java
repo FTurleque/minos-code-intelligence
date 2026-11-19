@@ -4,6 +4,7 @@ import com.minos.application.WslJavaDiagnosis;
 import com.minos.application.WslJavaDiagnosis.Check;
 import com.minos.application.WslJavaDiagnosis.State;
 import com.minos.cli.operations.AutonomousIndexOperations;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -36,8 +37,8 @@ class DoctorCommandWslJavaTest {
         StringBuilder json = new StringBuilder();
         StringBuilder text = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[]{"--format", "json"}, json, new StringBuilder()));
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[0], text, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[]{"--format", "json"}, json, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[0], text, new StringBuilder()));
 
         assertTrue(json.toString().contains("\"wslJava\":{\"distribution\":\"Ubuntu\",\"checks\":["
                 + "{\"id\":\"wsl-version\",\"state\":\"OK\"},{\"id\":\"systemd\",\"state\":\"OK\"},"
@@ -68,9 +69,9 @@ class DoctorCommandWslJavaTest {
         StringBuilder second = new StringBuilder();
         StringBuilder text = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[]{"--format", "json"}, first, new StringBuilder()));
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[]{"--format", "json"}, second, new StringBuilder()));
-        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[0], text, new StringBuilder()),
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[]{"--format", "json"}, first, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[]{"--format", "json"}, second, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, doctor.run(new String[0], text, new StringBuilder()),
                 "the WSL route is optional: an unmet prerequisite is not an ACTION_REQUIRED");
 
         String json = first.toString();

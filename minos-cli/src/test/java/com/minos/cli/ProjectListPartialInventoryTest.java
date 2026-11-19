@@ -1,8 +1,8 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.command.ProjectCommand;
 import com.minos.application.ProjectOperations;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.registry.DegradedEntry;
 import org.junit.jupiter.api.Test;
 
@@ -69,8 +69,8 @@ class ProjectListPartialInventoryTest {
         StringBuilder json = new StringBuilder();
         StringBuilder error = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS, command.run(new String[]{"list"}, text, error));
-        assertEquals(FindSymbolCommand.SUCCESS, command.run(new String[]{"list", FORMAT, JSON}, json, error));
+        assertEquals(CliExitCodes.SUCCESS, command.run(new String[]{"list"}, text, error));
+        assertEquals(CliExitCodes.SUCCESS, command.run(new String[]{"list", FORMAT, JSON}, json, error));
 
         assertEquals(HEALTHY_ID + "\tdemo\tNEVER_INDEXED\tproject-root\n", text.toString());
         assertTrue(json.toString().startsWith("{\"count\":1,\"projects\":[{\"id\":\"" + HEALTHY_ID + "\""), json.toString());
@@ -83,7 +83,7 @@ class ProjectListPartialInventoryTest {
         ProjectCommand command = new ProjectCommand(new StubOperations(new ProjectOperations.ProjectInventory(List.of(), List.of())));
         StringBuilder output = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS, command.run(new String[]{"list"}, output, new StringBuilder()));
+        assertEquals(CliExitCodes.SUCCESS, command.run(new String[]{"list"}, output, new StringBuilder()));
         assertEquals("No projects registered.\n", output.toString());
     }
 
@@ -94,7 +94,7 @@ class ProjectListPartialInventoryTest {
 
         int exit = command.run(new String[]{"list"}, new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exit);
         assertTrue(error.toString().startsWith("error: project list failed"), error.toString());
     }
 
@@ -104,16 +104,16 @@ class ProjectListPartialInventoryTest {
 
         int exit = command.run(new String[]{"list", "--bogus"}, new StringBuilder(), new StringBuilder());
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, exit);
+        assertEquals(CliExitCodes.USAGE_ERROR, exit);
     }
 
     @Test
     void theOtherProjectCommandsKeepTheirExitCodesWhateverTheInventoryLooksLike() throws Exception {
         ProjectCommand command = new ProjectCommand(new StubOperations(partial()));
 
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 command.runInspectAlias(new String[]{"demo"}, new StringBuilder(), new StringBuilder()));
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 command.runIndexStatus(new String[]{"demo"}, new StringBuilder(), new StringBuilder()));
     }
 

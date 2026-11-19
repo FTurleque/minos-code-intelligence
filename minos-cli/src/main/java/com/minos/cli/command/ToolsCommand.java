@@ -2,6 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.output.SymbolOutputFormat;
@@ -43,7 +44,7 @@ public final class ToolsCommand {
             if ("install".equals(parsed.action())) {
                 AutonomousIndexOperations.ProviderView installed = operations.installProvider(parsed.provider());
                 output.append(render(List.of(installed), parsed.format())).append('\n');
-                return FindSymbolCommand.SUCCESS;
+                return CliExitCodes.SUCCESS;
             }
             List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
             output.append(render(providers, parsed.format())).append('\n');
@@ -51,9 +52,9 @@ public final class ToolsCommand {
                     && providers.stream()
                             .filter(provider -> parsed.all() || provider.requiredByDefault())
                             .anyMatch(ToolsCommand::blocksReadiness)) {
-                return FindSymbolCommand.EXECUTION_ERROR;
+                return CliExitCodes.EXECUTION_ERROR;
             }
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         });
     }
 

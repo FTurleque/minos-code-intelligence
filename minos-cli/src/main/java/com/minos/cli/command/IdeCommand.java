@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.output.SymbolOutputFormat;
@@ -45,11 +46,11 @@ public final class IdeCommand {
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
         if (arguments.length == 1 && CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
         if (arguments.length == 0 || !"handshake".equals(arguments[0])) {
             error.append("error: expected `ide handshake`\n").append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
 
         SymbolOutputFormat format;
@@ -57,7 +58,7 @@ public final class IdeCommand {
             format = parseFormat(arguments);
         } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
 
         if (format == SymbolOutputFormat.JSON) {
@@ -75,7 +76,7 @@ public final class IdeCommand {
                     .append("transport: cli-json-process\n")
                     .append("capabilities: ").append(String.join(",", CAPABILITIES)).append('\n');
         }
-        return FindSymbolCommand.SUCCESS;
+        return CliExitCodes.SUCCESS;
     }
 
     public static String usage() {

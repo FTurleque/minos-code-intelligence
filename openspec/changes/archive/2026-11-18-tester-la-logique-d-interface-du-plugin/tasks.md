@@ -21,7 +21,7 @@
 ## 3. Clôture
 
 - [x] 3.1 AUD-TST-08 — Mettre à jour la matrice de traçabilité du design ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 3.2 AUD-TST-08 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.2 AUD-TST-08 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 - [x] 3.3 AUD-TST-08 — Valider ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`.
 - [x] 3.4 AUD-TST-08 — Lister les documents à mettre à jour avant archivage (`docs/user/intellij-plugin.md`, dossier de capacité, `docs/project/audits/2026-11-15/SUIVI.md`) ; vérifier que chacun est fait ou nommé comme reste.
 
