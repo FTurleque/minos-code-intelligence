@@ -1809,69 +1809,173 @@ def check_package_cycles(root: Path = ROOT, modules: tuple[str, ...] = MODULES,
     return len(components), len(packages)
 
 
-# A9 / AUD-ARC-03 — the dependency lists of the current architecture document are checked against the POMs. The
-# structure is the contract: a `### minos-…` heading, and under it a bullet labelled "Dépendances". A document that
-# loses that shape fails, it does not pass by default (ADR 0043 section 3). Prose elsewhere is not checked.
+# A9 / AUD-ARC-03, AUD-ARC-07 — the module sections of the current architecture document are checked against the
+# POMs and the sources. The structure is the contract: a `### minos-…` heading, and under it bullets labelled
+# "Dépendances" (exactly one), "Sources" (exactly one) and "Interfaces" (at most one). A document that loses that shape
+# fails, it does not pass by default (ADR 0043 section 3). Prose elsewhere is not checked.
 ARCHITECTURE_BLOCKS_DOC = ROOT / "docs" / "architecture" / "arc42" / "05-vue-blocs.md"
 MODULE_HEADING = re.compile(r"^###\s+(minos-[a-z0-9-]+)")
 ANY_HEADING = re.compile(r"^#{1,3}\s")
-DEPENDENCIES_BULLET = re.compile(r"^-\s+\*\*Dépendances\*\*\s*:\s*(.*)$")
+DOCUMENTED_BULLET = re.compile(r"^-\s+\*\*(Dépendances|Sources|Interfaces)\*\*\s*:\s*(.*)$")
 MODULE_TOKEN = re.compile(r"`(minos-[a-z0-9-]+)`")
+# A dependency token, then optionally a parenthesis that immediately follows it and opens with its Maven scope.
+SCOPED_MODULE_TOKEN = re.compile(r"`(minos-[a-z0-9-]+)`(?:\s*\((test|runtime)\b[^)]*\))?")
+DOCUMENTED_SCOPES = frozenset({"test", "runtime"})
+SOURCE_ROOT_TOKEN = re.compile(r"com/minos/([a-z][a-z0-9]*)/")
+INTERFACE_TOKEN = re.compile(r"`([A-Z][A-Za-z0-9]*)`")
+ATTRIBUTION = re.compile(r"\bdéfini(?:e|s|es)?\s+dans\b([^.]*)")
+PUBLIC_INTERFACE = re.compile(r"^public\s+(?:sealed\s+|non-sealed\s+)?interface\s+([A-Z]\w*)", re.MULTILINE)
 
 
-def documented_dependency_lines(document: Path) -> dict[str, list[str]]:
-    """Module -> its "Dépendances" bullets, for each `### minos-…` section of the document."""
-    sections: dict[str, list[str]] = {}
+def documented_bullets(document: Path) -> dict[str, dict[str, list[str]]]:
+    """Module -> label ("Dépendances", "Sources", "Interfaces") -> its bullets, for each `### minos-…` section."""
+    sections: dict[str, dict[str, list[str]]] = {}
     current: str | None = None
     for line in document.read_text(encoding="utf-8").splitlines():
         heading = MODULE_HEADING.match(line)
         if heading:
             current = heading.group(1)
-            sections.setdefault(current, [])
+            sections.setdefault(current, {"Dépendances": [], "Sources": [], "Interfaces": []})
         elif ANY_HEADING.match(line):
             current = None
         elif current is not None:
-            bullet = DEPENDENCIES_BULLET.match(line)
+            bullet = DOCUMENTED_BULLET.match(line)
             if bullet:
-                sections[current].append(bullet.group(1))
+                sections[current][bullet.group(1)].append(bullet.group(2))
     return sections
 
 
-def documentation_problem(module: str, lines: list[str], expected: set[str], modules: tuple[str, ...]) -> str | None:
-    """Why the "Dépendances" bullets of one module section do not match its POM, or None when they do."""
+def documented_dependency_lines(document: Path) -> dict[str, list[str]]:
+    """Module -> its "Dépendances" bullets, for each `### minos-…` section of the document."""
+    return {module: bullets["Dépendances"] for module, bullets in documented_bullets(document).items()}
+
+
+def shown_scope(scope: str) -> str | None:
+    """The scope a document writes for a dependency: test or runtime; nothing for a compile-time dependency."""
+    return scope if scope in DOCUMENTED_SCOPES else None
+
+
+def scoped_line(expected: dict[str, str]) -> str:
+    """The expected "Dépendances" line for these dependencies (module -> Maven scope)."""
+    return ", ".join(f"`{name}`" + (f" ({shown_scope(scope)})" if shown_scope(scope) else "")
+                     for name, scope in sorted(expected.items())) or "aucune"
+
+
+def documentation_problem(module: str, lines: list[str], expected: dict[str, str] | set[str],
+                          modules: tuple[str, ...]) -> str | None:
+    """Why the "Dépendances" bullets of one module section do not match its POM (dependencies and the scope of each
+    one declared outside compilation), or None when they do."""
+    if not isinstance(expected, dict):
+        expected = {name: "compile" for name in expected}
     if len(lines) != 1:
         return f"{module}: expected one 'Dépendances' line in its section, found {len(lines)}"
     text = lines[0]
     if module == ASSEMBLY_MODULE and "tous les modules" in text.casefold():
-        missing = set(modules) - {module} - expected
+        missing = set(modules) - {module} - set(expected)
         return f"{module}: documented as depending on all modules, the POM misses {', '.join(sorted(missing))}" \
             if missing else None
-    documented = set(MODULE_TOKEN.findall(text)) - {module}
-    if documented == expected:
+    documented: dict[str, str | None] = {}
+    for name, scope in SCOPED_MODULE_TOKEN.findall(text):
+        if name != module:
+            documented[name] = scope or None
+    if set(documented) != set(expected):
+        return (f"{module}: documented {sorted(documented)}, POM declares {sorted(expected)}; "
+                f"expected line: - **Dépendances** : {scoped_line(expected)}")
+    wrong = [f"{name} documented with scope {documented[name] or 'none'}, the POM declares it in "
+             f"{expected[name]} (expected scope: {shown_scope(expected[name]) or 'none'})"
+             for name in sorted(expected) if documented[name] != shown_scope(expected[name])]
+    if wrong:
+        return f"{module}: " + "; ".join(wrong) + f"; expected line: - **Dépendances** : {scoped_line(expected)}"
+    return None
+
+
+def sources_problem(module: str, lines: list[str], roots: frozenset[str]) -> str | None:
+    """Why the "Sources" bullet of a module section does not cite exactly the package roots of the module, or None.
+    A line that cites only the source directory of the module, without any root, is accepted."""
+    if len(lines) != 1:
+        return f"{module}: expected one 'Sources' line in its section, found {len(lines)}"
+    cited = set(SOURCE_ROOT_TOKEN.findall(lines[0]))
+    if not cited or cited == set(roots):
         return None
-    line = ", ".join(f"`{name}`" for name in sorted(expected)) or "aucune"
-    return (f"{module}: documented {sorted(documented)}, POM declares {sorted(expected)}; "
-            f"expected line: - **Dépendances** : {line}")
+    problems = []
+    if set(roots) - cited:
+        problems.append(f"omits the package root(s) {', '.join(sorted(set(roots) - cited))}")
+    if cited - set(roots):
+        problems.append(f"cites the package root(s) {', '.join(sorted(cited - set(roots)))} the module does not own")
+    expected = ", ".join(f"`com/minos/{root}/`" for root in sorted(roots))
+    return f"{module}: its 'Sources' line " + " and ".join(problems) + f" (package roots of the module: {expected})"
 
 
-def check_architecture_documentation(graph: dict[str, frozenset[str]], document: Path = ARCHITECTURE_BLOCKS_DOC,
-                                     modules: tuple[str, ...] = MODULES) -> int:
-    """A9 — every module's "Dépendances" line in the arc42 block view equals its direct internal POM dependencies."""
+def reactor_type_owners(root: Path, modules: tuple[str, ...]) -> dict[str, set[str]]:
+    """Simple name of every top-level production type of the reactor -> the modules that declare it."""
+    owners: dict[str, set[str]] = {}
+    for module in modules:
+        for qualified in production_types(root, module):
+            owners.setdefault(qualified.rsplit(".", 1)[-1], set()).add(module)
+    return owners
+
+
+def public_interfaces(root: Path, module: str) -> list[str]:
+    """The public top-level interfaces declared by the production sources of one module."""
+    source_root = root / module / "src" / "main" / "java"
+    found: set[str] = set()
+    for source in sorted(source_root.rglob("*.java")) if source_root.is_dir() else []:
+        found.update(PUBLIC_INTERFACE.findall(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))))
+    return sorted(found)
+
+
+def interfaces_problem(module: str, lines: list[str], owners: dict[str, set[str]],
+                       interfaces: list[str]) -> str | None:
+    """Why the "Interfaces" bullet of a module section is wrong, or None: every cited type exists and belongs to the
+    module or to a module the line names after "défini(e)(s) dans"; "aucune" only when the module declares no public
+    interface. A section without such a line is accepted."""
+    if not lines:
+        return None
+    if len(lines) > 1:
+        return f"{module}: expected at most one 'Interfaces' line in its section, found {len(lines)}"
+    text = lines[0]
+    if text.strip().casefold().startswith("aucune"):
+        return (f"{module}: its 'Interfaces' line says aucune, the module declares the public interface(s) "
+                f"{', '.join(interfaces)}") if interfaces else None
+    attributed = {module} | {name for clause in ATTRIBUTION.findall(text) for name in MODULE_TOKEN.findall(clause)}
+    problems = []
+    for name in dict.fromkeys(INTERFACE_TOKEN.findall(text)):
+        declared = owners.get(name)
+        if not declared:
+            problems.append(f"{name} is no production type of the reactor")
+        elif not declared & attributed:
+            problems.append(f"{name} is declared by {', '.join(sorted(declared))}, not by "
+                            f"{', '.join(sorted(attributed))}")
+    return f"{module}: its 'Interfaces' line cites " + "; ".join(problems) if problems else None
+
+
+def check_architecture_documentation(graph: dict[str, frozenset[str]] | dict[str, dict[str, str]],
+                                     document: Path = ARCHITECTURE_BLOCKS_DOC, modules: tuple[str, ...] = MODULES,
+                                     root: Path = ROOT,
+                                     package_roots: dict[str, frozenset[str]] | None = None) -> int:
+    """A9 — in the arc42 block view, every module section documents its direct internal POM dependencies (with the
+    scope of those declared outside compilation), its package roots and existing, correctly attributed interfaces."""
+    package_roots = PACKAGE_ROOTS_BY_MODULE if package_roots is None else package_roots
     if not document.is_file():
         fail(f"A9 architecture document is missing: {document}")
-    sections = documented_dependency_lines(document)
+    sections = documented_bullets(document)
+    owners = reactor_type_owners(root, modules)
     problems: list[str] = []
     for module in modules:
         if module not in sections:
             problems.append(f"{module} has no section in {document.name}")
             continue
-        problem = documentation_problem(module, sections[module], set(graph[module]), modules)
-        if problem:
-            problems.append(problem)
+        bullets = sections[module]
+        dependencies = graph[module]
+        problems += [problem for problem in (
+            documentation_problem(module, bullets["Dépendances"], dependencies, modules),
+            sources_problem(module, bullets["Sources"], package_roots.get(module, frozenset())),
+            interfaces_problem(module, bullets["Interfaces"], owners, public_interfaces(root, module)),
+        ) if problem]
     problems += [f"{document.name} has a section for {module}, which is not a governed module"
                  for module in sorted(set(sections) - set(modules))]
     if problems:
-        fail("A9 current architecture documentation diverges from the POMs: " + "; ".join(problems))
+        fail("A9 current architecture documentation diverges from the POMs and the sources: " + "; ".join(problems))
     return len(modules)
 
 
@@ -1967,8 +2071,16 @@ def runtime_edge_row(declaring: str, providing: str, services: tuple[str, ...]) 
     return f"| `{declaring}` | `{providing}` | {', '.join(f'`{service}`' for service in services)} |"
 
 
-def render_dependency_document(graph: dict[str, frozenset[str]], runtime_edges: RuntimeEdges | None = None) -> str:
+def dependency_scopes(graph: dict[str, frozenset[str]] | dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    """Module -> dependency -> Maven scope; a graph without scopes means compile-time dependencies."""
+    return {module: dict(dependencies) if isinstance(dependencies, dict)
+            else {name: "compile" for name in dependencies} for module, dependencies in graph.items()}
+
+
+def render_dependency_document(graph: dict[str, frozenset[str]] | dict[str, dict[str, str]],
+                               runtime_edges: RuntimeEdges | None = None) -> str:
     runtime_edges = runtime_edges or {}
+    scopes = dependency_scopes(graph)
     lines = [
         "# Diagramme — Dépendances Maven entre modules MINOS",
         "",
@@ -1983,8 +2095,9 @@ def render_dependency_document(graph: dict[str, frozenset[str]], runtime_edges: 
     for module in MODULES:
         lines.append(f'    {mermaid_id(module)}["{module}"]')
     for module in MODULES:
-        for dependency in sorted(graph[module]):
-            lines.append(f"    {mermaid_id(module)} --> {mermaid_id(dependency)}")
+        for dependency, scope in sorted(scopes[module].items()):
+            label = f"|{shown_scope(scope)}|" if shown_scope(scope) else ""
+            lines.append(f"    {mermaid_id(module)} -->{label} {mermaid_id(dependency)}")
     for declaring, providing in runtime_edges:
         lines.append(f"    {mermaid_id(declaring)} -.-> {mermaid_id(providing)}")
     lines.extend([
@@ -1996,7 +2109,8 @@ def render_dependency_document(graph: dict[str, frozenset[str]], runtime_edges: 
         "|---|---|",
     ])
     for module in MODULES:
-        dependencies = ", ".join(f"`{dependency}`" for dependency in sorted(graph[module])) or "—"
+        dependencies = ", ".join(f"`{dependency}`" + (f" ({shown_scope(scope)})" if shown_scope(scope) else "")
+                                 for dependency, scope in sorted(scopes[module].items())) or "—"
         lines.append(f"| `{module}` | {dependencies} |")
     lines.extend([
         "",
@@ -2024,7 +2138,7 @@ def render_dependency_document(graph: dict[str, frozenset[str]], runtime_edges: 
     return "\n".join(lines)
 
 
-def check_or_write_dependency_document(graph: dict[str, frozenset[str]], write_doc: bool,
+def check_or_write_dependency_document(graph: dict[str, frozenset[str]] | dict[str, dict[str, str]], write_doc: bool,
                                        document: Path = GENERATED_DEPENDENCY_DOC,
                                        runtime_edges: RuntimeEdges | None = None) -> None:
     runtime_edges = runtime_edges or {}
@@ -2081,10 +2195,10 @@ def main() -> int:
         unreferenced = check_unreferenced_production_types()
         packages = check_package_ownership()
         cycles, cycle_packages = check_package_cycles()
-        documented = check_architecture_documentation(graph)
+        documented = check_architecture_documentation(scoped)
         architecture_test = check_architecture_test_policy()
         runtime_edges = runtime_service_edges()
-        check_or_write_dependency_document(graph, write_doc, runtime_edges=runtime_edges)
+        check_or_write_dependency_document(scoped, write_doc, runtime_edges=runtime_edges)
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")

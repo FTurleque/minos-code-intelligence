@@ -175,15 +175,15 @@ Le bloc modifié est écrit pour rester vrai avant et après `donner-une-source-
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| frontieres-de-modules › La portée d'une dépendance hors compilation est écrite dans la documentation de dépendances | Document généré | D2 | 1.2, 1.3 | à écrire ; `--write-doc` à exécuter |
-| idem | Portée absente de l'arc42 | D2 | 1.2 | à écrire |
-| idem | Portée écrite à tort | D2 | 1.2 | à écrire |
-| idem | Parenthèse qui n'est pas une portée | D2 | 1.2 | à écrire |
-| frontieres-de-modules › Les racines de packages citées par la documentation d'un module sont les siennes | Racine omise ; Racine d'un autre module ; Section sans ligne Sources ; Répertoire de sources seul | D1, D3 | 2.1, 2.2 | à écrire |
-| frontieres-de-modules › Les interfaces citées par la documentation d'un module existent et sont attribuées au bon module | Port attribué au mauvais module ; Aucune interface déclarée à tort ; Type disparu | D1, D3 | 2.1, 2.2 | à écrire |
-| idem | Documentation corrigée | diagramme | 2.3 | garde sur le dépôt : à exécuter |
-| frontieres-de-modules › Les adaptateurs de stockage forment un seul module | Reactor fusionné | D4 | 3.1 | cas A7 existant de l'auto-test : à rejouer |
-| idem | Ancien module réintroduit | — | 3.1 | cas existant : à rejouer |
+| frontieres-de-modules › La portée d'une dépendance hors compilation est écrite dans la documentation de dépendances | Document généré | D2 | 1.2, 1.3 | `scripts/architecture/test_check_module_boundaries.py#test_the_generated_document_writes_the_scope_outside_compilation` ; `--write-doc` exécuté deux fois, le second sans différence ; garde au code 0 |
+| idem | Portée absente de l'arc42 | D2 | 1.2 | `scripts/architecture/test_check_module_boundaries.py#test_a_missing_scope_is_refused_naming_the_dependency_and_the_expected_scope` ; rouge du dépôt sur `minos-explorer` |
+| idem | Portée écrite à tort | D2 | 1.2 | `scripts/architecture/test_check_module_boundaries.py#test_a_scope_written_for_a_compile_dependency_is_refused`, `test_a_wrong_scope_is_refused` |
+| idem | Parenthèse qui n'est pas une portée | D2 | 1.2 | `scripts/architecture/test_check_module_boundaries.py#test_a_see_also_parenthesis_after_a_compile_dependency_is_not_a_scope` ; ligne réelle de `minos-bootstrap` acceptée |
+| frontieres-de-modules › Les racines de packages citées par la documentation d'un module sont les siennes | Racine omise ; Racine d'un autre module ; Section sans ligne Sources ; Répertoire de sources seul | D1, D3 | 2.1, 2.2 | `scripts/architecture/test_check_module_boundaries.py#test_a_package_root_omitted_from_the_sources_line_is_refused`, `test_a_package_root_of_another_module_is_refused`, `test_a_section_without_a_sources_line_is_refused`, `test_a_sources_line_with_the_source_directory_only_is_accepted` |
+| frontieres-de-modules › Les interfaces citées par la documentation d'un module existent et sont attribuées au bon module | Port attribué au mauvais module ; Aucune interface déclarée à tort ; Type disparu | D1, D3 | 2.1, 2.2 | `scripts/architecture/test_check_module_boundaries.py#test_a_port_attributed_to_the_wrong_module_is_refused_naming_its_real_module`, `test_a_module_named_outside_the_defined_in_clause_does_not_count`, `test_none_is_refused_for_a_module_that_declares_a_public_interface`, `test_a_type_no_module_declares_is_refused` |
+| idem | Documentation corrigée | diagramme | 2.3 | garde au code 0 après correction ; `scripts/architecture/test_check_module_boundaries.py#test_the_current_document_matches_the_real_poms` |
+| frontieres-de-modules › Les adaptateurs de stockage forment un seul module | Reactor fusionné | D4 | 3.1 | cas A7 de l'auto-test rejoués (304 cas verts) |
+| idem | Ancien module réintroduit | — | 3.1 | cas A7 existants rejoués |
 
 ## Questions ouvertes
 
