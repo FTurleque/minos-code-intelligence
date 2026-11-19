@@ -989,6 +989,45 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
 # backends do not name each other, and the shared packages (the snapshot codec and the MINOS_HOME path mapping) name
 # neither backend, nor the PostgreSQL driver, nor JDBC. Each rule: (label, source package, forbidden prefixes); a prefix
 # under the groupId is written without it.
+# A20 (AUD-ARC-05) — the production classes of the final assembly minos-app, by name below com.minos, each with its
+# role. A policy belongs to an application module or a surface; a new class enters this list by a visible edit.
+ASSEMBLY_CLASSES: dict[str, str] = {
+    "app.DockerMcpTransport": "transport: STDIO session of minos mcp relayed to the Docker runtime",
+    "app.ExplorerLaunchRouteProvider": "launch route: minos explorer serve, wiring of the explorer launch policy",
+    "app.McpBackend": "home backend configuration: the execution backends",
+    "app.McpBackendConfiguration": "home backend configuration: the versioned value",
+    "app.McpBackendConfigurationStore": "home backend configuration: its persistence",
+    "app.McpBackendRouter": "launch route: minos mcp, native or Docker",
+    "app.McpLaunchRouteProvider": "launch route: minos mcp entry point registered by ServiceLoader",
+    "integration.nexus.NexusExportBridgeMain": "assembly: NEXUS export bridge entry point",
+}
+
+
+def check_assembly_classes(root: Path = ROOT, group_id: str | None = None,
+                           listed: dict[str, str] | None = None) -> int:
+    """A20 — every production class of minos-app is listed in ASSEMBLY_CLASSES with a written role, and every entry
+    names a class of minos-app: the final assembly holds wiring, launch routes, transport and the home backend
+    configuration, no application policy."""
+    listed = ASSEMBLY_CLASSES if listed is None else listed
+    prefix = (group_id or repository_group_id(root)) + "."
+    source_root = root / ASSEMBLY_MODULE / "src" / "main" / "java"
+    found: dict[str, str] = {}
+    for source in sorted(source_root.rglob("*.java")) if source_root.is_dir() else []:
+        if source.name in ("package-info.java", "module-info.java"):
+            continue
+        name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(prefix)
+        found[name] = source.relative_to(root).as_posix()
+    problems = [f"{path} is a production class of {ASSEMBLY_MODULE} absent from ASSEMBLY_CLASSES ({name}); place a "
+                f"policy in an application module or a surface, or list the class with its role"
+                for name, path in sorted(found.items()) if name not in listed]
+    problems += [f"ASSEMBLY_CLASSES entry {name} has no written role"
+                 for name, role in sorted(listed.items()) if not str(role).strip()]
+    problems += [f"ASSEMBLY_CLASSES entry {name} is no class of {ASSEMBLY_MODULE} any more; remove it"
+                 for name in sorted(set(listed) - set(found))]
+    if problems:
+        fail("A20 classes of the final assembly (AUD-ARC-05: minos-app holds wiring, launch routes, transport and "
+             "the home backend configuration): " + "; ".join(problems))
+    return len(listed)
 INFRASTRUCTURE_API = re.compile(
     r"\bjava\s*\.\s*net\s*\.\s*HttpURLConnection\b|\bjava\s*\.\s*net\s*\.\s*http\s*\.\s*\w+"
     r"|\bjavax\s*\.\s*tools\s*\.\s*\w+|\bcom\s*\.\s*sun\s*\.\s*source\s*\.\s*[\w.]+")
@@ -1929,6 +1968,7 @@ def main() -> int:
         engine_accessors = check_minos_application_accessors()
         launchers = check_process_launchers()
         adapter_types = check_adapter_types_named_by_adapters()
+        assembly_classes = check_assembly_classes()
         api_users, embedded_adapters = check_embedded_adapters()
         storage_packages = check_storage_package_isolation()
         package_roots = check_package_roots()
@@ -1969,6 +2009,8 @@ def main() -> int:
         print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "
               f"({sum(sum(types.values()) for types in ADAPTER_TYPES_NAMED_BY_ADAPTER.values())} files), none other "
               f"is named; {len(ADAPTER_COUPLING_REASONS)} couple(s) justified in ADAPTER_COUPLING_REASONS")
+        print(f"A20 assembly classes: {assembly_classes} production class(es) of minos-app listed in ASSEMBLY_CLASSES "
+              f"with their role, none other")
         print(f"A19 embedded adapters: {api_users} file(s) of minos-application listed in INFRASTRUCTURE_API_USERS "
               f"name a JDK infrastructure API, {embedded_adapters} class(es) listed in EMBEDDED_ADAPTER_CLASSES, named "
               f"by no other production source of minos-application")

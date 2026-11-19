@@ -66,8 +66,8 @@ class ExplorerSessionTest {
             int exit = ExplorerSession.serve(team, 0, Map.of(), error, waits::incrementAndGet);
 
             assertEquals(ExplorerSession.USAGE_ERROR, exit);
-            assertTrue(error.toString().startsWith("error: minos explorer serve is not available when the team mode"),
-                    error.toString());
+            assertEquals("error: " + ExplorerLaunchPolicy.TEAM_MODE_REFUSED + System.lineSeparator(),
+                    error.toString(), "the same text as the launch route refusal");
             assertTrue(error.toString().contains("MINOS_HOSTED_MODE"), error.toString());
             assertFalse(error.toString().contains("http://"), "no address is printed, nothing listens");
             assertEquals(0, waits.get(), "the session never started");
