@@ -97,6 +97,11 @@ final class IndexingFixture {
     }
 
     ProjectIndexingUseCase useCase(UnaryOperator<IndexerExecutor> decorator) {
+        return new ProjectIndexingUseCase(dependencies(), decorator);
+    }
+
+    /** The collaborators of the use case over this fixture. */
+    ProjectIndexingUseCase.Dependencies dependencies() {
         List<SourceRootDetector> detectors = new ArrayList<>(DefaultDiscoveryPlugins.sourceRootDetectors());
         detectors.addAll(extraDetectors);
         ProjectDiscoveryService discovery = new ProjectDiscoveryService(
@@ -109,7 +114,7 @@ final class IndexingFixture {
             if (retentionFailure != null) throw retentionFailure;
             return new StorageRetentionService.RetentionResult(0, 0, 0);
         };
-        return new ProjectIndexingUseCase(new ProjectIndexingUseCase.Dependencies(
+        return new ProjectIndexingUseCase.Dependencies(
                 new Registry(project),
                 snapshots,
                 stateStore,
@@ -130,7 +135,7 @@ final class IndexingFixture {
                 projectId -> {
                     semanticRefreshes.incrementAndGet();
                     return null;
-                }), decorator);
+                });
     }
 
     private IndexerRegistry registry() {

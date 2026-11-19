@@ -8,6 +8,7 @@ import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.domain.registry.DegradedEntry;
 import com.minos.registry.RegisteredProject;
+import com.minos.storage.home.FileIndexImportHistoryStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
@@ -68,7 +69,7 @@ class ProjectInventoryToleranceTest {
     private ProjectInspectionService inspection(ProjectDiscoveryService discovery) throws IOException {
         IndexStateStore stateStore = new FileIndexStateStore(home.resolve("index-state"));
         FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
-        return new ProjectInspectionService(home, registry, snapshots, stateStore, discovery, List.of());
+        return new ProjectInspectionService(new FileIndexImportHistoryStore(home), registry, snapshots, stateStore, discovery, List.of());
     }
 
     private void corruptRegistryEntry(RegisteredProject project) throws IOException {

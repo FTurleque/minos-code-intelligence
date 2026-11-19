@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliJson;
 import com.minos.cli.support.CliOptions;
 import com.minos.cli.support.LazyApplication;
@@ -79,7 +80,7 @@ public final class IdeIntelligenceCommand {
         Objects.requireNonNull(error, "error");
         if (arguments.length == 0 || CliCommandSupport.isHelp(arguments[0])) {
             output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         }
 
         // Analysis first: nothing below reaches a service, so a usage error (code 2) can never follow a call.
@@ -88,18 +89,18 @@ public final class IdeIntelligenceCommand {
             invocation = parse(arguments);
         } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
+            return CliExitCodes.USAGE_ERROR;
         }
         // Execution: any failure, an IllegalArgumentException of a service included, is an execution error (code 1).
         try {
             output.append(CliJson.render(invocation.run())).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            return CliExitCodes.SUCCESS;
         } catch (LazyApplication.OpenFailure openFailure) {
             // MINOS_HOME could not be opened: not a failure of this operation, the launcher reports it as before.
             throw openFailure;
         } catch (IOException | RuntimeException exception) {
             error.append("error: ").append(message(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
+            return CliExitCodes.EXECUTION_ERROR;
         }
     }
 

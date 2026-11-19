@@ -9,7 +9,8 @@
 flowchart TB
     clients(["Développeur, IDE, agent IA"])
     app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, route MCP"]
-    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-nexus · minos-explorer"]
+    surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-explorer"]
+    contract["<b>Module de contrat</b><br/>minos-nexus : contrat JSON NEXUS"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
     application["<b>minos-application</b><br/>services applicatifs"]
     adapters["<b>Adaptateurs</b><br/>minos-storage (local · PostgreSQL optionnel)<br/>minos-provider-scip · minos-runtime-local · minos-integration-git"]
@@ -20,6 +21,8 @@ flowchart TB
     app --> surfaces
     app --> bootstrap
     surfaces --> application
+    surfaces -->|"minos-cli"| contract
+    contract --> application
     surfaces -.->|"ouvrent l'application (ServiceLoader)"| bootstrap
     bootstrap --> application
     bootstrap -->|"câble"| adapters
@@ -32,5 +35,7 @@ flowchart TB
 
 Lecture : les flèches descendent vers le cœur ; `minos-bootstrap` est le seul module non adaptateur qui connaît
 des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne dépendent pas des adaptateurs.
+Aucune surface ne dépend d'une autre surface : `minos-nexus`, qui traduit un résultat applicatif dans le contrat
+JSON NEXUS, est un module de contrat, entre l'application et les surfaces ; seule `minos-cli` en dépend.
 
 Deux familles d'arêtes réelles sont dessinées pour ne pas masquer la dette : la flèche pointillée `surfaces → minos-engine` (les surfaces consomment encore des types du moteur ; l'ADR-0058 la déclare, l'ADR-0057 point 6 vise à la résorber) et la boucle sur « Adaptateurs » (`minos-provider-scip` → `minos-storage` et `minos-runtime-local`). Le détail exact est dans [module-dependencies.md](module-dependencies.md), fichier généré qui fait foi.

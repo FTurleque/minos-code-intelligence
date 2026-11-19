@@ -6,6 +6,7 @@ import com.minos.discovery.ProjectDetector;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.registry.RegisteredProject;
 import com.minos.source.SourceBudgetPolicy;
+import com.minos.storage.home.FileIndexImportHistoryStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
@@ -145,7 +146,7 @@ class ProjectStatusWithoutDiscoveryTest {
             LocalProjectRegistry registry = new LocalProjectRegistry(home.resolve("registry"));
             this.project = registry.registerProject(projectRoot, "status-project");
             this.service = new ProjectInspectionService(
-                    home, registry, new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")),
+                    new FileIndexImportHistoryStore(home), registry, new FileSymbolSnapshotStore(home.resolve("symbol-snapshots")),
                     new FileIndexStateStore(home.resolve("index-state")), discovery, List.of());
         }
     }

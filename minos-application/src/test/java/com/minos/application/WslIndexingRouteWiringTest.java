@@ -1,6 +1,5 @@
 package com.minos.application;
 
-import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligence;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
@@ -9,7 +8,7 @@ import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableRunMarkers;
-import com.minos.program.analysis.ProgramGraphService;
+import com.minos.program.analysis.TestProgramGraphProviders;
 import com.minos.registry.ProjectRegistry;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.semantic.SemanticVectorStore;
@@ -39,7 +38,7 @@ class WslIndexingRouteWiringTest {
     void aCompositionRootOffersNoRouteByDefault() throws Exception {
         try (MinosApplication application = application(null)) {
             assertEquals(Optional.empty(), application.compositionRoot().wslIndexingRoute(home));
-            assertEquals(Optional.empty(), ProjectIndexingUseCase.viaWsl(application, Optional.of("Ubuntu")));
+            assertEquals(Optional.empty(), application.projectIndexingViaWsl(Optional.of("Ubuntu")));
             MinosApplicationComposer composer = application.compositionRoot();
             assertThrows(NullPointerException.class, () -> composer.wslIndexingRoute(null));
             assertEquals(Optional.empty(), composer.wslIndexingWorker(home));
@@ -58,12 +57,12 @@ class WslIndexingRouteWiringTest {
             return nativeRuntimes;
         };
         try (MinosApplication application = application(route)) {
-            assertTrue(ProjectIndexingUseCase.viaWsl(application, Optional.of("Ubuntu-24.04")).isPresent());
-            assertTrue(ProjectIndexingUseCase.viaWsl(application, Optional.empty()).isPresent());
+            assertTrue(application.projectIndexingViaWsl(Optional.of("Ubuntu-24.04")).isPresent());
+            assertTrue(application.projectIndexingViaWsl(Optional.empty()).isPresent());
             assertEquals(List.of(Optional.of("Ubuntu-24.04"), Optional.empty()), requested);
             assertEquals(List.of(application.providerRuntimeManager(), application.providerRuntimeManager()), natives,
                     "the route delegates every non-routed provider to the native runtimes");
-            assertThrows(NullPointerException.class, () -> ProjectIndexingUseCase.viaWsl(application, null));
+            assertThrows(NullPointerException.class, () -> application.projectIndexingViaWsl(null));
         }
     }
 
@@ -83,7 +82,7 @@ class WslIndexingRouteWiringTest {
                 .providerRuntimeManager(unused(ProviderRuntimeManager.class))
                 .snapshotLifecycle(unused(SnapshotStager.class), unused(SnapshotPromoter.class))
                 .gitIntelligence(unused(GitIntelligence.class))
-                .programGraphProviders(ProgramGraphService.productionProviders())
+                .programGraphProviders(TestProgramGraphProviders.production())
                 .scipArtifactImporter((indexFile, request, snapshots) -> {
                     throw new UnsupportedOperationException("import");
                 });
@@ -98,6 +97,8 @@ class WslIndexingRouteWiringTest {
                     : Optional.of(route);
             case "wslIndexingWorker" -> InvocationHandler.invokeDefault(self, method, arguments);
             case "resumableRunMarkers" -> unused(ResumableRunMarkers.class);
+            case "indexImportHistoryStore" -> ImportHistoryStores.none();
+            case "completeProgramGraphProviders" -> TestProgramGraphProviders.completedArgument(arguments[0]);
             case "toString" -> "composer";
             case "hashCode" -> System.identityHashCode(self);
             case "equals" -> self == arguments[0];

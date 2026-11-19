@@ -1,6 +1,5 @@
 package com.minos.application.indexing;
 
-import com.minos.application.ProviderRuntimeSummary;
 import com.minos.orchestration.IndexingRun;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;

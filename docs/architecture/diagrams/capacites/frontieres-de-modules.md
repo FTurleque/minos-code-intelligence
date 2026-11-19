@@ -22,7 +22,7 @@ La vue détaillée des dépendances réelles entre POM est générée :
 Type : flowchart (vue de composants, non UML) · Portée : existant vérifié · Exigences : « Les adaptateurs de
 stockage forment un seul module », « `minos-nexus` ne dépend plus de `minos-engine` », « La composition et le
 provider SCIP ne nomment pas le backend PostgreSQL », « Le garde de cycles couvre le plugin IntelliJ hors du
-reactor »
+reactor », « Un module de contrat reste sous les surfaces », « Aucune surface ne dépend d'une autre surface »
 
 ```mermaid
 flowchart BT
@@ -38,6 +38,9 @@ flowchart BT
     cli["minos-cli"]
     api["minos-api"]
     mcp["minos-mcp"]
+    exp["minos-explorer"]
+  end
+  subgraph contrat["Module de contrat"]
     nex["minos-nexus"]
   end
   asm["minos-app (assemblage, dépend des 12 autres)"]
@@ -56,8 +59,11 @@ flowchart BT
   cli --> app
   api --> app
   mcp --> app
+  exp --> app
+  cli --> nex
   nex --> app
   surf -.->|"runtime ou test seulement"| boot
+  nex -.->|"test seulement"| boot
   asm --> surf
   ij -.->|"processus CLI versionné"| cli
 ```
@@ -65,12 +71,16 @@ flowchart BT
 Vue simplifiée de `ALLOWED_DEPENDENCIES` (`scripts/architecture/check-module-boundaries.py:59-85`), dont une copie
 identique vit dans `ModuleArchitectureTest` (égalité contrôlée par la règle A17) ; les flèches transitives vers le
 domaine et le moteur sont omises. Les surfaces n'atteignent la racine de composition qu'en portée `runtime` ou
-`test`. Le plugin IntelliJ n'est pas un module : il n'entre que dans l'analyse des cycles (A8).
+`test`, le module de contrat en portée `test` seulement. Aucune flèche ne relie deux surfaces : `minos-cli`
+dépend du module de contrat `minos-nexus`, qui ne dépend que du domaine et de l'application. Le plugin IntelliJ
+n'est pas un module : il n'entre que dans l'analyse des cycles (A8).
 
-Règles du garde, par ce qu'elles refusent : A2 dépendance contraire aux rôles hexagonaux ; A3 package partagé
+Règles du garde, par ce qu'elles refusent : A2 dépendance contraire aux rôles hexagonaux (dont une surface
+qui dépend d'une autre surface, et un module de contrat qui dépend d'autre chose que du domaine et de
+l'application) ; A3 package partagé
 entre deux modules ; A7 liste des modules différente du reactor ; A8 nouveau cycle de packages ; A9 documentation
 des dépendances différente des POM ; A10 type non exporté du runtime local nommé ailleurs ; A11 type du moteur
-nommé par une surface hors liste ; A12 lancement de processus dans les couches internes ; A13 couplage entre
+nommé par une surface ou un module de contrat hors liste ; A12 lancement de processus dans les couches internes ; A13 couplage entre
 adaptateurs hors liste ; A14 nouvelle racine de packages ; A15 classe publique sans appelant ; A16
 `ServiceLoader` sans chargeur explicite ; A17 tables Java et Python différentes ; A18 index mémoire ou port
 d'écriture hors du cœur. Aucune règle ne porte les étiquettes A4 à A6.
@@ -124,7 +134,7 @@ d'écriture hors du cœur. Aucune règle ne porte les étiquettes A4 à A6.
 | La requête de symboles de l'API est construite par l'application | tous | — | `scripts/architecture/test_check_module_boundaries.py#test_the_surfaces_read_git_through_the_application_and_keep_only_the_published_read_models`, `minos-app/src/test/java/com/minos/characterization/A2SurfaceCharacterizationTest.java#javaApiOutputsAreUnchanged` | couverte |
 | Les résultats de requête sont des modèles de lecture publiés | raison écrite des entrées non contrôlée | — | `scripts/architecture/test_check_module_boundaries.py#test_an_imported_type_outside_the_list_is_refused_naming_surface_file_and_type` | partielle |
 | L'export NEXUS passe par un cas d'usage applicatif | tous | — | `minos-application/src/test/java/com/minos/application/export/KnowledgeExportRefusalTest.java#anUnregisteredProjectRootIsRefusedByItsName`, `scripts/architecture/test_check_module_boundaries.py#test_the_nexus_export_no_longer_uses_the_engine` | couverte |
-| `minos-nexus` ne dépend plus de `minos-engine` | usage transitif : pas de témoin négatif en bytecode | V1 | `scripts/architecture/test_check_module_boundaries.py#test_the_nexus_surface_may_not_depend_on_the_engine_again`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#everyModuleOnlyUsesItsAllowedModules` | partielle |
+| `minos-nexus` ne dépend plus de `minos-engine` | usage transitif : pas de témoin négatif en bytecode | V1 | `scripts/architecture/test_check_module_boundaries.py#test_the_nexus_contract_module_may_not_depend_on_the_engine_again`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#everyModuleOnlyUsesItsAllowedModules` | partielle |
 | Les adaptateurs de stockage forment un seul module | tous | V1 | `scripts/architecture/test_check_module_boundaries.py#test_reactor_module_absent_from_the_governed_list_fails`, `scripts/architecture/test_check_module_boundaries.py#test_the_real_tables_are_identical` | couverte |
 | La composition et le provider SCIP ne nomment pas le backend PostgreSQL | tous | V1 | `scripts/architecture/test_check_module_boundaries.py#test_an_import_of_the_backend_in_the_composition_root_is_refused`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#onlyThePostgresqlBackendUsesPostgresql` | couverte |
 | Le mode local ne charge aucune classe PostgreSQL | tous | — | `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalCompositionLoadsNoPostgresqlClassTest.java#theLocalCompositionLoadsNoPostgresqlClass`, `minos-bootstrap/src/test/java/com/minos/bootstrap/LocalCompositionLoadsNoPostgresqlClassTest.java#theCheckNamesAPostgresqlClassLoadedByTheComposition` | couverte |

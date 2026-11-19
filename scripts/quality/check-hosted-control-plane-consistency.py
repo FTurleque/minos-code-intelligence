@@ -107,8 +107,11 @@ def evaluate() -> str:
             'HOSTED_MODE_ENV = "MINOS_HOSTED_MODE"', "hostedControlPlaneService",
             "MinosApplicationRuntimeConfiguration.apply(settings, builder)")
     require("MinosApplicationRuntimeConfiguration.java", runtime_config,
-            '"enabled"', '"disabled"', "hostedTenantKeyProvider",
+            "HostedMode.from(settings)", "hostedTenantKeyProvider",
             "environmentHostedTenantKeyProvider()")
+    # AUD-ARC-05: one rule reads the team mode, for the application and for the explorer launch.
+    hosted_mode = read("minos-application/src/main/java/com/minos/application/HostedMode.java")
+    require("HostedMode.java", hosted_mode, '"enabled"', '"disabled"', "unsupported hosted mode: ")
     forbid("MinosApplicationRuntimeConfiguration.java", runtime_config, "new EnvironmentHostedTenantKeyProvider")
     require("MinosApplicationAssembler.java", app_assembler,
             'home.resolve("hosted-control-plane")', "hostedTenantKeyProvider",

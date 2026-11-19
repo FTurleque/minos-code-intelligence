@@ -1,9 +1,11 @@
 package com.minos.app;
 
+import com.minos.application.HostedMode;
 import com.minos.application.MinosApplication;
 import com.minos.cli.ExplorerLaunchRoute;
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.registry.ProjectPathMapping;
+import com.minos.explorer.ExplorerLaunchPolicy;
 import com.minos.explorer.ExplorerSession;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.storage.MinosRuntimeSettings;
@@ -12,26 +14,21 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
  * Gives {@code com.minos.cli.MinosLauncher} the {@code minos explorer serve} route of the final assembly,
  * registered by {@code META-INF/services/com.minos.cli.ExplorerLaunchRoute}.
  *
- * <p>The route decides whether the surface may start on this home before it opens anything: a home whose
- * backend is the Docker runtime is not opened on the host, and a home in team mode gets no exploration
- * surface. Only then is the application opened, for as long as the surface serves.</p>
+ * <p>The route reads the backend and the team mode of the home before it opens anything, and asks
+ * {@link ExplorerLaunchPolicy} whether the surface may start: a home whose backend is the Docker runtime is not
+ * opened on the host, and a home in team mode gets no exploration surface. The team mode is read by
+ * {@link HostedMode#from}, the rule of the application. Only then is the application opened, for as long as the
+ * surface serves.</p>
  */
 public final class ExplorerLaunchRouteProvider implements ExplorerLaunchRoute {
-
-    static final String DOCKER_BACKEND_REFUSED = "this MINOS home runs on the Docker backend, whose data is not"
-            + " opened on the host: start the optional explorer service of the Docker runtime instead (Compose"
-            + " profile explorer), or switch the home to the native backend";
-    static final String TEAM_MODE_REFUSED = "minos explorer serve is not available when the team mode is enabled"
-            + " (MINOS_HOSTED_MODE / minos.hosted.mode): the exploration surface has no per-project authorization."
-            + " Disable the team mode for this MINOS_HOME to explore its semantic index on this machine";
 
     /** Opens the application of a validated MINOS home; in production {@link MinosApplication#open}. */
     @FunctionalInterface
@@ -71,13 +68,10 @@ public final class ExplorerLaunchRouteProvider implements ExplorerLaunchRoute {
         boolean workstation = runtimeLocation.get() == ProjectPathMapping.RuntimeLocation.NATIVE;
         Path validatedHome = workstation ? PrivateLocalStorage.ensurePrivateDirectory(home)
                 : home.toAbsolutePath().normalize();
-        if (workstation && dockerBackend(validatedHome)) {
-            return refuse(error, DOCKER_BACKEND_REFUSED);
-        }
-        MinosRuntimeSettings settings = MinosRuntimeSettings.load(validatedHome);
-        String teamMode = settings.value(MinosApplication.HOSTED_MODE_PROPERTY, MinosApplication.HOSTED_MODE_ENV);
-        if (teamMode != null && !"disabled".equals(teamMode.toLowerCase(Locale.ROOT))) {
-            return refuse(error, TEAM_MODE_REFUSED);
+        Optional<String> refusal = ExplorerLaunchPolicy.refusal(runtimeLocation.get(),
+                () -> dockerBackend(validatedHome), () -> HostedMode.from(MinosRuntimeSettings.load(validatedHome)));
+        if (refusal.isPresent()) {
+            return refuse(error, refusal.get());
         }
         try (MinosApplication application = opener.open(validatedHome)) {
             return surface.serve(application, port, error);
@@ -98,6 +92,6 @@ public final class ExplorerLaunchRouteProvider implements ExplorerLaunchRoute {
 
     private static int refuse(Appendable error, String reason) throws IOException {
         error.append("error: ").append(reason).append(System.lineSeparator());
-        return FindSymbolCommand.USAGE_ERROR;
+        return CliExitCodes.USAGE_ERROR;
     }
 }

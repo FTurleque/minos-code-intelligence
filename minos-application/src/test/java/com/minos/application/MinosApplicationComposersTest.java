@@ -102,6 +102,13 @@ class MinosApplicationComposersTest {
         }
         @Override public HostedTenantKeyProvider environmentHostedTenantKeyProvider() { throw unused(); }
         @Override public ResumableRunMarkers resumableRunMarkers(Path home) { throw unused(); }
+        @Override public com.minos.orchestration.IndexImportHistoryStore indexImportHistoryStore(Path home) { throw unused(); }
+        @Override public java.util.Optional<com.minos.application.semantic.EmbeddingProvider> embeddingProvider(
+                EmbeddingProviderSettings settings) { throw unused(); }
+        @Override public List<com.minos.program.analysis.ProgramGraphProvider> programGraphProviders(
+                com.minos.incremental.ProjectFingerprintSnapshotStore fingerprints) { throw unused(); }
+        @Override public List<com.minos.program.analysis.ProgramGraphProvider> completeProgramGraphProviders(
+                List<com.minos.program.analysis.ProgramGraphProvider> requested) { throw unused(); }
         @Override public com.minos.semantic.SemanticProjectionStore semanticProjectionStore(Path home) { throw unused(); }
         @Override public com.minos.runtime.WorkerSandboxProbe workerSandboxProbe() { throw unused(); }
         @Override public com.minos.runtime.HostCommandLocator hostCommandLocator() { throw unused(); }

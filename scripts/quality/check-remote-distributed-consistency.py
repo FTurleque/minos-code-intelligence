@@ -177,8 +177,12 @@ def check_remote_indexing_wiring() -> None:
 
     require_facts("ProjectIndexingUseCase.java", autonomous, "executorDecorator", "UnaryOperator<IndexerExecutor>")
     require_facts("RemoteIndexingUseCase.java", remote_use_case,
-                  "RemoteIndexingRuntime", "compositionRoot.remoteRepositoryMaterializer(",
-                  "compositionRoot.remoteIndexingRuntime(", "force", "verified artifact evidence")
+                  "RemoteIndexingRuntime", "force", "verified artifact evidence")
+    # ADR 0087: the facade builds the remote use case, the materializer then the runtime of the composition root.
+    facade = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
+    require_facts("MinosApplication.java", facade,
+                  "compositionRoot.remoteRepositoryMaterializer(", "compositionRoot.remoteIndexingRuntime(")
+    forbid("RemoteIndexingUseCase.java", remote_use_case, "import com.minos.application.MinosApplication")
     forbid("RemoteIndexingUseCase.java", remote_use_case,
            "import com.minos.runtime.local.distributed.DistributedArtifactBundleStore",
            "import com.minos.runtime.local.distributed.DistributedIndexerExecutor",

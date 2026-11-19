@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliOptions;
 
 import java.io.IOException;
@@ -76,7 +76,7 @@ final class ExplorerCommandLine {
     private static int usageError(Appendable error, String message) throws IOException {
         error.append("error: ").append(message).append(System.lineSeparator())
                 .append(USAGE).append(System.lineSeparator());
-        return FindSymbolCommand.USAGE_ERROR;
+        return CliExitCodes.USAGE_ERROR;
     }
 
     /** The single explorer entry point visible from the class loader of MINOS itself. */

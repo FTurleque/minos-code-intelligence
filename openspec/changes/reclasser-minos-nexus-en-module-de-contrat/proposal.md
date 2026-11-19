@@ -44,8 +44,8 @@ Aucune.
 | `minos-nexus` est listé parmi les surfaces | [Existant vérifié] | `scripts/architecture/check-module-boundaries.py:51`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java:83-84` |
 | `NexusSemanticSignalService` est sans appelant de production | [Existant vérifié] | `scripts/architecture/check-module-boundaries.py:1222-1223` |
 | Le module compte 4 classes et 347 lignes | [Existant vérifié] | `wc -l minos-nexus/src/main/java/com/minos/nexus/*.java` : 152 + 93 + 50 + 52 |
-| Requalifier plutôt qu'absorber | [Proposition] | design D1 |
-| Garder `NexusSemanticSignalService`, déclarée non qualifiée | [Proposition] | design D2 |
+| Requalifier plutôt qu'absorber | [Décision] | design D1, propriétaire, 2026-11-17 |
+| Garder `NexusSemanticSignalService`, déclarée non qualifiée | [Décision] | design D2, propriétaire, 2026-11-17 |
 
 ## Impact
 
@@ -58,4 +58,4 @@ Aucune.
 
 ## Questions ouvertes
 
-- Bloquante avant implémentation : D1 (requalifier ou absorber) et D2 (sort de `NexusSemanticSignalService`), toutes deux avec une recommandation dans le design. Les specs décrivent l'option recommandée.
+Aucune : le propriétaire a retenu le 2026-11-17 les options recommandées de D1 (requalifier) et de D2 (garder `NexusSemanticSignalService`, déclarée non qualifiée).

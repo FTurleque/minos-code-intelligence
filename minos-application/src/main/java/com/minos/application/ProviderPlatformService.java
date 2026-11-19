@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.application.indexing.ProviderRuntimeSummary;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.ProviderConformanceKit;

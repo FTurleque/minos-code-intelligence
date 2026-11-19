@@ -4,7 +4,6 @@ import com.minos.application.resolution.ProjectResolver;
 import com.minos.domain.Evidence;
 import com.minos.domain.Origin;
 import com.minos.domain.SymbolLocation;
-import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraphCapability;
@@ -67,10 +66,6 @@ public final class ProgramGraphService {
     private long analysisNanos;
     private final AtomicLong impactAdjacencyBuilds = new AtomicLong();
 
-    public ProgramGraphService(ProjectRegistry registry, CodeKnowledgeSnapshotStore snapshotStore) {
-        this(registry, snapshotStore, productionProviders());
-    }
-
     public ProgramGraphService(ProjectRegistry registry, CodeKnowledgeSnapshotStore snapshotStore,
                                List<ProgramGraphProvider> providers) {
         this(new ProjectResolver(registry), snapshotStore, providers, DEFAULT_MAX_CACHE_ENTRIES, DEFAULT_MAX_CACHE_WEIGHT);
@@ -102,16 +97,11 @@ public final class ProgramGraphService {
                 HeapShare.PROGRAM_GRAPH.ceiling(maxCacheWeight, maximumHeapBytes));
     }
 
-    public static List<ProgramGraphProvider> productionProviders() {
-        return List.of(new RelationshipProgramGraphProvider(), new JavaSourceProgramGraphProvider());
-    }
-
-    public static List<ProgramGraphProvider> productionProviders(ProjectFingerprintSnapshotStore fingerprints) {
-        return List.of(new RelationshipProgramGraphProvider(), new FingerprintConstrainedJavaProgramGraphProvider(fingerprints));
-    }
-
+    /** The identifiers of the providers, in their order of composition. */
     public Set<String> providerIds() {
-        return providers.stream().map(ProgramGraphProvider::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        Set<String> ids = new LinkedHashSet<>();
+        providers.forEach(provider -> ids.add(provider.id()));
+        return java.util.Collections.unmodifiableSet(ids);
     }
 
     public CacheStats cacheStats() {
@@ -327,11 +317,6 @@ public final class ProgramGraphService {
                 throw new IllegalArgumentException("conflicting program graph providers share id: " + nonNull.id());
             }
         }
-        if (configured.containsKey(RelationshipProgramGraphProvider.PROVIDER_ID)
-                && !configured.containsKey(JavaSourceProgramGraphProvider.PROVIDER_ID)) {
-            configured.put(JavaSourceProgramGraphProvider.PROVIDER_ID, new JavaSourceProgramGraphProvider());
-        }
-        configured.putIfAbsent(FileProgramGraphProvider.PROVIDER_ID, new FileProgramGraphProvider());
         return List.copyOf(configured.values());
     }
 

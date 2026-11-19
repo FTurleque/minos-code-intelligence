@@ -207,11 +207,46 @@ class HexagonalRuleTest(unittest.TestCase):
         _MODULE.check_hexagonal_boundaries(scoped_graph(minos_cli={"minos-application": "compile"}))
 
     def test_a_surface_sees_the_composition_root_at_runtime_or_in_tests_only(self):
-        for module in ("minos-cli", "minos-api", "minos-mcp", "minos-nexus"):
+        for module in ("minos-cli", "minos-api", "minos-mcp", "minos-explorer"):
             with self.subTest(module=module):
                 self.refused(scoped_graph(**{module: {"minos-bootstrap": "compile"}}), module, "minos-bootstrap")
                 for scope in ("runtime", "test"):
                     _MODULE.check_hexagonal_boundaries(scoped_graph(**{module: {"minos-bootstrap": scope}}))
+
+    def test_minos_nexus_is_a_contract_module_and_not_a_surface(self):
+        self.assertIn("minos-nexus", _MODULE.CONTRACT_MODULES)
+        self.assertNotIn("minos-nexus", _MODULE.SURFACE_MODULES)
+
+    def test_a_contract_module_may_not_depend_on_a_surface(self):
+        self.refused(scoped_graph(minos_nexus={"minos-cli": "compile"}), "minos-nexus -> minos-cli", "contract module")
+
+    def test_a_contract_module_depends_only_on_the_domain_and_the_application(self):
+        for dependency in ("minos-engine", "minos-storage", "minos-app"):
+            with self.subTest(dependency=dependency):
+                self.refused(scoped_graph(minos_nexus={dependency: "compile"}), f"minos-nexus -> {dependency}",
+                             "contract module")
+        _MODULE.check_hexagonal_boundaries(scoped_graph(
+            minos_nexus={"minos-domain": "compile", "minos-application": "compile"}))
+
+    def test_a_contract_module_sees_the_composition_root_in_tests_only(self):
+        for scope in ("compile", "runtime"):
+            with self.subTest(scope=scope):
+                self.refused(scoped_graph(minos_nexus={"minos-bootstrap": scope}),
+                             f"minos-nexus -> minos-bootstrap [{scope}]", "test scope")
+        _MODULE.check_hexagonal_boundaries(scoped_graph(minos_nexus={"minos-bootstrap": "test"}))
+
+    def test_no_surface_depends_on_another_surface_in_any_scope(self):
+        for scope in ("compile", "runtime", "test"):
+            with self.subTest(scope=scope):
+                self.refused(scoped_graph(minos_mcp={"minos-cli": scope}), "minos-mcp -> minos-cli",
+                             "another surface")
+
+    def test_a_surface_may_depend_on_a_contract_module(self):
+        _MODULE.check_hexagonal_boundaries(scoped_graph(minos_cli={"minos-nexus": "compile"}))
+
+    def test_an_adapter_and_the_composition_root_never_reach_a_contract_module(self):
+        self.refused(scoped_graph(minos_storage={"minos-nexus": "compile"}), "minos-storage -> minos-nexus")
+        self.refused(scoped_graph(minos_bootstrap={"minos-nexus": "test"}), "minos-bootstrap -> minos-nexus")
 
     def test_an_adapter_never_reaches_a_higher_layer(self):
         for adapter in sorted(_MODULE.ADAPTER_MODULES):
@@ -257,10 +292,10 @@ class DependencyPolicyTest(unittest.TestCase):
         self.refused(scoped_graph(minos_mcp={"minos-nexus": "compile"}), "minos-mcp", "forbidden MINOS dependencies",
                      "minos-nexus")
 
-    def test_the_nexus_surface_may_not_depend_on_the_engine_again(self):
+    def test_the_nexus_contract_module_may_not_depend_on_the_engine_again(self):
         # AUD-ARC-01, lot 5: the NEXUS export goes through minos-application; the edge to the engine is gone.
-        self.refused(scoped_graph(minos_nexus={"minos-engine": "compile"}), "minos-nexus",
-                     "forbidden MINOS dependencies", "minos-engine")
+        self.refused(scoped_graph(minos_nexus={"minos-engine": "compile"}), "minos-nexus -> minos-engine",
+                     "contract module")
 
     def test_a_declared_subset_of_the_allowed_table_is_accepted(self):
         _MODULE.check_dependency_policy(scoped_graph(minos_runtime_local={"minos-engine": "compile"}))
@@ -277,9 +312,11 @@ class DependencyPolicyTest(unittest.TestCase):
             self.refused(scoped_graph(minos_engine={"minos-nexus": "compile"}), "minos-engine may depend only")
 
     def test_a_cycle_between_modules_is_refused(self):
-        allowed = {"minos-nexus": frozenset({"minos-cli"}), "minos-cli": frozenset({"minos-nexus"})}
+        allowed = {"minos-runtime-local": frozenset({"minos-integration-git"}),
+                   "minos-integration-git": frozenset({"minos-runtime-local"})}
         with mock.patch.dict(_MODULE.ALLOWED_DEPENDENCIES, allowed):
-            self.refused(scoped_graph(minos_nexus={"minos-cli": "compile"}, minos_cli={"minos-nexus": "compile"}),
+            self.refused(scoped_graph(minos_runtime_local={"minos-integration-git": "compile"},
+                                      minos_integration_git={"minos-runtime-local": "compile"}),
                          "internal Maven dependency cycle")
 
     def test_an_acyclic_graph_is_accepted(self):
@@ -1441,6 +1478,109 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
                      "minos-engine/io.PrivateLocalStorage", "is not in PROCESS_LAUNCHERS")
 
 
+class AssemblyClassesRuleTest(RatchetTreeTestCase):
+    """A20 — the production classes of minos-app are a closed list, each with its role (AUD-ARC-05)."""
+
+    LISTED = {"app.McpBackendRouter": "launch route", "integration.nexus.NexusExportBridgeMain": "bridge"}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-app", "com.minos.app", "McpBackendRouter", "final class McpBackendRouter { }")
+        self.write("minos-app", "com.minos.integration.nexus", "NexusExportBridgeMain",
+                   "public final class NexusExportBridgeMain { }")
+        self.write("minos-app", "com.minos.app", "Helper", "final class Helper { }", kind="test")
+
+    def check(self, listed=None):
+        return _MODULE.check_assembly_classes(self.root, listed=self.LISTED if listed is None else listed)
+
+    def test_the_listed_classes_are_accepted_and_test_classes_are_not_counted(self):
+        self.assertEqual(2, self.check())
+
+    def test_a_new_production_class_is_refused_with_its_name_and_the_advice(self):
+        self.write("minos-app", "com.minos.app", "LaunchPolicy", "final class LaunchPolicy { }")
+        self.refused(self.check, "A20", "minos-app/src/main/java/com/minos/app/LaunchPolicy.java",
+                     "app.LaunchPolicy", "application module or a surface")
+
+    def test_a_stale_entry_is_refused_with_the_request_to_remove_it(self):
+        self.refused(lambda: self.check({**self.LISTED, "app.Gone": "launch route"}), "A20",
+                     "ASSEMBLY_CLASSES entry app.Gone is no class of minos-app any more; remove it")
+
+    def test_an_entry_without_a_role_is_refused(self):
+        self.refused(lambda: self.check({**self.LISTED, "app.McpBackendRouter": " "}), "A20",
+                     "ASSEMBLY_CLASSES entry app.McpBackendRouter has no written role")
+
+    def test_the_real_assembly_matches_its_list(self):
+        self.assertEqual(len(_MODULE.ASSEMBLY_CLASSES), _MODULE.check_assembly_classes())
+        self.assertEqual(8, len(_MODULE.ASSEMBLY_CLASSES))
+class EmbeddedAdapterRuleTest(RatchetTreeTestCase):
+    """A19 — minos-application names a JDK infrastructure API only in listed files, and an embedded adapter class only
+    from its family (AUD-ARC-01, ADR 0087)."""
+
+    API_USERS = frozenset({"application.semantic.OllamaEmbeddingProvider", "program.analysis.JavaAstParser"})
+    ADAPTERS = {"OllamaEmbeddingProvider": "learned embedding client", "JavaAstParser": "Java analyser",
+                "FileProgramGraphProvider": "sidecar reader"}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-application", "com.minos.application.semantic", "OllamaEmbeddingProvider",
+                   "public final class OllamaEmbeddingProvider { java.net.HttpURLConnection c; }")
+        self.write("minos-application", "com.minos.program.analysis", "JavaAstParser",
+                   "final class JavaAstParser { JavacTask t; }", imports=("com.sun.source.util.JavacTask",))
+        self.write("minos-application", "com.minos.program.analysis", "FileProgramGraphProvider",
+                   "public final class FileProgramGraphProvider { JavaAstParser parser; }")
+        self.write("minos-application", "com.minos.program.analysis", "ProgramGraphService",
+                   "public final class ProgramGraphService { /** Uses a FileProgramGraphProvider. */ }")
+
+    def check(self, api_users=None, adapters=None):
+        return _MODULE.check_embedded_adapters(
+            self.root, api_users=self.API_USERS if api_users is None else api_users,
+            adapters=self.ADAPTERS if adapters is None else adapters)
+
+    def test_the_listed_files_and_classes_are_accepted_and_the_family_names_itself(self):
+        self.assertEqual((2, 3), self.check())
+
+    def test_a_new_http_client_of_the_application_is_refused_with_the_file_and_the_api(self):
+        self.write("minos-application", "com.minos.application", "RemoteClient",
+                   "final class RemoteClient { HttpClient client; }", imports=("java.net.http.HttpClient",))
+        self.refused(self.check, "A19", "minos-application/src/main/java/com/minos/application/RemoteClient.java",
+                     "java.net.http.HttpClient", "not in INFRASTRUCTURE_API_USERS")
+
+    def test_a_listed_file_that_no_longer_names_an_api_is_refused_as_stale(self):
+        self.write("minos-application", "com.minos.program.analysis", "JavaAstParser", "final class JavaAstParser { }")
+        self.refused(self.check, "A19", "INFRASTRUCTURE_API_USERS entry program.analysis.JavaAstParser",
+                     "remove it")
+
+    def test_an_api_mentioned_in_a_comment_or_a_literal_only_is_accepted(self):
+        self.write("minos-application", "com.minos.application", "Notes",
+                   '/** Not {@link javax.tools.ToolProvider}. */ final class Notes { String s = "javax.tools.X"; }')
+        self.assertEqual((2, 3), self.check())
+
+    def test_the_service_naming_an_adapter_again_is_refused_with_the_file_and_the_class(self):
+        self.write("minos-application", "com.minos.program.analysis", "ProgramGraphService",
+                   "public final class ProgramGraphService { Object p = new FileProgramGraphProvider(); }")
+        self.refused(self.check, "A19", "program/analysis/ProgramGraphService.java", "FileProgramGraphProvider",
+                     "MinosApplicationComposer")
+
+    def test_a_qualified_name_of_an_adapter_is_refused(self):
+        self.write("minos-application", "com.minos.application", "Wiring",
+                   "final class Wiring { Object p = new com.minos.application.semantic.OllamaEmbeddingProvider(); }")
+        self.refused(self.check, "A19", "application/Wiring.java", "OllamaEmbeddingProvider")
+
+    def test_an_adapter_entry_without_a_class_is_refused_as_stale(self):
+        self.refused(lambda: self.check(adapters={**self.ADAPTERS, "JavaTaintAnalyzer": "Java analyser"}), "A19",
+                     "EMBEDDED_ADAPTER_CLASSES entry JavaTaintAnalyzer is no class of minos-application", "remove it")
+
+    def test_an_adapter_entry_without_a_justification_is_refused(self):
+        self.refused(lambda: self.check(adapters={**self.ADAPTERS, "FileProgramGraphProvider": " "}), "A19",
+                     "EMBEDDED_ADAPTER_CLASSES entry FileProgramGraphProvider has no written justification")
+
+    def test_the_real_tree_matches_both_tables(self):
+        self.assertEqual((len(_MODULE.INFRASTRUCTURE_API_USERS), len(_MODULE.EMBEDDED_ADAPTER_CLASSES)),
+                         _MODULE.check_embedded_adapters())
+        self.assertEqual(10, len(_MODULE.INFRASTRUCTURE_API_USERS))
+        self.assertEqual(17, len(_MODULE.EMBEDDED_ADAPTER_CLASSES))
+
+
 class EngineConcreteCodeMeasureTest(RatchetTreeTestCase):
     """AUD-ARC-05 — the share of concrete code of minos-engine is measured (ADR 0068, Mise en oeuvre), never ratcheted."""
 
@@ -2140,6 +2280,13 @@ class UnreferencedProductionTypeRuleTest(unittest.TestCase):
 
     def test_repository_list_matches_the_head(self):
         self.assertEqual(len(_MODULE.UNREFERENCED_PRODUCTION_TYPES), _MODULE.check_unreferenced_production_types())
+
+    def test_the_nexus_semantic_signal_stays_declared_as_not_qualified(self):
+        entry = "minos-nexus/com.minos.nexus.NexusSemanticSignalService"
+        self.assertIn("not qualified by a client", _MODULE.UNREFERENCED_PRODUCTION_TYPES[entry])
+        deprived = {key: reason for key, reason in _MODULE.UNREFERENCED_PRODUCTION_TYPES.items() if key != entry}
+        with self.assertRaisesRegex(RuntimeError, r"A15 .*com\.minos\.nexus\.NexusSemanticSignalService"):
+            _MODULE.check_unreferenced_production_types(declared=deprived)
 
 
 if __name__ == "__main__":

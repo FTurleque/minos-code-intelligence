@@ -394,3 +394,12 @@ noté au § « Consequences » est fermé aux deux sites qui le portaient :
   racine de composition, qui changerait le constructeur public de `IndexingExecutionRequest` ; l'arête
   implicite `minos-engine` → `minos-runtime-local` par SPI subsiste. Non qualifié : hôte embarqué de bout
   en bout et JAR ombré au-delà de la présence des fichiers de service.
+
+## 10. Mise en œuvre : adaptateurs embarqués par l'application (AUD-ARC-01, 2026-11-18)
+
+Changement OpenSpec `cabler-les-adaptateurs-embarques-par-la-racine-de-composition`, décision
+[ARCH-0087](ARCH-0087-adaptateurs-embarques-et-facade-reduite.md) (Proposed). Le client d'embeddings appris et les
+fournisseurs du graphe de programme restent dans `minos-application` mais sont instanciés par
+`DefaultMinosApplicationComposer` seul (`embeddingProvider`, `programGraphProviders`,
+`completeProgramGraphProviders`) ; la règle **A19** de `check-module-boundaries.py` tient les deux listes fermées.
+

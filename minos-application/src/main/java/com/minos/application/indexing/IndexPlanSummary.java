@@ -1,6 +1,5 @@
 package com.minos.application.indexing;
 
-import com.minos.application.ProviderRuntimeSummary;
 
 import java.util.List;
 import java.util.Objects;

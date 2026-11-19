@@ -2,6 +2,7 @@ package com.minos.cli.command;
 
 import com.minos.cli.CliArgumentRules;
 import com.minos.cli.MinosCliRunner;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.LazyApplication;
 import com.minos.application.MinosApplication;
 import com.minos.registry.ProjectRegistry;
@@ -98,7 +99,7 @@ class IdeIntelligenceCommandTest {
         int code = new IdeIntelligenceCommand(application).run(
                 new String[]{"semantic-index-status", "some-project"}, out, err);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, code, err.toString());
+        assertEquals(CliExitCodes.EXECUTION_ERROR, code, err.toString());
         assertTrue(err.toString().startsWith("error: "), err.toString());
         assertFalse(err.toString().contains("bootstrap"), err.toString());
     }
@@ -112,7 +113,7 @@ class IdeIntelligenceCommandTest {
             throw new UncheckedIOException(new IOException("storage failure"));
         }).run(new String[]{"semantic-index-status", "some-project"}, out, err);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, code, err.toString());
+        assertEquals(CliExitCodes.EXECUTION_ERROR, code, err.toString());
         assertTrue(err.toString().startsWith("error: "), err.toString());
         assertFalse(err.toString().contains("bootstrap"), err.toString());
     }

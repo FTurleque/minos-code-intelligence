@@ -103,10 +103,14 @@ def evaluate() -> str:
         runtime_config_path,
         runtime_config,
         '"ollama".equals(provider)',
-        "new OllamaEmbeddingProvider",
+        "builder.resolvedComposer().embeddingProvider(learned)",
         '"local-hash".equals(provider)',
         '"disabled".equals(provider)',
     )
+    forbid(runtime_config_path, runtime_config, "OllamaEmbeddingProvider")
+    # ADR 0087: the composition root instantiates the learned provider.
+    composer_path = "minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java"
+    require(composer_path, read(composer_path), "new OllamaEmbeddingProvider(")
 
     store_path = "minos-storage/src/main/java/com/minos/storage/local/store/FileSemanticVectorStore.java"
     store = read(store_path)

@@ -1,10 +1,6 @@
 package com.minos.application.remote;
 
-import com.minos.application.MinosApplication;
-import com.minos.application.MinosApplicationComposer;
 import com.minos.application.indexing.IndexExecutionSummary;
-import com.minos.application.indexing.IndexingResumeChoice;
-import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.registry.ProjectRegistry;
@@ -57,13 +53,13 @@ public final class RemoteIndexingUseCase {
 
     /** The local indexing of a registered project, with every provider executor wrapped by {@code decorator}. */
     @FunctionalInterface
-    interface LocalIndexing {
+    public interface LocalIndexing {
         IndexExecutionSummary execute(String projectId, String providerOverride,
                                       UnaryOperator<IndexerExecutor> decorator) throws IOException;
     }
 
-    /** The ports of the remote indexing; production takes them from {@link MinosApplication}. */
-    record Dependencies(
+    /** The ports of the remote indexing; production takes them from the application facade. */
+    public record Dependencies(
             Path home,
             ProjectRegistry projectRegistry,
             RemoteRepositoryMaterializer materializer,
@@ -71,7 +67,7 @@ public final class RemoteIndexingUseCase {
             List<IndexerDescriptor> descriptors,
             LocalIndexing indexing
     ) {
-        Dependencies {
+        public Dependencies {
             home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
             Objects.requireNonNull(projectRegistry, "projectRegistry");
             Objects.requireNonNull(materializer, "materializer");
@@ -81,7 +77,7 @@ public final class RemoteIndexingUseCase {
         }
     }
 
-    RemoteIndexingUseCase(Dependencies dependencies) {
+    public RemoteIndexingUseCase(Dependencies dependencies) {
         Objects.requireNonNull(dependencies, "dependencies");
         this.home = dependencies.home();
         this.projectRegistry = dependencies.projectRegistry();
@@ -90,30 +86,6 @@ public final class RemoteIndexingUseCase {
         this.descriptors = dependencies.descriptors().stream().collect(Collectors.toUnmodifiableMap(
                 IndexerDescriptor::id, descriptor -> descriptor));
         this.indexing = dependencies.indexing();
-    }
-
-    /**
-     * The production wiring: the materializer then the runtime, created in this order by the composition root
-     * (ADR 0042); the local indexing is {@link ProjectIndexingUseCase} of the same application.
-     */
-    public static RemoteIndexingUseCase of(MinosApplication application) throws IOException {
-        Objects.requireNonNull(application, "application");
-        MinosApplicationComposer compositionRoot = application.compositionRoot();
-        RemoteRepositoryMaterializer materializer = compositionRoot.remoteRepositoryMaterializer(application.home());
-        return of(application, materializer, compositionRoot.remoteIndexingRuntime(application.home()));
-    }
-
-    /** The wiring of {@code application} with an explicit materializer and runtime (substituted by tests). */
-    public static RemoteIndexingUseCase of(
-            MinosApplication application,
-            RemoteRepositoryMaterializer materializer,
-            RemoteIndexingRuntime runtime
-    ) {
-        Objects.requireNonNull(application, "application");
-        return new RemoteIndexingUseCase(new Dependencies(application.home(), application.projectRegistry(),
-                materializer, runtime, application.indexerDescriptors(),
-                (projectId, providerOverride, decorator) -> ProjectIndexingUseCase.of(application, decorator)
-                        .executeSummary(projectId, providerOverride, true, IndexingResumeChoice.RESUME)));
     }
 
     /** Materializes the revision, describes it and releases it: nothing stays referenced by this call. */
