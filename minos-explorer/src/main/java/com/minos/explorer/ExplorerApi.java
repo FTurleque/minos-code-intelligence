@@ -73,9 +73,9 @@ final class ExplorerApi {
             return new Answer(200, DeterministicJson.render(body), null);
         }
 
-        static Answer error(int status, String code, String message) {
+        static Answer error(int status, ExplorerErrorCode code, String message) {
             return new Answer(status, DeterministicJson.render(DeterministicJson.object(
-                    "error", DeterministicJson.object("code", code, "message", message))), null);
+                    "error", DeterministicJson.object("code", code.name(), "message", message))), null);
         }
     }
 
@@ -110,9 +110,9 @@ final class ExplorerApi {
     Answer answer(String method, List<String> segments, Map<String, String> parameters, Body body,
                   Function<Exception, String> failures) {
         Route route = Route.matching(segments);
-        if (route == null) return Answer.error(404, "NOT_FOUND", "no such route in /api/v" + ExplorerContract.VERSION);
+        if (route == null) return Answer.error(404, ExplorerErrorCode.NOT_FOUND, "no such route in /api/v" + ExplorerContract.VERSION);
         if (!route.method().equals(method)) {
-            return new Answer(405, Answer.error(405, "METHOD_NOT_ALLOWED",
+            return new Answer(405, Answer.error(405, ExplorerErrorCode.METHOD_NOT_ALLOWED,
                     "this route accepts " + route.method() + " only").json(), route.method());
         }
         try {
@@ -126,17 +126,17 @@ final class ExplorerApi {
                 case SEARCH -> search(segments.get(1), parameters, body);
             };
         } catch (SemanticCorpusQueryService.DocumentNotFoundException missing) {
-            return Answer.error(404, "DOCUMENT_NOT_FOUND", missing.getMessage());
+            return Answer.error(404, ExplorerErrorCode.DOCUMENT_NOT_FOUND, missing.getMessage());
         } catch (SemanticCorpusQueryService.IndexChangedException changed) {
-            return Answer.error(409, "INDEX_CHANGED", changed.getMessage());
+            return Answer.error(409, ExplorerErrorCode.INDEX_CHANGED, changed.getMessage());
         } catch (ProjectResolver.ResolutionException unresolved) {
             boolean invalid = unresolved.code() == ProjectResolver.ErrorCode.INVALID_PROJECT_REFERENCE;
-            return Answer.error(invalid ? 400 : 404, unresolved.code().name(), unresolved.publicMessage());
+            return Answer.error(invalid ? 400 : 404, ExplorerErrorCode.of(unresolved.code()), unresolved.publicMessage());
         } catch (UsageException usage) {
-            return Answer.error(400, "INVALID_REQUEST",
+            return Answer.error(400, ExplorerErrorCode.INVALID_REQUEST,
                     PublicErrorMessages.sanitize(usage.getMessage(), "invalid request"));
         } catch (IOException | RuntimeException internal) {
-            return Answer.error(500, "INTERNAL_ERROR", INTERNAL_ERROR + " (ref " + failures.apply(internal) + ")");
+            return Answer.error(500, ExplorerErrorCode.INTERNAL_ERROR, INTERNAL_ERROR + " (ref " + failures.apply(internal) + ")");
         }
     }
 

@@ -36,6 +36,22 @@ const KIND_ORIGIN = {
   CHUNK: "extrait lu à l'indexation",
   FILE: "résumé du fichier"
 };
+// French label of every error code of the v1 API (closed list, ARCH-0086). The English message of an error is a
+// diagnostic for developers and is never shown.
+const ERROR_LABELS = {
+  BUSY: "La surface d'exploration est occupée. Réessayez dans un instant.",
+  DOCUMENT_NOT_FOUND: "Ce document n'existe plus dans l'index. Rechargez la liste.",
+  INDEX_CHANGED: "L'index a changé pendant la consultation. Rechargez la liste.",
+  INTERNAL_ERROR: "Erreur interne de la surface d'exploration. Consultez la sortie d'erreur de « minos explorer serve ».",
+  INVALID_PROJECT_REFERENCE: "La référence de projet n'est pas valide. Choisissez un projet dans la liste.",
+  INVALID_REQUEST: "La requête n'est pas valide. Vérifiez les filtres et la recherche.",
+  METHOD_NOT_ALLOWED: "Cette opération n'est pas permise par la surface d'exploration.",
+  NOT_FOUND: "Cette adresse n'existe pas dans la surface d'exploration.",
+  PROJECT_NOT_FOUND: "Ce projet n'est plus enregistré. Rechargez la page.",
+  PROJECT_REFERENCE_AMBIGUOUS: "Plusieurs projets portent ce nom. Choisissez un projet dans la liste.",
+  TIMEOUT: "La requête a pris trop de temps et a été abandonnée. Réessayez.",
+  UNSUPPORTED_MEDIA_TYPE: "Le corps de la requête n'est pas au format attendu."
+};
 const DIVERGENCE = {
   IDENTIQUE: "La source actuelle est identique au contenu indexé.",
   DIFFERENTE: "La source a changé depuis l'indexation.",
@@ -104,7 +120,8 @@ async function api(path, body) {
   try { payload = await response.json(); } catch (ignored) { payload = null; }
   if (!response.ok) {
     const error = payload && payload.error ? payload.error : {};
-    throw new ApiError(response.status, error.code || "ERROR", error.message || "La requête a échoué.");
+    throw new ApiError(response.status, typeof error.code === "string" && error.code ? error.code : null,
+      error.message || "");
   }
   return payload;
 }
@@ -124,12 +141,20 @@ function banner(text) {
 
 function report(error) {
   if (error instanceof ApiError && error.code === "REFUSED") return;
-  if (error instanceof ApiError && error.status === 409) {
+  if (error instanceof ApiError && (error.code === "INDEX_CHANGED" || (error.code === null && error.status === 409))) {
     banner("L'index a changé pendant la consultation : les résultats affichés ont été écartés. La lecture reprend à la première page.");
     loadProjects();
     return;
   }
-  banner(error instanceof ApiError ? error.message : "La surface d'exploration ne répond pas. Vérifiez que « minos explorer serve » est toujours lancé.");
+  banner(error instanceof ApiError ? errorLabel(error) : "La surface d'exploration ne répond pas. Vérifiez que « minos explorer serve » est toujours lancé.");
+}
+
+// The French text of an API error, chosen by its code; never its English message.
+function errorLabel(error) {
+  if (error.code === null) return "La requête a échoué (sans code, statut " + error.status + ").";
+  return Object.prototype.hasOwnProperty.call(ERROR_LABELS, error.code)
+    ? ERROR_LABELS[error.code]
+    : "La requête a échoué (code " + error.code + ").";
 }
 
 function shortId(value) {

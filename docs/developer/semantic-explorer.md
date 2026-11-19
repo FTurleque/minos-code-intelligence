@@ -98,6 +98,20 @@ commande reçoit le seul nom de la classe de l'exception).
 
 Le contrat évolue de façon additive sous ce préfixe ; une rupture publie `/api/v2/` à côté.
 
+**Langue des constantes (ARCH-0086).** Toute constante nouvelle du contrat (valeur sérialisée, code d'erreur)
+s'écrit en anglais. Les huit valeurs françaises de la version 1 (état de projection `ABSENTE`, `PRETE`, `PERIMEE`,
+`ECHOUEE` ; divergence `IDENTIQUE`, `DIFFERENTE`, `SOURCE_INTROUVABLE`, `NON_COMPARABLE`) forment une liste close :
+aucune n'est ajoutée, renommée ni retirée sous `/api/v1/`. `ExplorerContractValuesTest` (`minos-explorer`),
+`SemanticExplorationApiContractTest` (`minos-api`) et `SemanticProjectionCommandLineTest` (`minos-cli`) tiennent les
+valeurs sérialisées champ par champ ; le champ `limitations`, liste ouverte, n'en fait pas partie.
+
+**Codes d'erreur.** `ExplorerErrorCode` (visibilité package) est la liste fermée des codes ; `ExplorerApi.Answer.error`
+ne reçoit que ce type, si bien qu'une réponse hors liste ne compile pas. Chaque code de
+`ProjectResolver.ErrorCode` y a son code de même nom (`ExplorerErrorCode.of`). La page traduit le code par la table
+`ERROR_LABELS` d'`app.js` et n'affiche jamais `error.message` ; un code sans libellé donne « La requête a échoué
+(code …). », une réponse sans code « La requête a échoué (sans code, statut …). ». La reprise sur `409` se décide sur
+le code `INDEX_CHANGED`, ou sur le statut quand la réponse n'a pas de code.
+
 ## Projection 2D
 
 Une projection est un **cache dérivé** : elle se recalcule à volonté depuis l'index. Elle est préparée par la
@@ -226,7 +240,7 @@ dans le même contexte.
 | `sinks.test.mjs` | liste, en-tête, détail, voisins, recherche, textes et survol de la carte, bandeau rendus en texte avec `<script>alert(1)</script>` |
 | `map.test.mjs` | point désigné (jeux à graine fixe, jusqu'à 100 000 points, égalités, rayon de 8 px), filtre de nature, bornes et point fixe du zoom, suite des requêtes de points, tracé sur le faux canevas, compteurs de rafale (table `CURRENT`) |
 | `map-grid.test.mjs` | point désigné par la grille identique au parcours complet (100 000 points, zooms de 0,5 à 200), points examinés par recherche, liste filtrée calculée une fois par filtre, grille refaite à la relecture de la carte, survol traité une fois par image, clic immédiat |
-| `labels.test.mjs` | table des constantes du contrat confrontée aux libellés, fonctions pures, affichage d'une erreur d'API |
+| `labels.test.mjs` | tables des constantes du contrat et des codes d'erreur confrontées aux libellés, fonctions pures, affichage d'une erreur d'API par son code |
 | `clipboard.test.mjs` | échec de « Copier la référence » signalé dans le bandeau, sans rejet non traité |
 
 Lancer : `python scripts/quality/check-explorer-front.py` (Node 20 ou plus dans le `PATH`), ou un fichier seul par
