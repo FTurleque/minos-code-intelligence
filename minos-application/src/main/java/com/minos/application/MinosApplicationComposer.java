@@ -3,6 +3,7 @@ package com.minos.application;
 import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedTenantKeyProvider;
+import com.minos.orchestration.IndexImportHistoryStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
@@ -78,6 +79,9 @@ public interface MinosApplicationComposer {
 
     /** Projection cache of the semantic indexes of this MINOS_HOME, the same for every storage backend. */
     SemanticProjectionStore semanticProjectionStore(Path home);
+
+    /** Import history of the projects of this MINOS_HOME, the same for every storage backend. */
+    IndexImportHistoryStore indexImportHistoryStore(Path home);
 
     /** Worker sandbox probe of the real host (doctor, remote index). */
     WorkerSandboxProbe workerSandboxProbe();

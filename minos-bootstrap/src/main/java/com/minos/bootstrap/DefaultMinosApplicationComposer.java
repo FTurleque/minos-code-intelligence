@@ -17,10 +17,12 @@ import com.minos.integration.git.GitIntelligenceService;
 import com.minos.integration.git.JGitRemoteRepositoryMaterializer;
 import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedTenantKeyProvider;
+import com.minos.orchestration.IndexImportHistoryStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.storage.home.FileIndexImportHistoryStore;
 import com.minos.storage.local.registry.LocalProjectPathMappings;
 import com.minos.registry.ProjectPathMappings;
 import com.minos.remote.RemoteIndexingRuntime;
@@ -163,6 +165,11 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     }
 
     /** The projection files of this MINOS_HOME; nothing is created until a projection is prepared. */
+    @Override
+    public IndexImportHistoryStore indexImportHistoryStore(Path home) {
+        return new FileIndexImportHistoryStore(home);
+    }
+
     @Override
     public SemanticProjectionStore semanticProjectionStore(Path home) {
         return new FileSemanticProjectionStore(

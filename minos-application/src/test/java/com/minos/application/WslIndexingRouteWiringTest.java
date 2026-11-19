@@ -98,6 +98,7 @@ class WslIndexingRouteWiringTest {
                     : Optional.of(route);
             case "wslIndexingWorker" -> InvocationHandler.invokeDefault(self, method, arguments);
             case "resumableRunMarkers" -> unused(ResumableRunMarkers.class);
+            case "indexImportHistoryStore" -> ImportHistoryStores.none();
             case "toString" -> "composer";
             case "hashCode" -> System.identityHashCode(self);
             case "equals" -> self == arguments[0];

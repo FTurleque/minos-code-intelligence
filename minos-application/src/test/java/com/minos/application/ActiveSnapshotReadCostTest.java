@@ -61,7 +61,7 @@ class ActiveSnapshotReadCostTest {
     void aStatusViewDoesNotLoadTheActiveSnapshot(@TempDir Path home) throws Exception {
         states.saveProjectState(ready("snapshot-new"));
         RegisteredProject project = new RegisteredProject(projectId, home, "status-cost", Optional.empty(), AT, AT);
-        ProjectInspectionService inspection = new ProjectInspectionService(home, new UnusedRegistry(), snapshots,
+        ProjectInspectionService inspection = new ProjectInspectionService(ImportHistoryStores.none(), new UnusedRegistry(), snapshots,
                 states, new ProjectDiscoveryService(), List.of());
 
         ProjectInspectionService.ProjectView view = inspection.statusView(project);
@@ -99,7 +99,7 @@ class ActiveSnapshotReadCostTest {
         ProjectIndexState persisted = ready("snapshot-old");
         states.saveProjectState(persisted);
         RegisteredProject project = new RegisteredProject(projectId, home, "status-cost", Optional.empty(), AT, AT);
-        ProjectInspectionService inspection = new ProjectInspectionService(home, new UnusedRegistry(), snapshots,
+        ProjectInspectionService inspection = new ProjectInspectionService(ImportHistoryStores.none(), new UnusedRegistry(), snapshots,
                 states, new ProjectDiscoveryService(), List.of());
 
         assertThrows(IOException.class, () -> inspection.statusView(project));
