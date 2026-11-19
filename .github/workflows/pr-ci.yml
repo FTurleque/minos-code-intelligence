@@ -209,6 +209,7 @@ jobs:
           python scripts/quality/test_verify_ruleset.py -v
           python scripts/ci/test_plugin_gate.py -v
           python scripts/ci/test_docker_gate.py -v
+          python scripts/ci/test_fetch_verified.py -v
 
       - name: JaCoCo gate self-test (decision logic on synthetic reports; the gate itself runs in the verify jobs)
         run: python scripts/quality/check-jacoco.py --self-test
