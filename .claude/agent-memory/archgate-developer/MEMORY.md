@@ -3,3 +3,4 @@
 - [Clôture finale de l'audit, 2026-11-05](project_cloture_finale_audit_2026_11_05.md) — PR #662-664 fusionnées ; restent findings.json/ETAT (auditeur), R-30 à confirmer
 - [PR empilées sans CI](project_pr_empilees_sans_ci.md) — base ≠ main = aucun check ; re-cibler + fermer/rouvrir ; Gitleaks toutes branches ; 429 curl transitoire
 - [Sprint 2 sécurité Java fusionné, 2026-11-16](project_sprint2_securite_java_2026_11_16.md) — PR #763-765 ; restes : archivage OpenSpec, SEC-0083 Proposed, SUIVI, annonce SECURITY.md
+- [Sprint 8 audit 2026-11-15 fusionné, 2026-11-19](project_sprint8_audit_2026_11_19.md) — PR 781-792 ; restes archivage et SUIVI ; JDK Ubuntu épinglé ; CI externes à relancer
