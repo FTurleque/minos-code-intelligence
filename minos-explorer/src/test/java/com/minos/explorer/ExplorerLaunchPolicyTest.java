@@ -40,4 +40,47 @@ class ExplorerLaunchPolicyTest {
         assertEquals("mode", assertThrows(NullPointerException.class,
                 () -> ExplorerLaunchPolicy.teamModeRefusal(null)).getMessage());
     }
+    @Test
+    void theDockerBackendIsDecidedFirstWithoutReadingTheTeamMode() throws Exception {
+        Optional<String> refusal = ExplorerLaunchPolicy.refusal(RuntimeLocation.NATIVE, () -> true, () -> {
+            throw new AssertionError("the team mode is not read");
+        });
+
+        assertEquals(Optional.of(ExplorerLaunchPolicy.DOCKER_BACKEND_REFUSED), refusal);
+    }
+
+    @Test
+    void insideTheDockerRuntimeTheBackendIsNotRead() throws Exception {
+        Optional<String> refusal = ExplorerLaunchPolicy.refusal(RuntimeLocation.DOCKER, () -> {
+            throw new AssertionError("the backend switch is not read");
+        }, () -> HostedMode.DISABLED);
+
+        assertEquals(Optional.empty(), refusal);
+    }
+
+    @Test
+    void theTeamModeIsDecidedOnAWorkstationHomeOnTheNativeBackend() throws Exception {
+        assertEquals(Optional.of(ExplorerLaunchPolicy.TEAM_MODE_REFUSED),
+                ExplorerLaunchPolicy.refusal(RuntimeLocation.NATIVE, () -> false, () -> HostedMode.ENABLED));
+        assertEquals(Optional.empty(),
+                ExplorerLaunchPolicy.refusal(RuntimeLocation.NATIVE, () -> false, () -> HostedMode.DISABLED));
+    }
+
+    @Test
+    void anUnsupportedTeamModeIsRefusedWithItsOwnMessage() throws Exception {
+        Optional<String> refusal = ExplorerLaunchPolicy.refusal(RuntimeLocation.NATIVE, () -> false, () -> {
+            throw new IllegalArgumentException("unsupported hosted mode: maybe");
+        });
+
+        assertEquals(Optional.of("unsupported hosted mode: maybe"), refusal);
+    }
+
+    @Test
+    void missingReadingsAreRefusedByName() {
+        assertEquals("dockerBackend", assertThrows(NullPointerException.class,
+                () -> ExplorerLaunchPolicy.refusal(RuntimeLocation.NATIVE, null, () -> HostedMode.DISABLED))
+                .getMessage());
+        assertEquals("teamMode", assertThrows(NullPointerException.class,
+                () -> ExplorerLaunchPolicy.refusal(RuntimeLocation.NATIVE, () -> false, null)).getMessage());
+    }
 }

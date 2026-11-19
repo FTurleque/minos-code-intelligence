@@ -68,18 +68,8 @@ public final class ExplorerLaunchRouteProvider implements ExplorerLaunchRoute {
         boolean workstation = runtimeLocation.get() == ProjectPathMapping.RuntimeLocation.NATIVE;
         Path validatedHome = workstation ? PrivateLocalStorage.ensurePrivateDirectory(home)
                 : home.toAbsolutePath().normalize();
-        Optional<String> refusal = ExplorerLaunchPolicy.backendRefusal(runtimeLocation.get(),
-                workstation && dockerBackend(validatedHome));
-        if (refusal.isPresent()) {
-            return refuse(error, refusal.get());
-        }
-        HostedMode teamMode;
-        try {
-            teamMode = HostedMode.from(MinosRuntimeSettings.load(validatedHome));
-        } catch (IllegalArgumentException unsupported) {
-            return refuse(error, unsupported.getMessage());
-        }
-        refusal = ExplorerLaunchPolicy.teamModeRefusal(teamMode);
+        Optional<String> refusal = ExplorerLaunchPolicy.refusal(runtimeLocation.get(),
+                () -> dockerBackend(validatedHome), () -> HostedMode.from(MinosRuntimeSettings.load(validatedHome)));
         if (refusal.isPresent()) {
             return refuse(error, refusal.get());
         }

@@ -3,6 +3,7 @@ package com.minos.explorer;
 import com.minos.application.HostedMode;
 import com.minos.domain.registry.ProjectPathMapping;
 
+import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -23,6 +24,37 @@ public final class ExplorerLaunchPolicy {
             + " Disable the team mode for this MINOS_HOME to explore its semantic index on this machine";
 
     private ExplorerLaunchPolicy() {
+    }
+
+    /** One reading of the home, which may fail on the file system. */
+    @FunctionalInterface
+    public interface HomeReading<T> {
+        T read() throws IOException;
+    }
+
+    /**
+     * The refusal of a launch, if any, in the order of the decision: the backend of the home first (read only on a
+     * workstation), then its team mode, read by {@link HostedMode#from}; a team mode value it does not recognise is
+     * refused with its own usage message. A home that is accepted needs both readings.
+     */
+    public static Optional<String> refusal(ProjectPathMapping.RuntimeLocation location,
+                                           HomeReading<Boolean> dockerBackend,
+                                           HomeReading<HostedMode> teamMode) throws IOException {
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(dockerBackend, "dockerBackend");
+        Objects.requireNonNull(teamMode, "teamMode");
+        Optional<String> backend = backendRefusal(location,
+                location == ProjectPathMapping.RuntimeLocation.NATIVE && dockerBackend.read());
+        if (backend.isPresent()) {
+            return backend;
+        }
+        HostedMode mode;
+        try {
+            mode = teamMode.read();
+        } catch (IllegalArgumentException unsupported) {
+            return Optional.of(unsupported.getMessage());
+        }
+        return teamModeRefusal(mode);
     }
 
     /**
