@@ -29,7 +29,7 @@ flowchart LR
     minos_provider_scip --> minos_domain
     minos_provider_scip --> minos_engine
     minos_provider_scip --> minos_runtime_local
-    minos_provider_scip --> minos_storage
+    minos_provider_scip -->|test| minos_storage
     minos_integration_git --> minos_domain
     minos_integration_git --> minos_engine
     minos_application --> minos_domain
@@ -42,25 +42,25 @@ flowchart LR
     minos_bootstrap --> minos_runtime_local
     minos_bootstrap --> minos_storage
     minos_nexus --> minos_application
-    minos_nexus --> minos_bootstrap
+    minos_nexus -->|test| minos_bootstrap
     minos_nexus --> minos_domain
     minos_cli --> minos_application
-    minos_cli --> minos_bootstrap
+    minos_cli -->|runtime| minos_bootstrap
     minos_cli --> minos_domain
     minos_cli --> minos_engine
     minos_cli --> minos_nexus
     minos_api --> minos_application
-    minos_api --> minos_bootstrap
+    minos_api -->|runtime| minos_bootstrap
     minos_api --> minos_domain
     minos_api --> minos_engine
     minos_mcp --> minos_application
-    minos_mcp --> minos_bootstrap
+    minos_mcp -->|runtime| minos_bootstrap
     minos_mcp --> minos_domain
     minos_mcp --> minos_engine
     minos_explorer --> minos_application
-    minos_explorer --> minos_bootstrap
+    minos_explorer -->|runtime| minos_bootstrap
     minos_explorer --> minos_domain
-    minos_explorer --> minos_engine
+    minos_explorer -->|test| minos_engine
     minos_app --> minos_api
     minos_app --> minos_application
     minos_app --> minos_bootstrap
@@ -88,15 +88,15 @@ flowchart LR
 | `minos-engine` | `minos-domain` |
 | `minos-runtime-local` | `minos-domain`, `minos-engine` |
 | `minos-storage` | `minos-domain`, `minos-engine` |
-| `minos-provider-scip` | `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage` |
+| `minos-provider-scip` | `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage` (test) |
 | `minos-integration-git` | `minos-domain`, `minos-engine` |
 | `minos-application` | `minos-domain`, `minos-engine` |
 | `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage` |
-| `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain` |
-| `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-nexus` |
-| `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
-| `minos-mcp` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
-| `minos-explorer` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
+| `minos-nexus` | `minos-application`, `minos-bootstrap` (test), `minos-domain` |
+| `minos-cli` | `minos-application`, `minos-bootstrap` (runtime), `minos-domain`, `minos-engine`, `minos-nexus` |
+| `minos-api` | `minos-application`, `minos-bootstrap` (runtime), `minos-domain`, `minos-engine` |
+| `minos-mcp` | `minos-application`, `minos-bootstrap` (runtime), `minos-domain`, `minos-engine` |
+| `minos-explorer` | `minos-application`, `minos-bootstrap` (runtime), `minos-domain`, `minos-engine` (test) |
 | `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-explorer`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage` |
 
 ## Arêtes d'exécution par service

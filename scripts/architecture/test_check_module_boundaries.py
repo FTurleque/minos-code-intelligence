@@ -785,16 +785,20 @@ ARC42 = """# Section 5
 ### minos-domain
 - **Responsabilité** : le noyau.
 - **Dépendances** : aucune.
+- **Sources** : `minos-domain/src/main/java/`.
 
 ### minos-engine
 - **Responsabilité** : les ports.
 - **Dépendances** : `minos-domain`, `jackson 2.22`.
+- **Sources** : `minos-engine/src/main/java/`.
 
 ### minos-cli (optionnel)
 - **Dépendances** : `minos-engine`, `minos-domain`.
+- **Sources** : `minos-cli/src/main/java/`.
 
 ### minos-app
 - **Dépendances** : tous les modules.
+- **Sources** : `minos-app/src/main/java/`.
 """
 
 
@@ -860,7 +864,7 @@ class ArchitectureDocumentationRuleTest(unittest.TestCase):
     def test_the_current_document_matches_the_real_poms(self):
         scoped = _MODULE.check_pom_rules()
         graph = {module: frozenset(deps) for module, deps in scoped.items()}
-        self.assertEqual(len(MODULES), _MODULE.check_architecture_documentation(graph))
+        self.assertEqual(len(MODULES), _MODULE.check_architecture_documentation(scoped))
 
 
 class RuntimeLocalExportRuleTest(unittest.TestCase):
@@ -2385,6 +2389,105 @@ class PolicySourceTest(unittest.TestCase):
                 _MODULE.check_dependency_policy(scoped_graph(minos_cli={"minos-nexus": "compile"}))
         self.assertIn("minos-cli", str(raised.exception))
         self.assertIn("minos-nexus", str(raised.exception))
+
+
+
+class DocumentedScopeSourcesAndInterfacesTest(unittest.TestCase):
+    """AUD-ARC-07 — A9 reads the scope of each dependency, the package roots and the interfaces of a module section."""
+
+    EXPLORER = {"minos-application": "compile", "minos-bootstrap": "runtime", "minos-domain": "compile",
+                "minos-engine": "test"}
+
+    def problem(self, line, expected=None):
+        return _MODULE.documentation_problem("minos-explorer", [line], expected or self.EXPLORER, MODULES)
+
+    def test_a_line_with_the_scopes_of_the_pom_is_accepted(self):
+        self.assertIsNone(self.problem(
+            "`minos-application`, `minos-bootstrap` (runtime), `minos-domain`, `minos-engine` (test)"))
+
+    def test_a_missing_scope_is_refused_naming_the_dependency_and_the_expected_scope(self):
+        problem = self.problem("`minos-application`, `minos-bootstrap` (runtime), `minos-domain`, `minos-engine`")
+        self.assertIn("minos-engine documented with scope none", problem)
+        self.assertIn("expected scope: test", problem)
+
+    def test_a_wrong_scope_is_refused(self):
+        problem = self.problem("`minos-application`, `minos-bootstrap` (test), `minos-domain`, `minos-engine` (test)")
+        self.assertIn("minos-bootstrap documented with scope test", problem)
+
+    def test_a_scope_written_for_a_compile_dependency_is_refused(self):
+        problem = self.problem("`minos-application` (test), `minos-bootstrap` (runtime), `minos-domain`, "
+                               "`minos-engine` (test)")
+        self.assertIn("minos-application documented with scope test", problem)
+        self.assertIn("compile", problem)
+
+    def test_a_scope_parenthesis_may_carry_free_text_after_the_scope(self):
+        self.assertIsNone(self.problem("`minos-application`, `minos-bootstrap` (runtime, par ServiceLoader), "
+                                       "`minos-domain`, `minos-engine` (test : jar et test-jar)"))
+
+    def test_a_see_also_parenthesis_after_a_compile_dependency_is_not_a_scope(self):
+        self.assertIsNone(_MODULE.documentation_problem(
+            "minos-bootstrap", ["`minos-domain`, `minos-storage` (voir [`module-dependencies.md`](x.md))."],
+            {"minos-domain": "compile", "minos-storage": "compile"}, MODULES))
+
+    def test_the_generated_document_writes_the_scope_outside_compilation(self):
+        scoped = {module: {} for module in MODULES}
+        scoped["minos-explorer"] = dict(self.EXPLORER)
+        text = _MODULE.render_dependency_document(scoped)
+        self.assertIn("| `minos-explorer` | `minos-application`, `minos-bootstrap` (runtime), `minos-domain`, "
+                      "`minos-engine` (test) |", text)
+        self.assertIn("minos_explorer -->|test| minos_engine", text)
+        self.assertIn("minos_explorer --> minos_application", text)
+
+    def test_a_package_root_omitted_from_the_sources_line_is_refused(self):
+        problem = _MODULE.sources_problem("minos-engine", ["`minos-engine/src/main/java/com/minos/store/`, "
+                                                           "`com/minos/query/`."], frozenset({"store", "query", "io"}))
+        self.assertIn("minos-engine", problem)
+        self.assertIn("omits the package root(s) io", problem)
+
+    def test_a_package_root_of_another_module_is_refused(self):
+        problem = _MODULE.sources_problem("minos-domain", ["`com/minos/domain/`, `com/minos/store/`."],
+                                          frozenset({"domain"}))
+        self.assertIn("store the module does not own", problem)
+
+    def test_a_section_without_a_sources_line_is_refused(self):
+        self.assertIn("expected one 'Sources' line", _MODULE.sources_problem("minos-api", [], frozenset({"api"})))
+
+    def test_a_sources_line_with_the_source_directory_only_is_accepted(self):
+        self.assertIsNone(_MODULE.sources_problem("minos-application", ["`minos-application/src/main/java/com/minos/`."],
+                                                  frozenset({"application", "context"})))
+
+    OWNERS = {"SemanticVectorStore": {"minos-domain"}, "StorageBackend": {"minos-engine"},
+              "IndexerProvider": {"minos-engine"}}
+
+    def test_a_port_attributed_to_the_wrong_module_is_refused_naming_its_real_module(self):
+        line = ("implémente `StorageBackend`, `SemanticVectorStore`, définies dans `minos-engine`. Le module ne dépend "
+                "pas de `minos-application`.")
+        problem = _MODULE.interfaces_problem("minos-storage", [line], self.OWNERS, [])
+        self.assertIn("SemanticVectorStore is declared by minos-domain", problem)
+        self.assertNotIn("StorageBackend", problem)
+
+    def test_a_module_named_outside_the_defined_in_clause_does_not_count(self):
+        problem = _MODULE.interfaces_problem("minos-storage", ["implémente `SemanticVectorStore`. Voir `minos-domain`."],
+                                             self.OWNERS, [])
+        self.assertIn("SemanticVectorStore is declared by minos-domain", problem)
+
+    def test_none_is_refused_for_a_module_that_declares_a_public_interface(self):
+        problem = _MODULE.interfaces_problem("minos-domain", ["aucune (modèle passif)."], self.OWNERS,
+                                             ["SemanticVectorStore"])
+        self.assertIn("SemanticVectorStore", problem)
+        self.assertIsNone(_MODULE.interfaces_problem("minos-domain", ["aucune."], self.OWNERS, []))
+
+    def test_a_type_no_module_declares_is_refused(self):
+        problem = _MODULE.interfaces_problem("minos-engine", ["`StorageBackend`, `GoneType`."], self.OWNERS, [])
+        self.assertIn("GoneType is no production type of the reactor", problem)
+
+    def test_a_section_without_an_interfaces_line_is_accepted(self):
+        self.assertIsNone(_MODULE.interfaces_problem("minos-api", [], self.OWNERS, ["MinosApi"]))
+
+    def test_the_real_reactor_owners_and_public_interfaces_are_read(self):
+        owners = _MODULE.reactor_type_owners(_MODULE.ROOT, MODULES)
+        self.assertEqual({"minos-domain"}, owners["SemanticVectorStore"])
+        self.assertIn("SemanticVectorStore", _MODULE.public_interfaces(_MODULE.ROOT, "minos-domain"))
 
 
 if __name__ == "__main__":
