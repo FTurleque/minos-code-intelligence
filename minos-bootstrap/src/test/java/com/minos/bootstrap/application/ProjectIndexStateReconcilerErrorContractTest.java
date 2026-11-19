@@ -1,6 +1,6 @@
 package com.minos.bootstrap.application;
 
-import com.minos.application.ProjectIndexStateReconciler;
+import com.minos.application.indexing.ProjectIndexStateReconciler;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.IndexingRun;

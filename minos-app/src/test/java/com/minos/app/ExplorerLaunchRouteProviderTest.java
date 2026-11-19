@@ -2,8 +2,9 @@ package com.minos.app;
 
 import com.minos.application.MinosApplication;
 import com.minos.cli.ExplorerLaunchRoute;
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.registry.ProjectPathMapping;
+import com.minos.explorer.ExplorerLaunchPolicy;
 import com.minos.storage.MinosRuntimeSettings;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.local.LocalStorageBackend;
@@ -101,7 +102,7 @@ class ExplorerLaunchRouteProviderTest {
 
     @Test
     void aHomeInTeamModeIsRefusedBeforeAnythingIsOpened(@TempDir Path temp) throws Exception {
-        for (String value : List.of("enabled", "ENABLED", "anything-else")) {
+        for (String value : List.of("enabled", "ENABLED", "Enabled")) {
             Path home = Files.createDirectories(temp.resolve("home-" + value));
             Path configuration = Files.createDirectories(home.resolve(MinosRuntimeSettings.CONFIG_DIRECTORY))
                     .resolve(MinosRuntimeSettings.CONFIG_FILE);
@@ -111,12 +112,44 @@ class ExplorerLaunchRouteProviderTest {
 
             int exit = refusing().run(home, 0, error);
 
-            assertEquals(FindSymbolCommand.USAGE_ERROR, exit, value);
-            assertTrue(error.toString().startsWith("error: minos explorer serve is not available when the team mode"),
-                    error.toString());
+            assertEquals(CliExitCodes.USAGE_ERROR, exit, value);
+            assertEquals("error: " + ExplorerLaunchPolicy.TEAM_MODE_REFUSED + System.lineSeparator(),
+                    error.toString(), "the same text as the session refusal");
             assertTrue(error.toString().contains("MINOS_HOSTED_MODE"), error.toString());
             assertFalse(error.toString().contains(temp.toString()), "absolute path in the refusal");
         }
+    }
+
+    @Test
+    void anUnsupportedTeamModeIsAUsageErrorBeforeAnythingIsOpened(@TempDir Path temp) throws Exception {
+        Path home = Files.createDirectories(temp.resolve("home"));
+        Path configuration = Files.createDirectories(home.resolve(MinosRuntimeSettings.CONFIG_DIRECTORY))
+                .resolve(MinosRuntimeSettings.CONFIG_FILE);
+        Files.writeString(configuration, MinosApplication.HOSTED_MODE_PROPERTY + "=maybe\n", StandardCharsets.UTF_8);
+        StringBuilder error = new StringBuilder();
+
+        int exit = refusing().run(home, 0, error);
+
+        assertEquals(CliExitCodes.USAGE_ERROR, exit);
+        assertEquals("error: unsupported hosted mode: maybe" + System.lineSeparator(), error.toString());
+    }
+
+    @Test
+    void theDockerBackendIsRefusedFirstWithoutReadingTheTeamMode(@TempDir Path temp) throws Exception {
+        Path home = Files.createDirectories(temp.resolve("home"));
+        new McpBackendConfigurationStore(home).save(new McpBackendConfiguration(
+                McpBackendConfiguration.CURRENT_FORMAT_VERSION, McpBackend.DOCKER,
+                McpBackendConfiguration.DEFAULT_DOCKER_CONTAINER, McpBackendConfiguration.DEFAULT_DOCKER_PROBE_TIMEOUT));
+        Path configuration = Files.createDirectories(home.resolve(MinosRuntimeSettings.CONFIG_DIRECTORY))
+                .resolve(MinosRuntimeSettings.CONFIG_FILE);
+        Files.writeString(configuration, MinosApplication.HOSTED_MODE_PROPERTY + "=maybe\n", StandardCharsets.UTF_8);
+        StringBuilder error = new StringBuilder();
+
+        int exit = refusing().run(home, 0, error);
+
+        assertEquals(CliExitCodes.USAGE_ERROR, exit);
+        assertEquals("error: " + ExplorerLaunchPolicy.DOCKER_BACKEND_REFUSED + System.lineSeparator(),
+                error.toString());
     }
 
     @Test
@@ -147,7 +180,7 @@ class ExplorerLaunchRouteProviderTest {
 
         int exit = refusing().run(home, 0, error);
 
-        assertEquals(FindSymbolCommand.USAGE_ERROR, exit);
+        assertEquals(CliExitCodes.USAGE_ERROR, exit);
         assertTrue(error.toString().contains("Docker backend"), error.toString());
         assertTrue(error.toString().contains("profile explorer"), error.toString());
         assertFalse(error.toString().contains(temp.toString()), "absolute path in the refusal");

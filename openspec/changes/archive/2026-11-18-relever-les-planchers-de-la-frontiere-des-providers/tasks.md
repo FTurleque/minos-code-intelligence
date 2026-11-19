@@ -17,14 +17,14 @@
 
 ## 3. Planchers relevés (AUD-TST-03)
 
-- [ ] 3.1 AUD-TST-03 — Correction : relever les quatre `prefixMinimums` de `scripts/quality/check-jacoco.py` à la plus basse des mesures Linux et Windows moins environ 5 points — un seul nombre par compteur, la lecture `float(minimums["line"])` / `float(minimums["branch"])` n'acceptant pas de dictionnaire par système — avec le run et les décomptes des deux systèmes en commentaire anglais ; chaque clé reste déclarée dans `prefixes` ; ajouter le cas d'auto-test « érosion du filtre » sur rapport synthétique. Vérifier : `python scripts/quality/check-jacoco.py --self-test` vert ; `python scripts/quality/check-jacoco.py` vert sur les rapports Linux et Windows de la CI de la PR (scopes `provider-execution-trust-boundary` et `m24-polyglot-provider-platform`) ; `python scripts/quality/check-ci-wiring.py` et `python scripts/quality/check-single-execution.py` verts.
+- [x] 3.1 AUD-TST-03 — Correction : relever les quatre `prefixMinimums` de `scripts/quality/check-jacoco.py` à la plus basse des mesures Linux et Windows moins environ 5 points — un seul nombre par compteur, la lecture `float(minimums["line"])` / `float(minimums["branch"])` n'acceptant pas de dictionnaire par système — avec le run et les décomptes des deux systèmes en commentaire anglais ; chaque clé reste déclarée dans `prefixes` ; ajouter le cas d'auto-test « érosion du filtre » sur rapport synthétique. Vérifier : `python scripts/quality/check-jacoco.py --self-test` vert ; `python scripts/quality/check-jacoco.py` vert sur les rapports Linux et Windows de la CI de la PR (scopes `provider-execution-trust-boundary` et `m24-polyglot-provider-platform`) ; `python scripts/quality/check-ci-wiring.py` et `python scripts/quality/check-single-execution.py` verts.
   - Fait : planchers 0,88 / 0,95 (`StrongProcessOwnershipIndexerExecutor`, après séparation), 0,72 / 0,62 (`ScipJavaProcessPlanFactory`), 0,73 / 0,61 (`ManagedPolyglotScipRuntimeManager`), 0,95 / 0,95 (`ProviderProcessEnvironment`), commentés avec le run et les décomptes ; auto-test vert (24 scénarios), `check-ci-wiring.py` et `check-single-execution.py` verts. Reste : relire le gate sur les rapports Linux et Windows de la CI de la PR.
-- [ ] 3.2 AUD-TST-03 — (reste, à l'archivage) Documentation : reporter l'exigence et sa qualification dans `docs/architecture/diagrams/capacites/controles-de-fusion.md`. Vérifier : `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.2 AUD-TST-03 — (reste, à l'archivage) Documentation : reporter l'exigence et sa qualification dans `docs/architecture/diagrams/capacites/controles-de-fusion.md`. Vérifier : `python scripts/docs/check-capability-dossiers.py`.
 
 ## 4. Clôture
 
 - [x] 4.1 AUD-TST-03 — Mettre à jour la matrice de traçabilité du design (mesures réelles, preuves manquantes nommées) ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 4.2 AUD-TST-03 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 4.2 AUD-TST-03 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 - [x] 4.3 AUD-TST-03 — Valider ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`.
 - [x] 4.4 AUD-TST-03 — Lister les documents à mettre à jour avant archivage (dossier de capacité, `docs/project/audits/2026-11-15/SUIVI.md`) ; vérifier que chacun est fait ou nommé comme reste.
 

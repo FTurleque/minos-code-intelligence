@@ -107,9 +107,14 @@ final class MinosApplicationAssembler {
             }
             GitIntelligence effectiveGit = builder.gitIntelligence != null
                     ? builder.gitIntelligence : composer.gitIntelligence();
-            List<ProgramGraphProvider> effectiveProgramGraphProviders = builder.programGraphProviders != null
+            List<ProgramGraphProvider> requestedProgramGraphProviders = builder.programGraphProviders != null
                     ? builder.programGraphProviders
-                    : MinosApplication.productionProgramGraphProviders(effectiveFingerprints);
+                    : composer.programGraphProviders(effectiveFingerprints);
+            if (requestedProgramGraphProviders.isEmpty()) {
+                throw new IllegalArgumentException("programGraphProviders must not be empty");
+            }
+            List<ProgramGraphProvider> effectiveProgramGraphProviders =
+                    composer.completeProgramGraphProviders(requestedProgramGraphProviders);
             Optional<HostedControlPlaneService> effectiveHosted = hostedControlPlane(
                     builder, composer, home, effectiveSnapshots);
 

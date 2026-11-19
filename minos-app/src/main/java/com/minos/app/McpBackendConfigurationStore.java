@@ -16,7 +16,10 @@ import java.util.Properties;
 import java.util.Set;
 import static com.minos.diagnostics.PublicErrorMessages.leafName;
 
-/** Atomic, fail-closed persistence for the MCP runtime backend selection. */
+/**
+ * Atomic, fail-closed persistence of the execution backend of a MINOS home, read by the launch routes of
+ * {@code minos mcp} and of {@code minos explorer serve}.
+ */
 public final class McpBackendConfigurationStore {
 
     public static final String RUNTIME_DIRECTORY = "runtime";

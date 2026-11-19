@@ -1,5 +1,6 @@
 package com.minos.cli.command;
 
+import com.minos.cli.support.CliExitCodes;
 import com.minos.diagnostics.SnapshotMemoryExhaustedException;
 import com.minos.diagnostics.SnapshotScratchSpaceExhaustedException;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ class SnapshotMemoryRefusalCliTest {
         int exitCode = command.run(new String[]{"project-1", "Greeting"}, output, error);
 
         assertEquals(1, exitCode);
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exitCode);
         assertEquals("", output.toString());
         assertEquals("error: find-symbol failed: " + MESSAGE + "\n", error.toString());
     }

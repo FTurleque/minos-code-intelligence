@@ -214,10 +214,12 @@ def main() -> int:
         )
         jacoco_gate = read("scripts/quality/check-jacoco.py")
 
-        require("MinosApplication.java", application,
-                "ProgramGraphService.productionProviders(effectiveFingerprints)")
-        require("ProgramGraphService.java", graph_service,
-                "new FingerprintConstrainedJavaProgramGraphProvider(fingerprints)")
+        composer = read("minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java")
+        assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
+        require("MinosApplicationAssembler.java", assembler,
+                "composer.programGraphProviders(effectiveFingerprints)")
+        require("DefaultMinosApplicationComposer.java", composer,
+                "new FingerprintConstrainedJavaProgramGraphProvider(Objects.requireNonNull(fingerprints")
         require("ProgramGraphService.java", graph_service, "public CacheStats cacheStats()")
         require("FingerprintConstrainedJavaProgramGraphProvider.java", fingerprint_provider,
                 "SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT")

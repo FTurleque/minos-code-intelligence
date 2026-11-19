@@ -228,14 +228,14 @@ Aucune capacité produit nouvelle. Voie WSL2 : comportement inchangé, propre à
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| frontieres-de-modules › Les cas d'usage reçoivent leurs collaborateurs et non l'application | Cas d'usage sans import du package de la façade | D4, flowchart | 1.2, 2.2 | recherche textuelle |
+| frontieres-de-modules › Les cas d'usage reçoivent leurs collaborateurs et non l'application | Cas d'usage sans import du package de la façade | D4, flowchart | 1.2, 2.2 | `UseCasePackagesDependencyTest` |
 | idem | Aucun cycle de packages | D4 | 1.2, 2.2 | `check-module-boundaries.py` |
-| idem | Cas d'usage construit sans application | D3 | 2.1 | à écrire |
-| idem | Collaborateur manquant refusé | Modèle | 2.1 | à écrire |
-| frontieres-de-modules › La façade expose les cas d'usage, construits à la demande | Surfaces servies par la façade | séquence | 2.2 | recherche textuelle |
-| idem | Ouverture sans écriture | D3 | 2.2 | `MinosMcpWriteProtectedHomeTest` (existant) |
-| idem | Voie WSL2 absente | Contrats | 2.1 | `WslIndexingRouteWiringTest` (à adapter) |
-| idem | Échec de création du moteur distant | séquence | 2.1 | à écrire |
+| idem | Cas d'usage construit sans application | D3 | 2.1 | `ProjectIndexingDependenciesTest#aUseCaseBuiltFromItsCollaboratorsAloneAcceptsTheIdentityDecorator` ; tests existants sur `IndexingFixture` (plan sans application) |
+| idem | Collaborateur manquant refusé | Modèle | 2.1 | `ProjectIndexingDependenciesTest#aMissingCollaboratorIsRefusedByName`, `#aMissingDecoratorIsRefusedByName` |
+| frontieres-de-modules › La façade expose les cas d'usage, construits à la demande | Surfaces servies par la façade | séquence | 2.2 | recherche `UseCase.of(` / `UseCase.viaWsl(` vide ; `UseCaseFacadeTest#theLocalIndexingAndTheExportAreBuiltOnceOnFirstRequest` |
+| idem | Ouverture sans écriture | D3 | 2.2 | `MinosMcpWriteProtectedHomeTest` ; `UseCaseFacadeTest#openingAsksNoUseCaseCollaboratorOfTheCompositionRoot` |
+| idem | Voie WSL2 absente | Contrats | 2.1 | `WslIndexingRouteWiringTest` ; `UseCaseFacadeTest#noWslRouteYieldsEmptyWithoutResolvingAnything` |
+| idem | Échec de création du moteur distant | séquence | 2.1 | `UseCaseFacadeTest#aFailingMaterializerIsPropagatedAndTheNextRequestTriesAgain` |
 | frontieres-de-modules › La façade ne rend ni type du moteur ni racine de composition | les trois scénarios | D1, D5 | 4.2, 4.3 | `test_check_module_boundaries.py`, à écrire |
 | frontieres-de-modules › Les tests lisent un port de l'application par un accès de test | Jar de production sans accès de test | D2 | 4.2 | à écrire (test de packaging) |
 | idem | Test d'une surface | D2 | 4.3 | `MinosMcpWriteProtectedHomeTest` |

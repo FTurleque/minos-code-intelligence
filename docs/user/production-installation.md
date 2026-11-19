@@ -283,6 +283,8 @@ Pour une base PostgreSQL **externe non-loopback**, l'URL JDBC doit utiliser `ssl
 
 Il n'existe pas de fallback silencieux PostgreSQL→local.
 
+L'historique d'import SCIP (`MINOS_HOME/cli-index-history/<projet>.properties`) reste un fichier de `MINOS_HOME` quel que soit le backend : il n'est pas écrit en base. C'est une preuve secondaire, l'instantané actif fait foi ; un historique absent ou perdu se reconstruit au prochain `import-scip`.
+
 MINOS migre le schéma de la base à l'ouverture, en une transaction. Une base migrée par une version de MINOS est refusée par une version plus ancienne (`PostgreSQL schema is newer than this MINOS runtime`) : revenir à une version antérieure demande la sauvegarde de la base prise avant la mise à jour. Depuis le schéma 5, la base conserve l'offre de reprise d'une indexation interrompue, comme le stockage local ; le schéma 6 tient en plus le nombre de documents de chaque index sémantique, et un MINOS plus ancien déjà démarré sur la base échoue à l'écriture d'un index sémantique tant qu'il n'est pas remplacé.
 
 Une base PostgreSQL externe n'est jamais supprimée par l'uninstaller MINOS.

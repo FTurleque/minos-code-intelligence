@@ -1,14 +1,19 @@
 package com.minos.application;
 
+import com.minos.application.semantic.EmbeddingProvider;
+import com.minos.domain.registry.ProjectPathMapping;
 import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedTenantKeyProvider;
+import com.minos.incremental.ProjectFingerprintSnapshotStore;
+import com.minos.orchestration.IndexImportHistoryStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.program.analysis.ProgramGraphProvider;
 import com.minos.registry.ProjectPathMappings;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.RemoteRepositoryMaterializer;
@@ -22,7 +27,9 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.semantic.SemanticProjectionStore;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -79,6 +86,25 @@ public interface MinosApplicationComposer {
     /** Projection cache of the semantic indexes of this MINOS_HOME, the same for every storage backend. */
     SemanticProjectionStore semanticProjectionStore(Path home);
 
+    /** Import history of the projects of this MINOS_HOME, the same for every storage backend. */
+    IndexImportHistoryStore indexImportHistoryStore(Path home);
+
+    /**
+     * Learned embedding provider for already validated semantic settings (ADR 0087), empty when this composition root
+     * does not supply the requested provider; the application then refuses the setting, without any fallback.
+     */
+    Optional<EmbeddingProvider> embeddingProvider(EmbeddingProviderSettings settings);
+
+    /** Production program graph providers, the relationship provider included; never empty. */
+    List<ProgramGraphProvider> programGraphProviders(ProjectFingerprintSnapshotStore fingerprints);
+
+    /**
+     * The given program graph providers completed with the analysers every application carries: the Java source
+     * analyser beside the relationship provider when no Java analyser is given, and the sidecar reader when absent.
+     * The given providers keep their order and come first.
+     */
+    List<ProgramGraphProvider> completeProgramGraphProviders(List<ProgramGraphProvider> requested);
+
     /** Worker sandbox probe of the real host (doctor, remote index). */
     WorkerSandboxProbe workerSandboxProbe();
 
@@ -116,6 +142,28 @@ public interface MinosApplicationComposer {
 
     /** Persisted host/container root mapping of this MINOS_HOME (Docker plan). */
     ProjectPathMappings projectPathMappings(Path home);
+
+    /**
+     * Validated settings of a learned embedding provider: the identifier, model and dimensions are required, the
+     * endpoint and timeout are optional (the composition root applies its defaults).
+     */
+    record EmbeddingProviderSettings(
+            String providerId,
+            String model,
+            int dimensions,
+            Optional<URI> endpoint,
+            Optional<Duration> timeout,
+            ProjectPathMapping.RuntimeLocation runtimeLocation
+    ) {
+        public EmbeddingProviderSettings {
+            Objects.requireNonNull(providerId, "providerId");
+            Objects.requireNonNull(model, "model");
+            if (dimensions < 1) throw new IllegalArgumentException("dimensions must be positive");
+            Objects.requireNonNull(endpoint, "endpoint");
+            Objects.requireNonNull(timeout, "timeout");
+            Objects.requireNonNull(runtimeLocation, "runtimeLocation");
+        }
+    }
 
     /** Snapshot staging and promotion, supplied together. */
     record SnapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {

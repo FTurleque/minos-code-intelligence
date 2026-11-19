@@ -1,5 +1,6 @@
 package com.minos.cli.command;
 
+import com.minos.cli.support.CliExitCodes;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ResolutionStatus;
@@ -45,7 +46,7 @@ class FindSymbolCommandTest {
                 "--format", "JSON"
         }, output, error);
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertEquals("project-1", projectId.get());
         assertEquals("Greeting", criteria.get().text());
         assertEquals("com.minos.GreetingService", criteria.get().qualifiedName());
@@ -73,7 +74,7 @@ class FindSymbolCommandTest {
                 new StringBuilder()
         );
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertEquals(FindSymbolCommand.DEFAULT_LIMIT, criteria.get().limit());
         assertEquals("symbols: 0\n", output.toString());
     }
@@ -93,7 +94,7 @@ class FindSymbolCommandTest {
                 new StringBuilder()
         );
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertEquals(0, invocations.get());
         assertEquals(FindSymbolCommand.usage() + "\n", output.toString());
     }
@@ -150,7 +151,7 @@ class FindSymbolCommandTest {
             StringBuilder error = new StringBuilder();
             int exitCode = command.run(invalid.arguments(), new StringBuilder(), error);
 
-            assertEquals(FindSymbolCommand.USAGE_ERROR, exitCode);
+            assertEquals(CliExitCodes.USAGE_ERROR, exitCode);
             assertTrue(error.toString().contains("error: " + invalid.message()), error.toString());
             assertTrue(error.toString().contains(FindSymbolCommand.usage()), error.toString());
         }
@@ -170,7 +171,7 @@ class FindSymbolCommandTest {
                 error
         );
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exitCode);
         assertEquals(
                 "error: find-symbol failed: active snapshot is unavailable\n",
                 error.toString()
@@ -194,13 +195,13 @@ class FindSymbolCommandTest {
         int exitCode = command.run(
                 new String[]{"project-1", "Greeting", "--module", "app"}, output, error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exitCode);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exitCode);
         assertEquals("", output.toString());
         assertTrue(error.toString().startsWith("error: find-symbol failed: module filter is unavailable"),
                 error.toString());
 
         StringBuilder withoutModule = new StringBuilder();
-        assertEquals(FindSymbolCommand.SUCCESS, command.run(
+        assertEquals(CliExitCodes.SUCCESS, command.run(
                 new String[]{"project-1", "Greeting", "--format", "json"}, withoutModule, new StringBuilder()));
         assertTrue(withoutModule.toString().startsWith("{\"count\":1,"), withoutModule.toString());
     }

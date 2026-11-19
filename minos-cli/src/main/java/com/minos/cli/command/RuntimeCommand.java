@@ -1,6 +1,7 @@
 package com.minos.cli.command;
 
 import com.minos.cli.support.CliCommandSupport;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.cli.support.CliOptions;
 import com.minos.application.dynamic.RuntimeIntelligenceService;
 import com.minos.application.dynamic.RuntimeIntelligenceService.HotPath;
@@ -78,7 +79,7 @@ public final class RuntimeCommand {
                         case SYMBOL -> renderSymbol(options);
                     };
                     output.append(rendered).append('\n');
-                    return FindSymbolCommand.SUCCESS;
+                    return CliExitCodes.SUCCESS;
                 });
     }
 

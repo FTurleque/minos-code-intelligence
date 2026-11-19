@@ -4,6 +4,7 @@ import com.minos.application.ProjectInspectionService;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.registry.RegisteredProject;
+import com.minos.storage.home.FileIndexImportHistoryStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
@@ -89,6 +90,7 @@ class ProjectInspectionUnreadableDirectoryTest {
     private static ProjectInspectionService inspection(Path home, LocalProjectRegistry registry) throws IOException {
         IndexStateStore stateStore = new FileIndexStateStore(home.resolve("index-state"));
         FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
-        return new ProjectInspectionService(home, registry, snapshots, stateStore, new ProjectDiscoveryService(), List.of());
+        return new ProjectInspectionService(new FileIndexImportHistoryStore(home), registry, snapshots, stateStore,
+                new ProjectDiscoveryService(), List.of());
     }
 }

@@ -1034,6 +1034,132 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
 # backends do not name each other, and the shared packages (the snapshot codec and the MINOS_HOME path mapping) name
 # neither backend, nor the PostgreSQL driver, nor JDBC. Each rule: (label, source package, forbidden prefixes); a prefix
 # under the groupId is written without it.
+# A20 (AUD-ARC-05) — the production classes of the final assembly minos-app, by name below com.minos, each with its
+# role. A policy belongs to an application module or a surface; a new class enters this list by a visible edit.
+ASSEMBLY_CLASSES: dict[str, str] = {
+    "app.DockerMcpTransport": "transport: STDIO session of minos mcp relayed to the Docker runtime",
+    "app.ExplorerLaunchRouteProvider": "launch route: minos explorer serve, wiring of the explorer launch policy",
+    "app.McpBackend": "home backend configuration: the execution backends",
+    "app.McpBackendConfiguration": "home backend configuration: the versioned value",
+    "app.McpBackendConfigurationStore": "home backend configuration: its persistence",
+    "app.McpBackendRouter": "launch route: minos mcp, native or Docker",
+    "app.McpLaunchRouteProvider": "launch route: minos mcp entry point registered by ServiceLoader",
+    "integration.nexus.NexusExportBridgeMain": "assembly: NEXUS export bridge entry point",
+}
+
+
+def check_assembly_classes(root: Path = ROOT, group_id: str | None = None,
+                           listed: dict[str, str] | None = None) -> int:
+    """A20 — every production class of minos-app is listed in ASSEMBLY_CLASSES with a written role, and every entry
+    names a class of minos-app: the final assembly holds wiring, launch routes, transport and the home backend
+    configuration, no application policy."""
+    listed = ASSEMBLY_CLASSES if listed is None else listed
+    prefix = (group_id or repository_group_id(root)) + "."
+    source_root = root / ASSEMBLY_MODULE / "src" / "main" / "java"
+    found: dict[str, str] = {}
+    for source in sorted(source_root.rglob("*.java")) if source_root.is_dir() else []:
+        if source.name in ("package-info.java", "module-info.java"):
+            continue
+        name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(prefix)
+        found[name] = source.relative_to(root).as_posix()
+    problems = [f"{path} is a production class of {ASSEMBLY_MODULE} absent from ASSEMBLY_CLASSES ({name}); place a "
+                f"policy in an application module or a surface, or list the class with its role"
+                for name, path in sorted(found.items()) if name not in listed]
+    problems += [f"ASSEMBLY_CLASSES entry {name} has no written role"
+                 for name, role in sorted(listed.items()) if not str(role).strip()]
+    problems += [f"ASSEMBLY_CLASSES entry {name} is no class of {ASSEMBLY_MODULE} any more; remove it"
+                 for name in sorted(set(listed) - set(found))]
+    if problems:
+        fail("A20 classes of the final assembly (AUD-ARC-05: minos-app holds wiring, launch routes, transport and "
+             "the home backend configuration): " + "; ".join(problems))
+    return len(listed)
+INFRASTRUCTURE_API = re.compile(
+    r"\bjava\s*\.\s*net\s*\.\s*HttpURLConnection\b|\bjava\s*\.\s*net\s*\.\s*http\s*\.\s*\w+"
+    r"|\bjavax\s*\.\s*tools\s*\.\s*\w+|\bcom\s*\.\s*sun\s*\.\s*source\s*\.\s*[\w.]+")
+# A19 (ADR 0087) — the minos-application files that name a JDK infrastructure API, by name below com.minos. The ratchet
+# only shrinks: a new HTTP client, compiler or source tree reader belongs to an adapter wired by minos-bootstrap.
+INFRASTRUCTURE_API_USERS: frozenset[str] = frozenset({
+    "application.semantic.OllamaEmbeddingProvider",
+    "program.analysis.JavaAstParser",
+    "program.analysis.JavaAstSupport",
+    "program.analysis.JavaControlFlowAnalyzer",
+    "program.analysis.JavaDefUseAnalyzer",
+    "program.analysis.JavaProgramGraphAssembler",
+    "program.analysis.JavaProgramGraphContext",
+    "program.analysis.JavaProgramModel",
+    "program.analysis.JavaSecurityRules",
+    "program.analysis.JavaTaintAnalyzer",
+})
+_JAVA_ANALYSER = "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)"
+# A19 (ADR 0087) — the adapter classes minos-application embeds, each with its justification. No other production
+# source of minos-application names them: the composition root instantiates them. The list only shrinks.
+EMBEDDED_ADAPTER_CLASSES: dict[str, str] = {
+    "OllamaEmbeddingProvider": "learned embedding client (HTTP), supplied by MinosApplicationComposer.embeddingProvider",
+    "FileProgramGraphProvider": "program sidecar reader, added by MinosApplicationComposer.completeProgramGraphProviders",
+    "FingerprintConstrainedJavaProgramGraphProvider": "production Java analyser bound to the source fingerprints, "
+                                                      "supplied by MinosApplicationComposer.programGraphProviders",
+    "SourceStateKeyMemo": "source state memo of the fingerprint-constrained analyser (names "
+                          "JavaProgramGraphEngine.SourceStateKey)",
+    "JavaAstParser": _JAVA_ANALYSER,
+    "JavaAstSupport": _JAVA_ANALYSER,
+    "JavaControlFlowAnalyzer": _JAVA_ANALYSER,
+    "JavaDefUseAnalyzer": _JAVA_ANALYSER,
+    "JavaInterproceduralFlowResolver": _JAVA_ANALYSER,
+    "JavaProgramGraphAssembler": _JAVA_ANALYSER,
+    "JavaProgramGraphContext": _JAVA_ANALYSER,
+    "JavaProgramGraphEngine": _JAVA_ANALYSER,
+    "JavaProgramModel": _JAVA_ANALYSER,
+    "JavaSecurityRules": _JAVA_ANALYSER,
+    "JavaSourceProgramGraphProvider": _JAVA_ANALYSER,
+    "JavaSourceWorkspace": _JAVA_ANALYSER,
+    "JavaTaintAnalyzer": _JAVA_ANALYSER,
+}
+
+
+def check_embedded_adapters(root: Path = ROOT, group_id: str | None = None,
+                            api_users: frozenset[str] | None = None,
+                            adapters: dict[str, str] | None = None) -> tuple[int, int]:
+    """A19 — in minos-application, only the INFRASTRUCTURE_API_USERS files name java.net.HttpURLConnection or a type of
+    java.net.http, javax.tools or com.sun.source, and only the EMBEDDED_ADAPTER_CLASSES name one of those classes (by
+    import, qualified name or simple name). Comments and string literals are ignored; both tables only shrink."""
+    api_users = INFRASTRUCTURE_API_USERS if api_users is None else api_users
+    adapters = EMBEDDED_ADAPTER_CLASSES if adapters is None else adapters
+    prefix = (group_id or repository_group_id(root)) + "."
+    source_root = root / APPLICATION_MODULE / "src" / "main" / "java"
+    sources: dict[str, tuple[str, str, str]] = {}
+    for source in sorted(source_root.rglob("*.java")) if source_root.is_dir() else []:
+        name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(prefix)
+        code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+        sources[name] = (source.relative_to(root).as_posix(), source.stem, code)
+    problems: list[str] = []
+    using = {}
+    for name, (path, _, code) in sorted(sources.items()):
+        found = sorted({re.sub(r"\s+", "", match.group(0)) for match in INFRASTRUCTURE_API.finditer(code)})
+        if found:
+            using[name] = (path, found)
+    problems += [f"{path} names {', '.join(found)} and is not in INFRASTRUCTURE_API_USERS ({name}); an "
+                 f"infrastructure client belongs to an adapter wired by minos-bootstrap"
+                 for name, (path, found) in sorted(using.items()) if name not in api_users]
+    problems += [f"INFRASTRUCTURE_API_USERS entry {name} names no infrastructure API any more; remove it "
+                 f"(the ratchet only shrinks)" for name in sorted(set(api_users) - set(using))]
+    classes = {stem for _, stem, _ in sources.values()}
+    problems += [f"EMBEDDED_ADAPTER_CLASSES entry {name} has no written justification"
+                 for name, reason in sorted(adapters.items()) if not str(reason).strip()]
+    problems += [f"EMBEDDED_ADAPTER_CLASSES entry {name} is no class of {APPLICATION_MODULE}; remove it "
+                 f"(the list only shrinks)" for name in sorted(set(adapters) - classes)]
+    for name, (path, stem, code) in sorted(sources.items()):
+        if stem in adapters:
+            continue
+        named = sorted(set(adapters) & set(SOURCE_WORD.findall(code)))
+        if named:
+            problems.append(f"{path} names the embedded adapter class(es) {', '.join(named)}; ask the composition "
+                            f"root (MinosApplicationComposer) for them")
+    if problems:
+        fail("A19 embedded adapters of minos-application (ADR 0087: minos-bootstrap instantiates them; the "
+             "application names no infrastructure API outside the closed list): " + "; ".join(problems))
+    return len(api_users), len(adapters)
+
+
 STORAGE_PACKAGE_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("local -> postgresql", LOCAL_BACKEND_PACKAGE, (POSTGRESQL_BACKEND_PACKAGE, POSTGRESQL_DRIVER_PACKAGE)),
     ("postgresql -> local", POSTGRESQL_BACKEND_PACKAGE, (LOCAL_BACKEND_PACKAGE,)),
@@ -1887,6 +2013,8 @@ def main() -> int:
         engine_accessors = check_minos_application_accessors()
         launchers = check_process_launchers()
         adapter_types = check_adapter_types_named_by_adapters()
+        assembly_classes = check_assembly_classes()
+        api_users, embedded_adapters = check_embedded_adapters()
         storage_packages = check_storage_package_isolation()
         package_roots = check_package_roots()
         service_loaders = check_service_loader_class_loaders()
@@ -1929,6 +2057,11 @@ def main() -> int:
         print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "
               f"({sum(sum(types.values()) for types in ADAPTER_TYPES_NAMED_BY_ADAPTER.values())} files), none other "
               f"is named; {len(ADAPTER_COUPLING_REASONS)} couple(s) justified in ADAPTER_COUPLING_REASONS")
+        print(f"A20 assembly classes: {assembly_classes} production class(es) of minos-app listed in ASSEMBLY_CLASSES "
+              f"with their role, none other")
+        print(f"A19 embedded adapters: {api_users} file(s) of minos-application listed in INFRASTRUCTURE_API_USERS "
+              f"name a JDK infrastructure API, {embedded_adapters} class(es) listed in EMBEDDED_ADAPTER_CLASSES, named "
+              f"by no other production source of minos-application")
         print(f"R1/R2 PostgreSQL backend isolation: {postgresql_blind} modules name neither the backend package nor "
               "its driver")
         print(f"Storage packages: {storage_packages} rules over production and test sources, the two backends name "

@@ -79,6 +79,60 @@ class DefaultMinosApplicationComposerTest {
         }
     }
 
+    /** The import history is the file store of the home, whatever the backend, and a reading creates nothing. */
+    @Test
+    void theImportHistoryStoreIsTheFileStoreOfTheHomeAndAReadingCreatesNothing(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        com.minos.orchestration.IndexImportHistoryStore store =
+                new DefaultMinosApplicationComposer().indexImportHistoryStore(home);
+
+        assertInstanceOf(com.minos.storage.home.FileIndexImportHistoryStore.class, store);
+        assertEquals(java.util.Optional.empty(), store.read(java.util.UUID.randomUUID()));
+        assertEquals(false, java.nio.file.Files.exists(home.resolve("cli-index-history")));
+    }
+
+    /** The learned provider is the local Ollama client, with the defaults of the adapter when nothing is set. */
+    @Test
+    void theLearnedProviderIsOllamaWithItsDefaultsAndAnotherIdentifierIsNotSupplied() {
+        DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
+        com.minos.application.semantic.EmbeddingProvider provider = composer.embeddingProvider(
+                new MinosApplicationComposer.EmbeddingProviderSettings("ollama", "code-embed", 384,
+                        java.util.Optional.empty(), java.util.Optional.empty(),
+                        com.minos.domain.registry.ProjectPathMapping.RuntimeLocation.NATIVE)).orElseThrow();
+
+        com.minos.application.semantic.OllamaEmbeddingProvider ollama =
+                assertInstanceOf(com.minos.application.semantic.OllamaEmbeddingProvider.class, provider);
+        assertEquals(com.minos.application.semantic.OllamaEmbeddingProvider.DEFAULT_ENDPOINT, ollama.endpoint());
+        assertEquals("code-embed", ollama.modelId());
+        assertEquals(384, ollama.dimensions());
+        assertEquals(java.util.Optional.empty(), composer.embeddingProvider(
+                new MinosApplicationComposer.EmbeddingProviderSettings("remote", "code-embed", 384,
+                        java.util.Optional.empty(), java.util.Optional.empty(),
+                        com.minos.domain.registry.ProjectPathMapping.RuntimeLocation.NATIVE)));
+    }
+
+    /** The completion keeps the given providers first and adds the Java analyser only beside the relationships. */
+    @Test
+    void theCompletionAddsTheJavaAnalyserBesideTheRelationshipsAndTheSidecarAlways(@TempDir Path temp)
+            throws Exception {
+        DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
+        com.minos.program.analysis.ProgramGraphProvider sidecar =
+                new com.minos.program.analysis.FileProgramGraphProvider();
+
+        assertEquals(java.util.List.of("minos-relationships", "minos-java-source-v1", "minos-program-sidecar-v1"),
+                ids(composer.completeProgramGraphProviders(java.util.List.of(
+                        new com.minos.program.analysis.RelationshipProgramGraphProvider()))));
+        assertEquals(java.util.List.of("minos-program-sidecar-v1"),
+                ids(composer.completeProgramGraphProviders(java.util.List.of(sidecar))));
+        assertEquals(java.util.List.of("minos-relationships", "minos-java-source-v1"), ids(
+                composer.programGraphProviders(
+                        new com.minos.storage.local.incremental.FileProjectFingerprintSnapshotStore(temp))));
+    }
+
+    private static java.util.List<String> ids(java.util.List<com.minos.program.analysis.ProgramGraphProvider> list) {
+        return list.stream().map(com.minos.program.analysis.ProgramGraphProvider::id).toList();
+    }
+
     /** The production probe queries the real host; the "decision" cause follows the enumeration. */
     @Test
     void productionWorkerSandboxProbeAndCommandLocatorAreTheRealHostOnes(@TempDir Path temp) {

@@ -2,7 +2,6 @@ package com.minos.cli.operations;
 
 import com.minos.cli.QualifiedSandboxForTests;
 import com.minos.application.MinosApplication;
-import com.minos.application.remote.RemoteIndexingUseCase;
 import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
@@ -74,7 +73,7 @@ class LocalRemoteIndexOperationsIntegrationTest {
                 request, repository, project, "b".repeat(64), false,
                 Instant.parse("2026-07-29T00:00:00Z"));
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
-        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCase.of(
+        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCases.wired(
                 application,
                 ignored -> materialization,
                 LocalRemoteIndexingRuntimeFixtures.withSelection(
@@ -140,7 +139,7 @@ class LocalRemoteIndexOperationsIntegrationTest {
         };
 
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
-        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCase.of(
+        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCases.wired(
                 application, materializer, LocalRemoteIndexingRuntimeFixtures.withSelection(store,
                         (workerId, delegate, artifactStore) -> {
                             throw new AssertionError("worker must never be created when the lease is never acquired");

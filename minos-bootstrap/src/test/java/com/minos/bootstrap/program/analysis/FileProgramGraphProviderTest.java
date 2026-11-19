@@ -108,7 +108,9 @@ class FileProgramGraphProviderTest {
                         edge("call:1", "symbol:a", "symbol:b", "CALL"),
                         edge("def-use:1", "var:def", "var:use", "DEF_USE")));
 
-        ProgramGraphService service = new ProgramGraphService(registry, store, List.of(new RelationshipProgramGraphProvider()));
+        ProgramGraphService service = new ProgramGraphService(registry, store,
+                new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(
+                        List.of(new RelationshipProgramGraphProvider())));
         ProgramGraph before = service.getGraph(project.id().toString());
         assertTrue(before.supports(ProgramGraphCapability.CALL_GRAPH));
         assertTrue(before.supports(ProgramGraphCapability.LOCAL_DATA_FLOW));

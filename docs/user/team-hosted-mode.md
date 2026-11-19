@@ -11,6 +11,8 @@ $env:MINOS_HOSTED_MODE='enabled'
 $env:MINOS_TEAM_KEY_KEY_A='<base64-32-bytes>'
 ```
 
+`MINOS_HOSTED_MODE` (or `minos.hosted.mode`) accepts `enabled` and `disabled`, in any case; an absent or empty value means disabled. Any other value is refused when MINOS opens the home and by `minos explorer serve` (usage error `unsupported hosted mode: <value>`, exit code 2).
+
 The suffix is the uppercase key id with non-alphanumeric characters replaced by `_`. MINOS derives separate tenant-scoped keys for AES-256-GCM encryption, HMAC token signing and the HMAC audit chain. Master keys and bearer tokens are never persisted.
 
 Bootstrap returns a bearer token once:

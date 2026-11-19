@@ -184,9 +184,10 @@ class ProgramGraphPerformanceQualificationTest {
         ProgramGraphService service = new ProgramGraphService(
                 application.projectRegistry(),
                 application.snapshotStore(),
-                List.of(new RelationshipProgramGraphProvider(),
-                        new FingerprintConstrainedJavaProgramGraphProvider(
-                                application.fingerprintStore(), monotonicNanos::get)));
+                new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(
+                        List.of(new RelationshipProgramGraphProvider(),
+                                new FingerprintConstrainedJavaProgramGraphProvider(
+                                        application.fingerprintStore(), monotonicNanos::get))));
         String id = project.id().toString();
 
         ProgramGraph first = service.getGraph(id, QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES);

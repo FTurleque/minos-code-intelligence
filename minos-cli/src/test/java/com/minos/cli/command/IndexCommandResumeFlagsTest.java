@@ -3,6 +3,7 @@ package com.minos.cli.command;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.application.ProjectOperations;
 import com.minos.application.indexing.IndexingResumeChoice;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -27,7 +28,7 @@ class IndexCommandResumeFlagsTest {
                 autonomous.policies);
 
         StringBuilder error = new StringBuilder();
-        assertEquals(FindSymbolCommand.USAGE_ERROR, command.run(
+        assertEquals(CliExitCodes.USAGE_ERROR, command.run(
                 new String[]{"demo", "--no-resume", "--resume-only"}, new StringBuilder(), error));
         assertTrue(error.toString().contains("--no-resume"), error.toString());
     }
@@ -41,7 +42,7 @@ class IndexCommandResumeFlagsTest {
             StringBuilder output = new StringBuilder();
             StringBuilder error = new StringBuilder();
             int code = command.run(new String[]{"demo", "--dry-run", flag}, output, error);
-            assertEquals(FindSymbolCommand.USAGE_ERROR, code, flag);
+            assertEquals(CliExitCodes.USAGE_ERROR, code, flag);
             assertTrue(error.toString().startsWith("error: --dry-run executes nothing, so it cannot be combined with "
                     + "--no-resume/--resume-only"), error.toString());
             assertEquals("", output.toString());
@@ -99,7 +100,7 @@ class IndexCommandResumeFlagsTest {
 
         int code = command.run(new String[]{"demo", "--resume-only"}, new StringBuilder(), error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, code);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, code);
         assertTrue(error.toString().contains("resume"), error.toString());
     }
 

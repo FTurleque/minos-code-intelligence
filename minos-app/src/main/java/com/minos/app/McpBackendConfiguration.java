@@ -3,7 +3,10 @@ package com.minos.app;
 import java.time.Duration;
 import java.util.Objects;
 
-/** Versioned configuration consumed by the stable {@code minos mcp} entry point. */
+/**
+ * The execution backend of a MINOS home ({@code runtime/backend.properties}), versioned: native or Docker. The
+ * launch routes of {@code minos mcp} and of {@code minos explorer serve} read it.
+ */
 public record McpBackendConfiguration(
         int formatVersion,
         McpBackend backend,
