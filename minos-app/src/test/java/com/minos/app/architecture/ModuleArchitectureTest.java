@@ -80,13 +80,18 @@ class ModuleArchitectureTest {
 
     private static final Set<String> ADAPTERS = Set.of("minos-runtime-local", "minos-storage",
             "minos-provider-scip", "minos-integration-git");
-    private static final Set<String> SURFACES =
-            Set.of("minos-cli", "minos-api", "minos-mcp", "minos-nexus", "minos-explorer");
+    private static final Set<String> SURFACES = Set.of("minos-cli", "minos-api", "minos-mcp", "minos-explorer");
+    /**
+     * ADR 0068 (A2): a contract module translates an application result into a versioned external contract (ADR 0020);
+     * it sits between minos-application and the surfaces, which may use it.
+     */
+    private static final Set<String> CONTRACT_MODULES = Set.of("minos-nexus");
 
     /**
-     * A11 on the bytecode (AUD-ARC-01, ADR 0058 § 3): per surface, the top-level minos-engine types its compiled classes
-     * depend on, with the number of top-level surface classes that depend on each. The source view of the same debt is
-     * ENGINE_TYPES_NAMED_BY_SURFACE in scripts/architecture/check-module-boundaries.py; the bytecode also sees the calls
+     * A11 on the bytecode (AUD-ARC-01, ADR 0058 § 3): per surface and per contract module, the top-level minos-engine
+     * types its compiled classes depend on, with the number of its top-level classes that depend on each. The source
+     * view of the same debt is ENGINE_TYPES_NAMED_BY_SURFACE in scripts/architecture/check-module-boundaries.py; the
+     * bytecode also sees the calls
      * chained on an engine result, which name no type, and misses a type used only as a type argument. A change that
      * removes a use updates both tables; the tables only shrink.
      */
@@ -161,10 +166,14 @@ class ModuleArchitectureTest {
         assertTrue(split.isEmpty(), "split packages: " + split);
     }
 
-    /** ADR 0042 (A2): no adapter reaches the application layer, the composition root, a surface or the assembly. */
+    /**
+     * ADR 0042 (A2): no adapter reaches the application layer, the composition root, a contract module, a surface or
+     * the assembly.
+     */
     @Test
     void adaptersDoNotReachBackIntoUpperLayers() {
-        Set<String> upper = union(Set.of("minos-application", "minos-bootstrap", "minos-app"), SURFACES);
+        Set<String> upper = union(union(Set.of("minos-application", "minos-bootstrap", "minos-app"), SURFACES),
+                CONTRACT_MODULES);
         for (String adapter : ADAPTERS) {
             noClasses().that(inModules(Set.of(adapter)))
                     .should().dependOnClassesThat(inModules(upper))
@@ -173,11 +182,11 @@ class ModuleArchitectureTest {
         }
     }
 
-    /** ADR 0042 (A2): the application layer only knows ports, never an adapter, the root or a surface. */
+    /** ADR 0042 (A2): the application layer only knows ports, never an adapter, the root, a contract or a surface. */
     @Test
     void applicationOnlyKnowsPorts() {
         noClasses().that(inModules(Set.of("minos-application")))
-                .should().dependOnClassesThat(inModules(union(union(ADAPTERS, SURFACES),
+                .should().dependOnClassesThat(inModules(union(union(union(ADAPTERS, SURFACES), CONTRACT_MODULES),
                         Set.of("minos-bootstrap", "minos-app"))))
                 .because("ADR 0042 (A2): minos-application only knows ports")
                 .check(all);
@@ -193,6 +202,30 @@ class ModuleArchitectureTest {
                 .should().dependOnClassesThat(inModules(union(ADAPTERS, Set.of("minos-bootstrap", "minos-app"))))
                 .because("ADR 0042 (A2): surfaces open the application through MinosApplication.open")
                 .check(all);
+    }
+
+    /**
+     * ADR 0068 (A2): a contract module uses no surface, no adapter, neither the engine nor the composition root nor the
+     * assembly: only the domain and the application.
+     */
+    @Test
+    void contractModulesSitBelowTheSurfaces() {
+        noClasses().that(inModules(CONTRACT_MODULES))
+                .should().dependOnClassesThat(inModules(union(union(SURFACES, ADAPTERS),
+                        Set.of("minos-engine", "minos-bootstrap", "minos-app"))))
+                .because("ADR 0068 (A2): a contract module depends only on minos-domain and minos-application")
+                .check(all);
+    }
+
+    /** ADR 0068 (A2): no surface uses another surface; a translation shared by surfaces is a contract module. */
+    @Test
+    void noSurfaceUsesAnotherSurface() {
+        for (String surface : SURFACES) {
+            noClasses().that(inModules(Set.of(surface)))
+                    .should().dependOnClassesThat(inModules(minus(SURFACES, Set.of(surface))))
+                    .because("ADR 0068 (A2): a surface depends on no other surface")
+                    .check(all);
+        }
     }
 
     /**
@@ -245,7 +278,8 @@ class ModuleArchitectureTest {
                 .should().dependOnClassesThat().resideInAnyPackage("com.minos.storage..", "org.postgresql..",
                         "java.sql..", "javax.sql..", "com.minos.cli..", "com.minos.mcp..", "com.minos.api..",
                         "com.minos.nexus..")
-                .because("ADR 0082: the exploration surface depends on no storage adapter and on no other surface")
+                .because("ADR 0082: the exploration surface depends on no storage adapter, on no other surface and "
+                        + "on no contract module")
                 .check(all);
         noClasses().that().resideOutsideOfPackage("com.minos.explorer..")
                 .should().dependOnClassesThat().resideInAnyPackage("com.sun.net.httpserver..")
@@ -318,7 +352,7 @@ class ModuleArchitectureTest {
     }
 
     /**
-     * A11 on the bytecode: each surface depends only on the minos-engine types of its
+     * A11 on the bytecode: each surface and each contract module depends only on the minos-engine types of its
      * ENGINE_TYPES_USED_BY_SURFACE_BYTECODE list, each from the listed number of top-level classes.
      */
     @Test
@@ -326,7 +360,7 @@ class ModuleArchitectureTest {
         Map<String, Map<String, Set<String>>> observed = new TreeMap<>();
         for (JavaClass javaClass : all) {
             String surface = MODULE_BY_CLASS.get(javaClass.getName());
-            if (!SURFACES.contains(surface)) {
+            if (!SURFACES.contains(surface) && !CONTRACT_MODULES.contains(surface)) {
                 continue;
             }
             for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {

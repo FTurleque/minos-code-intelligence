@@ -17,15 +17,6 @@ import java.util.Objects;
 public final class FindSymbolCommand {
 
     public static final String NAME = "find-symbol";
-    public static final int SUCCESS = CliExitCodes.SUCCESS;
-    public static final int EXECUTION_ERROR = CliExitCodes.EXECUTION_ERROR;
-    public static final int USAGE_ERROR = CliExitCodes.USAGE_ERROR;
-    /**
-     * Résultat partiel : la sortie est valide pour ce qui a pu être lu, mais des entrées du registre ont été
-     * écartées (comptées et affichées). Un seul sens, pour toutes les commandes : {@code project list} (Q8) et la
-     * résolution par nom de {@code inspect}, {@code project inspect} et {@code index-status} (Q24).
-     */
-    public static final int PARTIAL_RESULT = CliExitCodes.PARTIAL_RESULT;
 
     static final int DEFAULT_LIMIT = 20;
     static final int MAX_LIMIT = 1_000;
@@ -55,7 +46,7 @@ public final class FindSymbolCommand {
         return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             List<SymbolResult> results = List.copyOf(symbolQuery.findSymbols(options.projectId(), options.criteria()));
             output.append(SymbolResultRenderer.render(results, options.format())).append('\n');
-            return SUCCESS;
+            return CliExitCodes.SUCCESS;
         });
     }
 

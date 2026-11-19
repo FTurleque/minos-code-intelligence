@@ -1,7 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
-import com.minos.cli.command.FindSymbolCommand;
+import com.minos.cli.support.CliExitCodes;
 import com.minos.registry.RegisteredProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,7 +46,7 @@ class IndexViaWslSideEffectsTest {
             // Off Windows the parse step refuses the option; on a Windows installation without the route, the backend
             // refuses before resolving the project. Either way the option is named and nothing is written.
             boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
-            int expected = windows ? FindSymbolCommand.EXECUTION_ERROR : FindSymbolCommand.USAGE_ERROR;
+            int expected = windows ? CliExitCodes.EXECUTION_ERROR : CliExitCodes.USAGE_ERROR;
             assertEquals(expected, code, error.toString());
             assertTrue(error.toString().contains("--via-wsl"), error.toString());
             assertEquals("", output.toString());

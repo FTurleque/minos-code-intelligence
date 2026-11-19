@@ -59,6 +59,11 @@ public interface AutonomousIndexOperations {
 
     ProviderView installProvider(String providerId) throws Exception;
 
+    /**
+     * A provider runtime as the CLI shows it: diagnostics are sanitized before display, the identifier is named
+     * {@code id} and the executable is nullable, unlike {@code ProviderRuntimeSummary}.
+     * {@code CliViewParityTest} keeps it exhaustive against its summary.
+     */
     record ProviderView(
             String id,
             String version,
@@ -81,6 +86,10 @@ public interface AutonomousIndexOperations {
         }
     }
 
+    /**
+     * An indexing plan as the CLI shows it: its provider runtimes are {@link ProviderView}s, with sanitized
+     * diagnostics, unlike {@code IndexPlanSummary}. {@code CliViewParityTest} keeps it exhaustive against its summary.
+     */
     record IndexPlanView(
             String projectId,
             String projectName,
@@ -108,7 +117,10 @@ public interface AutonomousIndexOperations {
         }
     }
 
-    /** Outcome of the resume considered for a run (ADR 0039 §6); {@code refusalReason} is public text. */
+    /**
+     * Outcome of the resume considered for a run (ADR 0039 §6): the refusal reason is sanitized public text and
+     * nullable, unlike the optional of {@code ResumeTraceSummary}. {@code CliViewParityTest} keeps it exhaustive against its summary.
+     */
     record ResumeView(int attempt, int reusedTargets, int reexecutedTargets, String refusalReason) {
         public ResumeView {
             if (attempt < 1) throw new IllegalArgumentException("attempt must be positive");
@@ -119,6 +131,10 @@ public interface AutonomousIndexOperations {
         }
     }
 
+    /**
+     * An indexing run as the CLI shows it: the diagnostic is sanitized and the optional components of
+     * {@code IndexExecutionSummary} are nullable. {@code CliViewParityTest} keeps it exhaustive against its summary.
+     */
     record IndexExecutionView(
             IndexPlanView plan,
             String runId,

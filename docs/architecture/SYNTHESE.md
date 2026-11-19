@@ -18,7 +18,7 @@ Son architecture est **hexagonale, capabilist et fail-closed** :
 - `minos-domain` est le cœur sans dépendance externe.
 - `minos-engine` définit les ports (interfaces) provider-indépendants.
 - Les adapters (`minos-provider-scip`, `minos-integration-git`, `minos-storage`) implémentent ces ports.
-- Les surfaces (`minos-cli`, `minos-mcp`, `minos-api`, `minos-nexus`) consomment les services applicatifs via `minos-application`.
+- Les surfaces (`minos-cli`, `minos-mcp`, `minos-api`, `minos-explorer`) consomment les services applicatifs via `minos-application` ; aucune ne dépend d'une autre. Le module de contrat `minos-nexus` traduit l'export applicatif dans le contrat JSON NEXUS pour `minos-cli`.
 - `minos-bootstrap` est la racine de composition (ADR-0042) ; `minos-app` est l'assemblage final distribué (lanceur, JAR ombré, backends optionnels).
 
 57 ADR documentent chaque décision structurante depuis le jalon C0 jusqu'au chantier storage/hexagonal d'octobre 2026.

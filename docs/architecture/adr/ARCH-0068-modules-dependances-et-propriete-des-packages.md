@@ -213,6 +213,12 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 - **A12 et `Runtime`** : un `exec` (appel ou référence de méthode) sur `Runtime.getRuntime()`, sur un nom déclaré de type `Runtime` (variable, champ, paramètre) ou sur un nom affecté de `Runtime.getRuntime()` compte comme un site de lancement. Le contrôle reste lexical : un `Runtime` obtenu par un appel de méthode intermédiaire n'est pas suivi.
 - **Sous-packages de `com.minos.storage`** : la racine `storage` appartient au moteur (package `com.minos.storage`, les ports) et à `minos-storage`. Seul `minos-storage` déclare un package sous `com.minos.storage.`, en production comme en test : un tel nom désigne donc toujours ce module. Pour cette seule racine, la règle restreint la liberté du § 3 (un parent lexical et ses sous-packages dans des modules différents) et d'A14 (sous-package libre sous une racine possédée) ; elle n'en change aucun emplacement existant. `com.minos.storage.codec` et `com.minos.storage.home` restent en place : le § 4 fixe `codec` ; le § 5 interdit de renommer un package existant ; `minos-storage` n'a pas d'espace de noms commun à ses deux backends, et placer les packages partagés sous l'un d'eux ferait nommer `local` par `postgresql`, contrairement au § 4.
 
+**§ 2, famille de contrat et surfaces sans arête entre elles (AUD-ARC-08, changement OpenSpec `reclasser-minos-nexus-en-module-de-contrat`, décision du propriétaire du 2026-11-17)** :
+- **Module de contrat** : `minos-nexus` traduit un résultat applicatif dans un contrat externe versionné (ADR 0020) ; il n'est ni une surface ni un adaptateur, et se place entre `minos-application` et les surfaces. Il ne dépend que de `minos-domain` et de `minos-application`, et de `minos-bootstrap` en portée test. Aucun adaptateur, ni la racine de composition, ni `minos-application` ne dépend de lui. Le garde le tient par `CONTRACT_MODULES` (règle A2), `ModuleArchitectureTest` sur le bytecode.
+- **Aucune surface ne dépend d'une autre surface**, quelle que soit la portée Maven ; une surface peut dépendre d'un module de contrat (`minos-cli` → `minos-nexus`).
+- **A11** couvre les surfaces et les modules de contrat : la liste de `minos-nexus` reste vide et gardée.
+- **`NexusSemanticSignalService`** reste dans le module, déclarée dans `UNREFERENCED_PRODUCTION_TYPES` (A15) et présentée comme non qualifiée par un client.
+
 ## Écarts constatés
 
 Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en vigueur tant qu'un amendement ou une correction du code n'a pas tranché.

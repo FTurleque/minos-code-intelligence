@@ -28,9 +28,16 @@ SCOPES = {
     # on pr-ci.yml run 43650742311 (main 89be3fb4, 2026-11-14), aggregate report of each system: Linux line 0.924 /
     # branch 0.797, Windows 0.924 / 0.798; the floor of the scope is kept. QueryViewMemoryBudget: 115/122 lines
     # (0.943), 59/68 branches (0.868) on both systems; class floor = measure minus about 5 points.
+    # AUD-ARC-09 (audit of 2026-11-15): the snapshot codec is split by responsibility; each class has a class floor
+    # (measure minus about 5 points), measured on Windows, JDK 21, minos-storage module report of 2026-11-18:
+    # SnapshotEntityCodec 231/243 lines (0.951), 45/53 branches (0.849); SnapshotInput 44/47 (0.936), 22/26 (0.846);
+    # SnapshotEncodingSink 31/31, 8/8; SnapshotStringEncoding 22/23 (0.957), 13/14 (0.929). The five classes of the
+    # codec cover 497/532 lines and 123/143 branches.
     "storage-codec-and-state": {
         "prefixes": (
             "com/minos/storage/codec/SnapshotBinaryCodecSupport", "com/minos/storage/codec/SnapshotBinaryPrimitives",
+            "com/minos/storage/codec/SnapshotEntityCodec", "com/minos/storage/codec/SnapshotInput",
+            "com/minos/storage/codec/SnapshotEncodingSink", "com/minos/storage/codec/SnapshotStringEncoding",
             "com/minos/storage/local/orchestration/FileIndexStateStore",
             "com/minos/storage/local/incremental/FileProjectFingerprintSnapshotStore",
             "com/minos/storage/local/registry/LocalProjectRegistry",
@@ -39,6 +46,10 @@ SCOPES = {
         "line": 0.89, "branch": 0.73,
         "prefixMinimums": {
             "com/minos/storage/codec/QueryViewMemoryBudget": {"line": 0.89, "branch": 0.81},
+            "com/minos/storage/codec/SnapshotEntityCodec": {"line": 0.90, "branch": 0.80},
+            "com/minos/storage/codec/SnapshotInput": {"line": 0.88, "branch": 0.80},
+            "com/minos/storage/codec/SnapshotEncodingSink": {"line": 0.95, "branch": 0.95},
+            "com/minos/storage/codec/SnapshotStringEncoding": {"line": 0.90, "branch": 0.88},
         },
     },
     # AUD-TST-01 (audit of 2026-11-15): the semantic explorer module and the corpus service behind its routes. Measured
@@ -394,7 +405,11 @@ ZONE_SCOPES = {
     ),
     "wsl-lane": (),
     "semantic-projection": (),
-    "storage-codec-and-state": ("com/minos/storage/codec/QueryViewMemoryBudget",),
+    "storage-codec-and-state": (
+        "com/minos/storage/codec/QueryViewMemoryBudget", "com/minos/storage/codec/SnapshotEntityCodec",
+        "com/minos/storage/codec/SnapshotInput", "com/minos/storage/codec/SnapshotEncodingSink",
+        "com/minos/storage/codec/SnapshotStringEncoding",
+    ),
     "critical-orchestration": (
         "com/minos/orchestration/IndexingRunContext", "com/minos/orchestration/IndexingTargetExecution",
         "com/minos/orchestration/IndexingSnapshotPublication", "com/minos/orchestration/IndexingRunOutcomes",

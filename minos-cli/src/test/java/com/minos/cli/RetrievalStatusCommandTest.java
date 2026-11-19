@@ -1,8 +1,8 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.command.RetrievalStatusCommand;
 import com.minos.application.semantic.SemanticIndexService;
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -25,7 +25,7 @@ class RetrievalStatusCommandTest {
         int exitCode = command.run(new String[]{"status", "demo", "--format", "json"},
                 output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertTrue(output.toString().contains("\"state\":\"READY\""));
         assertTrue(output.toString().contains("\"semanticAvailable\":true"));
         assertTrue(output.toString().contains("\"documentCount\":42"));
@@ -43,7 +43,7 @@ class RetrievalStatusCommandTest {
 
         int exitCode = command.run(new String[]{"status", "demo"}, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertTrue(output.toString().contains("state: READY_STRUCTURED_FALLBACK"));
         assertTrue(output.toString().contains("semanticAvailable: false"));
         assertTrue(output.toString().contains("SEMANTIC_SIGNAL_UNAVAILABLE_STRUCTURED_FALLBACK_USED"));
@@ -59,7 +59,7 @@ class RetrievalStatusCommandTest {
                 RetrievalStatusCommand.Mode.HYBRID, ignored -> status);
         StringBuilder output = new StringBuilder();
 
-        assertEquals(FindSymbolCommand.SUCCESS,
+        assertEquals(CliExitCodes.SUCCESS,
                 command.run(new String[]{"status", "demo"}, output, new StringBuilder()));
         assertTrue(output.toString().contains("state: NO_ACTIVE_SNAPSHOT"));
     }
@@ -71,7 +71,7 @@ class RetrievalStatusCommandTest {
         int exitCode = MinosCliRunner.runStatelessHelp(
                 new String[]{"semantic", "status", "--help"}, output, new StringBuilder());
 
-        assertEquals(FindSymbolCommand.SUCCESS, exitCode);
+        assertEquals(CliExitCodes.SUCCESS, exitCode);
         assertTrue(output.toString().contains("semantic status <project>"));
     }
 }

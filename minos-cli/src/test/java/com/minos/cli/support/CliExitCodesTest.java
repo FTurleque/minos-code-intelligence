@@ -3,9 +3,18 @@ package com.minos.cli.support;
 import com.minos.cli.command.FindSymbolCommand;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/** Pins the stable CLI exit codes (ARCH-0016) and their single definition in {@link CliExitCodes}. */
 class CliExitCodesTest {
+
+    private static final Set<String> EXIT_CODE_NAMES =
+            Set.of("SUCCESS", "EXECUTION_ERROR", "USAGE_ERROR", "PARTIAL_RESULT");
 
     @Test
     void exitCodesKeepTheirPublishedValues() {
@@ -16,10 +25,13 @@ class CliExitCodesTest {
     }
 
     @Test
-    void findSymbolCommandConstantsAreTheSameCodes() {
-        assertEquals(CliExitCodes.SUCCESS, FindSymbolCommand.SUCCESS);
-        assertEquals(CliExitCodes.EXECUTION_ERROR, FindSymbolCommand.EXECUTION_ERROR);
-        assertEquals(CliExitCodes.USAGE_ERROR, FindSymbolCommand.USAGE_ERROR);
-        assertEquals(CliExitCodes.PARTIAL_RESULT, FindSymbolCommand.PARTIAL_RESULT);
+    void noCommandDeclaresAnExitCodeAlias() {
+        List<String> aliases = Arrays.stream(FindSymbolCommand.class.getDeclaredFields())
+                .map(Field::getName)
+                .filter(EXIT_CODE_NAMES::contains)
+                .sorted()
+                .toList();
+
+        assertEquals(List.of(), aliases, "FindSymbolCommand must not redeclare the CLI exit codes");
     }
 }

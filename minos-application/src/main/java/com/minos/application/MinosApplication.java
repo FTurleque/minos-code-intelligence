@@ -1,6 +1,10 @@
 package com.minos.application;
 
 import com.minos.application.dynamic.RuntimeIntelligenceService;
+import com.minos.application.export.KnowledgeExportUseCase;
+import com.minos.application.indexing.IndexingResumeChoice;
+import com.minos.application.indexing.ProjectIndexingUseCase;
+import com.minos.application.remote.RemoteIndexingUseCase;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.EmbeddingProvider;
 import com.minos.application.semantic.HybridContextBuilder;
@@ -23,10 +27,12 @@ import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IncrementalIndexingPlanner;
+import com.minos.orchestration.IndexImportHistoryStore;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexerRegistry;
+import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectInvalidationService;
@@ -36,6 +42,7 @@ import com.minos.program.analysis.ProgramGraphProvider;
 import com.minos.program.analysis.ProgramGraphService;
 import com.minos.program.analysis.SecurityAnalysisService;
 import com.minos.registry.ProjectRegistry;
+import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.storage.MinosRuntimeSettings;
@@ -52,6 +59,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.UnaryOperator;
 
 import static com.minos.domain.Preconditions.requireText;
 
@@ -85,7 +93,11 @@ public final class MinosApplication implements AutoCloseable {
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
     private final Optional<TeamControlPlane> teamControlPlane;
     private final MinosApplicationComposer compositionRoot;
+    private final IndexImportHistoryStore indexImportHistoryStore;
     private SemanticProjectionService semanticProjectionService;
+    private ProjectIndexingUseCase projectIndexing;
+    private RemoteIndexingUseCase remoteIndexing;
+    private KnowledgeExportUseCase knowledgeExport;
 
     /**
      * Stores resolved by the assembler (builder override or selected backend), grouped by domain (ADR 0045).
@@ -183,8 +195,11 @@ public final class MinosApplication implements AutoCloseable {
         if (graphProviders.isEmpty()) throw new IllegalArgumentException("programGraphProviders must not be empty");
         Optional<EmbeddingProvider> semanticProvider = Objects.requireNonNull(embeddingProvider, "embeddingProvider");
 
+        this.indexImportHistoryStore = Objects.requireNonNull(
+                Objects.requireNonNull(compositionRoot, "compositionRoot").indexImportHistoryStore(this.home),
+                "indexImportHistoryStore");
         ProjectInspectionService projectInspectionService = new ProjectInspectionService(
-                this.home, projectRegistry, snapshotStore, indexStateStore, discoveryService, this.indexerDescriptors);
+                indexImportHistoryStore, projectRegistry, snapshotStore, indexStateStore, discoveryService, this.indexerDescriptors);
         ProjectQueryService projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
         ProjectArchitectureQuery architectureQuery =
                 LocalProjectArchitectureQuery.defaults(projectRegistry, snapshotStore, discoveryService);
@@ -243,13 +258,6 @@ public final class MinosApplication implements AutoCloseable {
         }
     }
 
-    /** Stable production composition seam retained as a regression-checkable invariant. */
-    static List<ProgramGraphProvider> productionProgramGraphProviders(
-            ProjectFingerprintSnapshotStore effectiveFingerprints
-    ) {
-        return ProgramGraphService.productionProviders(effectiveFingerprints);
-    }
-
     public static Builder builder(Path home) { return new Builder(home); }
 
     // Identity and composition.
@@ -303,6 +311,9 @@ public final class MinosApplication implements AutoCloseable {
     // Queries (ADR 0045: derived services grouped in Queries).
     /** Git facts port, read by LocalProjectGitQuery; the surfaces use ProjectGitQuery. */
     GitIntelligence gitIntelligence() { return gitIntelligence; }
+    /** The import history port, for the operations of this package; not part of the facade. */
+    IndexImportHistoryStore indexImportHistoryStore() { return indexImportHistoryStore; }
+
     public ProjectInspectionService projectInspectionService() { return queries.projectInspectionService(); }
     public ProjectQueryService projectQueryService() { return queries.projectQueryService(); }
     public ProjectArchitectureQuery architectureQuery() { return queries.architectureQuery(); }
@@ -331,6 +342,79 @@ public final class MinosApplication implements AutoCloseable {
                     compositionRoot.semanticProjectionStore(home));
         }
         return semanticProjectionService;
+    }
+
+    // Use cases, built on first request from the collaborators of this application (ADR 0087): nothing is created
+    // on disk when the application opens.
+
+    /** The local indexing of every surface: the native provider runtimes, no executor decoration. */
+    public synchronized ProjectIndexingUseCase projectIndexing() {
+        if (projectIndexing == null) {
+            projectIndexing = new ProjectIndexingUseCase(indexingDependencies(providerRuntimeManager()),
+                    UnaryOperator.identity());
+        }
+        return projectIndexing;
+    }
+
+    /** The local indexing with every provider executor wrapped by {@code executorDecorator}; built for each call. */
+    public ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> executorDecorator) {
+        return new ProjectIndexingUseCase(indexingDependencies(providerRuntimeManager()), executorDecorator);
+    }
+
+    /**
+     * The indexing through the WSL2 route the composition root offers (scip-java routed to the distribution, every
+     * other provider native); empty when this installation does not offer the route, and nothing is resolved then.
+     *
+     * @param distribution the WSL distribution name, or empty for the default distribution of WSL
+     */
+    public Optional<ProjectIndexingUseCase> projectIndexingViaWsl(Optional<String> distribution) {
+        Objects.requireNonNull(distribution, "distribution");
+        return compositionRoot.wslIndexingRoute(home).map(route -> new ProjectIndexingUseCase(
+                indexingDependencies(route.runtimes(providerRuntimeManager(), distribution)),
+                UnaryOperator.identity()));
+    }
+
+    /**
+     * The remote indexing: the materializer then the runtime of this home, created in this order by the composition
+     * root on the first request; a failure is propagated and the next request tries again.
+     */
+    public synchronized RemoteIndexingUseCase remoteIndexing() throws IOException {
+        if (remoteIndexing == null) {
+            RemoteRepositoryMaterializer materializer = compositionRoot.remoteRepositoryMaterializer(home);
+            remoteIndexing = new RemoteIndexingUseCase(new RemoteIndexingUseCase.Dependencies(home,
+                    stores.projectRegistry(), materializer, compositionRoot.remoteIndexingRuntime(home),
+                    indexerDescriptors, (projectId, providerOverride, decorator) -> projectIndexing(decorator)
+                            .executeSummary(projectId, providerOverride, true, IndexingResumeChoice.RESUME)));
+        }
+        return remoteIndexing;
+    }
+
+    /** The knowledge export over the registry and the snapshots of this application. */
+    public synchronized KnowledgeExportUseCase knowledgeExport() {
+        if (knowledgeExport == null) {
+            knowledgeExport = new KnowledgeExportUseCase(stores.projectRegistry(), stores.snapshotStore());
+        }
+        return knowledgeExport;
+    }
+
+    /** The ports of the indexing orchestration, with the provider runtimes of the chosen route. */
+    private ProjectIndexingUseCase.Dependencies indexingDependencies(ProviderRuntimeManager runtimes) {
+        return new ProjectIndexingUseCase.Dependencies(
+                stores.projectRegistry(),
+                stores.snapshotStore(),
+                stores.indexStateStore(),
+                stores.fingerprintStore(),
+                runtimes,
+                indexing.snapshotStager(),
+                indexing.snapshotPromoter(),
+                compositionRoot.resumableRunMarkers(home),
+                indexing.discoveryService(),
+                indexing.fingerprintService(),
+                indexing.invalidationService(),
+                indexing.incrementalIndexingPlanner(),
+                this::indexerRegistry,
+                stores.retentionService(),
+                ProjectIndexingUseCase.semanticRefresh(semantic.semanticIndexService()));
     }
 
     // Hosted team control plane (opt-in).

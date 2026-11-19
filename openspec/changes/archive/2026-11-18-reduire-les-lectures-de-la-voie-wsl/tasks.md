@@ -27,7 +27,7 @@
 ## 4. Clôture
 
 - [x] 4.1 AUD-PERF-07, AUD-PERF-08 — Mettre à jour la matrice de traçabilité du design (preuves réelles ou « manquante ») ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 4.2 AUD-PERF-07, AUD-PERF-08 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 4.2 AUD-PERF-07, AUD-PERF-08 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 - [x] 4.3 AUD-PERF-07, AUD-PERF-08 — Valider ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`.
 - [x] 4.4 AUD-PERF-07, AUD-PERF-08 — Lister les documents à mettre à jour avant archivage (ADR SEC-0079, dossier de capacité, `docs/project/audits/2026-11-15/SUIVI.md`) ; vérifier que chacun est fait ou nommé comme reste.
 

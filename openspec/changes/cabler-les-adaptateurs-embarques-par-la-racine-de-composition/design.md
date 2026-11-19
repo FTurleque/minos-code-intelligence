@@ -213,17 +213,17 @@ Aucune capacité produit nouvelle. Le garde ajouté est qualifié sur Windows et
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| frontieres-de-modules › Le fournisseur d'embeddings appris est fourni par la racine de composition | Fournisseur Ollama configuré | séquence | 2.2 | `M23SemanticProviderConfigurationTest` (existant, à étendre) |
-| idem | Aucune instanciation dans l'application | D4 | 2.2 | recherche textuelle ; garde |
-| idem | Fournisseur que la racine ne fournit pas | séquence, D2 | 2.1 | à écrire |
-| idem | Réglage sémantique invalide | séquence | 2.1 | à écrire |
-| frontieres-de-modules › Les fournisseurs du graphe de programme sont fournis par la racine de composition | Liste de production | D3 | 3.1 | à écrire |
-| idem | Liste surchargée par le Builder | D3, flowchart | 3.1 | à écrire |
-| idem | Liste surchargée sans le fournisseur de relations | D3 | 3.1 | à écrire |
-| idem | Service sans instanciation | D3 | 3.2 | recherche textuelle ; garde |
-| idem | Liste vide refusée | flowchart | 3.1 | à écrire |
-| frontieres-de-modules › Les API d'infrastructure du JDK nommées par l'application le sont par liste fermée | les quatre scénarios | D4 | 4.1, 4.2 | `test_check_module_boundaries.py`, à écrire |
-| frontieres-de-modules › Une classe d'adaptateur embarquée n'est nommée que par sa famille | les trois scénarios | D4 | 4.1, 4.2 | `test_check_module_boundaries.py`, à écrire |
+| frontieres-de-modules › Le fournisseur d'embeddings appris est fourni par la racine de composition | Fournisseur Ollama configuré | séquence | 2.2 | `M23SemanticProviderConfigurationTest` (inchangé, vert) ; `DefaultMinosApplicationComposerTest#theLearnedProviderIsOllamaWithItsDefaultsAndAnotherIdentifierIsNotSupplied` ; `LearnedEmbeddingProviderSettingsTest` |
+| idem | Aucune instanciation dans l'application | D4 | 2.2 | garde A19 ; `check-semantic-retrieval-consistency.py` (interdit `OllamaEmbeddingProvider` dans la configuration) |
+| idem | Fournisseur que la racine ne fournit pas | séquence, D2 | 2.1 | `LearnedEmbeddingProviderSettingsTest#aProviderTheRootDoesNotSupplyIsRefusedWithoutFallback`, `#anUnknownProviderIsRefusedWithoutAskingTheRoot` |
+| idem | Réglage sémantique invalide | séquence | 2.1 | `LearnedEmbeddingProviderSettingsTest#anInvalidSettingIsRefusedBeforeTheRootIsAsked` |
+| frontieres-de-modules › Les fournisseurs du graphe de programme sont fournis par la racine de composition | Liste de production | D3 | 3.1 | `ProgramGraphProviderCompositionTest#anOpenedApplicationHasTheProductionProvidersInOrder` |
+| idem | Liste surchargée par le Builder | D3, flowchart | 3.1 | `ProgramGraphProviderCompositionTest#theRelationshipProviderAloneIsCompletedWithTheJavaAnalyserAndTheSidecar` |
+| idem | Liste surchargée sans le fournisseur de relations | D3 | 3.1 | `ProgramGraphProviderCompositionTest#anotherProviderIsCompletedWithTheSidecarOnly` |
+| idem | Service sans instanciation | D3 | 3.2 | garde A19 (`EmbeddedAdapterRuleTest#test_the_service_naming_an_adapter_again_is_refused_with_the_file_and_the_class`) |
+| idem | Liste vide refusée | flowchart | 3.1 | `ProgramGraphProviderAssemblyTest#anEmptyProductionListIsRefusedBeforeAnyCompletion` |
+| frontieres-de-modules › Les API d'infrastructure du JDK nommées par l'application le sont par liste fermée | les quatre scénarios | D4 | 4.1, 4.2 | `EmbeddedAdapterRuleTest` (`test_check_module_boundaries.py`) |
+| frontieres-de-modules › Une classe d'adaptateur embarquée n'est nommée que par sa famille | les trois scénarios | D4 | 4.1, 4.2 | `EmbeddedAdapterRuleTest` (`test_check_module_boundaries.py`) |
 | frontieres-de-modules › Le câblage des fournisseurs par la racine ne change aucune sortie publique | Goldens inchangés ; Ordre de composition | Vérification | 3.3 | `A2CompositionCharacterizationTest`, `git diff --exit-code` |
 
 ## Questions ouvertes

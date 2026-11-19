@@ -1,8 +1,5 @@
 package com.minos.application.indexing;
 
-import com.minos.application.MinosApplication;
-import com.minos.application.ProjectIndexStateReconciler;
-import com.minos.application.PublishedSnapshotRetention;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.diagnostics.PublicErrorMessages;
@@ -86,7 +83,7 @@ public final class ProjectIndexingUseCase {
         String refresh(UUID projectId);
     }
 
-    /** The ports the orchestration needs; production takes them from {@link MinosApplication}. */
+    /** The ports the orchestration needs; production takes them from the application facade. */
     public record Dependencies(
             ProjectRegistry projectRegistry,
             CodeKnowledgeSnapshotStore snapshotStore,
@@ -201,53 +198,6 @@ public final class ProjectIndexingUseCase {
         this.publishedRetention = new PublishedSnapshotRetention(retentionService);
         this.semanticRefresh = dependencies.semanticRefresh();
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
-    }
-
-    /** The production wiring: every port comes from the application (ADR 0042: markers from the composition root). */
-    public static ProjectIndexingUseCase of(MinosApplication application, UnaryOperator<IndexerExecutor> executorDecorator) {
-        Objects.requireNonNull(application, "application");
-        return new ProjectIndexingUseCase(dependencies(application, application.providerRuntimeManager()),
-                executorDecorator);
-    }
-
-    /** The ports of the application, with the provider runtimes of the chosen route. */
-    private static Dependencies dependencies(MinosApplication application, ProviderRuntimeManager runtimes) {
-        return new Dependencies(
-                application.projectRegistry(),
-                application.snapshotStore(),
-                application.indexStateStore(),
-                application.fingerprintStore(),
-                runtimes,
-                application.snapshotStager(),
-                application.snapshotPromoter(),
-                application.compositionRoot().resumableRunMarkers(application.home()),
-                application.discoveryService(),
-                application.fingerprintService(),
-                application.invalidationService(),
-                application.incrementalIndexingPlanner(),
-                application::indexerRegistry,
-                application.retentionService(),
-                semanticRefresh(application.semanticIndexService()));
-    }
-
-    /** The production wiring without executor decoration: the local indexing of every surface. */
-    public static ProjectIndexingUseCase of(MinosApplication application) {
-        return of(application, UnaryOperator.identity());
-    }
-
-    /**
-     * The production wiring of the WSL2 route: the same orchestration, with the provider runtimes of the route that
-     * the composition root offers (scip-java routed to the distribution, every other provider native). Empty when
-     * this installation does not offer the route; nothing is resolved then.
-     *
-     * @param distribution the WSL distribution name, or empty for the default distribution of WSL
-     */
-    public static Optional<ProjectIndexingUseCase> viaWsl(MinosApplication application, Optional<String> distribution) {
-        Objects.requireNonNull(application, "application");
-        Objects.requireNonNull(distribution, "distribution");
-        return application.compositionRoot().wslIndexingRoute(application.home())
-                .map(route -> new ProjectIndexingUseCase(dependencies(application,
-                        route.runtimes(application.providerRuntimeManager(), distribution)), UnaryOperator.identity()));
     }
 
     /** The semantic refresh of the product: skipped without an embedding provider, never fatal to the index. */

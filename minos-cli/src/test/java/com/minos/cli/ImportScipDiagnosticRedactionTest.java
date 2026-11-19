@@ -1,9 +1,9 @@
 package com.minos.cli;
 
-import com.minos.cli.command.FindSymbolCommand;
 import com.minos.cli.command.ImportScipCommand;
 import com.minos.application.ProjectOperations;
 
+import com.minos.cli.support.CliExitCodes;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -38,7 +38,7 @@ class ImportScipDiagnosticRedactionTest {
                 "demo", "--file", "index.scip", "--provider", "scip-java"
         }, output, error);
 
-        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+        assertEquals(CliExitCodes.EXECUTION_ERROR, exit);
         assertTrue(output.isEmpty());
         assertEquals("error: import-scip failed: IllegalArgumentException\n", error.toString());
         assertFalse(error.toString().contains("private-user"));
@@ -67,7 +67,7 @@ class ImportScipDiagnosticRedactionTest {
                 "demo", "--file", "index.scip", "--provider", "scip-java", "--format", "json"
         }, output, error);
 
-        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertEquals(CliExitCodes.SUCCESS, exit);
         assertTrue(output.toString().contains("internal diagnostic redacted"), output.toString());
         assertTrue(error.toString().contains("internal diagnostic redacted"), error.toString());
         assertFalse(output.toString().contains("private-user"));
