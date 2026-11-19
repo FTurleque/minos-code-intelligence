@@ -171,16 +171,16 @@ Les règles Archgate d'ARCH-0068 gardent leur échec quand la liste des modules 
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| frontieres-de-modules › La politique de frontières partagée a une source unique | Dépôt réel | D1, D2 | 1.3, 2.2 | sortie du garde comparée : à exécuter |
-| idem | Arête retirée de la source unique | diagramme | 1.1, 2.1 | à écrire (Python et Java) |
-| idem | Compteur de la vue bytecode | D2 | 2.1 | à écrire |
-| frontieres-de-modules › Une source de politique illisible fait échouer les deux lecteurs | Fichier absent | D3 | 1.1, 2.1 | à écrire |
-| idem | Clé inconnue | D3 | 1.1, 2.1 | à écrire |
-| idem | Module inconnu dans une arête | D3 | 1.1 | à écrire |
-| frontieres-de-modules › Le test ArchUnit ne redéclare aucune table de politique | Table recopiée dans le test | D4 | 2.1, 2.2 | à écrire |
-| idem | Test qui ne lit plus la source | D4 | 2.1, 2.2 | à écrire |
-| idem | Dépôt réel | D4, D5 | 1.3, 2.2 | `archgate check` : à exécuter après chaque bascule |
-| frontieres-de-modules › Les types du moteur utilisés par le bytecode d'une surface le sont par liste fermée (modifiée) | les trois scénarios | D2, D4 | 2.1, 2.2 | `ModuleArchitectureTest` et son test de comparaison du cliquet : à rejouer |
+| frontieres-de-modules › La politique de frontières partagée a une source unique | Dépôt réel | D1, D2 | 1.3, 2.2 | sortie du garde identique octet pour octet à la référence ; `ModuleArchitectureTest` 16 règles, autant qu'avant |
+| idem | Arête retirée de la source unique | diagramme | 1.1, 2.1 | `scripts/architecture/test_check_module_boundaries.py#test_an_edge_removed_from_the_file_fails_the_dependency_policy` ; côté ArchUnit, la règle `everyModuleOnlyUsesItsAllowedModules` lit `ALLOWED` dans le fichier (aucune mutation Java exécutée) |
+| idem | Compteur de la vue bytecode | D2 | 2.1 | `ModuleArchitectureTest#theBytecodeRatchetRefusesANewTypeAChangedCountAndADeadEntry` (comparaison du cliquet) ; aucune mutation du fichier exécutée |
+| frontieres-de-modules › Une source de politique illisible fait échouer les deux lecteurs | Fichier absent | D3 | 1.1, 2.1 | `scripts/architecture/test_check_module_boundaries.py#test_a_missing_file_is_refused`, `minos-app/src/test/java/com/minos/app/architecture/ModuleBoundaryPolicyTest.java#aMissingFileIsRefused` ; garde sur le dépôt sans le fichier : code 1, aucune ligne de succès |
+| idem | Clé inconnue | D3 | 1.1, 2.1 | `scripts/architecture/test_check_module_boundaries.py#test_an_unknown_key_is_refused`, `minos-app/src/test/java/com/minos/app/architecture/ModuleBoundaryPolicyTest.java#anUnknownKeyIsRefused` |
+| idem | Module inconnu dans une arête | D3 | 1.1 | `scripts/architecture/test_check_module_boundaries.py#test_an_unknown_module_in_an_edge_is_refused`, `minos-app/src/test/java/com/minos/app/architecture/ModuleBoundaryPolicyTest.java#anUnknownModuleInAnEdgeIsRefused` |
+| frontieres-de-modules › Le test ArchUnit ne redéclare aucune table de politique | Table recopiée dans le test | D4 | 2.1, 2.2 | `scripts/architecture/test_check_module_boundaries.py#test_a_copied_allowed_table_is_refused`, `test_a_copied_module_set_is_refused` ; mutation du vrai test : A17 et Archgate rouges |
+| idem | Test qui ne lit plus la source | D4 | 2.1, 2.2 | `scripts/architecture/test_check_module_boundaries.py#test_a_test_that_no_longer_reads_the_policy_is_refused`, `test_a_reader_that_no_longer_names_the_file_is_refused` |
+| idem | Dépôt réel | D4, D5 | 1.3, 2.2 | `scripts/architecture/test_check_module_boundaries.py#test_the_real_test_reads_the_single_source` ; `archgate check` vert après chaque bascule (rouge noté entre les deux temps de 1.3) |
+| frontieres-de-modules › Les types du moteur utilisés par le bytecode d'une surface le sont par liste fermée (modifiée) | les trois scénarios | D2, D4 | 2.1, 2.2 | `ModuleArchitectureTest#surfacesUseOnlyListedEngineTypes` et `#theBytecodeRatchetRefusesANewTypeAChangedCountAndADeadEntry`, rejoués verts sur la vue lue dans le fichier |
 
 ## Questions ouvertes
 

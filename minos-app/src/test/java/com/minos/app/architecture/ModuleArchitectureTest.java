@@ -41,76 +41,42 @@ import org.junit.jupiter.api.Test;
  */
 class ModuleArchitectureTest {
 
+    /**
+     * The module boundary policy, read from its single source scripts/architecture/module-boundaries.json (AUD-ARC-04,
+     * ADR 0058), the file check-module-boundaries.py reads too: no table of this test repeats it.
+     */
+    private static final ModuleBoundaryPolicy POLICY = ModuleBoundaryPolicy.load(Path.of(""));
+
     /** Output directory of each module's production classes; minos-app writes to the reactor root target/. */
     private static final Map<String, Path> OUTPUTS = new LinkedHashMap<>();
 
     static {
-        for (String module : List.of(
-                "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
-                "minos-provider-scip", "minos-integration-git", "minos-application",
-                "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp", "minos-explorer")) {
-            OUTPUTS.put(module, Path.of(module, "target", "classes"));
+        for (String module : POLICY.modules()) {
+            OUTPUTS.put(module, POLICY.family("assembly").contains(module)
+                    ? Path.of("target", "classes") : Path.of(module, "target", "classes"));
         }
-        OUTPUTS.put("minos-app", Path.of("target", "classes"));
     }
 
-    /** Same table as ALLOWED_DEPENDENCIES of check-module-boundaries.py (ADR 0022 / ADR 0042, A2). */
-    private static final Map<String, Set<String>> ALLOWED = Map.ofEntries(
-            Map.entry("minos-domain", Set.of()),
-            Map.entry("minos-engine", Set.of("minos-domain")),
-            Map.entry("minos-runtime-local", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-storage", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-provider-scip",
-                    Set.of("minos-domain", "minos-engine", "minos-runtime-local", "minos-storage")),
-            Map.entry("minos-integration-git", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-application", Set.of("minos-domain", "minos-engine")),
-            Map.entry("minos-bootstrap", Set.of("minos-domain", "minos-engine", "minos-application",
-                    "minos-runtime-local", "minos-storage", "minos-provider-scip", "minos-integration-git")),
-            Map.entry("minos-nexus", Set.of("minos-domain", "minos-application", "minos-bootstrap")),
-            Map.entry("minos-cli",
-                    Set.of("minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap")),
-            Map.entry("minos-api", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
-            Map.entry("minos-mcp", Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
-            Map.entry("minos-explorer",
-                    Set.of("minos-domain", "minos-engine", "minos-application", "minos-bootstrap")),
-            Map.entry("minos-app", Set.of("minos-domain", "minos-engine", "minos-runtime-local",
-                    "minos-storage", "minos-provider-scip",
-                    "minos-integration-git", "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli",
-                    "minos-api", "minos-mcp", "minos-explorer")));
+    /** The allowed internal dependencies of each module (ADR 0022 / ADR 0042, A2), from the policy. */
+    private static final Map<String, Set<String>> ALLOWED = POLICY.allowed();
 
-    private static final Set<String> ADAPTERS = Set.of("minos-runtime-local", "minos-storage",
-            "minos-provider-scip", "minos-integration-git");
-    private static final Set<String> SURFACES = Set.of("minos-cli", "minos-api", "minos-mcp", "minos-explorer");
+    private static final Set<String> ADAPTERS = POLICY.family("adapter");
+    private static final Set<String> SURFACES = POLICY.family("surface");
     /**
      * ADR 0068 (A2): a contract module translates an application result into a versioned external contract (ADR 0020);
      * it sits between minos-application and the surfaces, which may use it.
      */
-    private static final Set<String> CONTRACT_MODULES = Set.of("minos-nexus");
+    private static final Set<String> CONTRACT_MODULES = POLICY.family("contract");
 
     /**
      * A11 on the bytecode (AUD-ARC-01, ADR 0058 § 3): per surface and per contract module, the top-level minos-engine
-     * types its compiled classes depend on, with the number of its top-level classes that depend on each. The source
-     * view of the same debt is ENGINE_TYPES_NAMED_BY_SURFACE in scripts/architecture/check-module-boundaries.py; the
-     * bytecode also sees the calls
-     * chained on an engine result, which name no type, and misses a type used only as a type argument. A change that
-     * removes a use updates both tables; the tables only shrink.
+     * types its compiled classes depend on, with the number of its top-level classes that depend on each, read from
+     * engineTypesUsedBySurfaceBytecode of the policy. The source view of the same debt is engineTypesNamedBySurface of
+     * the same file; the bytecode also sees the calls chained on an engine result, which name no type, and misses a type
+     * used only as a type argument. A change that removes a use updates both entries; they only shrink.
      */
-    private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE = Map.of(
-            "minos-api", Map.ofEntries(
-                    // Kept, as in ENGINE_TYPES_NAMED_BY_SURFACE of check-module-boundaries.py: published read models
-                    // returned by ProjectSymbolQuery (ADR 0057, point 6).
-                    Map.entry("query.RelationshipResult", 1),
-                    Map.entry("query.SymbolResult", 1),
-                    Map.entry("query.UsageResult", 1)),
-            "minos-cli", Map.ofEntries(
-                    // Kept, as in the source table: MinosVersion placed by ADR 0068 section 3.
-                    Map.entry("runtime.MinosVersion", 1)),
-            "minos-mcp", Map.ofEntries(
-                    Map.entry("runtime.MinosVersion", 1)),
-            // The NEXUS export goes through KnowledgeExportUseCase; minos-nexus does not depend on the engine.
-            "minos-nexus", Map.of(),
-            // The exploration surface reads through the application services only.
-            "minos-explorer", Map.of());
+    private static final Map<String, Map<String, Integer>> ENGINE_TYPES_USED_BY_SURFACE_BYTECODE =
+            POLICY.engineTypesUsedBySurfaceBytecode();
 
     private static final String GROUP_PREFIX = "com.minos.";
 
