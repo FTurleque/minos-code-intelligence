@@ -1,17 +1,34 @@
 /// <reference path="../rules.d.ts" />
 
 // Ports des invariants A7 (check_reactor_modules), A3 (check_package_ownership) et A14 (check_package_roots)
-// de scripts/architecture/check-module-boundaries.py. Le script Python reste la source de vérité et le gate de la
-// CI : les tables MODULES et PACKAGE_ROOTS_BY_MODULE y sont lues, jamais recopiées ici.
+// de scripts/architecture/check-module-boundaries.py, qui reste le gate de la CI. La liste des modules est lue dans la
+// source unique de la politique de frontières (scripts/architecture/module-boundaries.json, AUD-ARC-04), la table
+// PACKAGE_ROOTS_BY_MODULE dans le script ; aucune n'est recopiée ici.
 
 const SCRIPT = "scripts/architecture/check-module-boundaries.py";
+const POLICY = "scripts/architecture/module-boundaries.json";
 const ROOT_POM = "pom.xml";
 const PACKAGE_DECLARATION = /^\s*package\s+([A-Za-z_][\w.]*)\s*;/;
 
-function governedModules(script: string): string[] {
-  const block = /^MODULES\s*=\s*\(([^)]*)\)/m.exec(script);
-  if (!block) return [];
-  return [...block[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+/** Les modules de la section `modules` de la source unique, dans l'ordre ; vide si le fichier est illisible. */
+function governedModules(policy: string): string[] {
+  try {
+    const parsed = JSON.parse(policy) as { modules?: unknown };
+    if (!Array.isArray(parsed.modules)) return [];
+    return parsed.modules.map((entry) => (entry as { name?: unknown }).name).filter(
+      (name): name is string => typeof name === "string" && name.length > 0,
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function readPolicy(ctx: RuleContext): Promise<string> {
+  try {
+    return await ctx.readFile(POLICY);
+  } catch {
+    return "";
+  }
 }
 
 function reactorModules(pom: string): string[] {
@@ -62,11 +79,11 @@ async function declarations(ctx: RuleContext, modules: string[], folder: "main" 
 }
 
 async function modulesOrViolation(ctx: RuleContext, invariant: string): Promise<string[] | null> {
-  const modules = governedModules(await ctx.readFile(SCRIPT));
+  const modules = governedModules(await readPolicy(ctx));
   if (modules.length === 0) {
     ctx.report.violation({
-      message: `Le tuple MODULES est introuvable dans ${SCRIPT} : l'invariant ${invariant} ne peut pas être vérifié.`,
-      file: SCRIPT,
+      message: `La source de politique ${POLICY} est absente ou sans section modules : l'invariant ${invariant} ne peut pas être vérifié.`,
+      file: POLICY,
     });
     return null;
   }
@@ -77,16 +94,15 @@ export default {
   rules: {
     "governed-modules-match-reactor": {
       description:
-        "A7 : la liste MODULES de check-module-boundaries.py est exactement l'ensemble des <modules> du pom.xml racine",
+        "A7 : la liste des modules de module-boundaries.json est exactement l'ensemble des <modules> du pom.xml racine",
       severity: "error",
       async check(ctx) {
-        const script = await ctx.readFile(SCRIPT);
         const pom = await ctx.readFile(ROOT_POM);
-        const governed = governedModules(script);
+        const governed = governedModules(await readPolicy(ctx));
         if (governed.length === 0) {
           ctx.report.violation({
-            message: `Le tuple MODULES est introuvable dans ${SCRIPT} : l'invariant A7 ne peut pas être vérifié.`,
-            file: SCRIPT,
+            message: `La source de politique ${POLICY} est absente ou sans section modules : l'invariant A7 ne peut pas être vérifié.`,
+            file: POLICY,
           });
           return;
         }
@@ -102,20 +118,20 @@ export default {
         const missing = reactor.filter((name) => !governed.includes(name));
         const extra = governed.filter((name) => !reactor.includes(name));
         for (const name of duplicated) {
-          ctx.report.violation({ message: `MODULES liste ${name} plusieurs fois.`, file: SCRIPT });
+          ctx.report.violation({ message: `La section modules de ${POLICY} liste ${name} plusieurs fois.`, file: POLICY });
         }
         for (const name of missing) {
           ctx.report.violation({
-            message: `Le module ${name} du reactor est absent de MODULES : il échappe à toutes les règles de frontière.`,
-            file: SCRIPT,
-            fix: `Ajouter "${name}" à MODULES dans ${SCRIPT}.`,
+            message: `Le module ${name} du reactor est absent de la section modules de ${POLICY} : il échappe à toutes les règles de frontière.`,
+            file: POLICY,
+            fix: `Ajouter { "name": "${name}", "family": ... } à la section modules de ${POLICY}.`,
           });
         }
         for (const name of extra) {
           ctx.report.violation({
-            message: `MODULES liste ${name}, absent des <modules> de ${ROOT_POM}.`,
-            file: SCRIPT,
-            fix: `Retirer "${name}" de MODULES ou l'ajouter au reactor.`,
+            message: `La section modules de ${POLICY} liste ${name}, absent des <modules> de ${ROOT_POM}.`,
+            file: POLICY,
+            fix: `Retirer ${name} de la section modules de ${POLICY} ou l'ajouter au reactor.`,
           });
         }
       },

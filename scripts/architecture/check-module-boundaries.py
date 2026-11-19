@@ -9,6 +9,7 @@ Self-test: scripts/architecture/test_check_module_boundaries.py.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -16,22 +17,176 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 GENERATED_DEPENDENCY_DOC = ROOT / "docs" / "architecture" / "diagrams" / "module-dependencies.md"
-MODULES = (
-    "minos-domain",
-    "minos-engine",
-    "minos-runtime-local",
-    "minos-storage",
-    "minos-provider-scip",
-    "minos-integration-git",
-    "minos-application",
-    "minos-bootstrap",
-    "minos-nexus",
-    "minos-cli",
-    "minos-api",
-    "minos-mcp",
-    "minos-explorer",
-    "minos-app",
-)
+# AUD-ARC-04, ADR 0058 — the boundary policy shared with ModuleArchitectureTest (modules in reactor order and their
+# family, allowed internal dependencies, couples allowed in test scope only, both views of the A11 debt) and the A19 and
+# A20 tables have one source, read strictly: no table of this script repeats it.
+POLICY_FILE = ROOT / "scripts" / "architecture" / "module-boundaries.json"
+POLICY_SECTIONS = ("version", "modules", "allowedDependencies", "testOnlyDependencies", "engineTypesNamedBySurface",
+                   "engineTypesUsedBySurfaceBytecode", "embeddedAdapterClasses", "infrastructureApiUsers",
+                   "assemblyClasses")
+FAMILIES = ("core", "adapter", "application", "composition", "contract", "surface", "assembly")
+SINGLE_MODULE_FAMILIES = ("application", "composition", "assembly")
+
+
+class BoundaryPolicy:
+    """The shared boundary policy as module-boundaries.json declares it, checked on load."""
+
+    def __init__(self, **sections: object) -> None:
+        self.modules: tuple[str, ...] = sections["modules"]
+        self.families: dict[str, str] = sections["families"]
+        self.allowed_dependencies: dict[str, frozenset[str]] = sections["allowed_dependencies"]
+        self.test_only_dependencies: frozenset[tuple[str, str]] = sections["test_only_dependencies"]
+        self.engine_types_named_by_surface: dict[str, dict[str, int]] = sections["engine_types_named_by_surface"]
+        self.engine_types_used_by_surface_bytecode: dict[str, dict[str, int]] =             sections["engine_types_used_by_surface_bytecode"]
+        self.embedded_adapter_classes: dict[str, str] = sections["embedded_adapter_classes"]
+        self.infrastructure_api_users: frozenset[str] = sections["infrastructure_api_users"]
+        self.assembly_classes: dict[str, str] = sections["assembly_classes"]
+
+    def family(self, family: str) -> frozenset[str]:
+        return frozenset(module for module in self.modules if self.families[module] == family)
+
+    def single(self, family: str) -> str:
+        return next(iter(self.family(family)))
+
+
+def load_policy(path: Path = POLICY_FILE, root: Path = ROOT) -> BoundaryPolicy:
+    """Reads the boundary policy without any default: a missing or unparsable file, an unknown, duplicated or missing
+    key, an unknown family, an unknown module or a debt entry without reason fails, naming the file relatively."""
+    try:
+        shown = path.relative_to(root).as_posix()
+    except ValueError:
+        shown = path.name
+
+    def refuse(cause: str) -> None:
+        raise RuntimeError(f"boundary policy {shown}: {cause}")
+
+    def unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        seen: dict[str, object] = {}
+        for key, value in pairs:
+            if key in seen:
+                refuse(f"duplicated key {key!r}")
+            seen[key] = value
+        return seen
+
+    if not path.is_file():
+        refuse("missing; the guard and ModuleArchitectureTest read the shared policy from this file")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_keys)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        refuse(f"not valid JSON ({type(error).__name__})")
+    if not isinstance(data, dict):
+        refuse("the top level is not an object")
+
+    def exact_keys(value: object, expected: tuple[str, ...], where: str) -> dict:
+        if not isinstance(value, dict):
+            refuse(f"{where} is not an object")
+        for key in value:
+            if key not in expected:
+                refuse(f"unknown key {key!r} in {where}")
+        for key in expected:
+            if key not in value:
+                refuse(f"missing section {key!r} in {where}")
+        return value
+
+    def text(value: object, where: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            refuse(f"{where} needs a non-blank text (reason)")
+        return value
+
+    exact_keys(data, POLICY_SECTIONS, "the policy")
+    if data["version"] != 1:
+        refuse(f"unsupported version {data['version']!r}")
+    if not isinstance(data["modules"], list) or not data["modules"]:
+        refuse("modules is not a non-empty list")
+    modules: list[str] = []
+    families: dict[str, str] = {}
+    for index, entry in enumerate(data["modules"]):
+        exact_keys(entry, ("name", "family"), f"modules[{index}]")
+        name = text(entry["name"], f"modules[{index}].name")
+        if name in families:
+            refuse(f"module {name} is listed twice")
+        if entry["family"] not in FAMILIES:
+            refuse(f"unknown family {entry['family']!r} for {name}")
+        modules.append(name)
+        families[name] = entry["family"]
+    for family in SINGLE_MODULE_FAMILIES:
+        if sum(1 for value in families.values() if value == family) != 1:
+            refuse(f"exactly one module of family {family!r} is expected")
+
+    def known(module: object, where: str) -> str:
+        if module not in families:
+            refuse(f"{where} names the unknown module {module!r}")
+        return module
+
+    allowed = exact_keys(data["allowedDependencies"], tuple(modules), "allowedDependencies")
+    allowed_dependencies: dict[str, frozenset[str]] = {}
+    for module in modules:
+        targets = allowed[module]
+        if not isinstance(targets, list):
+            refuse(f"allowedDependencies.{module} is not a list")
+        if len(set(targets)) != len(targets):
+            refuse(f"allowedDependencies.{module} lists a module twice")
+        allowed_dependencies[module] = frozenset(known(target, f"allowedDependencies.{module}") for target in targets)
+    if not isinstance(data["testOnlyDependencies"], list):
+        refuse("testOnlyDependencies is not a list")
+    test_only: set[tuple[str, str]] = set()
+    for index, entry in enumerate(data["testOnlyDependencies"]):
+        where = f"testOnlyDependencies[{index}]"
+        exact_keys(entry, ("module", "dependency", "reason"), where)
+        text(entry["reason"], f"{where}.reason")
+        test_only.add((known(entry["module"], where), known(entry["dependency"], where)))
+
+    def engine_debt(section: str, counter: str) -> dict[str, dict[str, int]]:
+        value = data[section]
+        if not isinstance(value, dict):
+            refuse(f"{section} is not an object")
+        debt: dict[str, dict[str, int]] = {}
+        for module, types in value.items():
+            known(module, section)
+            if families[module] not in ("surface", "contract"):
+                refuse(f"{section}.{module}: {module} is neither a surface nor a contract module")
+            if not isinstance(types, dict):
+                refuse(f"{section}.{module} is not an object")
+            debt[module] = {}
+            for type_name, entry in types.items():
+                where = f"{section}.{module}.{type_name}"
+                exact_keys(entry, (counter, "reason"), where)
+                text(entry["reason"], f"{where}.reason")
+                if not isinstance(entry[counter], int) or isinstance(entry[counter], bool) or entry[counter] < 1:
+                    refuse(f"{where}.{counter} is not a positive count")
+                debt[module][type_name] = entry[counter]
+        return debt
+
+    def reasons(section: str) -> dict[str, str]:
+        value = data[section]
+        if not isinstance(value, dict):
+            refuse(f"{section} is not an object")
+        return {name: text(reason, f"{section}.{name}") for name, reason in value.items()}
+
+    users = data["infrastructureApiUsers"]
+    if not isinstance(users, list) or any(not isinstance(user, str) or not user.strip() for user in users):
+        refuse("infrastructureApiUsers is not a list of class names")
+    if len(set(users)) != len(users):
+        refuse("infrastructureApiUsers lists a class twice")
+    return BoundaryPolicy(
+        modules=tuple(modules),
+        families=families,
+        allowed_dependencies=allowed_dependencies,
+        test_only_dependencies=frozenset(test_only),
+        engine_types_named_by_surface=engine_debt("engineTypesNamedBySurface", "files"),
+        engine_types_used_by_surface_bytecode=engine_debt("engineTypesUsedBySurfaceBytecode", "classes"),
+        embedded_adapter_classes=reasons("embeddedAdapterClasses"),
+        infrastructure_api_users=frozenset(users),
+        assembly_classes=reasons("assemblyClasses"),
+    )
+
+
+try:
+    POLICY = load_policy()
+except RuntimeError as policy_error:
+    print(f"M21 MODULE BOUNDARY CONSISTENCY FAILED: {policy_error}", file=sys.stderr)
+    raise SystemExit(1) from policy_error
+MODULES = POLICY.modules
 
 # A2 / ADR 0042 — module roles.
 # Adapter modules implement engine/domain ports against a concrete technology (process runtime,
@@ -41,17 +196,12 @@ MODULES = (
 # application through MinosApplication.open and reach the composition root at runtime only. A contract module
 # translates an application result into a versioned external contract (ADR 0020): it sits between the application
 # and the surfaces, which may depend on it; no surface depends on another surface.
-ADAPTER_MODULES = frozenset({
-    "minos-runtime-local",
-    "minos-storage",
-    "minos-provider-scip",
-    "minos-integration-git",
-})
-APPLICATION_MODULE = "minos-application"
-BOOTSTRAP_MODULE = "minos-bootstrap"
-ASSEMBLY_MODULE = "minos-app"
-SURFACE_MODULES = frozenset({"minos-cli", "minos-api", "minos-mcp", "minos-explorer"})
-CONTRACT_MODULES = frozenset({"minos-nexus"})
+ADAPTER_MODULES = POLICY.family("adapter")
+APPLICATION_MODULE = POLICY.single("application")
+BOOTSTRAP_MODULE = POLICY.single("composition")
+ASSEMBLY_MODULE = POLICY.single("assembly")
+SURFACE_MODULES = POLICY.family("surface")
+CONTRACT_MODULES = POLICY.family("contract")
 # Surfaces may see the composition root at runtime or in tests, never at compile time.
 SURFACE_TO_BOOTSTRAP_SCOPES = frozenset({"runtime", "test"})
 # A contract module depends on these modules only; it sees the composition root in test scope only.
@@ -61,41 +211,12 @@ CONTRACT_TO_BOOTSTRAP_SCOPES = frozenset({"test"})
 ENGINE_TYPE_RATCHETED_MODULES = SURFACE_MODULES | CONTRACT_MODULES
 # Couples (module, dependency) allowed in test scope only: the SCIP provider receives its snapshot stores through
 # engine ports (SH-06), and its tests keep the real file store of minos-storage.
-TEST_ONLY_DEPENDENCIES = frozenset({("minos-provider-scip", "minos-storage")})
+TEST_ONLY_DEPENDENCIES = POLICY.test_only_dependencies
 
-# Explicitly allowed direct MINOS dependencies. This is a maximum set, not a requirement:
-# removing a dependency is allowed, adding a dependency outside this policy is blocked.
-ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
-    "minos-domain": frozenset(),
-    "minos-engine": frozenset({"minos-domain"}),
-    # ADR 0058: every module a class uses is declared, including the domain reached through minos-engine.
-    "minos-runtime-local": frozenset({"minos-domain", "minos-engine"}),
-    # ADR 0068 section 4: one storage module; its local and PostgreSQL backends are kept apart by package rules
-    # (R1, R2 and STORAGE_PACKAGE_RULES), not by Maven.
-    "minos-storage": frozenset({"minos-domain", "minos-engine"}),
-    "minos-provider-scip": frozenset({
-        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage"
-    }),
-    "minos-integration-git": frozenset({"minos-domain", "minos-engine"}),
-    "minos-application": frozenset({"minos-domain", "minos-engine"}),
-    "minos-bootstrap": frozenset({
-        "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage",
-        "minos-provider-scip", "minos-integration-git"
-    }),
-    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-bootstrap"}),
-    "minos-cli": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-nexus", "minos-bootstrap"}),
-    "minos-api": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
-    "minos-mcp": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
-    # ADR 0082: the local HTTP exploration surface. It is started through the ExplorerLaunchRoute service that
-    # minos-app provides; like every surface, it depends on no other surface.
-    "minos-explorer": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
-    "minos-app": frozenset({
-        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
-        "minos-provider-scip", "minos-integration-git",
-        "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp",
-        "minos-explorer"
-    }),
-}
+# Explicitly allowed direct MINOS dependencies (module-boundaries.json). This is a maximum set, not a requirement:
+# removing a dependency is allowed, adding a dependency outside this policy is blocked. A dict, so that the self-test
+# can patch an entry.
+ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = dict(POLICY.allowed_dependencies)
 
 # A3 / ADR 0068 — one package, one module. A Java package belongs to exactly one module: no package is
 # declared by the production sources of two modules, and no test is declared in a package whose production
@@ -603,35 +724,10 @@ ENGINE_MODULE = "minos-engine"
 
 # A11 / AUD-ARC-01, ADR 0058 § 3 — the minos-engine types each surface uses, with the number of its production files
 # that use each: by import, by fully qualified name, or by calling a MinosApplication accessor that returns the type
-# (minos_application_accessors). The bytecode view of the same debt is ENGINE_TYPES_USED_BY_SURFACE_BYTECODE in
-# minos-app ModuleArchitectureTest: a lot that removes a use updates both tables.
-ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = {
-    "minos-api": {
-        # Kept: published read models, the records the application port ProjectSymbolQuery returns (ADR 0057,
-        # point 6, decision D4 = a of AUD-ARC-01); LocalMinosApi converts them into the public DTOs.
-        "query.RelationshipResult": 1,
-        "query.SymbolResult": 1,
-        "query.UsageResult": 1,
-    },
-    "minos-cli": {
-        # Kept: published read models returned by ProjectSymbolQuery, see minos-api.
-        "query.RelationshipResult": 1,
-        "query.SymbolResult": 1,
-        "query.UsageResult": 1,
-        # Kept: ADR 0068 section 3 places com.minos.runtime, MinosVersion included, in the engine (decision Q1 = A of
-        # the transverse core lot, 2026-10-25).
-        "runtime.MinosVersion": 1,
-    },
-    "minos-mcp": {
-        # Kept: see minos-cli, ADR 0068 section 3.
-        "runtime.MinosVersion": 1,
-    },
-    # The NEXUS export goes through KnowledgeExportUseCase (minos-application); minos-nexus does not depend on the
-    # engine (AUD-ARC-01, lot 5).
-    "minos-nexus": {},
-    # The exploration surface reads through the application services only.
-    "minos-explorer": {},
-}
+# (minos_application_accessors). Both views of the debt live in module-boundaries.json: this one under
+# engineTypesNamedBySurface, the bytecode view of ModuleArchitectureTest under engineTypesUsedBySurfaceBytecode; a lot
+# that removes a use updates both entries of the file.
+ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = POLICY.engine_types_named_by_surface
 
 # A11 / AUD-ARC-01, ADR 0057 point 6 — the public instance accessors of MinosApplication whose return type names a
 # minos-engine type, with that type (as minos_application_accessors reads them). No surface production code calls them
@@ -1036,16 +1132,7 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
 # under the groupId is written without it.
 # A20 (AUD-ARC-05) — the production classes of the final assembly minos-app, by name below com.minos, each with its
 # role. A policy belongs to an application module or a surface; a new class enters this list by a visible edit.
-ASSEMBLY_CLASSES: dict[str, str] = {
-    "app.DockerMcpTransport": "transport: STDIO session of minos mcp relayed to the Docker runtime",
-    "app.ExplorerLaunchRouteProvider": "launch route: minos explorer serve, wiring of the explorer launch policy",
-    "app.McpBackend": "home backend configuration: the execution backends",
-    "app.McpBackendConfiguration": "home backend configuration: the versioned value",
-    "app.McpBackendConfigurationStore": "home backend configuration: its persistence",
-    "app.McpBackendRouter": "launch route: minos mcp, native or Docker",
-    "app.McpLaunchRouteProvider": "launch route: minos mcp entry point registered by ServiceLoader",
-    "integration.nexus.NexusExportBridgeMain": "assembly: NEXUS export bridge entry point",
-}
+ASSEMBLY_CLASSES: dict[str, str] = POLICY.assembly_classes
 
 
 def check_assembly_classes(root: Path = ROOT, group_id: str | None = None,
@@ -1078,42 +1165,10 @@ INFRASTRUCTURE_API = re.compile(
     r"|\bjavax\s*\.\s*tools\s*\.\s*\w+|\bcom\s*\.\s*sun\s*\.\s*source\s*\.\s*[\w.]+")
 # A19 (ADR 0087) — the minos-application files that name a JDK infrastructure API, by name below com.minos. The ratchet
 # only shrinks: a new HTTP client, compiler or source tree reader belongs to an adapter wired by minos-bootstrap.
-INFRASTRUCTURE_API_USERS: frozenset[str] = frozenset({
-    "application.semantic.OllamaEmbeddingProvider",
-    "program.analysis.JavaAstParser",
-    "program.analysis.JavaAstSupport",
-    "program.analysis.JavaControlFlowAnalyzer",
-    "program.analysis.JavaDefUseAnalyzer",
-    "program.analysis.JavaProgramGraphAssembler",
-    "program.analysis.JavaProgramGraphContext",
-    "program.analysis.JavaProgramModel",
-    "program.analysis.JavaSecurityRules",
-    "program.analysis.JavaTaintAnalyzer",
-})
-_JAVA_ANALYSER = "Java source program graph analyser, instantiated by minos-bootstrap (ADR 0087)"
+INFRASTRUCTURE_API_USERS: frozenset[str] = POLICY.infrastructure_api_users
 # A19 (ADR 0087) — the adapter classes minos-application embeds, each with its justification. No other production
 # source of minos-application names them: the composition root instantiates them. The list only shrinks.
-EMBEDDED_ADAPTER_CLASSES: dict[str, str] = {
-    "OllamaEmbeddingProvider": "learned embedding client (HTTP), supplied by MinosApplicationComposer.embeddingProvider",
-    "FileProgramGraphProvider": "program sidecar reader, added by MinosApplicationComposer.completeProgramGraphProviders",
-    "FingerprintConstrainedJavaProgramGraphProvider": "production Java analyser bound to the source fingerprints, "
-                                                      "supplied by MinosApplicationComposer.programGraphProviders",
-    "SourceStateKeyMemo": "source state memo of the fingerprint-constrained analyser (names "
-                          "JavaProgramGraphEngine.SourceStateKey)",
-    "JavaAstParser": _JAVA_ANALYSER,
-    "JavaAstSupport": _JAVA_ANALYSER,
-    "JavaControlFlowAnalyzer": _JAVA_ANALYSER,
-    "JavaDefUseAnalyzer": _JAVA_ANALYSER,
-    "JavaInterproceduralFlowResolver": _JAVA_ANALYSER,
-    "JavaProgramGraphAssembler": _JAVA_ANALYSER,
-    "JavaProgramGraphContext": _JAVA_ANALYSER,
-    "JavaProgramGraphEngine": _JAVA_ANALYSER,
-    "JavaProgramModel": _JAVA_ANALYSER,
-    "JavaSecurityRules": _JAVA_ANALYSER,
-    "JavaSourceProgramGraphProvider": _JAVA_ANALYSER,
-    "JavaSourceWorkspace": _JAVA_ANALYSER,
-    "JavaTaintAnalyzer": _JAVA_ANALYSER,
-}
+EMBEDDED_ADAPTER_CLASSES: dict[str, str] = POLICY.embedded_adapter_classes
 
 
 def check_embedded_adapters(root: Path = ROOT, group_id: str | None = None,
@@ -1820,37 +1875,41 @@ def check_architecture_documentation(graph: dict[str, frozenset[str]], document:
     return len(modules)
 
 
-# A17 / ADR 0058 — the ALLOWED table of the ArchUnit test and ALLOWED_DEPENDENCIES are one policy written twice: they
-# must stay identical, or the strict ArchUnit rule and this guard judge the same dependency differently.
-ARCHITECTURE_TEST = (ROOT / "minos-app" / "src" / "test" / "java" / "com" / "minos" / "app" / "architecture"
-                     / "ModuleArchitectureTest.java")
-ALLOWED_TABLE = re.compile(r"ALLOWED\s*=\s*Map\.ofEntries\((.*?)\);", re.S)
-ALLOWED_ENTRY = re.compile(r'Map\.entry\(\s*"([^"]+)"\s*,\s*Set\.of\(([^)]*)\)\s*\)', re.S)
+# A17 / ADR 0058, AUD-ARC-04 — one policy, one file: ModuleArchitectureTest loads module-boundaries.json through
+# ModuleBoundaryPolicy and declares no policy table of its own (no literal table of modules, dependencies or engine
+# types assigned to a field); otherwise the ArchUnit rules and this guard could judge the same edge differently.
+ARCHITECTURE_TEST_DIRECTORY = ROOT / "minos-app" / "src" / "test" / "java" / "com" / "minos" / "app" / "architecture"
+ARCHITECTURE_TEST = ARCHITECTURE_TEST_DIRECTORY / "ModuleArchitectureTest.java"
+ARCHITECTURE_POLICY_READER = ARCHITECTURE_TEST_DIRECTORY / "ModuleBoundaryPolicy.java"
+POLICY_READ = re.compile(r"\bModuleBoundaryPolicy\s*\.\s*load\s*\(")
+POLICY_FILE_NAMED = re.compile(r'"module-boundaries\.json"')
+COPIED_TABLE = re.compile(r"\b(?:private\s+)?static\s+final\s+[^;=]*?\b([A-Z][A-Z0-9_]*)\s*=\s*"
+                          r'(?:Map\.ofEntries|Map\.of|Set\.of|List\.of)\s*\(\s*(?:Map\.entry\s*\(\s*)?"minos-', re.S)
+MODULE_ENTRY = re.compile(r'\bMap\.entry\s*\(\s*"minos-')
 
 
-def check_architecture_test_policy(test: Path = ARCHITECTURE_TEST,
-                                   allowed: dict[str, frozenset[str]] = ALLOWED_DEPENDENCIES) -> int:
-    """A17 — ModuleArchitectureTest.ALLOWED equals ALLOWED_DEPENDENCIES, module by module (fail-closed if unreadable)."""
-    if not test.is_file():
-        fail(f"A17 ArchUnit policy table is missing: {test.name}")
-    table = ALLOWED_TABLE.search(COMMENTS_AND_LITERALS.sub(lambda m: m.group(0) if m.group(0).startswith('"') else " ",
-                                                            test.read_text(encoding="utf-8")))
-    if table is None:
-        fail(f"A17 cannot read the ALLOWED table of {test.name}: the ArchUnit policy cannot be compared")
-    java = {module: frozenset(re.findall(r'"([^"]+)"', deps)) for module, deps in ALLOWED_ENTRY.findall(table.group(1))}
+def check_architecture_test_policy(test: Path = ARCHITECTURE_TEST, reader: Path = ARCHITECTURE_POLICY_READER) -> int:
+    """A17 — ModuleArchitectureTest loads the policy (ModuleBoundaryPolicy.load), whose reader names
+    module-boundaries.json, and declares no literal policy table. Fail-closed when either file is missing."""
+    for source in (test, reader):
+        if not source.is_file():
+            fail(f"A17 ArchUnit policy source is missing: {source.name}")
+    code = COMMENTS_AND_LITERALS.sub(lambda m: m.group(0) if m.group(0).startswith('"') else " ",
+                                     test.read_text(encoding="utf-8"))
+    reader_code = COMMENTS_AND_LITERALS.sub(lambda m: m.group(0) if m.group(0).startswith('"') else " ",
+                                            reader.read_text(encoding="utf-8"))
     problems = []
-    for module in sorted(set(allowed) | set(java)):
-        if module not in java:
-            problems.append(f"{module} is absent from {test.name}")
-        elif module not in allowed:
-            problems.append(f"{module} is absent from ALLOWED_DEPENDENCIES")
-        elif java[module] != allowed[module]:
-            problems.append(f"{module}: {test.name} allows {sorted(java[module])}, ALLOWED_DEPENDENCIES allows "
-                            f"{sorted(allowed[module])}")
+    if not POLICY_READ.search(code):
+        problems.append(f"{test.name} no longer reads the policy through ModuleBoundaryPolicy.load")
+    if not POLICY_FILE_NAMED.search(reader_code):
+        problems.append(f"{reader.name} no longer names module-boundaries.json")
+    problems += [f"{test.name} declares the policy table {name} again" for name in COPIED_TABLE.findall(code)]
+    if MODULE_ENTRY.search(code) and not COPIED_TABLE.search(code):
+        problems.append(f"{test.name} declares a literal Map.entry table of modules")
     if problems:
-        fail("A17 ArchUnit and guard dependency tables diverge (ADR 0058: one policy, two tables kept identical; edit "
-             "both in the same change): " + "; ".join(problems))
-    return len(allowed)
+        fail("A17 ArchUnit policy (ADR 0058: one policy, read from scripts/architecture/module-boundaries.json by the "
+             "guard and by ModuleArchitectureTest, never copied): " + "; ".join(problems))
+    return len(ALLOWED_DEPENDENCIES)
 
 
 def check_pom_rules(root: Path = ROOT) -> dict[str, dict[str, str]]:
@@ -2037,7 +2096,8 @@ def main() -> int:
               f"{sum(len(members) for members, _ in KNOWN_PACKAGE_CYCLES.values())} packages, none new "
               f"({cycle_packages} packages analysed, plugin included)")
         print(f"A9 architecture document: {documented} module sections match the POM dependencies")
-        print(f"A17 ArchUnit policy: {architecture_test} modules, ModuleArchitectureTest.ALLOWED equals ALLOWED_DEPENDENCIES")
+        print(f"A17 ArchUnit policy: ModuleArchitectureTest reads the single source module-boundaries.json "
+              f"({architecture_test} modules), no policy table is copied")
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
         print("A11 surface and contract module -> minos-engine types: "
