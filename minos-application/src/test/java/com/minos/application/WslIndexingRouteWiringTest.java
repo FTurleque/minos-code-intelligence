@@ -1,6 +1,5 @@
 package com.minos.application;
 
-import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligence;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
@@ -39,7 +38,7 @@ class WslIndexingRouteWiringTest {
     void aCompositionRootOffersNoRouteByDefault() throws Exception {
         try (MinosApplication application = application(null)) {
             assertEquals(Optional.empty(), application.compositionRoot().wslIndexingRoute(home));
-            assertEquals(Optional.empty(), ProjectIndexingUseCase.viaWsl(application, Optional.of("Ubuntu")));
+            assertEquals(Optional.empty(), application.projectIndexingViaWsl(Optional.of("Ubuntu")));
             MinosApplicationComposer composer = application.compositionRoot();
             assertThrows(NullPointerException.class, () -> composer.wslIndexingRoute(null));
             assertEquals(Optional.empty(), composer.wslIndexingWorker(home));
@@ -58,12 +57,12 @@ class WslIndexingRouteWiringTest {
             return nativeRuntimes;
         };
         try (MinosApplication application = application(route)) {
-            assertTrue(ProjectIndexingUseCase.viaWsl(application, Optional.of("Ubuntu-24.04")).isPresent());
-            assertTrue(ProjectIndexingUseCase.viaWsl(application, Optional.empty()).isPresent());
+            assertTrue(application.projectIndexingViaWsl(Optional.of("Ubuntu-24.04")).isPresent());
+            assertTrue(application.projectIndexingViaWsl(Optional.empty()).isPresent());
             assertEquals(List.of(Optional.of("Ubuntu-24.04"), Optional.empty()), requested);
             assertEquals(List.of(application.providerRuntimeManager(), application.providerRuntimeManager()), natives,
                     "the route delegates every non-routed provider to the native runtimes");
-            assertThrows(NullPointerException.class, () -> ProjectIndexingUseCase.viaWsl(application, null));
+            assertThrows(NullPointerException.class, () -> application.projectIndexingViaWsl(null));
         }
     }
 

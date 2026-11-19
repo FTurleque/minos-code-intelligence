@@ -24,7 +24,7 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
 
     /** Production wiring: materializer and runtime from the composition root (ADR 0042). */
     public LocalRemoteIndexOperations(MinosApplication application) throws IOException {
-        this(RemoteIndexingUseCase.of(application));
+        this(application.remoteIndexing());
     }
 
     /** A use case wired with substituted ports: tests only. */

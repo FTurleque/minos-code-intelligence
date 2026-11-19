@@ -104,7 +104,7 @@ class KnowledgeExportRefusalTest {
         ProjectRegistry registry = ExportFixture.registry(List.of());
         assertThrows(NullPointerException.class, () -> new KnowledgeExportUseCase(null, snapshots));
         assertThrows(NullPointerException.class, () -> new KnowledgeExportUseCase(registry, null));
-        assertThrows(NullPointerException.class, () -> KnowledgeExportUseCase.of(null));
+        assertThrows(NullPointerException.class, () -> new KnowledgeExportUseCase(null, null));
         KnowledgeExportUseCase useCase = new KnowledgeExportUseCase(ExportFixture.registry(List.of()), untouched());
         assertThrows(NullPointerException.class, () -> useCase.export(null));
     }

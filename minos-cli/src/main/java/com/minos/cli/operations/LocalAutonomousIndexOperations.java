@@ -2,7 +2,7 @@ package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.ProviderPlatformService;
-import com.minos.application.ProviderRuntimeSummary;
+import com.minos.application.indexing.ProviderRuntimeSummary;
 import com.minos.application.indexing.IndexExecutionSummary;
 import com.minos.application.indexing.IndexPlanSummary;
 import com.minos.application.indexing.IndexingResumeChoice;
@@ -36,7 +36,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     private LocalAutonomousIndexOperations(MinosApplication application, boolean ownsApplication) {
         this.application = Objects.requireNonNull(application, "application");
         this.ownedApplication = ownsApplication ? application : null;
-        this.indexing = ProjectIndexingUseCase.of(application);
+        this.indexing = application.projectIndexing();
     }
 
     @Override
@@ -63,7 +63,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     @Override
     public IndexExecutionView executeViaWsl(String projectIdentifier, String providerOverride, boolean forceFull,
                                             IndexingResumeChoice resumeChoice, String distribution) throws IOException {
-        ProjectIndexingUseCase viaWsl = ProjectIndexingUseCase.viaWsl(application, Optional.ofNullable(distribution))
+        ProjectIndexingUseCase viaWsl = application.projectIndexingViaWsl(Optional.ofNullable(distribution))
                 .orElseThrow(() -> new IllegalArgumentException(VIA_WSL_UNAVAILABLE));
         return view(viaWsl.executeSummary(projectIdentifier, providerOverride, forceFull, resumeChoice));
     }

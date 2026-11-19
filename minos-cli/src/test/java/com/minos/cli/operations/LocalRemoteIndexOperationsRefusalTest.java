@@ -1,7 +1,6 @@
 package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
-import com.minos.application.remote.RemoteIndexingUseCase;
 import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
@@ -46,7 +45,7 @@ class LocalRemoteIndexOperationsRefusalTest {
         AtomicInteger materializeCalls = new AtomicInteger();
         RemoteRepositoryMaterializer materializer = refusingMaterializer(materializeCalls);
         try (MinosApplication application = MinosApplication.builder(home).build()) {
-            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCase.of(
+            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCases.wired(
                     application, materializer, application.compositionRoot().remoteIndexingRuntime(application.home())));
             RemoteSourceRequest request = RemoteSourceRequest.of(
                     "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
@@ -85,8 +84,9 @@ class LocalRemoteIndexOperationsRefusalTest {
                     null));
             assertEquals("untrustedCodeSandbox", failure.getMessage());
             // Nor can the runtime itself be left out of the remote indexing.
-            NullPointerException noRuntime = assertThrows(NullPointerException.class, () -> RemoteIndexingUseCase.of(
-                    application, refusingMaterializer(new AtomicInteger()), (RemoteIndexingRuntime) null));
+            RemoteRepositoryMaterializer unusedMaterializer = refusingMaterializer(new AtomicInteger());
+            NullPointerException noRuntime = assertThrows(NullPointerException.class, () -> RemoteIndexingUseCases.wired(
+                    application, unusedMaterializer, (RemoteIndexingRuntime) null));
             assertEquals("remoteIndexingRuntime", noRuntime.getMessage());
         }
     }

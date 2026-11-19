@@ -347,6 +347,21 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
+### Cas d'usage obtenus par la façade ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), version 1.3.0
+
+Aucune signature de `com.minos.api` ne change. Les cas d'usage reçoivent leurs collaborateurs et `com.minos.application.MinosApplication` les expose, construits à la première demande ; leurs fabriques statiques sont retirées (rupture de source et binaire de classes internes) :
+
+| Signature retirée | Remplaçant |
+|---|---|
+| `ProjectIndexingUseCase.of(MinosApplication)` | `application.projectIndexing()` |
+| `ProjectIndexingUseCase.of(MinosApplication, UnaryOperator<IndexerExecutor>)` | `application.projectIndexing(executorDecorator)` |
+| `ProjectIndexingUseCase.viaWsl(MinosApplication, Optional<String>)` | `application.projectIndexingViaWsl(distribution)` |
+| `RemoteIndexingUseCase.of(MinosApplication)` | `application.remoteIndexing()` |
+| `RemoteIndexingUseCase.of(MinosApplication, RemoteRepositoryMaterializer, RemoteIndexingRuntime)` | `new RemoteIndexingUseCase(new RemoteIndexingUseCase.Dependencies(...))` |
+| `KnowledgeExportUseCase.of(MinosApplication)` | `application.knowledgeExport()` |
+
+`ProjectIndexStateReconciler`, `PublishedSnapshotRetention` et `ProviderRuntimeSummary` passent de `com.minos.application` à `com.minos.application.indexing` : un code qui les importait doit changer son import et être recompilé.
+
 ### Fournisseurs embarqués câblés par la racine de composition ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), version 1.3.0
 
 Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.application.MinosApplicationComposer` gagne trois méthodes abstraites, qu'une implémentation tierce du port doit ajouter (rupture de source) :
@@ -382,7 +397,7 @@ Aucune signature de `com.minos.api` ne change, et le contrat JSON de l'export NE
 |---|---|
 | `new NexusExportService(ProjectRegistry, CodeKnowledgeSnapshotStore)` | `new NexusExportService(MinosApplication)` |
 
-La sélection de l'export est faite par `com.minos.application.export.KnowledgeExportUseCase`, que le service obtient par `KnowledgeExportUseCase.of(MinosApplication)`.
+La sélection de l'export est faite par `com.minos.application.export.KnowledgeExportUseCase`, que le service obtient par `MinosApplication.knowledgeExport()`.
 
 ### Accesseurs de `MinosApplication` réservés à l'application, version 1.3.0
 
