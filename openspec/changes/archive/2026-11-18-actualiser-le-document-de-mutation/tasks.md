@@ -16,12 +16,12 @@
 
 ## 3. Documentation durable (AUD-TST-10)
 
-- [ ] 3.1 AUD-TST-10 — (reste, à l'archivage) Reporter les deux exigences et leur qualification (état exact ; mutation de `minos-storage` et `minos-explorer` non exécutée tant que 2.1 ne l'est pas) dans `docs/architecture/diagrams/capacites/audit-qualite-code.md`. Vérifier : `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.1 AUD-TST-10 — (reste, à l'archivage) Reporter les deux exigences et leur qualification (état exact ; mutation de `minos-storage` et `minos-explorer` non exécutée tant que 2.1 ne l'est pas) dans `docs/architecture/diagrams/capacites/audit-qualite-code.md`. Vérifier : `python scripts/docs/check-capability-dossiers.py`.
 
 ## 4. Clôture
 
 - [x] 4.1 AUD-TST-10 — Mettre à jour la matrice de traçabilité du design, preuves manquantes nommées (mesures de 2.1 et 2.2 si elles ne sont pas faites) ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 4.2 AUD-TST-10 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 4.2 AUD-TST-10 — (reste, à l'archivage) Contrôler le dossier de capacité ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
 - [x] 4.3 AUD-TST-10 — Valider ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py --fast`.
 - [x] 4.4 AUD-TST-10 — Lister les documents à mettre à jour avant archivage (`code-audit-couverture.md`, `code-audit.md`, dossier de capacité, `docs/project/audits/2026-11-15/SUIVI.md`) ; vérifier que chacun est fait ou nommé comme reste.
 

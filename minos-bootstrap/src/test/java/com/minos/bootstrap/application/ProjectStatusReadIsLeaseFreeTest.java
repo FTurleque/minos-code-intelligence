@@ -5,6 +5,7 @@ import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
+import com.minos.storage.home.FileIndexImportHistoryStore;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.registry.LocalProjectRegistry;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;
@@ -112,7 +113,7 @@ class ProjectStatusReadIsLeaseFreeTest {
             this.readerProcess = new FileIndexStateStore(stateRoot);
             this.snapshots = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
             this.inspection = new ProjectInspectionService(
-                    home, registry, snapshots, readerProcess, new ProjectDiscoveryService(), List.of());
+                    new FileIndexImportHistoryStore(home), registry, snapshots, readerProcess, new ProjectDiscoveryService(), List.of());
         }
 
         private Path stateFile() {
