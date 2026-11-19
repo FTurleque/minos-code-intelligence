@@ -247,11 +247,11 @@ Hors de `minos-runtime-local`, les sources de production et de test SHALL ne nom
 - **THEN** il échoue en nommant le cycle de packages
 
 ### Requirement: Les surfaces n'assemblent pas le cycle d'indexation
-Aucune surface (`minos-cli`, `minos-api`, `minos-mcp`, `minos-nexus`) SHALL NOT construire `IndexingLifecycleService` ni enchaîner elle-même découverte, négociation, planification et exécution. Ces étapes SHALL être assemblées dans `minos-application`, qui SHALL NOT nommer de classe d'adaptateur pour le faire.
+Aucune surface (`minos-cli`, `minos-api`, `minos-mcp`) ni aucun module de contrat (`minos-nexus`) SHALL NOT construire `IndexingLifecycleService` ni enchaîner elle-même découverte, négociation, planification et exécution. Ces étapes SHALL être assemblées dans `minos-application`, qui SHALL NOT nommer de classe d'adaptateur pour le faire.
 
 #### Scenario: Construction du cycle hors des surfaces
 - **GIVEN** le dépôt après le changement
-- **WHEN** on recherche `new IndexingLifecycleService` dans les sources de production des quatre surfaces
+- **WHEN** on recherche `new IndexingLifecycleService` dans les sources de production de ces quatre modules
 - **THEN** la recherche ne retourne aucune ligne
 
 #### Scenario: Cas d'usage sans adaptateur
@@ -350,7 +350,7 @@ Tout appel `ServiceLoader.load` des sources de production du reactor SHALL passe
 - **THEN** il réussit et les quatre découvertes de production passent un chargeur
 
 ### Requirement: Les types du moteur nommés par une surface le sont par liste fermée
-Le garde de frontières SHALL tenir, pour chaque surface (`minos-cli`, `minos-api`, `minos-mcp`, `minos-nexus`), les types de `minos-engine` qu'elle utilise, chacun avec le nombre de fichiers de production qui l'utilisent. Un type hors liste SHALL faire échouer le garde, ainsi qu'un compteur différent du nombre de fichiers observé, une entrée inutilisée ou une entrée désignant un type inexistant.
+Le garde de frontières SHALL tenir, pour chaque surface (`minos-cli`, `minos-api`, `minos-mcp`) et chaque module de contrat (`minos-nexus`), les types de `minos-engine` qu'elle utilise, chacun avec le nombre de fichiers de production qui l'utilisent. Un type hors liste SHALL faire échouer le garde, ainsi qu'un compteur différent du nombre de fichiers observé, une entrée inutilisée ou une entrée désignant un type inexistant.
 
 #### Scenario: Nouveau type du moteur importé par la CLI
 - **GIVEN** une copie du dépôt où un fichier de `minos-cli` importe un type de `minos-engine` absent de la liste
@@ -375,7 +375,7 @@ Le garde de frontières SHALL tenir, pour chaque surface (`minos-cli`, `minos-ap
 #### Scenario: Dépôt réel
 - **GIVEN** le dépôt
 - **WHEN** le garde est exécuté
-- **THEN** il réussit et affiche, par surface, le nombre de types listés et de fichiers qui les utilisent
+- **THEN** il réussit et affiche, par surface et par module de contrat, le nombre de types listés et de fichiers qui les utilisent
 
 ### Requirement: Le lancement de processus hors du runtime local est tenu par liste fermée
 Dans `minos-engine`, `minos-application` et `minos-domain`, une classe qui lance un processus SHALL figurer dans une liste fermée du garde avec son nombre de sites (`new ProcessBuilder`, `ProcessBuilder::new`, `ProcessBuilder.startPipeline`, `exec` sur `Runtime.getRuntime()` ou sur un nom de type `Runtime` ou affecté de `Runtime.getRuntime()`). Sur le dépôt, la liste SHALL être vide. Une classe hors liste, un nombre de sites différent ou une entrée sans lancement SHALL faire échouer le garde.
@@ -619,15 +619,15 @@ Le garde SHALL lire dans la source de `MinosApplication` ses méthodes publiques
 - **THEN** cet appel n'est pas compté comme un usage de `GitIntelligence`
 
 ### Requirement: Les types du moteur utilisés par le bytecode d'une surface le sont par liste fermée
-Le test `ModuleArchitectureTest` SHALL tenir, par surface, les types de premier niveau de `minos-engine` dont dépendent ses classes compilées, chacun avec le nombre de classes de premier niveau qui en dépendent. Un type hors table, un compteur différent ou une entrée inutilisée SHALL faire échouer le test.
+Le test `ModuleArchitectureTest` SHALL appliquer, par surface et par module de contrat, la liste des types de premier niveau de `minos-engine` dont dépendent ses classes compilées, chacun avec le nombre de classes de premier niveau qui en dépendent. Cette liste SHALL être lue dans la source unique de la politique de frontières. Un type hors liste, un compteur différent ou une entrée inutilisée SHALL faire échouer le test.
 
 #### Scenario: Appel chaîné sur un résultat du moteur
-- **GIVEN** une classe de `minos-cli` qui appelle une méthode d'un type de `minos-engine` absent de la table, sans le nommer
+- **GIVEN** une classe de `minos-cli` qui appelle une méthode d'un type de `minos-engine` absent de la liste, sans le nommer
 - **WHEN** `ModuleArchitectureTest` est exécuté
 - **THEN** il échoue en nommant la surface, le type, le compteur attendu et les classes
 
 #### Scenario: Usage retiré sans mettre la table à jour
-- **GIVEN** une table du test qui liste un type dont plus aucune classe de la surface ne dépend
+- **GIVEN** une liste de la source unique qui nomme un type dont plus aucune classe de la surface ne dépend
 - **WHEN** le test est exécuté
 - **THEN** il échoue en nommant l'entrée à retirer
 
@@ -819,7 +819,7 @@ Le reactor SHALL compter un seul module de stockage, `minos-storage`, qui contie
 #### Scenario: Reactor fusionné
 - **GIVEN** le dépôt après la fusion
 - **WHEN** `python scripts/architecture/check-module-boundaries.py` s'exécute
-- **THEN** il réussit, avec 13 modules, et les tables A2 et A17 nomment `minos-storage` sans aucun des deux anciens nœuds
+- **THEN** il réussit, la liste `MODULES` égale la liste des modules du reactor (règle A7), et la politique de dépendances lue par le garde et par `ModuleArchitectureTest` nomme `minos-storage` sans aucun des deux anciens nœuds
 
 #### Scenario: Ancien module réintroduit
 - **GIVEN** une copie du dépôt dont le reactor déclare de nouveau `minos-storage-postgresql`
@@ -993,6 +993,178 @@ Les accesseurs publics d'instance de `MinosApplication` qui rendent un type de `
 - **GIVEN** le dépôt
 - **WHEN** le garde est exécuté
 - **THEN** il réussit et annonce 15 accesseurs publics typés moteur, et la CLI ne liste plus `registry.ProjectPathMappings` dans aucune table A11
+
+### Requirement: Un module de contrat reste sous les surfaces
+Le garde SHALL tenir une famille de modules de contrat, distincte des surfaces, qui contient `minos-nexus`. Un module de contrat SHALL ne dépendre que de `minos-domain` et de `minos-application` en production, et de `minos-bootstrap` en portée test seulement. Il SHALL NOT dépendre d'une surface, d'un adaptateur, de `minos-engine` ni de `minos-app`. `ModuleArchitectureTest` SHALL appliquer la même règle sur le bytecode.
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt, où `minos-nexus` appartient à la famille de contrat et plus à celle des surfaces
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0
+
+#### Scenario: Module de contrat qui dépend d'une surface
+- **GIVEN** une copie des POM où `minos-nexus` déclare `minos-cli`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 en nommant `minos-nexus`, `minos-cli` et la famille de contrat
+
+#### Scenario: Racine de composition hors portée test
+- **GIVEN** une copie des POM où `minos-nexus` déclare `minos-bootstrap` en portée `runtime`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant l'arête et la portée attendue
+
+#### Scenario: Type du moteur réintroduit
+- **GIVEN** une copie du dépôt où une classe de `minos-nexus` importe un type de `minos-engine`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en A11 en nommant `minos-nexus`, le fichier et le type
+
+### Requirement: Aucune surface ne dépend d'une autre surface
+Le garde SHALL refuser toute dépendance interne d'un module de surface vers un autre module de surface, quelle que soit sa portée Maven. Une surface SHALL pouvoir dépendre d'un module de contrat. L'assemblage `minos-app` n'est pas une surface et reste hors de cette règle.
+
+#### Scenario: Arête de la CLI vers le contrat NEXUS
+- **GIVEN** le dépôt, où `minos-cli` déclare `minos-nexus`
+- **WHEN** le garde est exécuté
+- **THEN** il réussit, l'arête allant d'une surface vers un module de contrat
+
+#### Scenario: Surface qui dépend d'une surface
+- **GIVEN** une copie des POM où `minos-mcp` déclare `minos-cli` en portée `test`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 en nommant les deux surfaces
+
+### Requirement: Le signal sémantique NEXUS est déclaré non qualifié
+Tant qu'aucune commande ni aucun client ne consomme `NexusSemanticSignalService`, la classe SHALL rester déclarée dans la liste des types publics sans appelant avec sa raison, et `docs/developer/public-surfaces.md` SHALL la présenter comme non qualifiée par un client. La documentation SHALL NOT la présenter comme une capacité disponible.
+
+#### Scenario: Documentation honnête
+- **GIVEN** le dépôt
+- **WHEN** on cherche `NexusSemanticSignalService` dans `docs/developer/public-surfaces.md`
+- **THEN** la section NEXUS porte la mention « non qualifié » sur la même ligne ou le même paragraphe
+
+#### Scenario: Entrée du cliquet retirée sans appelant
+- **GIVEN** une copie du dépôt où l'entrée de `NexusSemanticSignalService` est retirée de la liste des types sans appelant
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en A15 en nommant la classe
+
+### Requirement: La politique de frontières partagée a une source unique
+La liste des modules, leur famille, les dépendances internes autorisées, les couples admis en portée test seulement et les deux vues de la dette A11 (source et bytecode) SHALL être écrits dans un seul fichier de données versionné. Le garde Python et `ModuleArchitectureTest` SHALL lire ce fichier et SHALL NOT en tenir de copie. Un mouvement de cliquet SHALL se faire par une seule édition.
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` puis `ModuleArchitectureTest` sont exécutés
+- **THEN** les deux réussissent, et le garde affiche le même nombre de modules et de règles qu'avant la bascule
+
+#### Scenario: Arête retirée de la source unique
+- **GIVEN** une copie du dépôt où l'arête `minos-cli` → `minos-nexus` est retirée du seul fichier de données
+- **WHEN** le garde, puis `ModuleArchitectureTest`, sont exécutés sur cette copie
+- **THEN** le garde échoue en nommant l'arête du POM hors politique, et la règle ArchUnit des modules autorisés échoue sur le même couple, sans autre édition
+
+#### Scenario: Compteur de la vue bytecode
+- **GIVEN** une copie du dépôt où le compteur d'un type du moteur de la vue bytecode est augmenté de un dans le fichier de données
+- **WHEN** `ModuleArchitectureTest` est exécuté
+- **THEN** il échoue en nommant la surface, le type, le compteur écrit et le compteur observé
+
+### Requirement: Une source de politique illisible fait échouer les deux lecteurs
+Le garde Python et `ModuleArchitectureTest` SHALL échouer, sans appliquer de valeur par défaut, quand le fichier de politique est absent, n'est pas analysable, porte une clé inconnue ou une clé en double, omet une section attendue, donne à un module une famille inconnue ou nomme un module absent de la liste des modules. Le message SHALL nommer le fichier par son chemin relatif au dépôt et la cause.
+
+#### Scenario: Fichier absent
+- **GIVEN** une copie du dépôt sans le fichier de politique
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 en nommant le fichier attendu, et n'affiche aucune ligne de succès
+
+#### Scenario: Clé inconnue
+- **GIVEN** une copie du fichier où une section est mal orthographiée
+- **WHEN** le garde, puis `ModuleArchitectureTest`, sont exécutés
+- **THEN** chacun échoue en nommant la clé inconnue ; aucun ne traite la section manquante comme vide
+
+#### Scenario: Module inconnu dans une arête
+- **GIVEN** une copie du fichier où une dépendance autorisée nomme `minos-inconnu`
+- **WHEN** le garde est exécuté
+- **THEN** il échoue en nommant le module et l'entrée
+
+### Requirement: Le test ArchUnit ne redéclare aucune table de politique
+La règle A17 du garde SHALL échouer quand `ModuleArchitectureTest` ne lit plus le fichier de politique, ou déclare de nouveau une table littérale de dépendances autorisées, de modules, d'adaptateurs, de surfaces ou de types du moteur. La règle SHALL échouer aussi quand le fichier du test est absent ou illisible.
+
+#### Scenario: Table recopiée dans le test
+- **GIVEN** une copie du dépôt où le test déclare de nouveau une table littérale `ALLOWED` par `Map.ofEntries`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en A17 en nommant le test et la table recopiée
+
+#### Scenario: Test qui ne lit plus la source
+- **GIVEN** une copie du dépôt où le test ne nomme plus le fichier de politique
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en A17
+
+#### Scenario: Dépôt réel
+- **GIVEN** le dépôt
+- **WHEN** le garde est exécuté
+- **THEN** la ligne A17 annonce que le test lit la source unique, et `archgate check` réussit
+
+### Requirement: La portée d'une dépendance hors compilation est écrite dans la documentation de dépendances
+Le document de dépendances généré SHALL afficher, à côté de chaque dépendance interne déclarée dans une portée autre que la compilation, cette portée (`test` ou `runtime`). Dans `docs/architecture/arc42/05-vue-blocs.md`, la ligne « Dépendances » d'un module SHALL faire suivre un tel module d'une parenthèse qui commence par sa portée, et le garde SHALL échouer si la portée manque, est fausse, ou est écrite pour une dépendance de compilation.
+
+#### Scenario: Document généré
+- **GIVEN** le dépôt, où `minos-explorer` déclare `minos-engine` en portée `test` et `minos-bootstrap` en portée `runtime`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py --write-doc` est exécuté
+- **THEN** la ligne de `minos-explorer` du document porte ces deux portées, et une seconde exécution sans `--write-doc` se termine avec le code 0
+
+#### Scenario: Portée absente de l'arc42
+- **GIVEN** une copie de la vue des blocs où la ligne de `minos-explorer` cite `minos-engine` sans portée
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 en nommant le module, la dépendance et la portée attendue `test`
+
+#### Scenario: Parenthèse qui n'est pas une portée
+- **GIVEN** le dépôt, où la ligne de `minos-bootstrap` fait suivre sa dernière dépendance d'une parenthèse « (voir … ) »
+- **WHEN** le garde est exécuté
+- **THEN** cette parenthèse n'est pas lue comme une portée, et la ligne est acceptée puisque la dépendance est déclarée en compilation
+
+#### Scenario: Portée écrite à tort
+- **GIVEN** une copie de la vue des blocs où la ligne de `minos-cli` écrit `minos-application` suivi de la portée `test`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue : la dépendance est déclarée en compilation
+
+### Requirement: Les racines de packages citées par la documentation d'un module sont les siennes
+Pour chaque section de module de `docs/architecture/arc42/05-vue-blocs.md`, le garde SHALL exiger une ligne « Sources ». Les racines `com/minos/<racine>/` qu'elle cite SHALL être exactement celles que la table des racines de packages attribue au module. Une ligne qui ne cite que le répertoire de sources du module, sans racine, SHALL être acceptée.
+
+#### Scenario: Racine omise
+- **GIVEN** une copie de la vue des blocs où la ligne « Sources » de `minos-engine` cite ses racines sauf `com/minos/io/`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 en nommant `minos-engine` et la racine `io` manquante
+
+#### Scenario: Racine d'un autre module
+- **GIVEN** une copie où la ligne « Sources » de `minos-domain` cite `com/minos/store/`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant la racine que le module ne possède pas
+
+#### Scenario: Section sans ligne Sources
+- **GIVEN** une copie où la section d'un module n'a pas de ligne « Sources »
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue (jamais un succès par défaut)
+
+#### Scenario: Répertoire de sources seul
+- **GIVEN** le dépôt, où la ligne de `minos-application` cite seulement son répertoire de sources
+- **WHEN** le garde est exécuté
+- **THEN** la ligne est acceptée
+
+### Requirement: Les interfaces citées par la documentation d'un module existent et sont attribuées au bon module
+Dans une ligne « Interfaces » de la vue des blocs, chaque type cité entre accents graves SHALL être un type de production du reactor, appartenant au module de la section ou à un module que la ligne nomme par une tournure « défini dans » ; un module nommé autrement SHALL NOT compter. La mention « aucune » SHALL être refusée pour un module qui déclare une interface publique de premier niveau. Une section sans ligne « Interfaces » SHALL rester acceptée.
+
+#### Scenario: Port attribué au mauvais module
+- **GIVEN** une copie où la ligne de `minos-storage` cite `SemanticVectorStore` parmi des types « définis dans `minos-engine` », et nomme `minos-application` dans une autre phrase
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 en nommant le type et son module réel, `minos-domain`
+
+#### Scenario: Aucune interface déclarée à tort
+- **GIVEN** une copie où la ligne de `minos-domain` vaut « aucune »
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant au moins une interface publique du module
+
+#### Scenario: Type disparu
+- **GIVEN** une copie où une ligne « Interfaces » cite un type qu'aucun module ne déclare
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant le type
+
+#### Scenario: Documentation corrigée
+- **GIVEN** le dépôt après correction de la vue des blocs
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0
 
 ## Documentation liée
 

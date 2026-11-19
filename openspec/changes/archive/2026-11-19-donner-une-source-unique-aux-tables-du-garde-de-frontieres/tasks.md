@@ -21,7 +21,7 @@ Constat **AUD-ARC-04**. Prérequis : sprint 7 (`cabler-les-adaptateurs-embarques
 ## 4. Clôture
 
 - [x] 4.1 [AUD-ARC-04] Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes. Fait ; preuves manquantes nommées (mutations Java du fichier non exécutées).
-- [ ] 4.2 [AUD-ARC-04] Mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (trois exigences ajoutées, une modifiée, vue « qui lit la politique ») ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Reste : les trois exigences ajoutées entrent au dossier à l'archivage (le gate refuse une exigence absente des specs courantes) ; citation de test A17 renommé mise à jour.
+- [x] 4.2 [AUD-ARC-04] Mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (trois exigences ajoutées, une modifiée, vue « qui lit la politique ») ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Reste : les trois exigences ajoutées entrent au dossier à l'archivage (le gate refuse une exigence absente des specs courantes) ; citation de test A17 renommé mise à jour. Lignes de traçabilité ajoutées au dossier frontieres-de-modules à l'archivage.
 - [x] 4.3 [AUD-ARC-04] `openspec validate --all --strict`, `python .claude/scripts/run_gates.py`, `python scripts/quality/check-ci-wiring.py`, `archgate check`. openspec validate --all --strict (44), run_gates.py 82/82, check-ci-wiring.py, archgate check 18/18.
 - [x] 4.4 [AUD-ARC-04] Lister les documents à mettre à jour avant archivage (`docs/project/audits/2026-11-15/SUIVI.md`) ; vérifier que chacun est fait ou nommé comme reste. Restes nommés : SUIVI.md de l'audit ; dossier de capacité à l'archivage.
 

@@ -114,17 +114,19 @@ Ordre : `normaliser-…`, `prouver-…`, `reduire-…`, `relever-…` (après `b
 
 Ordre : `unifier-…`, `supprimer-…`, `porter-…`, `cabler-…` (écrit l'ADR en `Proposed`), `injecter-…` (le fait passer `Accepted`), `centraliser-…` (après `fiabiliser-la-surface-de-l-explorateur`). `porter`, `cabler` et `injecter` touchent `MinosApplicationComposer` et son test : fusion dans cet ordre.
 
-## Sprint 8 — Garde de frontières, contrats et documentation
+## Sprint 8 — Garde de frontières, contrats et documentation (fusionné et archivé le 2026-11-19)
 
 | Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
 |---|---|---|---|
-| AUD-ARC-08 | `reclasser-minos-nexus-en-module-de-contrat` | Spécifié | Absorber nexus contredirait ARCH-0068 et l'API Java documentée. Quatre règles (deux du garde, deux d'ArchUnit) portent sur surfaces ∪ modules de contrat ; règle « surface ↛ surface » ajoutée. |
-| AUD-ARC-04 | `donner-une-source-unique-aux-tables-du-garde-de-frontieres` | Spécifié (constat partiel) | A17 ne compare que `ALLOWED`. Une seule des six tables citées est recopiée ; trois copies non citées ne sont comparées par rien. Les règles Archgate d'ARCH-0058 et d'ARCH-0068 lisent ces tables : chaque lecteur bascule dans la tâche qui retire son littéral. |
-| AUD-ARC-09 | `decouper-l-executeur-d-indexation-et-le-codec-de-snapshot` | Spécifié (constat partiel) | 49 méthodes et 4 constructeurs, non 81 ; 37 et 20 commits confirmés par `git log --oneline --follow`. Codec découpé par responsabilité. Sans delta de spec (comportement constant), deux PR. |
-| AUD-QUA-03 | `trancher-la-langue-du-contrat-de-l-explorateur` | Spécifié (constat partiel) | Les erreurs portent déjà un `code`. La CLI sérialise aussi ces valeurs, et la nature de document entre dans la table. Aucun renommage dans v1. La liste fermée des codes se relève après le sprint 3. |
-| AUD-ARC-07 | `aligner-la-prose-d-architecture-sur-le-code` | Spécifié | Les trois « 14 » sont vrais au HEAD ; seul le scénario « 13 modules » de `frontieres-de-modules` est faux. `minos-domain` omet la racine `diagnostics`. |
+| AUD-ARC-08 | `reclasser-minos-nexus-en-module-de-contrat` | Fait (PR #783, archivé) ; D1 requalifier et D2 garder `NexusSemanticSignalService`, décisions du propriétaire du 2026-11-17 | Absorber nexus contredirait ARCH-0068 et l'API Java documentée. Quatre règles (deux du garde, deux d'ArchUnit) portent sur surfaces ∪ modules de contrat ; règle « surface ↛ surface » ajoutée. |
+| AUD-ARC-04 | `donner-une-source-unique-aux-tables-du-garde-de-frontieres` | Fait (PR #791, archivé, constat partiel) ; source unique `scripts/architecture/module-boundaries.json` | A17 ne compare que `ALLOWED`. Une seule des six tables citées est recopiée ; trois copies non citées ne sont comparées par rien. Les règles Archgate d'ARCH-0058 et d'ARCH-0068 lisent ces tables : chaque lecteur bascule dans la tâche qui retire son littéral. |
+| AUD-ARC-09 | `decouper-l-executeur-d-indexation-et-le-codec-de-snapshot` | Fait (PR #784 codec, PR #786 exécuteur ; archivé, constat partiel) ; reste : `SnapshotScalabilityBenchmark` non rejoué | 49 méthodes et 4 constructeurs, non 81 ; 37 et 20 commits confirmés par `git log --oneline --follow`. Codec découpé par responsabilité. Sans delta de spec (comportement constant), deux PR. |
+| AUD-QUA-03 | `trancher-la-langue-du-contrat-de-l-explorateur` | Fait (PR #781, archivé, constat partiel) ; option A, ADR ARCH-0086 ; reste : notes de version de la release qui livrera l'explorateur | Les erreurs portent déjà un `code`. La CLI sérialise aussi ces valeurs, et la nature de document entre dans la table. Aucun renommage dans v1. La liste fermée des codes se relève après le sprint 3. |
+| AUD-ARC-07 | `aligner-la-prose-d-architecture-sur-le-code` | Fait (PR #792, archivé) ; la route de l'explorateur de `minos-app` est corrigée en prose, non gardée | Les trois « 14 » sont vrais au HEAD ; seul le scénario « 13 modules » de `frontieres-de-modules` est faux. `minos-domain` omet la racine `diagnostics`. |
 
 Ordre : `reclasser-…`, `decouper-…` (lot `minos-engine` après `reduire-les-lectures-de-la-voie-wsl`), `trancher-…`, `donner-…` (après le sprint 7), `aligner-…` (en dernier).
+
+Fusionnés dans l'ordre `reclasser-…` (PR #783), `decouper-…` (PR #784, puis #786), `donner-…` (PR #791), `aligner-…` (PR #792), `trancher-…` (PR #781), puis archivés. La PR #790 relève le JDK de distribution Ubuntu épinglé par `scripts/ci/install-linux-sandbox-toolchain.sh`, remplacé par Ubuntu le 2026-11-18.
 
 ## Recouvrements entre changements
 

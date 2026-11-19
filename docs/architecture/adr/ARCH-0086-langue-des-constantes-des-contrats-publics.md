@@ -73,7 +73,7 @@ Exclus : le renommage d'une valeur dans v1 (option C) ; la publication d'un cont
 
 ## Mise en œuvre
 
-(Complété à l'implémentation.)
+Changement OpenSpec `trancher-la-langue-du-contrat-de-l-explorateur`, archivé le 2026-11-19 : `ExplorerContractValuesTest` (`minos-explorer`), `SemanticExplorationApiContractTest` (`minos-api`) et `SemanticProjectionCommandLineTest` (`minos-cli`) tiennent les valeurs sérialisées champ par champ et la liste close des huit valeurs françaises ; `ExplorerErrorCode` porte les douze codes d'erreur de la version 1 et `ExplorerApi.Answer.error` ne reçoit que ce type ; `app.js` traduit le code par la table `ERROR_LABELS` et n'affiche plus `error.message`.
 
 ## References
 

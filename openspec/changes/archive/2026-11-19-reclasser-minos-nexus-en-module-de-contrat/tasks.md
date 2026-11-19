@@ -21,9 +21,9 @@ Constat **AUD-ARC-08**. Aucune classe de production ne bouge ; tout `-pl` s'acco
 ## 3. Clôture
 
 - [x] 3.1 [AUD-ARC-08] Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 3.2 [AUD-ARC-08] Mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (trois exigences, vue des familles) ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Vue mise à jour ; les trois lignes de traçabilité entrent au dossier à l'archivage (check-capability-dossiers.py refuse une exigence absente des specs courantes).
+- [x] 3.2 [AUD-ARC-08] Mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (trois exigences, vue des familles) ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Vue mise à jour ; les trois lignes de traçabilité entrent au dossier à l'archivage (check-capability-dossiers.py refuse une exigence absente des specs courantes). Lignes de traçabilité des trois exigences ajoutées dans le dossier à l'archivage (PR d'archivage du sprint 8).
 - [x] 3.3 [AUD-ARC-08] `openspec validate --all --strict` et `python .claude/scripts/run_gates.py`. openspec validate --all --strict (50), run_gates.py --fast (29/29), test_check_module_boundaries.py (260 cas).
-- [ ] 3.4 [AUD-ARC-08] Lister les documents à mettre à jour avant archivage (`docs/project/audits/2026-11-15/SUIVI.md`, STATUS et ROADMAP si l'état d'architecture y est cité) ; vérifier que chacun est fait ou nommé comme reste. Restes nommés : SUIVI.md de l'audit ; STATUS et ROADMAP ne citent pas la famille de NEXUS.
+- [x] 3.4 [AUD-ARC-08] Lister les documents à mettre à jour avant archivage (`docs/project/audits/2026-11-15/SUIVI.md`, STATUS et ROADMAP si l'état d'architecture y est cité) ; vérifier que chacun est fait ou nommé comme reste. Restes nommés : SUIVI.md de l'audit ; STATUS et ROADMAP ne citent pas la famille de NEXUS. Fait : SUIVI.md de l'audit mis à jour à l'archivage ; STATUS et ROADMAP ne citent pas la famille de NEXUS.
 
 ## Workflow follow-up
 

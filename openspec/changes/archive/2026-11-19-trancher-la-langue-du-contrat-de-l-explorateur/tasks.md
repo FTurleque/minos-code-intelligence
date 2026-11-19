@@ -26,7 +26,7 @@ Constat **AUD-QUA-03**. Prérequis : `executer-le-front-de-l-explorateur-en-test
 ## 4. Clôture
 
 - [x] 4.1 [AUD-QUA-03] Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes. Fait : matrice nommée ; seul le scénario « code de résolution non repris » n'a pas de mutation exécutée.
-- [ ] 4.2 [AUD-QUA-03] Mettre à jour `docs/architecture/diagrams/capacites/exploration-semantique.md` (trois exigences, diagramme de séquence des erreurs) ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Reste : les trois exigences n'entrent au dossier qu'à l'archivage (check-capability-dossiers.py refuse une exigence absente de openspec/specs/).
+- [x] 4.2 [AUD-QUA-03] Mettre à jour `docs/architecture/diagrams/capacites/exploration-semantique.md` (trois exigences, diagramme de séquence des erreurs) ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Reste : les trois exigences n'entrent au dossier qu'à l'archivage (check-capability-dossiers.py refuse une exigence absente de openspec/specs/). Lignes de traçabilité ajoutées au dossier exploration-semantique à l'archivage.
 - [x] 4.3 [AUD-QUA-03] `openspec validate --all --strict`, `python .claude/scripts/run_gates.py`, `archgate check`. openspec validate --all --strict (50), run_gates --fast (29/29), archgate check (15/15).
 - [x] 4.4 [AUD-QUA-03] Lister les documents à mettre à jour avant archivage (`docs/project/audits/2026-11-15/SUIVI.md`, notes de version de la release qui livrera l'explorateur) ; vérifier que chacun est fait ou nommé comme reste. Restes nommés : SUIVI.md de l'audit (statut du constat), notes de version de la release qui livrera l'explorateur, dossier de capacité à l'archivage.
 
