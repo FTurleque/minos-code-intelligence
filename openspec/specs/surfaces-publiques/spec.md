@@ -348,6 +348,224 @@ Sur une application ouverte dont le répertoire de données ne peut plus être �
 - **WHEN** tous les outils ont été appelés
 - **THEN** l'état relevé après est identique
 
+### Requirement: L'erreur opaque d'un outil MCP porte la référence de sa trace
+Quand un outil MCP échoue pour une cause interne, la réponse SHALL commencer par l'erreur générique d'exécution d'outil et SHALL se terminer par la référence de corrélation écrite dans la ligne de diagnostic. La réponse SHALL NOT contenir d'autre information sur l'échec.
+
+#### Scenario: Référence commune à la réponse et au journal
+- **GIVEN** un outil dont le service lève une exception imprévue
+- **WHEN** l'outil est appelé (`./mvnw -B -ntp -pl minos-mcp -am test "-Dtest=MinosMcpInternalFailureTraceTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** le texte de la réponse commence par `error: MINOS tool execution failed` et se termine par `(ref <référence>)`
+- **AND** la même référence figure dans la ligne de diagnostic de stderr
+
+#### Scenario: Aucune fuite par la référence
+- **GIVEN** une exception dont le message contient un chemin et un jeton
+- **WHEN** l'outil échoue
+- **THEN** la réponse ne contient que l'erreur générique et une référence faite de chiffres hexadécimaux
+
+### Requirement: Un échec d'exécution de la CLI est tracé quand le journal privé est actif
+Journal de diagnostic privé actif, un échec d'exécution rendu par le cadre commun des commandes de la CLI ou par son lanceur, et qui n'est pas une erreur publique connue (référence de projet, registre illisible, refus de mémoire), SHALL journaliser sa pile et ajouter sur stderr une ligne qui donne la référence de l'entrée. Journal inactif, la sortie SHALL rester identique à l'octet.
+
+#### Scenario: Journal actif
+- **GIVEN** `MINOS_DIAGNOSTIC_LOG=enabled` et une commande du cadre commun dont l'application lève une exception imprévue
+- **WHEN** la commande s'exécute (`./mvnw -B -ntp -pl minos-cli -am test "-Dtest=CliInternalFailureTraceTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** le code de sortie est `1`, stderr garde sa ligne `error:` et porte une ligne de référence, et le journal contient l'entrée de cette référence
+
+#### Scenario: Journal inactif
+- **GIVEN** aucun réglage de diagnostic
+- **WHEN** la même commande échoue
+- **THEN** stderr est identique à la sortie d'avant ce changement
+- **AND** les goldens de caractérisation sont inchangés
+
+#### Scenario: Erreur publique connue non tracée
+- **GIVEN** le journal actif
+- **WHEN** une commande échoue parce que le projet désigné est inconnu (code `1`)
+- **THEN** aucune entrée n'est ajoutée au journal et stderr ne porte pas de ligne de référence
+
+#### Scenario: Erreur d'usage non tracée
+- **GIVEN** le journal actif
+- **WHEN** une commande est refusée pour une option invalide (code `2`)
+- **THEN** aucune entrée n'est ajoutée au journal
+
+### Requirement: Un échec interne de l'API Java est tracé sans changer l'exception publique
+Quand un appel de l'API Java échoue par un échec d'exécution ou d'E/S, le système SHALL écrire la ligne de diagnostic par le journal système et, journal privé actif, y ajouter la pile. La `MinosApiException` rendue SHALL rester sans cause, de même code et de même message qu'avant.
+
+#### Scenario: Échec d'exécution tracé
+- **GIVEN** une façade dont le service lève une exception imprévue et un enregistreur capturé
+- **WHEN** l'appel échoue (`./mvnw -B -ntp -pl minos-api -am test "-Dtest=MinosApiInternalFailureTraceTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** l'appelant reçoit une `MinosApiException` d'échec d'exécution sans cause
+- **AND** l'enregistreur a reçu une ligne avec la classe, la classe de la cause racine, l'origine et la référence, sans message
+
+#### Scenario: Requête invalide non tracée
+- **GIVEN** un appel refusé comme requête invalide
+- **WHEN** il échoue
+- **THEN** aucune ligne de diagnostic d'échec interne n'est écrite
+
+### Requirement: Le MCP ne rend comme erreur d'argument que l'erreur d'usage explicite
+Un outil MCP SHALL rendre un message d'erreur d'argument seulement quand l'échec est une erreur d'usage explicite, levée par la validation d'une entrée de l'appelant. Toute autre erreur d'argument levée pendant l'exécution, sous-classes du JDK comprises, SHALL être rendue par l'erreur générique d'exécution d'outil et journalisée comme échec interne.
+
+#### Scenario: Entrée invalide de l'appelant
+- **GIVEN** un outil appelé avec `limit` négatif
+- **WHEN** la validation le refuse (`./mvnw -B -ntp -pl minos-mcp -am test "-Dtest=MinosMcpUsageErrorTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** la réponse est une erreur qui nomme l'argument à corriger
+- **AND** aucune ligne de diagnostic d'échec interne n'est écrite
+
+#### Scenario: Précondition violée dans un service
+- **GIVEN** un outil dont le service lève une `IllegalArgumentException` qui n'est pas une erreur d'usage explicite, de message `limit must be positive`
+- **WHEN** l'outil est appelé avec des arguments valides
+- **THEN** la réponse est l'erreur générique d'exécution d'outil et ne contient pas ce message
+- **AND** la ligne de diagnostic nomme l'outil et la classe de l'exception
+
+#### Scenario: Sous-classe du JDK
+- **GIVEN** un service qui lève `NumberFormatException` ou `InvalidPathException` sur une donnée lue du stockage
+- **WHEN** l'outil est appelé
+- **THEN** la réponse est l'erreur générique d'exécution d'outil et l'échec est journalisé
+
+#### Scenario: Erreur d'usage au message sensible
+- **GIVEN** une erreur d'usage explicite dont le message contient un chemin absolu
+- **WHEN** l'outil est appelé
+- **THEN** la réponse est l'erreur générique d'exécution d'outil, sans ce chemin
+
+#### Scenario: Genre de symbole inconnu
+- **GIVEN** un outil de recherche de symboles appelé avec un genre qui n'existe pas
+- **WHEN** la validation le refuse
+- **THEN** la réponse est une erreur d'usage qui nomme l'argument `kind`
+- **AND** elle ne recopie pas la valeur envoyée
+
+### Requirement: L'API Java ne classe en requête invalide que l'erreur d'usage explicite
+Un appel de l'API Java SHALL rendre une `MinosApiException` de requête invalide seulement pour une erreur d'usage explicite, document inconnu compris, ou une référence de projet non résolue. Toute autre erreur d'argument levée pendant l'appel SHALL être rendue comme échec d'exécution, sans cause, avec un message redacté, et journalisée comme échec interne.
+
+#### Scenario: Paramètre invalide de l'appelant
+- **GIVEN** un appel dont un paramètre requis est `null`
+- **WHEN** la façade le valide (`./mvnw -B -ntp -pl minos-api -am test "-Dtest=MinosApiUsageErrorTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** l'appelant reçoit une `MinosApiException` de requête invalide qui nomme le paramètre
+
+#### Scenario: Erreur d'argument interne
+- **GIVEN** un service qui lève une `IllegalArgumentException` non explicite pendant un appel aux paramètres valides
+- **WHEN** l'appel échoue
+- **THEN** l'appelant reçoit une `MinosApiException` d'échec d'exécution, sans cause
+- **AND** une ligne de diagnostic nomme la classe de l'exception
+
+#### Scenario: Référence de projet inconnue
+- **GIVEN** un nom de projet absent du registre
+- **WHEN** un appel le désigne
+- **THEN** l'appelant reçoit la requête invalide et le message public déjà partagé avec la CLI et le MCP
+
+#### Scenario: Document inconnu de l'exploration sémantique
+- **GIVEN** un index sémantique qui ne contient pas la clé demandée
+- **WHEN** le détail ou les voisins de cette clé sont demandés par l'API d'exploration
+- **THEN** l'appelant reçoit une `MinosApiException` de requête invalide, comme avant
+- **AND** aucune ligne de diagnostic d'échec interne n'est écrite
+
+### Requirement: Une indisponibilité non classée de l'API Java est tracée
+Quand un appel de l'API Java échoue par une `IllegalStateException` qui n'est ni classée par la façade ni un refus attendu du service (index remplacé pendant la lecture, préparation de projection refusée), le système SHALL rendre l'indisponibilité comme avant et SHALL écrire une ligne de diagnostic d'échec interne qui nomme la classe et son origine, sans message.
+
+#### Scenario: État illégal levé par un service
+- **GIVEN** un service qui lève une `IllegalStateException` pendant un appel et un enregistreur capturé
+- **WHEN** l'appel échoue
+- **THEN** l'appelant reçoit une `MinosApiException` d'indisponibilité sans cause
+- **AND** l'enregistreur a reçu une ligne avec la classe de l'exception et son origine, sans son message
+
+#### Scenario: Refus attendu du service
+- **GIVEN** un index sémantique remplacé pendant la lecture d'une page, ou une préparation de projection refusée
+- **WHEN** l'appel échoue
+- **THEN** l'appelant reçoit l'indisponibilité avec le message public du refus
+- **AND** aucune ligne de diagnostic d'échec interne n'est écrite
+
+#### Scenario: Indisponibilité classée par la façade
+- **GIVEN** une opération que l'implémentation ne fournit pas et qui rend elle-même l'indisponibilité
+- **WHEN** elle est appelée
+- **THEN** aucune ligne de diagnostic d'échec interne n'est écrite
+
+### Requirement: Les erreurs d'usage de chaque surface sont tenues par une table testée
+Pour le MCP et l'API Java, un test SHALL énumérer les entrées invalides documentées de la surface et vérifier que chacune rend une erreur d'usage au message actionnable, et non l'erreur opaque. Une validation atteignable depuis la surface qui lèverait une erreur d'argument non explicite SHALL faire échouer ce test.
+
+#### Scenario: Table du MCP
+- **GIVEN** la table des entrées invalides des outils publiés (borne hors plage, genre de symbole inconnu, identifiant mal formé, argument inconnu) et celle de l'API Java (paramètre nul, borne hors plage, curseur invalide, document inconnu)
+- **WHEN** chaque entrée est jouée (`./mvnw -B -ntp -pl minos-mcp -am test "-Dtest=MinosMcpUsageErrorTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** aucune réponse ne vaut l'erreur générique d'exécution d'outil
+
+#### Scenario: Validation oubliée
+- **GIVEN** une validation de requête restée en `IllegalArgumentException` simple sur un chemin de la table
+- **WHEN** le test est joué
+- **THEN** il échoue en nommant l'entrée
+
+### Requirement: Les codes de sortie de la CLI ont une seule définition
+Les codes de sortie de la CLI (succès 0, erreur d'exécution 1, erreur d'usage 2, résultat partiel 3) SHALL être définis par la seule classe `CliExitCodes`. Aucune classe de commande SHALL en déclarer un alias, et aucune source de production ou de test SHALL lire un code de sortie par `FindSymbolCommand`.
+
+#### Scenario: Aucun alias dans une commande
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `FindSymbolCommand\.(SUCCESS|EXECUTION_ERROR|USAGE_ERROR|PARTIAL_RESULT)` dans les sources Java de tous les modules et dans `docs/user/`, `docs/developer/` et `docs/architecture/` hors archives
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Valeurs inchangées
+- **GIVEN** le dépôt après le changement
+- **WHEN** un test de `minos-cli` lit les quatre constantes de `CliExitCodes`
+- **THEN** elles valent 0, 1, 2 et 3
+
+#### Scenario: Sorties caractérisées inchangées
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify` puis `git diff --exit-code minos-app/src/test/resources/characterization/` sont exécutés
+- **THEN** la commande `git diff` se termine avec le code 0
+
+### Requirement: Les codes de sortie de la surface d'exploration suivent ceux de la CLI
+Chaque constante de code de sortie déclarée par `ExplorerSession` SHALL porter le nom et la valeur d'une constante de `CliExitCodes`. Un test de l'assemblage SHALL échouer quand une valeur diverge ou quand `ExplorerSession` déclare un code que `CliExitCodes` ne connaît pas.
+
+#### Scenario: Parité au HEAD du changement
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am test "-Dtest=ExitCodeContractParityTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit pour `SUCCESS`, `EXECUTION_ERROR` et `USAGE_ERROR`
+
+#### Scenario: Valeur divergente refusée
+- **GIVEN** une table de constantes de test où `USAGE_ERROR` vaut 2 d'un côté et 64 de l'autre
+- **WHEN** la comparaison du test de parité est appliquée à cette table
+- **THEN** elle échoue en nommant `USAGE_ERROR` et les deux valeurs
+
+#### Scenario: Code inconnu de la CLI refusé
+- **GIVEN** une table de constantes de test où la surface déclare un code absent de la CLI
+- **WHEN** la comparaison du test de parité est appliquée à cette table
+- **THEN** elle échoue en nommant la constante sans équivalent
+
+### Requirement: La CLI ne recopie pas à l'identique un résumé applicatif
+`minos-cli` SHALL utiliser directement un résumé de `minos-application` quand la vue qu'elle en tirerait aurait les mêmes composantes, les mêmes types et les mêmes contrôles. La matérialisation distante et la preuve d'artefact SHALL être rendues depuis `RemoteMaterializationSummary` et `ArtifactEvidenceSummary`, sans enregistrement intermédiaire.
+
+#### Scenario: Miroirs supprimés
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `record RemoteMaterializationView` et `record ArtifactEvidence(` dans `minos-cli/src/main`
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Sortie de la commande distante inchangée
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=RemoteIndexCommandTest,LocalRemoteIndexOperationsIntegrationTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** les sorties texte et JSON attendues par ces tests sont identiques à celles du HEAD
+
+#### Scenario: Preuve d'artefact invalide refusée
+- **GIVEN** une preuve d'artefact dont l'empreinte SHA-256 est vide
+- **WHEN** le résumé applicatif est construit
+- **THEN** la construction échoue en nommant le champ, comme le faisait la vue supprimée
+
+### Requirement: Une vue conservée de la CLI couvre toutes les composantes de son résumé
+Pour chaque vue de la CLI construite depuis un résumé de `minos-application`, toute composante du résumé SHALL avoir une composante dans la vue, par son nom ou par une correspondance déclarée, ou figurer dans une table d'exclusions portant une raison. Un test SHALL échouer quand une composante ajoutée au résumé n'a ni l'une ni l'autre.
+
+#### Scenario: Parité au HEAD du changement
+- **GIVEN** les couples plan, exécution, reprise, runtime de provider et indexation distante
+- **WHEN** `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=CliViewParityTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit pour chaque couple
+
+#### Scenario: Composante ajoutée au résumé seulement
+- **GIVEN** un couple d'enregistrements de test où le résumé porte une composante absente de la vue et des tables
+- **WHEN** la comparaison du test de parité est appliquée à ce couple
+- **THEN** elle échoue en nommant le résumé et la composante
+
+#### Scenario: Exclusion sans raison
+- **GIVEN** une table d'exclusions de test dont une entrée n'a pas de raison écrite
+- **WHEN** la comparaison est appliquée
+- **THEN** elle échoue en nommant l'entrée
+
+#### Scenario: Exclusion périmée
+- **GIVEN** une table d'exclusions de test qui nomme une composante que le résumé ne déclare plus
+- **WHEN** la comparaison est appliquée
+- **THEN** elle échoue en demandant de retirer l'entrée
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [surfaces-publiques](../../../docs/architecture/diagrams/capacites/surfaces-publiques.md)

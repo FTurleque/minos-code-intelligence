@@ -578,6 +578,201 @@ La page SHALL afficher, pour une erreur de l'API, un libellé français choisi d
 - **WHEN** les tests du front sont exécutés
 - **THEN** ils échouent en nommant le code sans libellé
 
+### Requirement: Un échec interne de l'explorateur laisse une ligne de diagnostic avec sa cause racine
+Pour tout échec interne d'une requête, la surface SHALL écrire sur stderr une ligne qui porte le motif de la route, la classe de l'exception, la classe de la cause racine, son origine dans le code MINOS et une référence, et SHALL rendre `500 INTERNAL_ERROR` avec cette référence. Ni la ligne ni la réponse ne SHALL contenir le message de l'exception, l'adresse demandée, une valeur de paramètre ou le jeton.
+
+#### Scenario: Exception enveloppée dans un service
+- **GIVEN** la surface démarrée et un service qui lève une exception enveloppant un `NullPointerException`
+- **WHEN** une requête valide atteint ce service (`./mvnw -B -ntp -pl minos-explorer -am test "-Dtest=ExplorerDiagnosticsTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** la réponse est `500` de code `INTERNAL_ERROR` et son message se termine par une référence
+- **AND** stderr porte une ligne avec le motif de la route, les deux classes, l'origine et la même référence
+
+#### Scenario: Aucune donnée de requête dans la ligne
+- **GIVEN** une requête dont le chemin porte une clé de document et dont l'exception a un message contenant un chemin absolu
+- **WHEN** elle échoue en interne
+- **THEN** la ligne ne contient ni la clé, ni le chemin, ni le jeton de session
+
+#### Scenario: Échec hors d'une route d'API
+- **GIVEN** un échange dont l'écriture de la réponse échoue
+- **WHEN** l'échec est attrapé par la surface
+- **THEN** stderr porte la même forme de ligne, avec la classe de la cause racine
+
+#### Scenario: Journal privé inactif
+- **GIVEN** aucun réglage de diagnostic et l'arborescence de `MINOS_HOME` relevée
+- **WHEN** une requête échoue en interne
+- **THEN** l'arborescence de `MINOS_HOME` est identique au relevé
+
+#### Scenario: Journal privé actif
+- **GIVEN** `MINOS_DIAGNOSTIC_LOG=enabled`, un `MINOS_HOME` inscriptible et son arborescence relevée
+- **WHEN** des consultations réussissent, puis une requête échoue en interne
+- **THEN** l'arborescence est identique au relevé après les consultations réussies
+- **AND** après l'échec, seul le dossier du journal de diagnostic a changé, et l'index est identique
+
+### Requirement: L'explorateur ne rend 400 que pour une erreur d'usage explicite
+La surface SHALL rendre `400 INVALID_REQUEST` seulement pour une erreur d'usage explicite levée par la validation de l'adresse, des paramètres ou du corps. Toute autre erreur d'argument levée pendant le traitement SHALL être un échec interne : `500 INTERNAL_ERROR` et ligne de diagnostic.
+
+#### Scenario: Paramètre invalide
+- **GIVEN** la surface démarrée
+- **WHEN** la liste des documents est demandée avec `limit=abc` ou un paramètre inconnu
+- **THEN** la réponse est `400` de code `INVALID_REQUEST` avec un message qui nomme ce qui est à corriger
+- **AND** aucune ligne d'échec interne n'est écrite
+
+#### Scenario: Erreur d'argument levée par un service
+- **GIVEN** un service qui lève une `IllegalArgumentException` non explicite, ou une `InvalidPathException`, sur une requête aux paramètres valides
+- **WHEN** la requête est traitée
+- **THEN** la réponse est `500` de code `INTERNAL_ERROR` et ne contient pas le message de l'exception
+- **AND** une ligne d'échec interne est écrite
+
+#### Scenario: Les erreurs d'usage du contrat restent des 400
+- **GIVEN** la table des entrées invalides des routes du contrat (échappement cassé dans l'adresse, curseur mal formé, genre inconnu, borne hors plage, corps non JSON ou trop gros, membre inconnu, clé trop longue)
+- **WHEN** chaque entrée est jouée (`./mvnw -B -ntp -pl minos-explorer -am test "-Dtest=ExplorerRoutesTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** chaque réponse est `400` ou le code d'usage déjà attendu, jamais `500`
+
+### Requirement: Les refus de l'explorateur sont journalisés avec limitation
+La surface SHALL écrire aussitôt la première requête refusée de chaque raison (hôte, origine, jeton), puis SHALL compter les refus suivants et les résumer par au plus une ligne par raison et par fenêtre de temps, avec leur nombre. Une ligne de refus SHALL NOT contenir l'adresse demandée, un en-tête ni le jeton.
+
+#### Scenario: Rafale de refus
+- **GIVEN** la surface démarrée avec une horloge injectée
+- **WHEN** mille requêtes sans jeton arrivent dans la même fenêtre (`./mvnw -B -ntp -pl minos-explorer -am test "-Dtest=ExplorerDiagnosticsTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** stderr porte une ligne de refus pour la raison « jeton », et aucune autre avant la fin de la fenêtre
+- **AND** chaque requête a reçu `401`
+
+#### Scenario: Résumé de la fenêtre
+- **GIVEN** la rafale précédente
+- **WHEN** la fenêtre se termine et qu'un nouveau refus arrive
+- **THEN** une ligne donne la raison et le nombre de refus comptés depuis la ligne précédente
+
+#### Scenario: Raisons distinctes
+- **GIVEN** un refus d'origine après une rafale de refus de jeton
+- **WHEN** il arrive dans la même fenêtre
+- **THEN** il est écrit aussitôt, sous sa propre raison
+
+### Requirement: Une requête de l'explorateur abandonnée au délai libère son créneau
+Quand une requête d'API dépasse le délai de la surface, la surface SHALL rendre `503 TIMEOUT` et SHALL libérer aussitôt son créneau de concurrence, même si la lecture sous-jacente ignore l'interruption. Les requêtes suivantes SHALL être servies sans attendre la fin de cette lecture.
+
+#### Scenario: Lectures qui ignorent l'interruption
+- **GIVEN** la surface démarrée avec un délai court et un traitement qui ignore l'interruption et reste bloqué
+- **WHEN** autant de requêtes que de créneaux sont abandonnées au délai, puis une requête normale arrive (`./mvnw -B -ntp -pl minos-explorer -am test "-Dtest=ExplorerServerTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** les requêtes bloquées reçoivent `503` de code `TIMEOUT`
+- **AND** la requête normale reçoit `200`
+
+### Requirement: Les lectures abandonnées encore en cours sont bornées et dites
+La surface SHALL compter les lectures abandonnées qui n'ont pas rendu la main et SHALL en borner le nombre. À la borne, toute nouvelle requête d'API SHALL recevoir `503 BUSY` sans qu'un service soit appelé, jusqu'à ce qu'une lecture abandonnée se termine. Le passage par la borne et le nombre de lectures abandonnées SHALL être écrits sur stderr, avec la même limitation que les refus.
+
+#### Scenario: Borne atteinte
+- **GIVEN** des lectures bloquées abandonnées jusqu'à la borne
+- **WHEN** une nouvelle requête d'API arrive
+- **THEN** elle reçoit `503` de code `BUSY` et aucun service n'est appelé
+- **AND** stderr porte une ligne qui donne le nombre de lectures abandonnées en cours
+
+#### Scenario: Retour à la normale
+- **GIVEN** la borne atteinte
+- **WHEN** une lecture abandonnée se termine, puis une requête arrive
+- **THEN** la requête reçoit `200`
+
+#### Scenario: Arrêt de la surface
+- **GIVEN** des lectures abandonnées en cours
+- **WHEN** la surface est arrêtée
+- **THEN** l'arrêt se termine sans attendre ces lectures
+
+### Requirement: Un segment de chemin point ou point-point est refusé
+La surface SHALL refuser par `400 INVALID_REQUEST`, avant tout appel de service, une adresse d'API dont un segment décodé vaut `.` ou `..`, y compris sous sa forme encodée en pourcentage. Le message SHALL NOT recopier l'adresse.
+
+#### Scenario: Segment point-point
+- **GIVEN** la surface démarrée et un jeton valide
+- **WHEN** `GET /api/v1/projects/../documents` ou `GET /api/v1/projects/%2E%2E/documents` est demandé (`./mvnw -B -ntp -pl minos-explorer -am test "-Dtest=ExplorerServerTest" "-Dsurefire.failIfNoSpecifiedTests=false"`)
+- **THEN** la réponse est `400` de code `INVALID_REQUEST`
+- **AND** aucun service n'est appelé
+
+#### Scenario: Point dans un nom
+- **GIVEN** un projet nommé `mon.projet` et une clé de document contenant des points et un `/` encodé
+- **WHEN** ses routes sont demandées
+- **THEN** elles sont servies comme avant
+
+### Requirement: Le point sous le pointeur est cherché parmi les points voisins seulement
+La page de l'explorateur SHALL trouver le point de la carte sous le pointeur en n'examinant que les points des cellules voisines du pointeur, et non tous les points affichés. Le point trouvé SHALL être celui que rendrait l'examen de tous les points affichés, avec le même rayon de capture. Sans point dans ce rayon, la page SHALL ne désigner aucun point.
+
+#### Scenario: Même point que le parcours complet
+- **GIVEN** une carte de 100 000 points répartis sur toute sa surface, dans un canevas de 800 × 600, à plusieurs niveaux de zoom et de décalage
+- **WHEN** le point sous 1 000 positions de pointeur est cherché par la page et par un parcours de référence de tous les points
+- **THEN** les deux désignent le même point pour chaque position, à chaque zoom
+- **AND** au zoom 1, le nombre de points examinés par la page pour une position est inférieur au centième du nombre de points affichés
+
+#### Scenario: Aucun point dans le rayon
+- **GIVEN** une carte dont aucun point n'est à moins du rayon de capture du pointeur
+- **WHEN** l'utilisateur clique à cette position
+- **THEN** aucun point n'est désigné
+- **AND** aucune requête de détail n'est émise
+
+### Requirement: La liste des points d'une nature n'est calculée qu'à son changement
+La page de l'explorateur SHALL calculer la liste des points affichés pour le filtre de nature courant quand ce filtre ou les points de la carte changent, et SHALL la réutiliser pour le survol, le clic et le dessin tant qu'aucun des deux ne change.
+
+#### Scenario: Survols successifs sous un filtre
+- **GIVEN** une carte chargée et le filtre de nature `CHUNK` choisi
+- **WHEN** deux survols se suivent sans changement de filtre ni de points
+- **THEN** la même liste de points affichés sert aux deux, sans nouveau filtrage
+
+#### Scenario: Changement de filtre
+- **GIVEN** la carte précédente
+- **WHEN** le filtre passe à `SYMBOL` puis un survol a lieu
+- **THEN** seuls des points de nature `SYMBOL` peuvent être désignés
+- **AND** aucun point de nature `CHUNK` n'est examiné
+
+### Requirement: Le survol de la carte est traité au plus une fois par image
+La page de l'explorateur SHALL traiter le survol de la carte au plus une fois par image affichée, avec la dernière position connue du pointeur. Un clic SHALL toujours désigner le point à la position du clic, sans attendre l'image suivante.
+
+#### Scenario: Rafale de mouvements
+- **GIVEN** une carte chargée et vingt mouvements de pointeur reçus avant l'image suivante
+- **WHEN** l'image suivante est produite
+- **THEN** une seule recherche de point a eu lieu, à la position du dernier mouvement
+
+#### Scenario: Clic entre deux images
+- **GIVEN** un mouvement de pointeur en attente de traitement
+- **WHEN** l'utilisateur clique sur un point avant l'image suivante
+- **THEN** le détail du point cliqué est demandé
+
+### Requirement: Le mode équipe est interprété par une seule règle au lancement de l'explorateur
+`minos explorer serve` SHALL décider du mode équipe par la même règle que l'ouverture de l'application : absent ou `disabled` vaut désactivé, `enabled` vaut activé, sans égard à la casse. Toute autre valeur SHALL être refusée par l'erreur d'usage « unsupported hosted mode », code de sortie 2, avant l'ouverture de l'application et avant toute écoute.
+
+#### Scenario: Mode équipe activé
+- **GIVEN** un `MINOS_HOME` dont les réglages fixent `MINOS_HOSTED_MODE=Enabled`
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am test "-Dtest=ExplorerLaunchRouteProviderTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** la route refuse avec le message du mode équipe et le code 2, sans ouvrir l'application
+
+#### Scenario: Mode équipe désactivé ou absent
+- **GIVEN** un `MINOS_HOME` natif sans réglage de mode équipe, puis avec `disabled`
+- **WHEN** la route est exécutée avec un ouvreur et une surface de test
+- **THEN** l'application est ouverte et la surface servie dans les deux cas
+
+#### Scenario: Valeur non reconnue
+- **GIVEN** un `MINOS_HOME` dont les réglages fixent le mode équipe à `maybe`
+- **WHEN** la route est exécutée
+- **THEN** elle écrit une erreur qui contient `unsupported hosted mode` et rend le code 2
+- **AND** l'application n'est pas ouverte et aucun port n'est écouté
+
+#### Scenario: Même règle que l'application
+- **GIVEN** la table de valeurs absente, vide, `disabled`, `DISABLED`, `enabled`, `Enabled`, `maybe`
+- **WHEN** un test de `minos-application` interroge la fonction d'interprétation puis ouvre l'application avec chaque valeur
+- **THEN** la fonction et l'ouverture classent chaque valeur de la même façon
+
+### Requirement: Chaque refus de lancement de l'explorateur a un seul texte
+Le message de refus en mode équipe et le message de refus sur un home au backend Docker SHALL être définis chacun une seule fois, dans `minos-explorer`. Un refus décidé avant l'ouverture de l'application et un refus décidé sur l'application ouverte SHALL afficher le même texte.
+
+#### Scenario: Une seule définition
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `is not available when the team mode is enabled` dans les sources de production de tous les modules
+- **THEN** une seule ligne de `minos-explorer` le contient
+
+#### Scenario: Même texte avant et après l'ouverture
+- **GIVEN** un home en mode équipe, puis une application de test ouverte dont le plan de contrôle d'équipe est présent
+- **WHEN** la route, puis `ExplorerSession.serve`, refusent
+- **THEN** les deux écrivent le même message et rendent le code 2
+
+#### Scenario: Home au backend Docker sur un poste
+- **GIVEN** un poste natif dont le home porte un backend d'exécution `docker`
+- **WHEN** la route est exécutée
+- **THEN** elle refuse avec le message du backend Docker et le code 2, sans lire le mode équipe ni ouvrir l'application
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [exploration-semantique](../../../docs/architecture/diagrams/capacites/exploration-semantique.md)

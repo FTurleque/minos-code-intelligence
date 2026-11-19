@@ -2,5 +2,4 @@
 - [review-context sans texte d'ADR](reference_review_context_sans_texte.md) — Archgate 0.18 : lire Decision/Do's des ADR soi-même pour la revue
 - [Clôture finale de l'audit, 2026-11-05](project_cloture_finale_audit_2026_11_05.md) — PR #662-664 fusionnées ; restent findings.json/ETAT (auditeur), R-30 à confirmer
 - [PR empilées sans CI](project_pr_empilees_sans_ci.md) — base ≠ main = aucun check ; re-cibler + fermer/rouvrir ; Gitleaks toutes branches ; 429 curl transitoire
-- [Sprint 2 sécurité Java fusionné, 2026-11-16](project_sprint2_securite_java_2026_11_16.md) — PR #763-765 ; restes : archivage OpenSpec, SEC-0083 Proposed, SUIVI, annonce SECURITY.md
-- [Sprint 8 audit 2026-11-15 fusionné, 2026-11-19](project_sprint8_audit_2026_11_19.md) — PR 781-792 ; restes archivage et SUIVI ; JDK Ubuntu épinglé ; CI externes à relancer
+- [Audit 2026-11-15 clos, 2026-11-19](project_audit_2026_11_15_clos.md) — 8 sprints archivés ; archiver dès la fusion ; groupe 4 d'injecter reporté ; pièges CI

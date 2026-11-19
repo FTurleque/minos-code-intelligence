@@ -339,6 +339,48 @@ Sous la limite mémoire et le pourcentage de tas par défaut du plan de requête
 - **WHEN** le test qui recense les caches pondérés s'exécute
 - **THEN** il échoue en nommant la classe qui construit ce cache
 
+### Requirement: Les fichiers de distribution Docker ne présentent pas le plan d'administration comme lançant des providers
+Les fichiers compose et le Dockerfile de release SHALL décrire le service `minos-admin` par ce qu'il exécute : administration, inventaire et vérification des outils, indexation refusée faute de bac à sable OS. Ils SHALL NOT affirmer que ce service lance un provider pour indexer. Le test de contrat Docker SHALL échouer sur une telle affirmation dans le bloc du service `minos-admin`. Le service de sonde des outils n'est pas concerné.
+
+#### Scenario: Commentaire qui annonce le lancement des providers
+- **GIVEN** une copie d'un fichier compose où le commentaire de `minos-admin` dit que l'indexation lance les providers
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am test "-Dtest=M29DockerAdministrationContractTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté sur cette copie
+- **THEN** le test échoue en nommant le fichier et la ligne
+
+#### Scenario: Fichiers réels
+- **GIVEN** les deux fichiers compose et le Dockerfile de release du dépôt après le changement
+- **WHEN** le même test est exécuté
+- **THEN** il réussit
+- **AND** le commentaire de `minos-admin` dit que l'indexation y est refusée
+
+#### Scenario: Service de sonde des outils
+- **GIVEN** les fichiers compose du dépôt, où le service `minos-provider-probe` est décrit comme sondant `javac`, `mvn`, les indexeurs et les toolchains
+- **WHEN** le même test est exécuté
+- **THEN** ce commentaire n'est pas signalé
+
+#### Scenario: Le runtime confirme ce que disent les fichiers
+- **GIVEN** une installation Docker de qualification
+- **WHEN** `scripts/ci/qualify-docker-upgrade.ps1` lance `index` dans le plan d'administration et lit l'état des providers
+- **THEN** l'indexation est refusée avant tout processus fils et scip-java est déclaré `UNSUPPORTED_BY_BACKEND`
+
+### Requirement: Le journal des services Docker publiés sur la boucle locale est borné
+Les services `minos-explorer` et `minos-pgadmin` du fichier Compose connecté SHALL déclarer le pilote de journal `json-file` avec une taille maximale par fichier et un nombre maximal de fichiers. Le gate des plafonds Compose SHALL échouer si l'un de ces services ne borne pas son journal.
+
+#### Scenario: Services bornés
+- **GIVEN** le fichier `docker/compose-mcp.connected.yaml` du dépôt
+- **WHEN** `python scripts/quality/check-compose-limits.py` est exécuté
+- **THEN** il réussit, et les deux services portent `max-size` et `max-file`
+
+#### Scenario: Borne retirée
+- **GIVEN** un arbre où le service `minos-explorer` n'a plus de clé `logging`, ou a `max-size` sans `max-file`
+- **WHEN** le gate est exécuté sur cet arbre (`python scripts/quality/test_check_compose_limits.py`)
+- **THEN** il échoue en nommant le service et la clé manquante
+
+#### Scenario: Pilote sans borne
+- **GIVEN** un arbre où le service déclare un pilote de journal autre que `json-file` sans option de taille
+- **WHEN** le gate est exécuté
+- **THEN** il échoue
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [distribution-docker](../../../docs/architecture/diagrams/capacites/distribution-docker.md)
