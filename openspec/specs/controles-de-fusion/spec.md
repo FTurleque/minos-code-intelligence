@@ -563,6 +563,133 @@ Le filtre d'environnement des processus de provider, l'exécuteur à propriété
 - **WHEN** l'auto-test est exécuté
 - **THEN** il réussit : les quatre classes portent un plancher de branches au moins égal à leur minimum
 
+### Requirement: Les documents courants nomment les rulesets déclarés et aucun risque ouvert ne vise une branche retirée
+Dans `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md` et les pages de `docs/developer/`, tout nom de ruleset cité sous la forme « Protect … » SHALL être un ruleset de `.github/required-checks.json`. Une ligne du registre des risques dont le statut est ouvert SHALL NOT citer la branche `develop`. Le gate des documents courants SHALL échouer dans les deux cas. Les relevés datés ne sont pas concernés.
+
+#### Scenario: Ancien nom de ruleset dans l'état courant
+- **GIVEN** une copie du dépôt où `STATUS.md` cite le ruleset « Protect main & develop »
+- **WHEN** `python scripts/docs/check-current-docs.py` est exécuté sur cette copie
+- **THEN** le gate échoue en nommant le fichier et le nom de ruleset inconnu
+
+#### Scenario: Risque ouvert sur la branche retirée
+- **GIVEN** une copie du dépôt où une ligne `OPEN` de `docs/architecture/risks/register.md` cite `develop`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant l'identifiant du risque
+
+#### Scenario: Dépôt réel
+- **GIVEN** les documents courants après le changement
+- **WHEN** `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check` sont exécutés
+- **THEN** les deux réussissent
+
+#### Scenario: Relevé daté
+- **GIVEN** une section de sprint de `STATUS.md` qui dit « fusionné dans `develop` » pour une PR antérieure au 2026-11-13
+- **WHEN** le gate est exécuté
+- **THEN** cette mention n'est pas signalée
+
+### Requirement: Un secret n'accompagne pas la compilation du code d'une pull request
+Dans un workflow déclenché par `pull_request`, une étape `run:` dont l'`env:` d'étape référence un secret SHALL NOT exécuter le wrapper Maven ni un script du dépôt, sauf entrée nominative d'une liste fermée du gate, avec sa raison ; une telle étape SHALL NOT lancer de phase du cycle de vie Maven. Un `env:` de job ou de workflow SHALL NOT référencer de secret autre que `DOCKERHUB_USERNAME`. Une entrée de liste périmée SHALL faire échouer le gate.
+
+#### Scenario: Compilation avec le jeton d'analyse
+- **GIVEN** une copie du dépôt où une étape de `pr-ci.yml` déclare `SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}` et exécute `./mvnw … test-compile`
+- **WHEN** `python scripts/quality/check-workflow-pins.py` est exécuté sur cette copie
+- **THEN** le gate échoue en nommant le workflow, le job et l'étape
+
+#### Scenario: Étape hors liste qui reçoit un secret et lance un script du dépôt
+- **GIVEN** une copie du dépôt où une étape hors de la liste fermée reçoit un secret et exécute un script de `scripts/`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant l'étape
+
+#### Scenario: Dépôt réel
+- **GIVEN** les workflows du dépôt, où la compilation du candidat et l'analyse sont deux étapes et où seule l'analyse reçoit le jeton
+- **WHEN** le gate est exécuté
+- **THEN** il réussit et affiche la liste fermée avec ses raisons
+
+#### Scenario: Entrée de liste sans objet
+- **GIVEN** une liste fermée qui nomme une étape qui ne reçoit plus de secret ou n'existe plus
+- **WHEN** le gate est exécuté
+- **THEN** il échoue en nommant l'entrée périmée
+
+#### Scenario: Secret remonté au niveau du job
+- **GIVEN** une copie du dépôt où `SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}` est déclaré dans l'`env:` du job `sonar` ou du workflow `pr-ci.yml`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il échoue en nommant le workflow, le niveau et la variable
+
+#### Scenario: Identifiant Docker Hub au niveau du job
+- **GIVEN** les jobs du dépôt qui déclarent `DOCKERHUB_USERNAME` dans leur `env:` de job
+- **WHEN** le gate est exécuté
+- **THEN** cette déclaration n'est pas signalée par cette règle
+
+#### Scenario: Workflow sans déclencheur pull_request
+- **GIVEN** un workflow lancé seulement à la demande ou par planification, dont une étape reçoit un secret et exécute le wrapper Maven
+- **WHEN** le gate est exécuté
+- **THEN** cette étape n'est pas signalée par cette règle
+
+### Requirement: Le gate de preuve Docker rend un verdict sur toute pull request
+`release-promotion-gate.yml` SHALL s'exécuter sur toute pull request vers `main`, sans filtre de chemins, et SHALL exposer le job `Docker upgrade evidence gate`, exécuté même si un job amont a échoué, a été annulé ou a été sauté. Ce job SHALL réussir seulement si le calcul de portée a réussi et que, selon la portée, la preuve de qualification du candidat est valide ou la qualification a été sautée parce que la pull request n'est pas concernée.
+
+#### Scenario: Pull request hors portée
+- **WHEN** `python scripts/ci/test_docker_gate.py` rejoue le verdict avec un calcul de portée réussi, la portée `false` et une qualification sautée
+- **THEN** le verdict est « réussi » et nomme la raison « non concerné »
+
+#### Scenario: Pull request concernée dont la qualification échoue
+- **WHEN** le verdict reçoit la portée `true` et le résultat `failure` ou `cancelled` de la qualification
+- **THEN** le verdict est « échec » (code 1)
+
+#### Scenario: Saut injustifié
+- **WHEN** le verdict reçoit la portée `true` et une qualification sautée
+- **THEN** le verdict est « échec »
+
+#### Scenario: Calcul de portée en échec
+- **WHEN** le verdict reçoit un calcul de portée qui n'a pas réussi, ou une portée vide
+- **THEN** la pull request est traitée comme concernée et le verdict est « échec » sans preuve valide
+
+#### Scenario: Check exigé toujours joignable
+- **GIVEN** le workflow après le changement
+- **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté
+- **THEN** il se termine avec le code 0 et résout le contexte `Docker upgrade evidence gate` vers un job d'un workflow sans `paths:`
+
+### Requirement: Un job exigé qui attend d'autres jobs s'exécute quel que soit leur résultat
+Un job dont le nom est un check exigé et qui déclare `needs:` SHALL déclarer `if: always()` (sous cette forme ou `${{ always() }}`), afin de rendre un verdict quand un job amont a échoué, a été annulé ou a été sauté. `check-ci-wiring.py` SHALL échouer sur un tel job sans cette condition.
+
+#### Scenario: Job exigé sans la condition
+- **GIVEN** une copie du dépôt où le job `Docker upgrade evidence gate` déclare `needs:` sans `if: always()`
+- **WHEN** `python scripts/quality/check-ci-wiring.py` est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 en nommant le workflow et le job
+
+#### Scenario: Dépôt réel
+- **GIVEN** les workflows du dépôt, où les deux jobs exigés à `needs:` (`IntelliJ plugin (gate)`, `Docker upgrade evidence gate`) déclarent la condition
+- **WHEN** le gate est exécuté
+- **THEN** il se termine avec le code 0
+
+#### Scenario: Job exigé sans dépendance
+- **GIVEN** un job exigé qui ne déclare pas `needs:`
+- **WHEN** le gate est exécuté
+- **THEN** ce job n'est pas signalé par cette règle
+
+### Requirement: Une pull request n'échappe à la qualification Docker que par une liste fermée de chemins
+Le calcul de portée SHALL déclarer une pull request hors portée seulement si chacun de ses fichiers modifiés appartient à une liste fermée de chemins sans effet sur l'image ni sur sa mise à niveau. Un chemin inconnu, une base introuvable, une erreur Git ou un déclenchement manuel SHALL la déclarer concernée. La liste SHALL NOT contenir le workflow du gate, ses scripts, `docker/`, un POM ni les sources principales d'un module.
+
+#### Scenario: Documentation seule
+- **WHEN** `python scripts/ci/test_docker_gate.py` rejoue une pull request qui ne modifie que des fichiers sous `docs/` et `openspec/`
+- **THEN** la portée est `false`
+
+#### Scenario: Un fichier de l'image parmi des documents
+- **WHEN** la pull request modifie `docs/user/cli.md` et `docker/Dockerfile.mcp.release`
+- **THEN** la portée est `true`
+
+#### Scenario: Chemin absent de la liste
+- **WHEN** la pull request modifie un fichier d'un dossier que la liste ne nomme pas
+- **THEN** la portée est `true`
+
+#### Scenario: Base introuvable ou déclenchement manuel
+- **WHEN** la base du diff est vide ou introuvable, ou l'événement est `workflow_dispatch`
+- **THEN** la portée est `true`
+
+#### Scenario: Liste élargie à un chemin de l'image
+- **GIVEN** une copie du script de portée dont la liste fermée contient `docker/` ou `pom.xml`
+- **WHEN** l'auto-test est exécuté sur cette copie
+- **THEN** il échoue en nommant l'entrée interdite
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [controles-de-fusion](../../../docs/architecture/diagrams/capacites/controles-de-fusion.md)

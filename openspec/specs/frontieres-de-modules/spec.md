@@ -1166,6 +1166,264 @@ Dans une ligne « Interfaces » de la vue des blocs, chaque type cité entre acc
 - **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
 - **THEN** il se termine avec le code 0
 
+### Requirement: L'historique d'import est lu et écrit par un port
+`minos-application` SHALL lire et écrire l'historique d'import d'un projet par un port de `minos-engine`, dont l'implémentation fichier vit dans `minos-storage` et est fournie par `minos-bootstrap`. Aucune source de production de `minos-application` SHALL nommer le dossier `cli-index-history` ni les clés du fichier. `MinosApplication` SHALL NOT exposer ce port par une méthode publique.
+
+#### Scenario: Littéral absent de l'application
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `cli-index-history` dans `minos-application/src/main`
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Un seul détenteur du format
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `cli-index-history` dans les sources de production de tous les modules
+- **THEN** une seule classe, dans `minos-storage`, le contient
+
+#### Scenario: Import réussi écrit l'historique sans avertissement
+- **GIVEN** un projet enregistré et un artefact SCIP valide
+- **WHEN** `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=ImportHistoryFailureTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** l'import est rapporté `COMMITTED`, le fichier d'historique du projet existe et aucun avertissement n'est journalisé
+
+#### Scenario: Inspection après import
+- **GIVEN** une application ouverte par la racine de composition de production, après l'import d'un artefact SCIP de provider et de version connus
+- **WHEN** un test de `minos-bootstrap` inspecte le projet
+- **THEN** la vue rend l'instantané actif, le provider, sa version et la date de fin de l'import
+
+#### Scenario: Port non exposé par la façade
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** le garde A11 réussit sans entrée nouvelle dans `MINOS_APPLICATION_ENGINE_ACCESSORS`
+
+### Requirement: Le format de l'historique d'import reste lisible
+L'implémentation fichier SHALL conserver l'emplacement `MINOS_HOME/cli-index-history/<identifiant du projet>.properties` et les clés `snapshotId`, `providerId`, `providerVersion`, `completedAt`. Un fichier écrit par une version antérieure SHALL être relu à l'identique. Un fichier absent SHALL se lire comme « aucun historique ».
+
+#### Scenario: Fichier d'une version antérieure
+- **GIVEN** un fichier d'historique copié tel qu'il est écrit au HEAD, avec `providerVersion` vide
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test "-Dtest=FileIndexImportHistoryStoreTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** les quatre valeurs sont rendues, la version du provider étant absente
+
+#### Scenario: Projet sans historique
+- **GIVEN** un `MINOS_HOME` sans dossier `cli-index-history`
+- **WHEN** l'historique d'un projet est lu
+- **THEN** le résultat est vide et aucun dossier n'est créé
+
+#### Scenario: Écriture atomique et privée
+- **GIVEN** un historique existant pour un projet
+- **WHEN** un nouvel historique est écrit
+- **THEN** le fichier est remplacé de façon atomique, garde des droits privés et aucun fichier temporaire ne subsiste
+
+### Requirement: Un historique d'import illisible est refusé sans fuite
+Un fichier d'historique hors bornes ou privé d'une clé obligatoire SHALL être refusé par une erreur qui nomme la clé manquante et la feuille du fichier, jamais son chemin absolu. Un échec d'écriture de l'historique SHALL NOT annuler un import dont l'instantané est actif.
+
+#### Scenario: Clé obligatoire manquante
+- **GIVEN** un fichier d'historique sans `snapshotId`
+- **WHEN** `./mvnw -B -ntp -pl minos-storage -am test "-Dtest=FileIndexImportHistoryStoreTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** l'erreur nomme `snapshotId` et le nom du fichier, sans chemin absolu
+
+#### Scenario: Refus du port relayé par l'inspection
+- **GIVEN** un port d'historique de test qui lève l'erreur de clé manquante
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test "-Dtest=ProjectInspectionServiceRefusalMessageTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** l'inspection relaie le message du port sans y ajouter de chemin absolu
+
+#### Scenario: Fichier hors bornes
+- **GIVEN** un fichier d'historique plus grand que la borne de lecture
+- **WHEN** l'implémentation fichier le lit
+- **THEN** la lecture est refusée avant d'avoir chargé le contenu en entier
+
+#### Scenario: Dossier d'historique inutilisable
+- **GIVEN** un `MINOS_HOME` où `cli-index-history` est un fichier ordinaire
+- **WHEN** un import SCIP réussit (`ImportHistoryFailureTest`)
+- **THEN** l'import est rapporté réussi avec un avertissement qui cite le projet et l'instantané actif, sans chemin absolu ni nom du dossier
+
+### Requirement: Le fournisseur d'embeddings appris est fourni par la racine de composition
+Aucune source de production de `minos-application` hors de la classe du fournisseur SHALL nommer `OllamaEmbeddingProvider`. L'application SHALL lire et valider les réglages sémantiques, puis obtenir le fournisseur par une fabrique de `MinosApplicationComposer` implémentée par `minos-bootstrap`. Un fournisseur configuré que la racine de composition ne sait pas fournir SHALL faire échouer l'ouverture, sans repli sur « désactivé ».
+
+#### Scenario: Fournisseur Ollama configuré
+- **GIVEN** un `MINOS_HOME` dont les réglages fixent le fournisseur `ollama`, un modèle et des dimensions valides
+- **WHEN** `./mvnw -B -ntp -pl minos-bootstrap -am test "-Dtest=M23SemanticProviderConfigurationTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** l'application ouverte porte un fournisseur de même identifiant, modèle, dimensions, point d'accès et limites qu'avant le changement
+
+#### Scenario: Aucune instanciation dans l'application
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `OllamaEmbeddingProvider` dans `minos-application/src/main` hors de `OllamaEmbeddingProvider.java`
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Fournisseur que la racine ne fournit pas
+- **GIVEN** un composeur de test dont la fabrique ne reconnaît pas le fournisseur demandé
+- **WHEN** l'application est ouverte avec ce fournisseur configuré
+- **THEN** l'ouverture échoue par une erreur d'usage qui nomme le fournisseur, sans chemin absolu
+- **AND** aucun fournisseur désactivé n'est installé à sa place
+
+#### Scenario: Réglage sémantique invalide
+- **GIVEN** des réglages `ollama` sans modèle, ou avec des dimensions non positives
+- **WHEN** l'application est ouverte
+- **THEN** l'ouverture échoue avec le même message qu'avant le changement, avant tout appel à la fabrique
+
+### Requirement: Les fournisseurs du graphe de programme sont fournis par la racine de composition
+`ProgramGraphService` SHALL utiliser la liste de fournisseurs qu'il reçoit et SHALL NOT en instancier. La liste de production et la complétion d'une liste surchargée SHALL être fournies par `MinosApplicationComposer`, implémenté par `minos-bootstrap` : l'analyseur de sources Java est ajouté seulement si le fournisseur de relations est présent, le lecteur de sidecar toujours. Une liste vide SHALL être refusée avant toute complétion.
+
+#### Scenario: Liste de production
+- **GIVEN** une application ouverte par `MinosApplication.open(home)` sans surcharge
+- **WHEN** les identifiants de fournisseurs du graphe de programme sont lus par un test de `minos-bootstrap`
+- **THEN** ils sont identiques, dans le même ordre, à ceux du HEAD
+
+#### Scenario: Liste surchargée par le Builder
+- **GIVEN** un `Builder` qui reçoit seulement le fournisseur fondé sur les relations
+- **WHEN** l'application est construite avec la racine de composition de production
+- **THEN** le graphe porte aussi les contributions de l'analyseur de sources Java et du lecteur de sidecar, comme au HEAD
+
+#### Scenario: Liste surchargée sans le fournisseur de relations
+- **GIVEN** un `Builder` qui reçoit seulement un fournisseur de test d'un autre identifiant
+- **WHEN** l'application est construite avec la racine de composition de production
+- **THEN** les fournisseurs sont celui du test puis le lecteur de sidecar, sans analyseur de sources Java
+
+#### Scenario: Service sans instanciation
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `new JavaSourceProgramGraphProvider`, `new FileProgramGraphProvider`, `new FingerprintConstrainedJavaProgramGraphProvider` et `new RelationshipProgramGraphProvider` dans `minos-application/src/main`
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Liste vide refusée
+- **GIVEN** un composeur de test dont la liste de production est vide
+- **WHEN** l'application est construite sans surcharge du `Builder`
+- **THEN** la construction échoue avec `programGraphProviders must not be empty`
+- **AND** la complétion n'est pas demandée à la racine de composition
+
+### Requirement: Les API d'infrastructure du JDK nommées par l'application le sont par liste fermée
+Le garde de frontières SHALL refuser toute source de production de `minos-application` qui nomme `java.net.HttpURLConnection`, un type de `java.net.http`, de `javax.tools` ou de `com.sun.source`, sauf les fichiers d'une table à cliquet. Un fichier hors table et une entrée qui ne nomme plus aucune de ces API SHALL faire échouer le garde. Commentaires et littéraux SHALL être ignorés.
+
+#### Scenario: Nouveau client HTTP dans l'application
+- **GIVEN** un arbre de test où une classe de production de `minos-application` importe `java.net.http.HttpClient`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant le fichier et l'API
+
+#### Scenario: Table du HEAD acceptée
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0 et annonce le nombre de fichiers de la table
+
+#### Scenario: Entrée périmée
+- **GIVEN** un arbre de test où un fichier de la table ne nomme plus aucune API surveillée
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en demandant de retirer l'entrée
+
+#### Scenario: Mention en commentaire
+- **GIVEN** un arbre de test où une classe hors table cite `javax.tools.ToolProvider` dans une Javadoc seulement
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde réussit
+
+### Requirement: Une classe d'adaptateur embarquée n'est nommée que par sa famille
+Le garde de frontières SHALL tenir la liste fermée des classes d'adaptateur que `minos-application` embarque, chacune avec sa justification. Aucune source de production de `minos-application` hors de cette liste SHALL nommer une de ces classes, par import, nom qualifié ou nom simple du même package. La liste SHALL seulement rétrécir.
+
+#### Scenario: Le service nomme de nouveau un adaptateur
+- **GIVEN** un arbre de test où `ProgramGraphService` instancie `FileProgramGraphProvider`
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant le fichier et la classe
+
+#### Scenario: Classes de la liste entre elles
+- **GIVEN** le dépôt après le changement, où `JavaProgramGraphEngine` nomme `JavaAstParser` et `SourceStateKeyMemo` nomme `JavaProgramGraphEngine.SourceStateKey`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** le garde réussit
+
+#### Scenario: Entrée sans classe
+- **GIVEN** un arbre de test où la liste nomme une classe absente des sources de production de `minos-application`
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en demandant de retirer l'entrée
+
+### Requirement: Le câblage des fournisseurs par la racine ne change aucune sortie publique
+Le déplacement de l'instanciation des fournisseurs d'embeddings et de graphe de programme vers `minos-bootstrap` SHALL laisser identiques à l'octet les sorties caractérisées de la CLI, de l'API Java et du MCP, ainsi que l'ordre de composition figé par les tests de caractérisation.
+
+#### Scenario: Goldens inchangés
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify` puis `git diff --exit-code minos-app/src/test/resources/characterization/` sont exécutés
+- **THEN** la commande `git diff` se termine avec le code 0
+
+#### Scenario: Ordre de composition
+- **GIVEN** le dépôt après le changement
+- **WHEN** `A2CompositionCharacterizationTest` est exécuté
+- **THEN** il réussit sans régénération de golden
+
+### Requirement: Les classes de production de minos-app sont tenues par liste fermée
+Le garde de frontières SHALL tenir la liste fermée des classes de production de `minos-app`, chacune avec son rôle (assemblage, route de lancement, transport, configuration du backend du home). Une classe de production absente de la liste et une entrée sans classe SHALL faire échouer le garde. La liste SHALL NOT contenir de classe dont le rôle est une politique applicative.
+
+#### Scenario: Liste du HEAD acceptée
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0 et annonce le nombre de classes de `minos-app`
+
+#### Scenario: Nouvelle classe dans l'assemblage
+- **GIVEN** un arbre de test où `minos-app` gagne une classe de production absente de la liste
+- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant la classe et en demandant de la placer dans un module applicatif ou une surface
+
+#### Scenario: Entrée périmée
+- **GIVEN** un arbre de test où la liste nomme une classe que `minos-app` ne déclare plus
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en demandant de retirer l'entrée
+
+#### Scenario: Rôle absent
+- **GIVEN** un arbre de test où une entrée de la liste n'a pas de rôle écrit
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant l'entrée
+
+### Requirement: Les cas d'usage reçoivent leurs collaborateurs et non l'application
+`ProjectIndexingUseCase`, `RemoteIndexingUseCase` et `KnowledgeExportUseCase` SHALL être construits par injection de leurs collaborateurs. Aucune source de production de `com.minos.application.indexing`, `com.minos.application.remote` et `com.minos.application.export` SHALL importer un type du package `com.minos.application`, `MinosApplication` et `MinosApplicationComposer` compris. Leur câblage de production SHALL se trouver dans le package `com.minos.application`.
+
+#### Scenario: Cas d'usage sans import du package de la façade
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `^import com\.minos\.application\.[A-Z]` dans les sources de production de `com.minos.application.indexing`, `com.minos.application.remote` et `com.minos.application.export`
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Aucun cycle de packages
+- **GIVEN** le dépôt après le changement, où `MinosApplication` rend les trois cas d'usage
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0 et affiche « A8 package cycles: 0 known cycles over 0 packages, none new »
+
+#### Scenario: Cas d'usage construit sans application
+- **GIVEN** un test de `minos-application` qui fournit des doubles des ports de `ProjectIndexingUseCase`
+- **WHEN** le cas d'usage est construit et son plan demandé pour un projet enregistré
+- **THEN** le plan est rendu sans qu'aucune application ni racine de composition soit ouverte
+
+#### Scenario: Collaborateur manquant refusé
+- **GIVEN** des `Dependencies` dont un port est `null`
+- **WHEN** le cas d'usage est construit
+- **THEN** la construction échoue par `NullPointerException` qui nomme le port
+
+### Requirement: La façade expose les cas d'usage, construits à la demande
+`MinosApplication` SHALL exposer l'indexation locale, l'indexation par la voie WSL2, l'indexation distante et l'export de connaissance. Un cas d'usage SHALL être construit à sa première demande : l'ouverture de l'application SHALL NOT créer de marqueur de reprise, de cache de matérialisation ni de moteur distant.
+
+#### Scenario: Surfaces servies par la façade
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `UseCase.of(` et `UseCase.viaWsl(` dans les sources Java de tous les modules
+- **THEN** la recherche ne retourne aucune ligne
+
+#### Scenario: Ouverture sans écriture
+- **GIVEN** un `MINOS_HOME` en lecture seule portant un projet indexé
+- **WHEN** `./mvnw -B -ntp -pl minos-mcp -am test "-Dtest=MinosMcpWriteProtectedHomeTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit : aucun cas d'usage n'a écrit à l'ouverture
+
+#### Scenario: Voie WSL2 absente
+- **GIVEN** une installation dont la racine de composition n'offre pas la voie WSL2
+- **WHEN** l'indexation par la voie WSL2 est demandée à la façade
+- **THEN** la façade rend un résultat vide et rien n'est résolu
+
+#### Scenario: Échec de création du moteur distant
+- **GIVEN** une racine de composition de test dont le matérialiseur échoue par `IOException`
+- **WHEN** l'indexation distante est demandée à la façade
+- **THEN** l'`IOException` est propagée à l'appelant et la demande suivante retente la création
+
+### Requirement: L'injection des cas d'usage ne change aucune sortie publique
+Le passage des cas d'usage à l'injection SHALL laisser identiques à l'octet les sorties caractérisées de la CLI, de l'API Java et du MCP, et SHALL conserver le refus de l'indexation distante avant tout effet.
+
+#### Scenario: Goldens inchangés
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify` puis `git diff --exit-code minos-app/src/test/resources/characterization/` sont exécutés
+- **THEN** la commande `git diff` se termine avec le code 0
+
+#### Scenario: Refus de l'indexation distante conservé
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=LocalRemoteIndexOperationsRefusalTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit : le refus intervient avant toute matérialisation, bail, enregistrement ou épingle
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [frontieres-de-modules](../../../docs/architecture/diagrams/capacites/frontieres-de-modules.md)
