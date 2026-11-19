@@ -2,6 +2,7 @@ package com.minos.app.architecture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,7 +36,7 @@ class ModuleBoundaryPolicyTest {
 
     private void mutated(UnaryOperator<String> change) throws IOException {
         String changed = change.apply(real);
-        assertFalse(changed.equals(real), "the mutation changes the policy");
+        assertNotEquals(real, changed, "the mutation changes the policy");
         write(changed);
     }
 
