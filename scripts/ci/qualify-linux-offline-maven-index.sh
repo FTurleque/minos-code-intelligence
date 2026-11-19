@@ -71,7 +71,13 @@ chmod 700 "$WORK" "$QUALIFICATION_REPOSITORY"
 
 # 1. Trusted population, outside the sandbox, on a throwaway copy of the fixture.
 cp -R "$REPOSITORY_ROOT/fixtures/java/java-simple" "$WORK/populate"
-mvn -B -ntp -f "$WORK/populate/pom.xml" "-Dmaven.repo.local=$QUALIFICATION_REPOSITORY" clean verify -DskipTests
+# The repository starts empty, so every plugin comes from Maven Central, which answers 429 to a busy runner: fewer
+# parallel downloads, and more patient retries of a "too many requests" answer than the resolver's default of 3.
+mvn -B -ntp -f "$WORK/populate/pom.xml" "-Dmaven.repo.local=$QUALIFICATION_REPOSITORY" \
+  -Daether.connector.basic.threads=2 \
+  -Daether.connector.http.retryHandler.count=10 \
+  -Daether.connector.http.retryHandler.interval=10000 \
+  clean verify -DskipTests
 rm -rf "$WORK/populate"
 # The designated repository must look like a Maven repository: no settings or hidden entry at its root.
 find "$QUALIFICATION_REPOSITORY" -maxdepth 1 -mindepth 1 \( -name '.*' -o -name 'settings*.xml' \) -exec rm -rf {} +
