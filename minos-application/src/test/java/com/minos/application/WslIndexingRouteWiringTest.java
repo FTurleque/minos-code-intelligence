@@ -9,7 +9,7 @@ import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableRunMarkers;
-import com.minos.program.analysis.ProgramGraphService;
+import com.minos.program.analysis.TestProgramGraphProviders;
 import com.minos.registry.ProjectRegistry;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.semantic.SemanticVectorStore;
@@ -83,7 +83,7 @@ class WslIndexingRouteWiringTest {
                 .providerRuntimeManager(unused(ProviderRuntimeManager.class))
                 .snapshotLifecycle(unused(SnapshotStager.class), unused(SnapshotPromoter.class))
                 .gitIntelligence(unused(GitIntelligence.class))
-                .programGraphProviders(ProgramGraphService.productionProviders())
+                .programGraphProviders(TestProgramGraphProviders.production())
                 .scipArtifactImporter((indexFile, request, snapshots) -> {
                     throw new UnsupportedOperationException("import");
                 });
@@ -99,6 +99,7 @@ class WslIndexingRouteWiringTest {
             case "wslIndexingWorker" -> InvocationHandler.invokeDefault(self, method, arguments);
             case "resumableRunMarkers" -> unused(ResumableRunMarkers.class);
             case "indexImportHistoryStore" -> ImportHistoryStores.none();
+            case "completeProgramGraphProviders" -> TestProgramGraphProviders.completedArgument(arguments[0]);
             case "toString" -> "composer";
             case "hashCode" -> System.identityHashCode(self);
             case "equals" -> self == arguments[0];

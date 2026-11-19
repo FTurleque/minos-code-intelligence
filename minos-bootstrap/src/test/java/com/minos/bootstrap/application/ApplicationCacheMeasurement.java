@@ -202,7 +202,8 @@ class ApplicationCacheMeasurement {
         FingerprintConstrainedJavaProgramGraphProvider fingerprints =
                 new FingerprintConstrainedJavaProgramGraphProvider(application.fingerprintStore());
         ProgramGraphService service = new ProgramGraphService(application.projectRegistry(),
-                application.snapshotStore(), List.of(new RelationshipProgramGraphProvider(), fingerprints));
+                application.snapshotStore(), new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(
+                        List.of(new RelationshipProgramGraphProvider(), fingerprints)));
         long before = settledHeap();
         resetPeaks();
         long started = System.nanoTime();

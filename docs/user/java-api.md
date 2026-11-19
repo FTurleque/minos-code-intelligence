@@ -347,6 +347,16 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
+### Fournisseurs embarqués câblés par la racine de composition ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), version 1.3.0
+
+Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.application.MinosApplicationComposer` gagne trois méthodes abstraites, qu'une implémentation tierce du port doit ajouter (rupture de source) :
+
+- `Optional<EmbeddingProvider> embeddingProvider(EmbeddingProviderSettings settings)` : fournisseur d'embeddings appris pour des réglages déjà validés ; vide quand l'identifiant n'est pas fourni, et l'ouverture refuse alors le réglage (« unsupported semantic provider ») ;
+- `List<ProgramGraphProvider> programGraphProviders(ProjectFingerprintSnapshotStore fingerprints)` : liste de production des fournisseurs du graphe de programme ;
+- `List<ProgramGraphProvider> completeProgramGraphProviders(List<ProgramGraphProvider> requested)` : complétion d'une liste (analyseur de sources Java à côté du fournisseur de relations, lecteur de sidecar toujours).
+
+La classe interne `com.minos.program.analysis.ProgramGraphService` perd son constructeur `(ProjectRegistry, CodeKnowledgeSnapshotStore)` et ses deux méthodes statiques `productionProviders` ; son constructeur à liste explicite ne complète plus la liste reçue (rupture de source et binaire). Remplacement : `MinosApplication.open(home).programGraphService()`, ou le constructeur à liste explicite avec une liste complétée par `new DefaultMinosApplicationComposer().completeProgramGraphProviders(...)`.
+
 ### Port de l'historique d'import, version 1.3.0
 
 Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.application.MinosApplicationComposer` gagne la méthode abstraite `IndexImportHistoryStore indexImportHistoryStore(Path home)` : une implémentation tierce du port doit l'ajouter (rupture de source) ; celle de `minos-bootstrap` rend `com.minos.storage.home.FileIndexImportHistoryStore`. Le premier paramètre des deux constructeurs publics de `com.minos.application.ProjectInspectionService` passe de `Path home` à `IndexImportHistoryStore historyStore` (rupture de source et binaire) ; remplacement : `new FileIndexImportHistoryStore(home)`, ou `MinosApplication.open(home).projectInspectionService()`. Le format du fichier d'historique ne change pas.

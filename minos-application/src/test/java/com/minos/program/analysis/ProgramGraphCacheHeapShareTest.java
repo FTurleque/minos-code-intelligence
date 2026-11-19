@@ -70,7 +70,7 @@ class ProgramGraphCacheHeapShareTest {
     private static ProgramGraphService service(ProgramGraphSourceFixture fixture,
                                                FingerprintConstrainedJavaProgramGraphProvider provider, long heap) {
         return new ProgramGraphService(new ProjectResolver(fixture.registry), fixture.snapshots,
-                List.of(new RelationshipProgramGraphProvider(), provider),
+                TestProgramGraphProviders.completed(List.of(new RelationshipProgramGraphProvider(), provider)),
                 ProgramGraphService.DEFAULT_MAX_CACHE_ENTRIES, ProgramGraphService.DEFAULT_MAX_CACHE_WEIGHT, heap);
     }
 }

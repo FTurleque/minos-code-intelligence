@@ -101,9 +101,11 @@ def evaluate() -> str:
     forbid("Java advanced provider implementation", implementation, "task.analyze(")
     forbid("Java advanced provider implementation", implementation, "Trees.instance(task).getElement")
 
-    require(service_path, service, "new JavaSourceProgramGraphProvider()")
-    require(service_path, service, "new RelationshipProgramGraphProvider()")
-    require(service_path, service, "new FileProgramGraphProvider()")
+    composer_path = "minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java"
+    composer = read(composer_path)
+    require(composer_path, composer, "new JavaSourceProgramGraphProvider()")
+    require(composer_path, composer, "new RelationshipProgramGraphProvider()")
+    require(composer_path, composer, "new FileProgramGraphProvider()")
 
     for kind in ("CONTROL_FLOW", "DEF_USE", "ARGUMENT_FLOW", "RETURN_FLOW", "TAINT_FLOW"):
         require(test_path, tests, f"ProgramEdgeKind.{kind}")

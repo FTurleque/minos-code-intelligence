@@ -12,7 +12,10 @@ import com.minos.application.MinosApplicationComposer;
 import com.minos.application.WslIndexingRoute;
 import com.minos.application.WslIndexingWorker;
 import com.minos.application.WslPrerequisiteDiagnostics;
+import com.minos.application.semantic.EmbeddingProvider;
+import com.minos.application.semantic.OllamaEmbeddingProvider;
 import com.minos.git.GitIntelligence;
+import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.integration.git.GitIntelligenceService;
 import com.minos.integration.git.JGitRemoteRepositoryMaterializer;
 import com.minos.hosted.HostedControlPlaneStore;
@@ -22,6 +25,11 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.program.analysis.FileProgramGraphProvider;
+import com.minos.program.analysis.FingerprintConstrainedJavaProgramGraphProvider;
+import com.minos.program.analysis.JavaSourceProgramGraphProvider;
+import com.minos.program.analysis.ProgramGraphProvider;
+import com.minos.program.analysis.RelationshipProgramGraphProvider;
 import com.minos.storage.home.FileIndexImportHistoryStore;
 import com.minos.storage.local.registry.LocalProjectPathMappings;
 import com.minos.registry.ProjectPathMappings;
@@ -46,6 +54,7 @@ import com.minos.storage.local.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -62,6 +71,8 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
 
     /** Directory of MINOS_HOME that holds the derived projections; deleting it loses nothing but time. */
     static final String SEMANTIC_PROJECTIONS_DIRECTORY = "semantic-projections";
+    /** Identifier of the learned embedding provider this composition root supplies (local Ollama). */
+    static final String OLLAMA_PROVIDER = "ollama";
 
     public DefaultMinosApplicationComposer() {
     }
@@ -165,6 +176,41 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     }
 
     /** The projection files of this MINOS_HOME; nothing is created until a projection is prepared. */
+    @Override
+    public Optional<EmbeddingProvider> embeddingProvider(EmbeddingProviderSettings settings) {
+        Objects.requireNonNull(settings, "settings");
+        if (!OLLAMA_PROVIDER.equals(settings.providerId())) {
+            return Optional.empty();
+        }
+        return Optional.of(new OllamaEmbeddingProvider(
+                settings.endpoint().orElse(OllamaEmbeddingProvider.DEFAULT_ENDPOINT), settings.model(),
+                settings.dimensions(), settings.timeout().orElse(OllamaEmbeddingProvider.DEFAULT_TIMEOUT),
+                settings.runtimeLocation()));
+    }
+
+    @Override
+    public List<ProgramGraphProvider> programGraphProviders(ProjectFingerprintSnapshotStore fingerprints) {
+        return List.of(new RelationshipProgramGraphProvider(),
+                new FingerprintConstrainedJavaProgramGraphProvider(Objects.requireNonNull(fingerprints, "fingerprints")));
+    }
+
+    @Override
+    public List<ProgramGraphProvider> completeProgramGraphProviders(List<ProgramGraphProvider> requested) {
+        List<ProgramGraphProvider> completed = new ArrayList<>(Objects.requireNonNull(requested, "requested"));
+        boolean relationships = hasProvider(completed, RelationshipProgramGraphProvider.PROVIDER_ID);
+        if (relationships && !hasProvider(completed, JavaSourceProgramGraphProvider.PROVIDER_ID)) {
+            completed.add(new JavaSourceProgramGraphProvider());
+        }
+        if (!hasProvider(completed, FileProgramGraphProvider.PROVIDER_ID)) {
+            completed.add(new FileProgramGraphProvider());
+        }
+        return List.copyOf(completed);
+    }
+
+    private static boolean hasProvider(List<ProgramGraphProvider> providers, String id) {
+        return providers.stream().anyMatch(provider -> provider != null && id.equals(provider.id()));
+    }
+
     @Override
     public IndexImportHistoryStore indexImportHistoryStore(Path home) {
         return new FileIndexImportHistoryStore(home);

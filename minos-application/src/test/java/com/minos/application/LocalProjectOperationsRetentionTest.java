@@ -12,7 +12,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ScipSymbolSnapshotReport;
-import com.minos.program.analysis.ProgramGraphService;
+import com.minos.program.analysis.TestProgramGraphProviders;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -160,7 +160,7 @@ class LocalProjectOperationsRetentionTest {
                     .providerRuntimeManager(unused(ProviderRuntimeManager.class))
                     .snapshotLifecycle(unused(SnapshotStager.class), unused(SnapshotPromoter.class))
                     .gitIntelligence(unused(GitIntelligence.class))
-                    .programGraphProviders(ProgramGraphService.productionProviders())
+                    .programGraphProviders(TestProgramGraphProviders.production())
                     .scipArtifactImporter((indexFile, request, snapshots) -> {
                         if (publicationFailure != null) throw publicationFailure;
                         events.add("publish " + request.snapshotId());
@@ -222,6 +222,7 @@ class LocalProjectOperationsRetentionTest {
             case "id" -> "in-memory";
             case "close" -> null;
             case "indexImportHistoryStore" -> ImportHistoryStores.inMemory();
+            case "completeProgramGraphProviders" -> TestProgramGraphProviders.completedArgument(arguments[0]);
             default -> throw new UnsupportedOperationException(type.getSimpleName() + "." + name);
         });
     }
