@@ -22,7 +22,7 @@ Constat **AUD-ARC-07**. Dernier changement du sprint 8 : prérequis `reclasser-m
 ## 4. Clôture
 
 - [x] 4.1 [AUD-ARC-07] Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes. Fait ; seule preuve manquante : la route de l'explorateur de minos-app, non gardée (prose).
-- [ ] 4.2 [AUD-ARC-07] Mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (trois exigences ajoutées, une modifiée) ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Reste : les trois exigences ajoutées entrent au dossier à l'archivage.
+- [x] 4.2 [AUD-ARC-07] Mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (trois exigences ajoutées, une modifiée) ; vérifier par `python scripts/docs/check-capability-dossiers.py`. Reste : les trois exigences ajoutées entrent au dossier à l'archivage. Lignes de traçabilité ajoutées au dossier frontieres-de-modules à l'archivage.
 - [x] 4.3 [AUD-ARC-07] `openspec validate --all --strict`, `python .claude/scripts/run_gates.py`, `archgate check`. openspec validate --all --strict, run_gates.py, archgate check 18/18 (à rejouer avant la PR, après la fusion de #791).
 - [x] 4.4 [AUD-ARC-07] Lister les documents à mettre à jour avant archivage (`docs/project/audits/2026-11-15/SUIVI.md`, `docs/architecture/SYNTHESE.md` et `docs/developer/architecture.md` s'ils reprennent un point corrigé) ; vérifier que chacun est fait ou nommé comme reste. Restes nommés : SUIVI.md de l'audit ; SYNTHESE.md et docs/developer/architecture.md relus, aucun point corrigé repris.
 
