@@ -29,6 +29,37 @@ Commit relu : `89be3fb4` (`main`).
 | Scopes JaCoCo par préfixe `com/minos/orchestration/IndexingRunExecutor` : `critical-orchestration` (ligne 0,75, branche 0,55) et `resume-orchestration` | `scripts/quality/check-jacoco.py:281-298` |
 | Documents qui citent le nom | `docs/architecture/arc42/05-vue-blocs.md:55`, `docs/architecture/arc42/06-vue-execution.md:53`, `docs/developer/architecture.md:100`, `docs/architecture/diagrams/capacites/decouverte-et-negociation.md:89`, `:105`, `docs/architecture/diagrams/capacites/persistance-snapshots.md:31`, `docs/architecture/diagrams/seq-indexation-nominale.md:47`, `docs/architecture/adr/BE-0039-reprise-indexation-apres-interruption.md:21`, `:27`, `:87`, `:168`, `:181`, `:189` |
 
+### Lot `minos-engine` : relevé et mesures
+
+Relu au `03c0fc90` (`main`, après la fusion de `reduire-les-lectures-de-la-voie-wsl`, 2026-11-18) : 1 041 lignes ; `registeredProjectFingerprint` (AUD-PERF-07) s'ajoute à l'exécution des cibles. `IndexingResumePlanner` appelle aussi `scopedChangedFiles` en production. Les numéros de ligne du tableau ci-dessus sont ceux du `89be3fb4`.
+
+Découpage arrêté (tâche 1.1), chaque méthode hors bloc ayant une seule classe d'accueil :
+
+| Classe | Contenu | Lignes |
+|---|---|---|
+| `IndexingRunExecutor` | `execute`, ordre des refus, `validateExecutionRoot`, `reconcilePreviousState`, `RunRequest`, `Collaborators`, enchaînement des phases | 181 |
+| `IndexingRunContext` | état du run (`RunContext`), `Ports`, `holdRunDirectory`, `publishInProgress`, `running`, `portable`, identité du run (`Identity`) ; le journal est déclaré par `IndexingRunExecutor` | 177 |
+| `IndexingTargetExecution` | `executeProviders`, `executeProvider`, `registeredProjectFingerprint`, `captureScopeFingerprint`, `checkpoint`, `requireExecutor`, `requireExecutionRoot`, `scopedChangedFiles`, `validateArtifact`, `requireInsideRunDirectory`, `requireArtifactsStillInsideRunDirectory`, `awaitReadable`, `ValidatedProjectRoot` | 281 |
+| `IndexingSnapshotPublication` | mise en place (confinement revérifié d'abord), promotion, `recoverUncertainPromotion`, `authoritativeTargetIsActive` | 74 |
+| `IndexingRunOutcomes` | `persistSuccess`, `resumeSuffix`, `persistTerminalFailure`, `isInterruption`, `interruptedRun`, `persistInterruption`, `holdAgainstRetention`, `persistFailure`, `failedRun`, `persistCommittedFailure`, `persistUncommittedFailure`, `persist`, `failureMessage` | 269 |
+| `IndexingRunResumption` | `executeResumed`, `reverifyReusedArtifacts`, `existingRunDirectory`, `resumeStagedPromotion`, `ResumedAttempt`, `ResumeAborted` | 187 |
+
+`holdRunDirectory`, appelée par le run neuf et par la reprise, vit dans le contexte du run, comme `publishInProgress` et `running` : aucune phase n'appelle l'exécuteur en retour.
+
+Mesures (Windows 10, JDK Microsoft 21.0.12, `./mvnw -B -ntp -pl minos-engine -am verify "-Dtest=com/minos/**/*Test"`, rapport du module) :
+
+| Classe | Avant (`03c0fc90`) lignes / branches | Après lignes / branches |
+|---|---|---|
+| `IndexingRunExecutor` | 420/460 / 137/175 | 63/68 / 18/21 |
+| `IndexingRunContext` | — | 63/63 / 10/12 |
+| `IndexingTargetExecution` | — | 100/119 / 40/54 |
+| `IndexingSnapshotPublication` | — | 29/32 / 6/10 |
+| `IndexingRunOutcomes` | — | 113/120 / 39/50 |
+| `IndexingRunResumption` | — | 77/83 / 24/28 |
+| Total | 420/460 / 137/175 | 445/485 / 137/175 |
+
+Les 40 lignes et 38 branches manquées sont les mêmes avant et après ; les 25 lignes comptées en plus sont les constructeurs et les champs des objets de phase. Scopes : `critical-orchestration` 0,915 / 0,769, `resume-orchestration` 0,934 / 0,815.
+
 ### `SnapshotBinaryCodecSupport` (`minos-storage/src/main/java/com/minos/storage/codec/SnapshotBinaryCodecSupport.java`)
 
 | Fait | Preuve |
