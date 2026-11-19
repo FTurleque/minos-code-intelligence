@@ -192,7 +192,7 @@ class LinuxCgroupJobFailClosedTest {
         assertSame(pathFree, LinuxCgroupJob.redactCause(pathFree, root));
     }
 
-    /** Same walk as {@code IndexingRunExecutor.isInterruption} (minos-application), which decides R1. */
+    /** Same walk as {@code IndexingRunOutcomes.isInterruption} (minos-engine), which decides R1. */
     private static boolean isInterruption(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof InterruptedException) return true;
