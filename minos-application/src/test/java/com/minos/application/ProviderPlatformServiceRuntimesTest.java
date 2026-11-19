@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.application.indexing.ProviderRuntimeSummary;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;

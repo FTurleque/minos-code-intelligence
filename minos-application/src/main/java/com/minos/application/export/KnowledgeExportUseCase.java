@@ -1,6 +1,5 @@
 package com.minos.application.export;
 
-import com.minos.application.MinosApplication;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
 import com.minos.domain.Relationship;
@@ -54,12 +53,6 @@ public final class KnowledgeExportUseCase {
     public KnowledgeExportUseCase(ProjectRegistry registry, CodeKnowledgeSnapshotStore snapshots) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
-    }
-
-    /** The export over the registry and the snapshot store of an opened application. */
-    public static KnowledgeExportUseCase of(MinosApplication application) {
-        Objects.requireNonNull(application, "application");
-        return new KnowledgeExportUseCase(application.projectRegistry(), application.snapshotStore());
     }
 
     /**

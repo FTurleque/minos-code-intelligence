@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.application.indexing.ProjectIndexStateReconciler;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;

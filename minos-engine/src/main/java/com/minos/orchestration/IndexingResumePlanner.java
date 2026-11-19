@@ -232,7 +232,7 @@ final class IndexingResumePlanner {
         if (!policy.qualifies(selection.indexer())) return false;
         if (execution.language() != selection.language()) return false;
         if (checkpoint.mode() != request.mode()) return false;
-        List<String> scoped = IndexingRunExecutor.scopedChangedFiles(
+        List<String> scoped = IndexingTargetExecution.scopedChangedFiles(
                 request.mode(), request.changedFiles(), target.projectRelativeRoot());
         if (!checkpoint.changedFiles().equals(scoped)) return false;
         if (Duration.between(checkpoint.completedAt(), request.now()).compareTo(request.resumeTtl()) > 0) {

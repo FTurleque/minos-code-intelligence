@@ -35,7 +35,7 @@ classDiagram
     class MinosTeamApi { <<public team control plane>> }
     class MinosMcpServer { <<read-only adapter>> }
     class NexusExportService { <<structured contract v1>> }
-    class NexusSemanticSignalService { <<semantic signals v2>> }
+    class NexusSemanticSignalService { <<semantic signals v2 - non qualifié>> }
 
     MinosCli --> MinosApplication
     MinosIdeProtocolV1 --> MinosApplication
@@ -262,7 +262,7 @@ Les tools team lisent `MINOS_TEAM_TOKEN` depuis le processus et n’acceptent au
 
 ## NEXUS
 
-`NexusExportService` projette le snapshot actif vers le contrat structuré v1. `NexusSemanticSignalService` fournit des candidats code-local avec score, nature et limitations.
+`minos-nexus` est un module de contrat : il traduit l'export applicatif dans le contrat JSON NEXUS, et `minos-cli` est la seule surface qui en dépend. `NexusExportService` projette le snapshot actif vers le contrat structuré v1, servi par `minos nexus-export`. `NexusSemanticSignalService` (candidats code-local avec score, nature et limitations, contrat v2) est non qualifié par un client : aucune commande ni aucun client ne le consomme, et il n'est pas présenté comme une capacité disponible.
 
 ```text
 MINOS → facts de code + retrieval/ranking local au code

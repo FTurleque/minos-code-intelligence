@@ -11,8 +11,10 @@ flowchart TB
         cli["minos-cli"]
         mcp["minos-mcp"]
         api["minos-api"]
-        nexus["minos-nexus"]
         explorer["minos-explorer"]
+    end
+    subgraph contrat["Module de contrat"]
+        nexus["minos-nexus"]
     end
     subgraph composition["Racine de composition"]
         bootstrap["minos-bootstrap"]
@@ -59,6 +61,7 @@ flowchart TB
 - Flèche pleine : dépendance Maven de portée `compile` ; pointillée `runtime` : les surfaces ne voient `minos-bootstrap` qu'à l'exécution (ServiceLoader, ADR 0042), jamais à la compilation.
 - Les backends local et PostgreSQL partagent `minos-storage`. `minos-bootstrap` ne nomme aucune classe du backend PostgreSQL (règle R1) et le découvre par `ServiceLoader` : il reste optionnel à l'exécution.
 - Les flèches qui partent d'un cadre (« Surfaces », « Adaptateurs ») résument une arête que chaque module du cadre porte : tous dépendent de `minos-engine` (et de `minos-domain`, non redessiné).
+- Aucune flèche ne relie deux surfaces : `minos-nexus` est un module de contrat, qui traduit un résultat applicatif dans le contrat JSON NEXUS ; il dépend de `minos-application` et de `minos-domain` (non redessiné), de `minos-bootstrap` en portée test seulement, et non de `minos-engine`.
 - Le plugin IntelliJ n'a aucune dépendance `com.minos:*` : il lance le CLI comme un processus externe (`MinosCliClient`). La flèche est une relation d'usage, pas une dépendance de build.
 - Graphe exhaustif généré : [module-dependencies.md](../module-dependencies.md) ; les diagrammes de détail par module restent à produire.
 

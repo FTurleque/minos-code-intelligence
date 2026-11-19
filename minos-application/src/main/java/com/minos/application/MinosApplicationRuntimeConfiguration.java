@@ -68,12 +68,7 @@ final class MinosApplicationRuntimeConfiguration {
     }
 
     private static void configureHostedMode(MinosRuntimeSettings settings, MinosApplication.Builder builder) {
-        String hostedMode = setting(
-                settings, MinosApplication.HOSTED_MODE_PROPERTY, MinosApplication.HOSTED_MODE_ENV);
-        if (hostedMode == null || hostedMode.isBlank() || "disabled".equalsIgnoreCase(hostedMode)) return;
-        if (!"enabled".equalsIgnoreCase(hostedMode)) {
-            throw new IllegalArgumentException("unsupported hosted mode: " + hostedMode);
-        }
+        if (HostedMode.from(settings) != HostedMode.ENABLED) return;
         builder.hostedTenantKeyProvider(builder.resolvedComposer().environmentHostedTenantKeyProvider());
     }
 

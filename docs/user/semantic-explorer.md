@@ -18,7 +18,7 @@ reste en STDIO.
 | Service `minos-explorer` du runtime Docker connecté | Démarrage, publication du port et contrôles d'accès relevés sur Docker Desktop (Windows) avec un `MINOS_HOME` vide ; **non qualifié avec des données réelles, PostgreSQL géré ni un hôte Linux** |
 | Runtime Docker hors ligne (`compose-mcp.prod.yaml`) | Non supporté : aucun service d'exploration |
 | Poste natif dont le backend MCP est Docker | Refusé par la commande, qui renvoie vers le service Docker |
-| Mode équipe (`MINOS_HOSTED_MODE=enabled`) | Refusé : la surface n'a pas d'autorisation par projet |
+| Mode équipe (`MINOS_HOSTED_MODE=enabled`) | Refusé : la surface n'a pas d'autorisation par projet ; une valeur autre que `enabled` ou `disabled` est refusée comme erreur d'usage |
 | Accès depuis une autre machine, TLS, comptes utilisateurs | Non supporté, sans cible |
 | Carte 2D (PCA) — installation native, stockage local | Livrée, testée automatiquement sous Windows et Linux ; états parcourus dans Chrome sous Windows ; **qualification partielle** : Linux et les autres navigateurs ne sont pas parcourus, les mesures portent sur des index `local-hash` synthétiques |
 | Carte 2D — installation native, PostgreSQL externe | Lecture des vecteurs par lots testée contre PostgreSQL/pgvector par la CI ; préparation complète **non qualifiée** sur ce stockage |
@@ -231,6 +231,7 @@ d'administration `minos-admin`, seul à écrire les données ; ce parcours n'a p
 | « Accès refusé » | adresse ouverte sans son fragment `#token=…`, ou commande relancée depuis | rouvrir l'adresse imprimée par la commande en cours |
 | Texte « MINOS explorer : requête refusée. » | la page a été demandée sous un autre nom que `127.0.0.1`, `localhost` ou `[::1]`, ou par une autre page | coller l'adresse imprimée par la commande dans la barre d'adresse |
 | `error: … the team mode is enabled` | `MINOS_HOSTED_MODE` ou `minos.hosted.mode` actif pour ce `MINOS_HOME` | la surface n'est pas disponible en mode équipe |
+| `error: unsupported hosted mode: <valeur>` (code 2) | `MINOS_HOSTED_MODE` ou `minos.hosted.mode` porte une autre valeur que `enabled` ou `disabled` (casse indifférente) | corriger la valeur ; rien n'est ouvert tant qu'elle n'est pas reconnue |
 | `error: this MINOS home runs on the Docker backend` | le lanceur de ce poste est basculé sur Docker | utiliser le service `minos-explorer`, ou repasser en backend natif |
 | `error: the exploration surface could not listen on the requested port` | port déjà pris | autre `--port`, ou aucun pour un port libre |
 | `error: MINOS_EXPLORER_CONTAINER_LISTEN is reserved to the MINOS Docker runtime` | variable interne du runtime Docker posée sur un poste | la retirer de l'environnement |

@@ -1,8 +1,8 @@
 package com.minos.cli.operations;
 
-import com.minos.application.ProviderRuntimeSummary;
 import com.minos.application.indexing.IndexExecutionSummary;
 import com.minos.application.indexing.IndexPlanSummary;
+import com.minos.application.indexing.ProviderRuntimeSummary;
 import com.minos.application.indexing.ResumeTraceSummary;
 import com.minos.application.remote.RemoteIndexSummary;
 import org.junit.jupiter.api.Test;

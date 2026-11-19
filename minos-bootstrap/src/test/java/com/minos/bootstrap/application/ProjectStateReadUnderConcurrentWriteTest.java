@@ -1,6 +1,6 @@
 package com.minos.bootstrap.application;
 
-import com.minos.application.ProjectIndexStateReconciler;
+import com.minos.application.indexing.ProjectIndexStateReconciler;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.local.orchestration.FileIndexStateStore;
 import com.minos.storage.local.store.FileSymbolSnapshotStore;

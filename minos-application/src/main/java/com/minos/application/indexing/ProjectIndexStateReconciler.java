@@ -1,4 +1,4 @@
-package com.minos.application;
+package com.minos.application.indexing;
 
 import com.minos.orchestration.IndexStateStoreException;
 import com.minos.orchestration.IndexStateStore;

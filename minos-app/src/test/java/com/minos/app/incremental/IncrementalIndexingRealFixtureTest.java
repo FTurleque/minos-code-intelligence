@@ -61,7 +61,7 @@ class IncrementalIndexingRealFixtureTest {
                 .build()) {
             self.set(application);
             RegisteredProject registered = application.projectRegistry().registerProject(project, "typescript-modules");
-            ProjectIndexingUseCase indexing = ProjectIndexingUseCase.of(application, UnaryOperator.identity());
+            ProjectIndexingUseCase indexing = application.projectIndexing(UnaryOperator.identity());
             String id = registered.id().toString();
 
             var first = indexing.execute(id, null, false, IndexingResumePolicy.RESUME);
