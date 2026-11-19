@@ -87,7 +87,7 @@ des classes d'adaptateur (hors `minos-app`, assemblage final). Les surfaces ne d
 - **Sources** : `minos-integration-git/src/main/java/com/minos/integration/git/`.
 
 ### minos-application
-- **Responsabilité** : services applicatifs partagés — architecture (`ArchitectureIntelligenceService`), impact (`ImpactAnalysisService`), recherche de code (`CodeSearchService`), output, workspace, sémantique, runtime dynamique ; ports seulement vers les adaptateurs (ADR 0042).
+- **Responsabilité** : services applicatifs partagés — architecture (`ArchitectureIntelligenceService`), impact (`ImpactAnalysisService`), recherche de code (`CodeSearchService`), output, workspace, sémantique, runtime dynamique ; ports vers les adaptateurs (ADR 0042). Elle embarque trois familles d'adaptateurs — client d'embeddings appris, analyseur de sources Java, lecteur de sidecar du graphe de programme — que seul `minos-bootstrap` instancie, par les fabriques de `MinosApplicationComposer` ; la règle A19 du garde de frontières en tient la liste fermée ([ARCH-0087](../adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)).
 - **Types clés** : `ArchitectureIntelligenceService`, `ImpactAnalysisService`, `CodeSearchService`, `HybridContextBuilder`, `EmbeddingProvider`.
 - **Interfaces** : `EmbeddingProvider`, `ProgramGraphProvider`.
 - **Dépendances** : `minos-domain`, `minos-engine`.

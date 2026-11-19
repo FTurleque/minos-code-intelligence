@@ -96,7 +96,7 @@ final class ProgramGraphSourceFixture {
     }
 
     ProgramGraphService service(List<ProgramGraphProvider> providers) {
-        return new ProgramGraphService(registry, snapshots, providers);
+        return new ProgramGraphService(registry, snapshots, TestProgramGraphProviders.completed(providers));
     }
 
     /** Le service tel que la production le compose, avec l'horloge manuelle de ce test. */

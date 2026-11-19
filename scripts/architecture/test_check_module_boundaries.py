@@ -1475,6 +1475,73 @@ class AssemblyClassesRuleTest(RatchetTreeTestCase):
     def test_the_real_assembly_matches_its_list(self):
         self.assertEqual(len(_MODULE.ASSEMBLY_CLASSES), _MODULE.check_assembly_classes())
         self.assertEqual(8, len(_MODULE.ASSEMBLY_CLASSES))
+class EmbeddedAdapterRuleTest(RatchetTreeTestCase):
+    """A19 — minos-application names a JDK infrastructure API only in listed files, and an embedded adapter class only
+    from its family (AUD-ARC-01, ADR 0087)."""
+
+    API_USERS = frozenset({"application.semantic.OllamaEmbeddingProvider", "program.analysis.JavaAstParser"})
+    ADAPTERS = {"OllamaEmbeddingProvider": "learned embedding client", "JavaAstParser": "Java analyser",
+                "FileProgramGraphProvider": "sidecar reader"}
+
+    def setUp(self):
+        super().setUp()
+        self.write("minos-application", "com.minos.application.semantic", "OllamaEmbeddingProvider",
+                   "public final class OllamaEmbeddingProvider { java.net.HttpURLConnection c; }")
+        self.write("minos-application", "com.minos.program.analysis", "JavaAstParser",
+                   "final class JavaAstParser { JavacTask t; }", imports=("com.sun.source.util.JavacTask",))
+        self.write("minos-application", "com.minos.program.analysis", "FileProgramGraphProvider",
+                   "public final class FileProgramGraphProvider { JavaAstParser parser; }")
+        self.write("minos-application", "com.minos.program.analysis", "ProgramGraphService",
+                   "public final class ProgramGraphService { /** Uses a FileProgramGraphProvider. */ }")
+
+    def check(self, api_users=None, adapters=None):
+        return _MODULE.check_embedded_adapters(
+            self.root, api_users=self.API_USERS if api_users is None else api_users,
+            adapters=self.ADAPTERS if adapters is None else adapters)
+
+    def test_the_listed_files_and_classes_are_accepted_and_the_family_names_itself(self):
+        self.assertEqual((2, 3), self.check())
+
+    def test_a_new_http_client_of_the_application_is_refused_with_the_file_and_the_api(self):
+        self.write("minos-application", "com.minos.application", "RemoteClient",
+                   "final class RemoteClient { HttpClient client; }", imports=("java.net.http.HttpClient",))
+        self.refused(self.check, "A19", "minos-application/src/main/java/com/minos/application/RemoteClient.java",
+                     "java.net.http.HttpClient", "not in INFRASTRUCTURE_API_USERS")
+
+    def test_a_listed_file_that_no_longer_names_an_api_is_refused_as_stale(self):
+        self.write("minos-application", "com.minos.program.analysis", "JavaAstParser", "final class JavaAstParser { }")
+        self.refused(self.check, "A19", "INFRASTRUCTURE_API_USERS entry program.analysis.JavaAstParser",
+                     "remove it")
+
+    def test_an_api_mentioned_in_a_comment_or_a_literal_only_is_accepted(self):
+        self.write("minos-application", "com.minos.application", "Notes",
+                   '/** Not {@link javax.tools.ToolProvider}. */ final class Notes { String s = "javax.tools.X"; }')
+        self.assertEqual((2, 3), self.check())
+
+    def test_the_service_naming_an_adapter_again_is_refused_with_the_file_and_the_class(self):
+        self.write("minos-application", "com.minos.program.analysis", "ProgramGraphService",
+                   "public final class ProgramGraphService { Object p = new FileProgramGraphProvider(); }")
+        self.refused(self.check, "A19", "program/analysis/ProgramGraphService.java", "FileProgramGraphProvider",
+                     "MinosApplicationComposer")
+
+    def test_a_qualified_name_of_an_adapter_is_refused(self):
+        self.write("minos-application", "com.minos.application", "Wiring",
+                   "final class Wiring { Object p = new com.minos.application.semantic.OllamaEmbeddingProvider(); }")
+        self.refused(self.check, "A19", "application/Wiring.java", "OllamaEmbeddingProvider")
+
+    def test_an_adapter_entry_without_a_class_is_refused_as_stale(self):
+        self.refused(lambda: self.check(adapters={**self.ADAPTERS, "JavaTaintAnalyzer": "Java analyser"}), "A19",
+                     "EMBEDDED_ADAPTER_CLASSES entry JavaTaintAnalyzer is no class of minos-application", "remove it")
+
+    def test_an_adapter_entry_without_a_justification_is_refused(self):
+        self.refused(lambda: self.check(adapters={**self.ADAPTERS, "FileProgramGraphProvider": " "}), "A19",
+                     "EMBEDDED_ADAPTER_CLASSES entry FileProgramGraphProvider has no written justification")
+
+    def test_the_real_tree_matches_both_tables(self):
+        self.assertEqual((len(_MODULE.INFRASTRUCTURE_API_USERS), len(_MODULE.EMBEDDED_ADAPTER_CLASSES)),
+                         _MODULE.check_embedded_adapters())
+        self.assertEqual(10, len(_MODULE.INFRASTRUCTURE_API_USERS))
+        self.assertEqual(17, len(_MODULE.EMBEDDED_ADAPTER_CLASSES))
 
 
 class EngineConcreteCodeMeasureTest(RatchetTreeTestCase):
