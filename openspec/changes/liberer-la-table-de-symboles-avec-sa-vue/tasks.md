@@ -15,7 +15,7 @@ Changement indépendant des autres changements actifs ; aucun ordre de fusion im
 
 ## 2. Décision et ADR (AUD-PERF-14)
 
-- [x] 2.1 AUD-PERF-14 — **(manuelle, propriétaire)** confirmer D1 du design (C recommandée ; B si le propriétaire préfère garder une table attachée à la vue). Vérifier : choix consigné dans la PR.
+- [ ] 2.1 AUD-PERF-14 — **(manuelle, propriétaire)** confirmer D1 du design (C recommandée ; B si le propriétaire préfère garder une table attachée à la vue). Vérifier : choix consigné dans la PR.
   - Recommandation du design appliquée (option C), confirmation du propriétaire demandée dans la PR.
 - [x] 2.2 AUD-PERF-14 — Réécrire la phrase du point 19 de DATA-0085 (`Proposed`, `docs/architecture/adr/DATA-0085-port-de-connaissance-et-persistance-des-snapshots-vues-comptees.md:56`) au présent : l'explorateur lit les symboles par la vue et ne garde aucune table hors d'elle. Vérifier : `archgate check` et `python .claude/scripts/run_gates.py --fast` verts.
   - Preuve : point 19 réécrit au présent ; `archgate check` : `pass: true`, 15/15 ; `python .claude/scripts/run_gates.py` vert (voir 3.3).

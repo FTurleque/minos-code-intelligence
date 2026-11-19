@@ -7,7 +7,7 @@ Constat **AUD-PERF-14** de l'audit `docs/project/audits/2026-11-15/` (sprint 9, 
 ## What Changes
 
 - Le service d'exploration ne garde plus de table de symboles hors de la vue : il résout les symboles d'une page par les lectures indexées que la vue fournit déjà (`CodeKnowledgeReader.findSymbolById`, `findFileSymbols`), sans état propre (décision D1, recommandée). Le symbole qui décrit un fichier reste celui de plus petite clé de symbole : les pages rendues ne changent pas.
-- La `WeakHashMap` `lookups` et la classe interne `SymbolLookup` disparaissent de `SemanticCorpusQueryService`.
+- La `WeakHashMap` `lookups` disparaît de `SemanticCorpusQueryService` ; la classe interne `SymbolLookup` ne tient plus que le lecteur de la vue, le temps d'une requête.
 - `SemanticCorpusQueryServiceTest.anEvictedViewIsNoLongerReachableFromTheService` vérifie aussi qu'un symbole de la vue évincée est collecté sans nouvel appel au service.
 - Le point 19 de DATA-0085 dit comment la table est tenue après le changement.
 
