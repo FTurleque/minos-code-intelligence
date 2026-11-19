@@ -14,7 +14,7 @@
 ```mermaid
 flowchart TB
     clients(["Développeur, IDE, agent IA"])
-    app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, route MCP"]
+    app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, routes MCP et explorateur"]
     surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-explorer"]
     contract["<b>Module de contrat</b><br/>minos-nexus : contrat JSON NEXUS"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
@@ -51,28 +51,28 @@ JSON NEXUS, est un module de contrat, entre l'application et les surfaces ; seul
 ### minos-domain
 - **Responsabilité** : modèle de domaine pur, sans dépendance externe.
 - **Types clés** : `Symbol`, `Relationship`, `Evidence`, `SymbolLocation`, `ProgramGraph`, `SemanticDocument`.
-- **Interfaces** : aucune (modèle passif).
+- **Interfaces** : `SemanticVectorStore` et `SemanticProjectionStore` (ports de l'index sémantique et de sa projection, implémentés par `minos-storage`), `SymbolReference` (référence résolue ou non d'une occurrence), `DiagnosticEntry` ; le reste du modèle est passif.
 - **Dépendances** : aucune.
-- **Sources** : `minos-domain/src/main/java/com/minos/domain/`, `com/minos/program/`, `com/minos/semantic/`.
+- **Sources** : `minos-domain/src/main/java/com/minos/domain/`, `com/minos/diagnostics/` (`PublicErrorMessages`), `com/minos/program/`, `com/minos/semantic/`.
 
 ### minos-engine
 - **Responsabilité** : définit les ports (interfaces) du moteur et les services provider-indépendants : requêtes, découverte de projet, planification incrémentale et orchestration de l'indexation (cycle de vie, exécution des runs, reprise) — [ADR 0044](../adr/archive/0044-un-package-un-module.md).
 - **Types clés** : `CodeKnowledgeReader` (port de lecture), `CodeKnowledgeStore` (port d'écriture et de lecture), `SnapshotReadView` (vue de lecture du snapshot actif), `InMemoryCodeKnowledgeStore` (`com.minos.store`, implémentation interne du port de lecture, nommée par ce seul package — règle A18), `IndexerRegistry`, `IndexerProvider`, `SymbolQueryService`, `RelationshipQueryService`, `DependencyDerivationService`, `RelatedTestDerivationService`, `ProjectDiscoveryService`, `IndexingLifecycleService`, `IndexingRunExecutor`.
-- **Interfaces** : `CodeKnowledgeReader`, `CodeKnowledgeStore`, `CodeKnowledgeSnapshotStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…), `PlatformAccessControl` (port d'ACL de plateforme du stockage privé `com.minos.io`, découvert par `ServiceLoader` ; le moteur ne lance aucun processus).
+- **Interfaces** : `CodeKnowledgeReader`, `CodeKnowledgeStore`, `CodeKnowledgeSnapshotStore`, `IndexerRegistry`, `IndexerProvider`, `ProjectDiscovery`, `RuntimeObservationStore`, SPI discovery (`BuildSystemDetector`, `LanguageDetector`…), `PlatformAccessControl` (port d'ACL de plateforme du stockage privé `com.minos.io`, découvert par ServiceLoader ; le moteur ne lance aucun processus).
 - **Dépendances** : `minos-domain`.
-- **Sources** : `minos-engine/src/main/java/com/minos/store/` (dont `store/cache/`, cache LRU pondéré partagé), `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`, `com/minos/incremental/`, `com/minos/hosted/` (modèle, ports et services du plan de contrôle d'équipe), `com/minos/dynamic/` (modèle et port des observations runtime).
+- **Sources** : `minos-engine/src/main/java/com/minos/store/` (dont `store/cache/`, cache LRU pondéré partagé), `com/minos/orchestration/`, `com/minos/query/`, `com/minos/discovery/`, `com/minos/incremental/`, `com/minos/hosted/` (modèle, ports et services du plan de contrôle d'équipe), `com/minos/dynamic/` (modèle et port des observations runtime), `com/minos/git/` (port Git), `com/minos/io/` (boîte à outils des E/S privées : ouverture confinée, écriture atomique, flux bornés), `com/minos/registry/` (ports du registre de projets), `com/minos/remote/` (indexation distante), `com/minos/runtime/` (dont `MinosVersion`), `com/minos/source/` (lecture des sources), `com/minos/storage/` (ports du stockage).
 
 ### minos-runtime-local
 - **Responsabilité** : infrastructure générique d'exécution locale de processus providers (CommandLocator, ProcessIndexerExecutor).
 - **Types clés** : `CommandLocator`, `ProcessIndexerExecutor`, `ProviderRuntimeManager`.
-- **Interfaces** : `ProviderRuntimeManager` (impl de `IndexingRuntimePorts`).
+- **Interfaces** : implémente `ProviderRuntimeManager` et les ports de `IndexingRuntimePorts`, définis dans `minos-engine`.
 - **Dépendances** : `minos-domain`, `minos-engine`.
 - **Sources** : `minos-runtime-local/src/main/java/com/minos/runtime/local/` (racine : l'orchestration — `LocalIsolatedIndexWorker`, `StrongProcessOwnershipIndexerExecutor`, `CompositeProviderRuntimeManager` ; sous-packages `process` pour la localisation des commandes, l'environnement et l'exécution des processus, `sandbox` pour les contrats et la sélection du bac à sable, bubblewrap et cgroup sous Linux, AppContainer et Job Object sous Windows, `workspace` pour l'espace de travail du provider, le quota d'écriture et la rétention, `distributed` pour les artefacts distribués, `acl` pour l'unique lanceur d'`icacls` et l'implémentation Windows du port `PlatformAccessControl` du moteur ; les dépendances vont de la racine vers tous, de `sandbox` vers `process`, `workspace` et `acl`, de `process` vers `workspace`, jamais l'inverse). Les ressources restent dans `com/minos/runtime/local/` et se chargent par chemin absolu. Les types de `acl`, `process`, `sandbox` et `workspace` sont publics pour se voir entre sous-packages ou pour `ServiceLoader` ; seuls ceux de la liste `RUNTIME_LOCAL_EXPORTED_TYPES` peuvent être nommés par un autre module, et aucun de `acl` (règle A10 de `check-module-boundaries.py`).
 
 ### minos-storage
 - **Responsabilité** : adaptateurs de stockage ([ADR 0068](../adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md) § 4). Le backend local persiste les snapshots, les vecteurs sémantiques, les observations runtime et le control plane tenant. Le backend PostgreSQL/pgvector, optionnel, remplace l'ensemble de la couche locale, pas seulement le port de snapshot (ADR-0025).
 - **Types clés** : `LocalStorageBackend`, `FileSymbolSnapshotStore`, `FileSemanticVectorStore`, `FileRuntimeObservationStore`, `FileHostedControlPlaneStore` ; `PostgresStorageBackend`, `PostgresStorageBackendProvider`.
-- **Interfaces** : implémente `StorageBackend`, `CodeKnowledgeStore`, `ProjectRegistry`, `ProjectFingerprintSnapshotStore`, `SemanticVectorStore`, `RuntimeObservationStore`, `IndexStateStore`, `HostedControlPlaneStore`, définies dans `minos-engine`. Le module ne dépend pas de `minos-application` (un adaptateur n'en dépend jamais, ADR 0042).
+- **Interfaces** : implémente `StorageBackend`, `CodeKnowledgeStore`, `ProjectRegistry`, `ProjectFingerprintSnapshotStore`, `RuntimeObservationStore`, `IndexStateStore`, `HostedControlPlaneStore`, définies dans `minos-engine`, et `SemanticVectorStore`, défini dans `minos-domain`. Le module ne dépend pas de `minos-application` (un adaptateur n'en dépend jamais, ADR 0042).
 - **Dépendances** : `minos-domain`, `minos-engine`, `postgresql 42.7.14`, `jackson 2.22`.
 - **Cloisonnement** : les deux backends sont séparés par des règles de packages, pas par Maven. `com.minos.storage.local` et `com.minos.storage.postgresql` ne se nomment pas l'un l'autre ; ils partagent `com.minos.storage.codec` (le codec des snapshots) et `com.minos.storage.home` (le fichier de correspondance des chemins de `MINOS_HOME`), qui ne nomment aucun backend, ni JDBC. La règle `check_storage_package_isolation` le vérifie sur les sources de production et de test, et `ModuleArchitectureTest` sur le bytecode. Ni `minos-bootstrap` ni `minos-provider-scip` ne nomment le backend PostgreSQL ou son pilote (règles R1 et R2) : la racine de composition le découvre par `ServiceLoader`, son service n'est déclaré que par l'assemblage `minos-app`, et la composition locale ne charge aucune de ses classes (`LocalCompositionLoadsNoPostgresqlClassTest`). Une règle ArchUnit (`ModuleArchitectureTest.onlyThePostgresqlBackendUsesPostgresql`) le vérifie aussi sur le bytecode. Les dépendances JDBC et Jackson sont dans le graphe de tout consommateur du module.
 - **Sources** : `minos-storage/src/main/java/com/minos/storage/codec/`, `minos-storage/src/main/java/com/minos/storage/home/`, `minos-storage/src/main/java/com/minos/storage/local/` (sous-packages `store`, `registry`, `orchestration`, `incremental`) et `minos-storage/src/main/java/com/minos/storage/postgresql/` (racine : le backend et son fournisseur `ServiceLoader` ; sous-packages `support` pour la connexion, la politique d'URL JDBC, les migrations, les codecs et le verrou de mutation, `snapshot` pour les stores de snapshots et d'observations, `project` pour le registre, les états d'index et la rétention, `semantic` pour les requêtes et le store vectoriel ; les dépendances vont vers `support`, jamais l'inverse).
@@ -80,8 +80,8 @@ JSON NEXUS, est un module de contrat, entre l'application et les surfaces ; seul
 ### minos-provider-scip
 - **Responsabilité** : adapter SCIP — ingestion des artefacts `.scip`, normalisation vers le domaine MINOS, lifecycle des providers Java/TypeScript/polyglot.
 - **Types clés** : `ScipIngestionAdapter`, `ScipSymbolNormalizer`, `ScipIndexerCatalog`, `ScipJavaProcessPlanFactory`, `ScipTypeScriptProcessPlanFactory`, `ManagedPolyglotScipRuntimeManager`.
-- **Interfaces** : implémente `IndexerProvider`.
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage` (tests seulement : la production reçoit ses magasins de snapshots par les ports `CodeKnowledgeSnapshotStore` et `StagingSnapshotStores` du moteur, que la racine de composition lui fournit), `scip-java-bindings 0.9.0`.
+- **Interfaces** : implémente `IndexerProvider`, défini dans `minos-engine`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage` (test : la production reçoit ses magasins de snapshots par les ports `CodeKnowledgeSnapshotStore` et `StagingSnapshotStores` du moteur, que la racine de composition lui fournit), `scip-java-bindings 0.9.0`.
 - **Sources** : `minos-provider-scip/src/main/java/com/minos/adapter/scip/` (racine : `ScipIndexerCatalog` ; sous-packages `ingestion` pour la lecture et la normalisation des artefacts `.scip`, `runtime` pour le cycle de vie du snapshot, `runtime.install` pour l'installation des outils, `runtime.plan` pour les plans d'indexation ; les dépendances vont de `install` vers `plan`, jamais l'inverse). Les ressources empaquetées restent dans `com/minos/adapter/scip/runtime/` et se chargent par chemin absolu.
 
 ### minos-integration-git
@@ -101,29 +101,29 @@ JSON NEXUS, est un module de contrat, entre l'application et les surfaces ; seul
 ### minos-nexus
 - **Responsabilité** : module de contrat (ni surface ni adaptateur) : export read-only du snapshot normalisé au format contrat JSON NEXUS. Le cas d'usage `KnowledgeExportUseCase` (`minos-application`) sélectionne les faits et résout les chemins ; `NexusExportService` les traduit dans le contrat. Un module de contrat ne dépend que de `minos-domain` et de `minos-application`, et de `minos-bootstrap` en portée test ; aucun adaptateur, ni la racine de composition, ni l'application ne dépend de lui. `NexusSemanticSignalService` (contrat v2 du signal sémantique) n'est qualifié par aucun client.
 - **Types clés** : `NexusExportContract`, `NexusExportService`.
-- **Dépendances** : `minos-domain`, `minos-application`, `minos-bootstrap` (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
+- **Dépendances** : `minos-domain`, `minos-application`, `minos-bootstrap` (test) (voir [`module-dependencies.md`](../diagrams/module-dependencies.md)).
 - **Sources** : `minos-nexus/src/main/java/`.
 
 ### minos-cli
 - **Responsabilité** : surface CLI stable — dispatcher `MinosCli`, toutes les commandes (project, index, search, find-symbol, architecture, impact, runtime, team…).
 - **Types clés** : `MinosCli`, `MinosCliRunner`, `MinosLauncher` et `DockerRuntimeBootstrap` (points d'entrée de processus, noms stables), SPI `McpLaunchRoute` (route `minos mcp`, fournie par `minos-app`).
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`, `minos-nexus`. Aucun adaptateur : la CLI ouvre l'application par `MinosApplication.open` et n'atteint la racine de composition qu'à l'exécution (ADR 0042).
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap` (runtime), `minos-nexus`. Aucun adaptateur : la CLI ouvre l'application par `MinosApplication.open` et n'atteint la racine de composition qu'à l'exécution (ADR 0042).
 - **Sources** : `minos-cli/src/main/java/com/minos/cli/` (racine : les points d'entrée et le SPI ci-dessus, dont les noms qualifiés sont stables ; sous-packages `command` pour les commandes, `operations` pour les opérations d'indexation autonomes et distantes, `support` pour l'analyse d'options, le rendu JSON, l'exécution commune, l'ouverture différée de l'application et les codes de sortie `CliExitCodes` ; les dépendances vont de la racine vers `command`, de `command` vers `operations` et `support`, d'`operations` vers `support`, jamais l'inverse).
 
 ### minos-api
 - **Responsabilité** : API Java publique versionnée exposant les contrats stables.
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap` (runtime).
 - **Sources** : `minos-api/src/main/java/`.
 
 ### minos-mcp
 - **Responsabilité** : serveur MCP STDIO read-only, catalogue d'outils MCP.
 - **Types clés** : `MinosMcpServer`, `MinosMcpApplicationTools`, `MinosApplicationMcpBackend`.
-- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap`, `io.modelcontextprotocol.sdk:mcp 2.0.0`.
+- **Dépendances** : `minos-domain`, `minos-engine`, `minos-application`, `minos-bootstrap` (runtime), `io.modelcontextprotocol.sdk:mcp 2.0.0`.
 - **Sources** : `minos-mcp/src/main/java/com/minos/mcp/`.
 
 ### minos-explorer
 - **Responsabilité** : surface HTTP locale, optionnelle et en lecture seule, d'exploration de l'index sémantique ([ADR 0082](../adr/ARCH-0082-surface-http-locale-optionnelle-de-consultation.md)) ; démarrée par `minos explorer serve`, seul module à porter une écoute HTTP.
-- **Dépendances** : `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`
+- **Dépendances** : `minos-application`, `minos-bootstrap` (runtime), `minos-domain`, `minos-engine` (test).
 - **Sources** : `minos-explorer/src/main/java/com/minos/explorer/`.
 
 ### minos-bootstrap
@@ -133,7 +133,7 @@ JSON NEXUS, est un module de contrat, entre l'application et les surfaces ; seul
 - **Sources** : `minos-bootstrap/src/main/java/com/minos/bootstrap/`.
 
 ### minos-app
-- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), route `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker, `com.minos.app`) fournie à `MinosLauncher` par `META-INF/services` ([ADR 0044](../adr/archive/0044-un-package-un-module.md)).
+- **Responsabilité** : assemblage final (shaded JAR), point d'entrée NEXUS (`NexusExportBridgeMain`), routes `minos mcp` (`McpLaunchRouteProvider` → router backend natif/Docker) et `minos explorer serve` (`ExplorerLaunchRouteProvider`, qui câble la politique de lancement de l'explorateur), toutes deux dans `com.minos.app` et fournies à `MinosLauncher` par `META-INF/services` ([ADR 0044](../adr/archive/0044-un-package-un-module.md)).
 - **Dépendances** : tous les modules.
 - **Sources** : `minos-app/src/main/java/`.
 

@@ -8,7 +8,7 @@
 ```mermaid
 flowchart TB
     clients(["Développeur, IDE, agent IA"])
-    app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, route MCP"]
+    app["<b>minos-app</b><br/>assemblage distribué : lanceur, JAR ombré, routes MCP et explorateur"]
     surfaces["<b>Surfaces</b><br/>minos-cli · minos-mcp · minos-api · minos-explorer"]
     contract["<b>Module de contrat</b><br/>minos-nexus : contrat JSON NEXUS"]
     bootstrap["<b>minos-bootstrap</b><br/>racine de composition (ADR-0042)"]
