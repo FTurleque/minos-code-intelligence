@@ -172,13 +172,13 @@ exploration-semantique : comportement de lancement qualifié sur Windows et Linu
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| exploration-semantique › Le mode équipe est interprété par une seule règle au lancement de l'explorateur | Mode équipe activé ; désactivé ou absent | séquence | 2.1 | `ExplorerLaunchRouteProviderTest` (existant, à étendre) |
-| idem | Valeur non reconnue | D1 | 2.1 | `ExplorerLaunchRouteProviderTest` (`:104-118`, à modifier) |
-| idem | Même règle que l'application | Modèle | 1.1 | `HostedModeTest`, à écrire |
-| exploration-semantique › Chaque refus de lancement de l'explorateur a un seul texte | Une seule définition | D2 | 2.2 | recherche textuelle |
-| idem | Même texte avant et après l'ouverture | D2 | 2.1 | à écrire |
-| idem | Home au backend Docker sur un poste | séquence | 2.1 | `ExplorerLaunchRouteProviderTest` (existant) |
-| frontieres-de-modules › Les classes de production de minos-app sont tenues par liste fermée | les quatre scénarios | D4 | 3.1, 3.2 | `test_check_module_boundaries.py`, à écrire |
+| exploration-semantique › Le mode équipe est interprété par une seule règle au lancement de l'explorateur | Mode équipe activé ; désactivé ou absent | séquence | 2.1 | `ExplorerLaunchRouteProviderTest#aHomeInTeamModeIsRefusedBeforeAnythingIsOpened` (`enabled`, `ENABLED`, `Enabled`), `#aHomeWhoseTeamModeIsDisabledIsServed` ; `ExplorerLaunchPolicyTest` |
+| idem | Valeur non reconnue | D1 | 2.1 | `ExplorerLaunchRouteProviderTest#anUnsupportedTeamModeIsAUsageErrorBeforeAnythingIsOpened` |
+| idem | Même règle que l'application | Modèle | 1.1 | `HostedModeTest` (classement par la règle et par l'ouverture ; `enabled` classé par la règle seule, l'ouverture demandant la racine de composition) |
+| exploration-semantique › Chaque refus de lancement de l'explorateur a un seul texte | Une seule définition | D2 | 2.2 | recherche `is not available when the team mode is enabled` : une ligne, `ExplorerLaunchPolicy.java` |
+| idem | Même texte avant et après l'ouverture | D2 | 2.1 | `ExplorerLaunchRouteProviderTest` et `ExplorerSessionTest` comparent la sortie à `ExplorerLaunchPolicy.TEAM_MODE_REFUSED` |
+| idem | Home au backend Docker sur un poste | séquence | 2.1 | `ExplorerLaunchRouteProviderTest#aHomeOnTheDockerBackendIsNotOpenedOnTheHost`, `#theDockerBackendIsRefusedFirstWithoutReadingTheTeamMode` |
+| frontieres-de-modules › Les classes de production de minos-app sont tenues par liste fermée | les quatre scénarios | D4 | 3.1, 3.2 | `AssemblyClassesRuleTest` (`test_check_module_boundaries.py`), règle A20 |
 
 ## Questions ouvertes
 
