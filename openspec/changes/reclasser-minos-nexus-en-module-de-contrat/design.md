@@ -143,7 +143,7 @@ La seule arête qui partait d'une surface vers une autre devient une arête surf
 
 ### D1 — Requalifier `minos-nexus` en module de contrat
 
-Statut : [Proposition], à confirmer par le propriétaire.
+Statut : [Décision] du propriétaire, 2026-11-17 : requalifier, sans absorption.
 
 Choix : garder le module, changer sa famille dans le garde, dans ArchUnit et dans la documentation.
 
@@ -158,7 +158,7 @@ ADR : note datée dans « Mise en œuvre » d'ARCH-0068 (famille de contrat, rè
 
 ### D2 — `NexusSemanticSignalService` reste, déclarée non qualifiée
 
-Statut : [Proposition], à confirmer par le propriétaire.
+Statut : [Décision] du propriétaire, 2026-11-17 : garder la classe, déclarée non qualifiée.
 
 Choix : la classe et son contrat v2 restent ; l'entrée A15 reste ; la documentation dit « non qualifié par un client ».
 
@@ -211,18 +211,18 @@ Statut : [Décision] de conception. La règle ArchUnit de l'explorateur (`Module
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| frontieres-de-modules › Un module de contrat reste sous les surfaces | Dépôt réel | D1 | 1.2 | garde sur le dépôt : à exécuter |
-| idem | Module de contrat qui dépend d'une surface | D1 | 1.1 | `test_check_module_boundaries.py` : à écrire |
-| idem | Racine de composition hors portée test | D1 | 1.1 | à écrire |
-| idem | Type du moteur réintroduit | D3 | 1.1 | cas existant à conserver, à rejouer |
-| frontieres-de-modules › Aucune surface ne dépend d'une autre surface | Arête de la CLI vers le contrat NEXUS | diagramme | 1.2 | garde sur le dépôt |
-| idem | Surface qui dépend d'une surface | diagramme | 1.1 | à écrire |
-| frontieres-de-modules › Le signal sémantique NEXUS est déclaré non qualifié | Documentation honnête | D2 | 2.2 | recherche textuelle : à exécuter |
-| idem | Entrée du cliquet retirée sans appelant | D2 | 2.1 | à écrire (aucun cas ne porte sur cette classe) |
-| frontieres-de-modules › Les surfaces n'assemblent pas le cycle d'indexation (modifiée) | les deux scénarios | D3 | 1.2 | recherche textuelle et garde : à exécuter |
-| frontieres-de-modules › Les types du moteur nommés par une surface le sont par liste fermée (modifiée) | les cinq scénarios | D3 | 1.1, 1.2 | cas A11 existants : à rejouer |
-| — (règles conservées) | adaptateur, racine de composition et application ↛ module de contrat | D4 | 1.1, 1.3 | quatre cas refusés : à écrire |
+| frontieres-de-modules › Un module de contrat reste sous les surfaces | Dépôt réel | D1 | 1.2 | `python scripts/architecture/check-module-boundaries.py` : code 0, ligne « A2 module families: … contract modules=1 (minos-nexus) » ; `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#contractModulesSitBelowTheSurfaces` |
+| idem | Module de contrat qui dépend d'une surface | D1 | 1.1 | `scripts/architecture/test_check_module_boundaries.py#test_a_contract_module_may_not_depend_on_a_surface`, `scripts/architecture/test_check_module_boundaries.py#test_a_contract_module_depends_only_on_the_domain_and_the_application` |
+| idem | Racine de composition hors portée test | D1 | 1.1 | `scripts/architecture/test_check_module_boundaries.py#test_a_contract_module_sees_the_composition_root_in_tests_only` |
+| idem | Type du moteur réintroduit | D3 | 1.1 | `scripts/architecture/test_check_module_boundaries.py#test_an_engine_type_back_in_nexus_is_refused_against_the_real_list` (rejoué, vert) |
+| frontieres-de-modules › Aucune surface ne dépend d'une autre surface | Arête de la CLI vers le contrat NEXUS | diagramme | 1.2 | garde sur le dépôt ; `scripts/architecture/test_check_module_boundaries.py#test_a_surface_may_depend_on_a_contract_module` |
+| idem | Surface qui dépend d'une surface | diagramme | 1.1 | `scripts/architecture/test_check_module_boundaries.py#test_no_surface_depends_on_another_surface_in_any_scope`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#noSurfaceUsesAnotherSurface` (rouge : 56 violations `minos-cli` → `minos-nexus` tant que NEXUS était une surface) |
+| frontieres-de-modules › Le signal sémantique NEXUS est déclaré non qualifié | Documentation honnête | D2 | 2.2 | recherche de `NexusSemanticSignalService` dans `docs/developer/public-surfaces.md` : « non qualifié » sur ses deux lignes |
+| idem | Entrée du cliquet retirée sans appelant | D2 | 2.1 | `scripts/architecture/test_check_module_boundaries.py#test_the_nexus_semantic_signal_stays_declared_as_not_qualified` |
+| frontieres-de-modules › Les surfaces n'assemblent pas le cycle d'indexation (modifiée) | les deux scénarios | D3 | 1.2 | `new IndexingLifecycleService` dans les sources de production de `minos-cli`, `minos-api`, `minos-mcp`, `minos-nexus` : 0 ligne ; garde vert |
+| frontieres-de-modules › Les types du moteur nommés par une surface le sont par liste fermée (modifiée) | les cinq scénarios | D3 | 1.1, 1.2 | cas A11 existants rejoués sur l'union surfaces et modules de contrat (260 cas verts) |
+| — (règles conservées) | adaptateur, racine de composition et application ↛ module de contrat | D4 | 1.1, 1.3 | POM : `scripts/architecture/test_check_module_boundaries.py#test_an_adapter_and_the_composition_root_never_reach_a_contract_module` ; bytecode : `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#adaptersDoNotReachBackIntoUpperLayers`, `applicationOnlyKnowsPorts` étendues, sans cas refusé exécuté (une classe fautive exigerait d'abord une arête Maven que A2 refuse) |
 
 ## Questions ouvertes
 
-- D1 et D2 attendent le propriétaire (recommandations ci-dessus). Si D1 bascule vers une absorption, les specs et les tâches de ce changement sont à réécrire avant `/opsx:apply`.
+Aucune : D1 et D2 sont tranchées (2026-11-17).

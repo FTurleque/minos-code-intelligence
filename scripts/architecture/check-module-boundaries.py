@@ -38,7 +38,9 @@ MODULES = (
 # file system, PostgreSQL, SCIP, Git). The application layer only knows ports; no adapter reaches
 # back into it. minos-bootstrap is the composition root: the ONLY non-adapter module that knows
 # concrete adapter classes, apart from minos-app, the final distributable assembly. Surfaces open the
-# application through MinosApplication.open and reach the composition root at runtime only.
+# application through MinosApplication.open and reach the composition root at runtime only. A contract module
+# translates an application result into a versioned external contract (ADR 0020): it sits between the application
+# and the surfaces, which may depend on it; no surface depends on another surface.
 ADAPTER_MODULES = frozenset({
     "minos-runtime-local",
     "minos-storage",
@@ -48,9 +50,15 @@ ADAPTER_MODULES = frozenset({
 APPLICATION_MODULE = "minos-application"
 BOOTSTRAP_MODULE = "minos-bootstrap"
 ASSEMBLY_MODULE = "minos-app"
-SURFACE_MODULES = frozenset({"minos-cli", "minos-api", "minos-mcp", "minos-nexus", "minos-explorer"})
+SURFACE_MODULES = frozenset({"minos-cli", "minos-api", "minos-mcp", "minos-explorer"})
+CONTRACT_MODULES = frozenset({"minos-nexus"})
 # Surfaces may see the composition root at runtime or in tests, never at compile time.
 SURFACE_TO_BOOTSTRAP_SCOPES = frozenset({"runtime", "test"})
+# A contract module depends on these modules only; it sees the composition root in test scope only.
+CONTRACT_MODULE_DEPENDENCIES = frozenset({"minos-domain", "minos-application"})
+CONTRACT_TO_BOOTSTRAP_SCOPES = frozenset({"test"})
+# The modules held by the A11 ratchet on minos-engine types: every surface and every contract module.
+ENGINE_TYPE_RATCHETED_MODULES = SURFACE_MODULES | CONTRACT_MODULES
 # Couples (module, dependency) allowed in test scope only: the SCIP provider receives its snapshot stores through
 # engine ports (SH-06), and its tests keep the real file store of minos-storage.
 TEST_ONLY_DEPENDENCIES = frozenset({("minos-provider-scip", "minos-storage")})
@@ -79,7 +87,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-api": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-mcp": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     # ADR 0082: the local HTTP exploration surface. It is started through the ExplorerLaunchRoute service that
-    # minos-app provides, so no other surface depends on it.
+    # minos-app provides; like every surface, it depends on no other surface.
     "minos-explorer": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-app": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage",
@@ -240,9 +248,47 @@ def test_only_dependency_violations(module: str, dependencies: dict[str, str]) -
             if owner == module and dependencies.get(dependency, "test") != "test"]
 
 
+def surface_violations(module: str, dependencies: dict[str, str]) -> list[str]:
+    """A2 — a surface reaches no adapter, sees the composition root at runtime or in tests only, and depends on no
+    other surface (a contract module is allowed)."""
+    violations = [
+        f"{module} -> {adapter} [{dependencies[adapter]}] (a surface must reach adapters only "
+        "through application ports; the composition root minos-bootstrap wires them)"
+        for adapter in sorted(set(dependencies) & ADAPTER_MODULES)]
+    bootstrap_scope = dependencies.get(BOOTSTRAP_MODULE)
+    if bootstrap_scope is not None and bootstrap_scope not in SURFACE_TO_BOOTSTRAP_SCOPES:
+        violations.append(
+            f"{module} -> {BOOTSTRAP_MODULE} [{bootstrap_scope}] (a surface may see the composition "
+            "root only in runtime or test scope, never at compile time)")
+    violations += [
+        f"{module} -> {surface} [{dependencies[surface]}] (a surface never depends on another surface; "
+        "a translation shared by surfaces belongs to a contract module)"
+        for surface in sorted((set(dependencies) & SURFACE_MODULES) - {module})]
+    return violations
+
+
+def contract_module_violations(module: str, dependencies: dict[str, str]) -> list[str]:
+    """A2 — a contract module depends only on CONTRACT_MODULE_DEPENDENCIES, and on the composition root in test
+    scope only."""
+    violations = []
+    for dependency, scope in sorted(dependencies.items()):
+        if dependency == BOOTSTRAP_MODULE:
+            if scope not in CONTRACT_TO_BOOTSTRAP_SCOPES:
+                violations.append(
+                    f"{module} -> {BOOTSTRAP_MODULE} [{scope}] (a contract module may see the composition "
+                    "root only in test scope)")
+        elif dependency not in CONTRACT_MODULE_DEPENDENCIES:
+            violations.append(
+                f"{module} -> {dependency} [{scope}] (a contract module depends only on "
+                f"{', '.join(sorted(CONTRACT_MODULE_DEPENDENCIES))}; never on a surface, an adapter, "
+                "the engine or the assembly)")
+    return violations
+
+
 def check_hexagonal_boundaries(scoped: dict[str, dict[str, str]]) -> None:
     """A2 / ADR 0042 — explicit, scope-aware hexagonal rules (all scopes unless stated)."""
-    roles = (ADAPTER_MODULES | SURFACE_MODULES | {APPLICATION_MODULE, BOOTSTRAP_MODULE, ASSEMBLY_MODULE}
+    roles = (ADAPTER_MODULES | SURFACE_MODULES | CONTRACT_MODULES
+             | {APPLICATION_MODULE, BOOTSTRAP_MODULE, ASSEMBLY_MODULE}
              | {name for couple in TEST_ONLY_DEPENDENCIES for name in couple})
     unknown = roles - set(MODULES)
     if unknown:
@@ -257,24 +303,20 @@ def check_hexagonal_boundaries(scoped: dict[str, dict[str, str]]) -> None:
                 f"{module} -> {adapter} (the application layer must depend only on ports; "
                 "wire the adapter from the composition root minos-bootstrap)" for adapter in adapters]
         elif module in SURFACE_MODULES:
-            violations += [
-                f"{module} -> {adapter} [{dependencies[adapter]}] (a surface must reach adapters only "
-                "through application ports; the composition root minos-bootstrap wires them)"
-                for adapter in adapters]
-            bootstrap_scope = dependencies.get(BOOTSTRAP_MODULE)
-            if bootstrap_scope is not None and bootstrap_scope not in SURFACE_TO_BOOTSTRAP_SCOPES:
-                violations.append(
-                    f"{module} -> {BOOTSTRAP_MODULE} [{bootstrap_scope}] (a surface may see the composition "
-                    "root only in runtime or test scope, never at compile time)")
+            violations += surface_violations(module, dependencies)
+        elif module in CONTRACT_MODULES:
+            violations += contract_module_violations(module, dependencies)
         elif module in ADAPTER_MODULES:
-            for forbidden in sorted({APPLICATION_MODULE, BOOTSTRAP_MODULE, ASSEMBLY_MODULE} | SURFACE_MODULES):
+            for forbidden in sorted({APPLICATION_MODULE, BOOTSTRAP_MODULE, ASSEMBLY_MODULE} | SURFACE_MODULES
+                                    | CONTRACT_MODULES):
                 if forbidden in dependencies:
                     violations.append(
                         f"{module} -> {forbidden} (an adapter must implement engine/domain ports and never "
-                        "depend on the application, the composition root or a surface)")
+                        "depend on the application, the composition root, a contract module or a surface)")
         elif module == BOOTSTRAP_MODULE:
-            for surface in sorted(set(dependencies) & (SURFACE_MODULES | {ASSEMBLY_MODULE})):
-                violations.append(f"{module} -> {surface} (the composition root sits below the surfaces)")
+            for upper in sorted(set(dependencies) & (SURFACE_MODULES | CONTRACT_MODULES | {ASSEMBLY_MODULE})):
+                violations.append(f"{module} -> {upper} (the composition root sits below the contract modules "
+                                  "and the surfaces)")
         elif module != ASSEMBLY_MODULE:
             # minos-domain, minos-engine: no adapter either. minos-bootstrap (and the final assembly
             # minos-app) are the only non-adapter modules allowed to know concrete adapter classes.
@@ -847,15 +889,17 @@ def named_type_ratchet_problems(rule: str, label: str, table: str, root: Path, n
 
 def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None = None,
                                          listed: dict[str, dict[str, int]] | None = None) -> dict[str, int]:
-    """A11 — each surface uses only the minos-engine types of its ENGINE_TYPES_NAMED_BY_SURFACE list, each from the
-    listed number of files; a call of a MinosApplication accessor counts as a use of the engine type it returns."""
+    """A11 — each surface and each contract module uses only the minos-engine types of its
+    ENGINE_TYPES_NAMED_BY_SURFACE list, each from the listed number of files; a call of a MinosApplication accessor
+    counts as a use of the engine type it returns."""
     listed = ENGINE_TYPES_NAMED_BY_SURFACE if listed is None else listed
     group = group_id or repository_group_id(root)
     qualified_name = qualified_name_pattern(group)
     accessors = minos_application_accessors(root, group)
-    unknown = sorted(set(listed) - SURFACE_MODULES)
-    problems = [f"ENGINE_TYPES_NAMED_BY_SURFACE names {module}, which is not a surface" for module in unknown]
-    for surface in sorted(SURFACE_MODULES):
+    unknown = sorted(set(listed) - ENGINE_TYPE_RATCHETED_MODULES)
+    problems = [f"ENGINE_TYPES_NAMED_BY_SURFACE names {module}, which is neither a surface nor a contract module"
+                for module in unknown]
+    for surface in sorted(ENGINE_TYPE_RATCHETED_MODULES):
         problems += named_type_ratchet_problems("A11", surface, "ENGINE_TYPES_NAMED_BY_SURFACE", root, surface,
                                                 ENGINE_MODULE, listed.get(surface, {}), group, qualified_name,
                                                 accessors)
@@ -863,7 +907,7 @@ def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None
         fail("A11 surface -> minos-engine ratchet (ADR 0058 section 3: a new engine type used by a surface needs a "
              "justification; go through an application port, or add the type to ENGINE_TYPES_NAMED_BY_SURFACE in "
              "a reviewed change): " + "; ".join(problems))
-    return {surface: len(listed.get(surface, {})) for surface in sorted(SURFACE_MODULES)}
+    return {surface: len(listed.get(surface, {})) for surface in sorted(ENGINE_TYPE_RATCHETED_MODULES)}
 
 
 COMPOSITION_ROOT_USE = re.compile(r"\bcompositionRoot\s*\(|::\s*compositionRoot\b|\bMinosApplicationComposers?\b")
@@ -885,8 +929,9 @@ def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = 
             problems.append(f"MinosApplication.{name} returns {engine_type}, listed as {listed[name]}")
     problems += [f"MINOS_APPLICATION_ENGINE_ACCESSORS entry {name} is no longer a public accessor returning an "
                  "engine type; remove it (the ratchet only shrinks)" for name in sorted(set(listed) - set(accessors))]
-    # The composition root hands out engine ports under an application type: a surface would bypass the table.
-    for surface in sorted(SURFACE_MODULES):
+    # The composition root hands out engine ports under an application type: a surface or a contract module would
+    # bypass the table.
+    for surface in sorted(ENGINE_TYPE_RATCHETED_MODULES):
         source_root = root / surface / "src" / "main" / "java"
         if not source_root.is_dir():
             continue
@@ -1984,6 +2029,9 @@ def main() -> int:
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
+        print(f"A2 module families: adapters={len(ADAPTER_MODULES)}, contract modules={len(CONTRACT_MODULES)} "
+              f"({', '.join(sorted(CONTRACT_MODULES))}), surfaces={len(SURFACE_MODULES)}, no surface depends on "
+              "another surface")
         print(f"A3 package ownership: packages={packages}, each owned by exactly one module")
         print(f"A8 package cycles: {cycles} known cycles over "
               f"{sum(len(members) for members, _ in KNOWN_PACKAGE_CYCLES.values())} packages, none new "
@@ -1992,7 +2040,7 @@ def main() -> int:
         print(f"A17 ArchUnit policy: {architecture_test} modules, ModuleArchitectureTest.ALLOWED equals ALLOWED_DEPENDENCIES")
         print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
               f"modules, none other is")
-        print("A11 surface -> minos-engine types: "
+        print("A11 surface and contract module -> minos-engine types: "
               + ", ".join(f"{surface}={count} ({sum(ENGINE_TYPES_NAMED_BY_SURFACE.get(surface, {}).values())} files)"
                           for surface, count in engine_types.items())
               + " listed in ENGINE_TYPES_NAMED_BY_SURFACE (names and MinosApplication accessors), none other is used")
