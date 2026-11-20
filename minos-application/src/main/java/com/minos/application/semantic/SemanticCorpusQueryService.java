@@ -11,7 +11,7 @@ import com.minos.registry.RegisteredProject;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVectorStore;
-import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.CodeKnowledgeReader;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotReadView;
 import com.minos.store.cache.WeightedLruCache;
@@ -23,14 +23,12 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
-import java.util.WeakHashMap;
 
 /**
  * Read-only consultation of the semantic documents of a project: paged list, detail of one document and its
@@ -66,17 +64,12 @@ public final class SemanticCorpusQueryService {
     private final SemanticSearchService semanticSearch;
     private final HybridSearchService hybridSearch;
 
-    /** Projects whose fingerprint, a few bytes each, is kept; and projects whose symbols, far heavier, are. */
+    /** Projects whose fingerprint, a few bytes each, is kept between two requests. */
     static final int MAX_FINGERPRINTED_PROJECTS = 64;
 
     private final Object cacheLock = new Object();
     private final WeightedLruCache<String, FingerprintedIndex> fingerprints =
             new WeightedLruCache<>(MAX_FINGERPRINTED_PROJECTS, MAX_FINGERPRINTED_PROJECTS);
-    /**
-     * The symbol table of each snapshot view still in use, held through the view (AUD-PERF-04, D3): a view that the
-     * store no longer keeps and no request uses is collected with its table. The table never refers to its view.
-     */
-    private final Map<SnapshotReadView, SymbolLookup> lookups = new WeakHashMap<>();
 
     public SemanticCorpusQueryService(ProjectRegistry registry, ProjectResolver projects,
                                       CodeKnowledgeSnapshotStore snapshots, SemanticIndexService indexService,
@@ -402,8 +395,12 @@ public final class SemanticCorpusQueryService {
         return Sha256.hex(digest);
     }
 
+    /**
+     * The symbols of the snapshot {@code indexedSnapshotId}, read through the active view of the store for the
+     * time of one request. Nothing is kept once the request is answered: a view the store evicts takes its
+     * symbols with it.
+     */
     private SymbolLookup lookup(RegisteredProject project, String indexedSnapshotId) throws IOException {
-        String projectId = project.id().toString();
         Optional<String> active = snapshots.activeSnapshotId(project.id());
         if (active.isEmpty() || !active.orElseThrow().equals(indexedSnapshotId)) {
             return SymbolLookup.unresolved();
@@ -412,16 +409,7 @@ public final class SemanticCorpusQueryService {
         if (loaded.isEmpty() || !indexedSnapshotId.equals(loaded.orElseThrow().snapshot().snapshotId())) {
             return SymbolLookup.unresolved();
         }
-        SnapshotReadView view = loaded.orElseThrow();
-        synchronized (cacheLock) {
-            SymbolLookup known = lookups.get(view);
-            if (known != null && known.describes(projectId, indexedSnapshotId)) return known;
-        }
-        SymbolLookup built = SymbolLookup.of(projectId, view.snapshot());
-        synchronized (cacheLock) {
-            lookups.put(view, built);
-        }
-        return built;
+        return SymbolLookup.of(project.id().toString(), loaded.orElseThrow().reader());
     }
 
     private static void requireStableKey(String stableKey) {
@@ -704,52 +692,37 @@ public final class SemanticCorpusQueryService {
         }
     }
 
-    /** The symbols of one snapshot by identifier and the first symbol of each file, to describe documents. */
+    /**
+     * The indexed reads of one view, to describe the documents of one request: a symbol by identifier, and the
+     * symbol of smallest key of each file. It holds no symbol of its own and lives no longer than its request.
+     */
     private static final class SymbolLookup {
-        private static final SymbolLookup UNRESOLVED = new SymbolLookup(null, null, Map.of(), Map.of());
+        private static final SymbolLookup UNRESOLVED = new SymbolLookup(null, null);
 
         private final String projectId;
-        private final String snapshotId;
-        private final Map<String, Symbol> byId;
-        private final Map<String, Symbol> firstByFile;
+        private final CodeKnowledgeReader reader;
 
-        private SymbolLookup(String projectId, String snapshotId, Map<String, Symbol> byId,
-                             Map<String, Symbol> firstByFile) {
+        private SymbolLookup(String projectId, CodeKnowledgeReader reader) {
             this.projectId = projectId;
-            this.snapshotId = snapshotId;
-            this.byId = byId;
-            this.firstByFile = firstByFile;
+            this.reader = reader;
         }
 
         static SymbolLookup unresolved() {
             return UNRESOLVED;
         }
 
-        static SymbolLookup of(String projectId, CodeKnowledgeSnapshot snapshot) {
-            Map<String, Symbol> byId = new HashMap<>();
-            Map<String, Symbol> firstByFile = new HashMap<>();
-            for (Symbol symbol : snapshot.symbols()) {
-                byId.put(symbol.id(), symbol);
-                String fileId = symbol.location() == null ? symbol.fileId() : symbol.location().fileId();
-                if (fileId == null) continue;
-                firstByFile.merge(fileId, symbol,
-                        (kept, candidate) -> candidate.symbolKey().compareTo(kept.symbolKey()) < 0 ? candidate : kept);
-            }
-            return new SymbolLookup(projectId, snapshot.snapshotId(), byId, firstByFile);
+        static SymbolLookup of(String projectId, CodeKnowledgeReader reader) {
+            return new SymbolLookup(projectId, reader);
         }
 
         boolean resolved() {
-            return snapshotId != null;
-        }
-
-        boolean describes(String otherProjectId, String otherSnapshotId) {
-            return resolved() && projectId.equals(otherProjectId) && snapshotId.equals(otherSnapshotId);
+            return reader != null;
         }
 
         DocumentSummary summarize(SemanticDocument document) {
-            Symbol symbol = document.kind() == SemanticDocumentKind.FILE ? null : byId.get(document.sourceId());
-            Symbol described = symbol != null ? symbol
-                    : document.fileId() == null ? null : firstByFile.get(document.fileId());
+            Symbol symbol = document.kind() == SemanticDocumentKind.FILE || !resolved() ? null
+                    : reader.findSymbolById(projectId, document.sourceId()).orElse(null);
+            Symbol described = symbol != null ? symbol : fileSymbol(document.fileId());
             return new DocumentSummary(document.stableKey(), document.kind().name(), document.sourceId(),
                     document.fileId(), document.startLine(), document.endLine(), document.checksum(),
                     document.content().length(), symbol != null,
@@ -758,6 +731,22 @@ public final class SemanticCorpusQueryService {
                     symbol == null ? null : symbol.kind().name(),
                     described == null ? null : described.language(),
                     described == null ? null : described.moduleId());
+        }
+
+        /**
+         * The symbol that describes {@code fileId}: of smallest key among the symbols whose location names the
+         * file, or whose own file is it when they have no location. The reader may also list under a file a
+         * symbol whose location names another one; such a symbol does not describe it.
+         */
+        private Symbol fileSymbol(String fileId) {
+            if (fileId == null || !resolved()) return null;
+            Symbol kept = null;
+            for (Symbol candidate : reader.findFileSymbols(projectId, fileId, Integer.MAX_VALUE)) {
+                String located = candidate.location() == null ? candidate.fileId() : candidate.location().fileId();
+                if (!fileId.equals(located)) continue;
+                if (kept == null || candidate.symbolKey().compareTo(kept.symbolKey()) < 0) kept = candidate;
+            }
+            return kept;
         }
     }
 }

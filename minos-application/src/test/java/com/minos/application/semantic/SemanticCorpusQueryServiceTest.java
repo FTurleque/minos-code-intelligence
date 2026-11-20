@@ -691,14 +691,71 @@ class SemanticCorpusQueryServiceTest {
     void anEvictedViewIsNoLongerReachableFromTheService() throws Exception {
         corpus.documents(projectId, new SemanticCorpusQueryService.DocumentsRequest(null, 50, null, null, null, null));
         WeakReference<SnapshotReadView> served = new WeakReference<>(snapshots.view);
+        WeakReference<Symbol> servedSymbol = new WeakReference<>(snapshots.view.snapshot().symbols().getFirst());
 
-        snapshots.evict();
+        // The store drops the view and keeps no symbol of it in memory, as a store that reloads from disk would.
+        snapshots.evictAndForgetSymbols();
 
-        for (int attempt = 0; attempt < 50 && served.get() != null; attempt++) {
+        for (int attempt = 0; attempt < 50 && (served.get() != null || servedSymbol.get() != null); attempt++) {
             System.gc();
             Thread.onSpinWait();
         }
         assertNull(served.get(), "the service keeps neither the evicted view nor anything that holds it");
+        assertNull(servedSymbol.get(), "the service keeps no symbol of the evicted view, without another call");
+    }
+
+    @Test
+    void aFileIsDescribedByItsSymbolOfSmallestKeyWhateverItsPosition() throws Exception {
+        // The symbol of smallest key comes last by position; a symbol whose location names another file and
+        // whose key is smaller still does not describe the file of its fileId.
+        useSnapshotAndFileDocuments(List.of(
+                fileSymbol("zeta", "key-z", "src/Gamma.java", "src/Gamma.java", 2, "java", "early"),
+                fileSymbol("alef", "key-b", "src/Gamma.java", "src/Gamma.java", 9, "kotlin", "late"),
+                fileSymbol("moved", "key-a", "src/Gamma.java", "src/Other.java", 1, "scala", "elsewhere")),
+                "src/Gamma.java");
+
+        SemanticCorpusQueryService.DocumentSummary gamma = corpus.documents(projectId,
+                new SemanticCorpusQueryService.DocumentsRequest(null, 50, null, null, null, null))
+                .documents().getFirst();
+
+        assertEquals("src/Gamma.java", gamma.fileId());
+        assertFalse(gamma.symbolResolved());
+        assertEquals("kotlin", gamma.language());
+        assertEquals("late", gamma.moduleId());
+    }
+
+    @Test
+    void aSymbolWithoutLocationDescribesTheFileOfItsFileId() throws Exception {
+        useSnapshotAndFileDocuments(List.of(
+                fileSymbol("loose", "key-l", "src/Delta.java", null, 0, "go", "loose-module")),
+                "src/Delta.java");
+
+        SemanticCorpusQueryService.DocumentSummary delta = corpus.documents(projectId,
+                new SemanticCorpusQueryService.DocumentsRequest(null, 50, null, null, null, null))
+                .documents().getFirst();
+
+        assertEquals("go", delta.language());
+        assertEquals("loose-module", delta.moduleId());
+    }
+
+    private void useSnapshotAndFileDocuments(List<Symbol> symbols, String... fileIds) {
+        snapshots.active = new CodeKnowledgeSnapshot(projectUuid, ACTIVE, symbols, List.of(), List.of());
+        List<SemanticDocument> documents = new ArrayList<>();
+        for (String fileId : fileIds) {
+            documents.add(new SemanticDocument("id-" + fileId, "file:" + fileId, projectId, ACTIVE,
+                    SemanticDocumentKind.FILE, fileId, fileId, 0, 0, "file " + fileId, "chk-" + fileId));
+        }
+        vectors.replace(indexOf(documents, ACTIVE, 7_000L));
+    }
+
+    private Symbol fileSymbol(String name, String symbolKey, String fileId, String locationFileId, int line,
+                              String language, String moduleId) {
+        SymbolLocation location = locationFileId == null ? null
+                : new SymbolLocation(locationFileId, line, 0, line, 10, PositionEncoding.UTF16_CODE_UNITS);
+        return new Symbol("sym-" + name, symbolKey, SymbolIdentityQuality.CANONICAL, projectId, moduleId,
+                fileId, null, SymbolKind.METHOD, name, "pkg." + name, "void " + name + "()", language, location,
+                ResolutionStatus.RESOLVED, new Origin("fixture", "TEST", "1", "run-1", OriginType.OTHER),
+                false, false, Set.of());
     }
 
     @Test
@@ -750,8 +807,18 @@ class SemanticCorpusQueryServiceTest {
             return Optional.ofNullable(active).map(CodeKnowledgeSnapshot::snapshotId);
         }
 
-        void evict() {
+        /** Drops the view and replaces the active snapshot by an equal one made of new symbol objects. */
+        void evictAndForgetSymbols() {
             view = null;
+            List<Symbol> reloaded = active.symbols().stream()
+                    .map(symbol -> new Symbol(symbol.id(), symbol.symbolKey(), symbol.identityQuality(),
+                            symbol.projectId(), symbol.moduleId(), symbol.fileId(), symbol.parentSymbolId(),
+                            symbol.kind(), symbol.name(), symbol.qualifiedName(), symbol.signature(),
+                            symbol.language(), symbol.location(), symbol.resolutionStatus(), symbol.origin(),
+                            symbol.external(), symbol.generated(), symbol.providerReferences()))
+                    .toList();
+            active = new CodeKnowledgeSnapshot(active.projectId(), active.snapshotId(), reloaded,
+                    active.occurrences(), active.relationships());
         }
 
         @Override
