@@ -64,6 +64,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_runner import run_gate
+
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST = Path(__file__).resolve().parent / "private-io-allowlist.json"
 
@@ -533,24 +537,23 @@ def inventory(root: Path, allowlist: Path) -> list[str]:
     return lines
 
 
+def run_checks() -> str:
+    """Runs the gate, or the inventory with --inventory, and returns the text to print on stdout."""
+    if sys.argv[1:] == ["--inventory"]:
+        return "\n".join(inventory(ROOT, ALLOWLIST))
+    if sys.argv[1:]:
+        raise ValueError(f"unknown arguments: {', '.join(sys.argv[1:])}")
+    violations, scanned, listed = check(ROOT, ALLOWLIST)
+    if violations:
+        for violation in violations:
+            print(f"  - {violation}", file=sys.stderr)
+        raise ValueError(f"{len(violations)} violation(s)")
+    return (f"PRIVATE I/O PRIMITIVES GATE SUCCESS (sources={scanned}, allowlisted-occurrences={listed}, "
+            f"forbidden={len(FORBIDDEN)}, primitives={len(PRIMITIVES)})")
+
+
 def main() -> int:
-    try:
-        if sys.argv[1:] == ["--inventory"]:
-            print("\n".join(inventory(ROOT, ALLOWLIST)))
-            return 0
-        if sys.argv[1:]:
-            raise ValueError(f"unknown arguments: {', '.join(sys.argv[1:])}")
-        violations, scanned, listed = check(ROOT, ALLOWLIST)
-        if violations:
-            for violation in violations:
-                print(f"  - {violation}", file=sys.stderr)
-            raise ValueError(f"{len(violations)} violation(s)")
-        print(f"PRIVATE I/O PRIMITIVES GATE SUCCESS (sources={scanned}, allowlisted-occurrences={listed}, "
-              f"forbidden={len(FORBIDDEN)}, primitives={len(PRIMITIVES)})")
-        return 0
-    except Exception as exception:
-        print(f"PRIVATE I/O PRIMITIVES GATE FAILED: {exception}", file=sys.stderr)
-        return 1
+    return run_gate("PRIVATE I/O PRIMITIVES GATE", run_checks)
 
 
 if __name__ == "__main__":
