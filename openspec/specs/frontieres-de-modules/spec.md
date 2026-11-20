@@ -1312,7 +1312,7 @@ Le garde de frontières SHALL refuser toute source de production de `minos-appli
 - **THEN** le cas vérifie que le garde réussit
 
 ### Requirement: Une classe d'adaptateur embarquée n'est nommée que par sa famille
-Le garde de frontières SHALL tenir la liste fermée des classes d'adaptateur que `minos-application` embarque, chacune avec sa justification. Aucune source de production de `minos-application` hors de cette liste SHALL nommer une de ces classes, par import, nom qualifié ou nom simple du même package. La liste SHALL seulement rétrécir.
+Le garde de frontières SHALL tenir la liste fermée des classes d'adaptateur que `minos-application` embarque, chacune avec sa justification. Aucune source de production de `minos-application` hors de cette liste SHALL nommer une de ces classes, par import, nom qualifié ou nom simple du même package. Chaque classe de `INFRASTRUCTURE_API_USERS` SHALL figurer dans cette liste par son nom simple. La liste SHALL seulement rétrécir.
 
 #### Scenario: Le service nomme de nouveau un adaptateur
 - **GIVEN** un arbre de test où `ProgramGraphService` instancie `FileProgramGraphProvider`
@@ -1328,6 +1328,12 @@ Le garde de frontières SHALL tenir la liste fermée des classes d'adaptateur qu
 - **GIVEN** un arbre de test où la liste nomme une classe absente des sources de production de `minos-application`
 - **WHEN** l'auto-test du garde est exécuté
 - **THEN** le cas vérifie que le garde échoue en demandant de retirer l'entrée
+
+#### Scenario: Entrée retirée alors que la classe nomme encore une API d'infrastructure
+- **GIVEN** un arbre de test où `OllamaEmbeddingProvider` nomme `java.net.HttpURLConnection`, figure dans `INFRASTRUCTURE_API_USERS` et manque à la liste des adaptateurs embarqués
+- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant `OllamaEmbeddingProvider` et la liste où l'ajouter
+- **AND** le même arbre où une autre source nomme `OllamaEmbeddingProvider` échoue aussi
 
 ### Requirement: Le câblage des fournisseurs par la racine ne change aucune sortie publique
 Le déplacement de l'instanciation des fournisseurs d'embeddings et de graphe de programme vers `minos-bootstrap` SHALL laisser identiques à l'octet les sorties caractérisées de la CLI, de l'API Java et du MCP, ainsi que l'ordre de composition figé par les tests de caractérisation.

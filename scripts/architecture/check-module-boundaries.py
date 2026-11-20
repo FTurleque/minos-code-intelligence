@@ -1200,13 +1200,12 @@ def check_embedded_adapters(root: Path = ROOT, group_id: str | None = None,
     problems += [f"INFRASTRUCTURE_API_USERS entry {name} names no infrastructure API any more; remove it "
                  f"(the ratchet only shrinks)" for name in sorted(set(api_users) - set(using))]
     # The first table is included in the second: an infrastructure client stays an embedded adapter, so removing its
-    # adapter entry while it still names the API cannot lift the protection.
-    for name in sorted(api_users):
+    # adapter entry while it still names the API cannot lift the protection. A stale entry is refused above.
+    for name in sorted(set(api_users) & set(using)):
         simple = name.rsplit(".", 1)[-1]
         if simple not in adapters:
-            api = ", ".join(using[name][1]) if name in using else "an infrastructure API"
-            problems.append(f"{simple} names {api} and is missing from EMBEDDED_ADAPTER_CLASSES; an infrastructure "
-                            f"client is an embedded adapter")
+            problems.append(f"{simple} names {', '.join(using[name][1])} and is missing from EMBEDDED_ADAPTER_CLASSES; "
+                            f"an infrastructure client is an embedded adapter")
     classes = {stem for _, stem, _ in sources.values()}
     problems += [f"EMBEDDED_ADAPTER_CLASSES entry {name} has no written justification"
                  for name, reason in sorted(adapters.items()) if not str(reason).strip()]

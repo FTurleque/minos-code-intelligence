@@ -2,9 +2,9 @@
 
 Suivi de la correction des constats de [`findings.md`](findings.md), dans l'ordre de [`sprints.md`](sprints.md). Une ligne par constat ; la preuve d'une fermeture est une commande ou une assertion de test, pas « la CI est verte ».
 
-## État au 2026-11-19
+## État au 2026-11-20
 
-Les huit sprints sont fusionnés et archivés : aucun changement OpenSpec de cet audit n'est actif. Les tâches non faites sont des mesures et des preuves manuelles, nommées dans la colonne « Statut » de chaque sprint et dans « Tâches manuelles », et le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, reporté.
+Les huit sprints sont fusionnés et archivés. Le sprint 9, ouvert par la vérification du 19/11, est fusionné et archivé (PR #796 et #797). Les tâches non faites sont des mesures et des preuves manuelles, nommées dans la colonne « Statut » de chaque sprint et dans « Tâches manuelles », et le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, reporté.
 
 ## État au 2026-11-15
 
@@ -132,6 +132,17 @@ Ordre : `reclasser-…`, `decouper-…` (lot `minos-engine` après `reduire-les-
 
 Fusionnés dans l'ordre `reclasser-…` (PR #783), `decouper-…` (PR #784, puis #786), `donner-…` (PR #791), `aligner-…` (PR #792), `trancher-…` (PR #781), puis archivés. La PR #790 relève le JDK de distribution Ubuntu épinglé par `scripts/ci/install-linux-sandbox-toolchain.sh`, remplacé par Ubuntu le 2026-11-18.
 
+## Sprint 9 — Reprises de la vérification du 19/11 (fusionné et archivé le 2026-11-20)
+
+Les deux constats de ce sprint ne figurent pas dans les versions suivies de `findings.md`, `findings.json` et `sprints.md` : ils viennent de la vérification du 19/11 et portent les numéros qui suivent ceux de l'audit. AUD-ARC-11 (faible) : la règle A19 ne liait pas `EMBEDDED_ADAPTER_CLASSES` à `INFRASTRUCTURE_API_USERS`. AUD-PERF-14 (faible, résidu d'AUD-PERF-04) : la `WeakHashMap` de `SemanticCorpusQueryService` retenait la table de symboles d'une vue évincée jusqu'à l'accès suivant.
+
+| Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
+|---|---|---|---|
+| AUD-ARC-11 | `proteger-les-adaptateurs-embarques-contre-le-retrait-de-leur-entree` | Fait (PR #796, archivé) ; D2 appliquée selon la recommandation, confirmation du propriétaire en attente | Mutation en mémoire des 17 entrées : 4 retraits silencieux, non 1 (`OllamaEmbeddingProvider`, `JavaAstSupport`, `JavaProgramModel`, `FileProgramGraphProvider`). L'inclusion des utilisateurs d'API dans la liste des adaptateurs couvre les trois premiers ; `FileProgramGraphProvider` ne nomme aucune API du JDK et reste à la revue (D2). |
+| AUD-PERF-14 | `liberer-la-table-de-symboles-avec-sa-vue` | Fait (PR #797, archivé) ; D1 option C appliquée, confirmation du propriétaire en attente ; mesure du temps d'une page non faite (fixture trop petite, tâche 1.4) | Purger la `WeakHashMap` avant le chargement ne suffit pas : la collecte déclenchée par le chargement suivant libère la vue, pas la valeur. Une table par projet laisse retenue celle du projet évincé. Le service lit les symboles par les index de la vue, sans table propre (D1) ; les deux backends construisent leurs vues par `SnapshotReadView.indexed`. |
+
+Fusionnés dans l'ordre #796 puis #797, puis archivés. Les partiels AUD-DEP-05 (sprint 2) et AUD-ARC-02 (sprint 7, groupe 4 reporté) restent dans leurs sprints et ne sont repris par aucun changement.
+
 ## Recouvrements entre changements
 
 - **Exigences `MODIFIED`** (six, chacune modifiée par un seul changement) :
@@ -167,7 +178,7 @@ Aucun numéro n'est réservé : chaque ADR prend le prochain numéro libre de `d
 
 ## Décisions du propriétaire
 
-Chaque design donne les options et une recommandation. Au 2026-11-19, toutes sont tranchées selon la recommandation, sauf le retrait de `compositionRoot()` et des 15 accesseurs (sprint 7), reporté avec le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage` :
+Chaque design donne les options et une recommandation. Au 2026-11-20, toutes sont tranchées selon la recommandation, sauf le retrait de `compositionRoot()` et des 15 accesseurs (sprint 7), reporté avec le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, et les deux décisions du sprint 9, appliquées selon la recommandation et dont la confirmation par le propriétaire est en attente (tâches 2.1 des deux changements archivés) :
 
 | Sprint | Décision | Recommandation du design |
 |---|---|---|
@@ -191,6 +202,8 @@ Chaque design donne les options et une recommandation. Au 2026-11-19, toutes son
 | 7 | Retrait du public de `compositionRoot()` et des 15 accesseurs | Retrait en une version, documenté |
 | 8 | Requalifier `minos-nexus` ou l'absorber | Requalifier |
 | 8 | Langue du contrat de l'explorateur | Anglais pour toute constante nouvelle, valeurs françaises de v1 figées |
+| 9 | Retrait silencieux de l'entrée de `FileProgramGraphProvider` (aucune API du JDK) | Résidu accepté, écrit dans ARCH-0087 (appliqué, confirmation en attente) |
+| 9 | Table de symboles de l'explorateur : lectures de la vue, ou table attachée à la vue | Lectures de la vue, sans table (appliqué, confirmation en attente) |
 
 ## Tâches manuelles
 

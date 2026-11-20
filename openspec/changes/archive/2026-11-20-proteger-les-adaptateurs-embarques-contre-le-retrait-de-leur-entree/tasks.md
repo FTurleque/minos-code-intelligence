@@ -24,7 +24,8 @@ Changement indépendant des autres changements actifs ; aucun ordre de fusion im
 
 - [x] 3.1 AUD-ARC-11 — Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
   - Preuve : matrice du design relue : la preuve attendue (cas rouge puis vert, garde vert, mutation rejouée) est exécutée (1.1-1.3) ; aucune ligne n'affirme une couverture sans preuve ; reste non prouvé : la confirmation de D2 par le propriétaire.
-- [ ] 3.2 AUD-ARC-11 — Après archivage, mettre à jour la ligne de l'exigence dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (4 scénarios, nouveau test) ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.2 AUD-ARC-11 — Après archivage, mettre à jour la ligne de l'exigence dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (4 scénarios, nouveau test) ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+  - Fait à l'archivage (trois cas ajoutés) ; `python scripts/docs/check-capability-dossiers.py` : 22 dossiers cohérents.
 - [x] 3.3 AUD-ARC-11 — Valider les spécifications ; vérifier par `openspec validate --all --strict`.
   - Preuve : `openspec validate --all --strict` : 23 passed, 0 failed.
 - [x] 3.4 AUD-ARC-11 — Lister les documents à mettre à jour avant archivage (ARCH-0087, dossier de capacité, ligne AUD-ARC-11 de `docs/project/audits/2026-11-15/SUIVI.md` ; STATUS et ROADMAP ne citent pas le constat) ; vérifier que chacun est fait ou nommé comme reste.

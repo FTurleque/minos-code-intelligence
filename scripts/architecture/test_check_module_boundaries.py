@@ -1586,6 +1586,13 @@ class EmbeddedAdapterRuleTest(RatchetTreeTestCase):
                      "OllamaEmbeddingProvider names java.net.HttpURLConnection",
                      "missing from EMBEDDED_ADAPTER_CLASSES")
 
+    def test_a_stale_api_user_missing_from_the_adapters_is_refused_as_stale_only(self):
+        with self.assertRaises(RuntimeError) as raised:
+            self.check(api_users=self.API_USERS | {"program.analysis.Gone"})
+        message = str(raised.exception)
+        self.assertIn("INFRASTRUCTURE_API_USERS entry program.analysis.Gone names no infrastructure API", message)
+        self.assertNotIn("missing from EMBEDDED_ADAPTER_CLASSES", message)
+
     def test_an_api_user_missing_from_the_adapters_is_refused_even_when_another_source_names_it(self):
         self.write("minos-application", "com.minos.application", "MinosApplicationRuntimeConfiguration",
                    "final class MinosApplicationRuntimeConfiguration { OllamaEmbeddingProvider provider; }",
