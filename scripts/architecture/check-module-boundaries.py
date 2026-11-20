@@ -1167,7 +1167,8 @@ INFRASTRUCTURE_API = re.compile(
 # only shrinks: a new HTTP client, compiler or source tree reader belongs to an adapter wired by minos-bootstrap.
 INFRASTRUCTURE_API_USERS: frozenset[str] = POLICY.infrastructure_api_users
 # A19 (ADR 0087) — the adapter classes minos-application embeds, each with its justification. No other production
-# source of minos-application names them: the composition root instantiates them. The list only shrinks.
+# source of minos-application names them: the composition root instantiates them. The list only shrinks, and it holds
+# the simple name of every INFRASTRUCTURE_API_USERS entry: an adapter entry leaves only once its class names no API.
 EMBEDDED_ADAPTER_CLASSES: dict[str, str] = POLICY.embedded_adapter_classes
 
 
@@ -1176,7 +1177,8 @@ def check_embedded_adapters(root: Path = ROOT, group_id: str | None = None,
                             adapters: dict[str, str] | None = None) -> tuple[int, int]:
     """A19 — in minos-application, only the INFRASTRUCTURE_API_USERS files name java.net.HttpURLConnection or a type of
     java.net.http, javax.tools or com.sun.source, and only the EMBEDDED_ADAPTER_CLASSES name one of those classes (by
-    import, qualified name or simple name). Comments and string literals are ignored; both tables only shrink."""
+    import, qualified name or simple name). Every INFRASTRUCTURE_API_USERS entry is listed, by its simple name, in
+    EMBEDDED_ADAPTER_CLASSES. Comments and string literals are ignored; both tables only shrink."""
     api_users = INFRASTRUCTURE_API_USERS if api_users is None else api_users
     adapters = EMBEDDED_ADAPTER_CLASSES if adapters is None else adapters
     prefix = (group_id or repository_group_id(root)) + "."
@@ -1197,6 +1199,14 @@ def check_embedded_adapters(root: Path = ROOT, group_id: str | None = None,
                  for name, (path, found) in sorted(using.items()) if name not in api_users]
     problems += [f"INFRASTRUCTURE_API_USERS entry {name} names no infrastructure API any more; remove it "
                  f"(the ratchet only shrinks)" for name in sorted(set(api_users) - set(using))]
+    # The first table is included in the second: an infrastructure client stays an embedded adapter, so removing its
+    # adapter entry while it still names the API cannot lift the protection.
+    for name in sorted(api_users):
+        simple = name.rsplit(".", 1)[-1]
+        if simple not in adapters:
+            api = ", ".join(using[name][1]) if name in using else "an infrastructure API"
+            problems.append(f"{simple} names {api} and is missing from EMBEDDED_ADAPTER_CLASSES; an infrastructure "
+                            f"client is an embedded adapter")
     classes = {stem for _, stem, _ in sources.values()}
     problems += [f"EMBEDDED_ADAPTER_CLASSES entry {name} has no written justification"
                  for name, reason in sorted(adapters.items()) if not str(reason).strip()]
