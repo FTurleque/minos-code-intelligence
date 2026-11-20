@@ -35,53 +35,61 @@ class RemoteCloneBudget {
     TreeMetrics checkpoint() throws IOException {
         enforceTimeout();
         if (!Files.exists(destination)) return new TreeMetrics(0L, 0L, 0L, 0L);
-        final long[] bytes = {0L};
-        final long[] files = {0L};
-        final long[] directories = {0L};
-        final long[] entries = {0L};
-        Files.walkFileTree(destination, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
-                    throws IOException {
-                enforceTimeout();
-                entries[0] = increment(entries[0], "traversal entry");
-                directories[0] = increment(directories[0], "directory");
-                enforceCardinality(files[0], directories[0], entries[0]);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                enforceTimeout();
-                entries[0] = increment(entries[0], "traversal entry");
-                files[0] = increment(files[0], "file");
-                enforceCardinality(files[0], directories[0], entries[0]);
-                if (attributes.isRegularFile()) {
-                    bytes[0] = checkedAdd(bytes[0], attributes.size());
-                    if (bytes[0] > maxBytes) {
-                        throw new IOException("remote repository exceeds the configured clone byte limit");
-                    }
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
-                enforceTimeout();
-                entries[0] = increment(entries[0], "traversal entry");
-                enforceCardinality(files[0], directories[0], entries[0]);
-                tolerateVanishedEntry(failure);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
-                if (failure != null) tolerateVanishedEntry(failure);
-                return FileVisitResult.CONTINUE;
-            }
-        });
+        TreeMeter meter = new TreeMeter();
+        Files.walkFileTree(destination, meter);
         enforceTimeout();
-        return new TreeMetrics(bytes[0], files[0], directories[0], entries[0]);
+        return meter.metrics();
+    }
+
+    /** Counts the entries of one walk against the cardinality, byte and time budgets. */
+    final class TreeMeter extends SimpleFileVisitor<Path> {
+        private long bytes;
+        private long files;
+        private long directories;
+        private long entries;
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+            enforceTimeout();
+            entries = increment(entries, "traversal entry");
+            directories = increment(directories, "directory");
+            enforceCardinality(files, directories, entries);
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+            enforceTimeout();
+            entries = increment(entries, "traversal entry");
+            files = increment(files, "file");
+            enforceCardinality(files, directories, entries);
+            if (attributes.isRegularFile()) {
+                bytes = checkedAdd(bytes, attributes.size());
+                if (bytes > maxBytes) {
+                    throw new IOException("remote repository exceeds the configured clone byte limit");
+                }
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
+            enforceTimeout();
+            entries = increment(entries, "traversal entry");
+            enforceCardinality(files, directories, entries);
+            tolerateVanishedEntry(failure);
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
+            if (failure != null) tolerateVanishedEntry(failure);
+            return FileVisitResult.CONTINUE;
+        }
+
+        TreeMetrics metrics() {
+            return new TreeMetrics(bytes, files, directories, entries);
+        }
     }
 
     /**

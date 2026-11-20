@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -28,6 +29,40 @@ class RemoteCloneBudgetTest {
         IOException thrown = assertThrows(IOException.class, () -> RemoteCloneBudget.tolerateVanishedEntry(denied));
 
         assertSame(denied, thrown);
+    }
+
+    @Test
+    void aFileThatVanishesDuringTheWalkIsCountedAsAnEntryOnlyAndTheWalkGoesOn() throws IOException {
+        RemoteCloneBudget.TreeMeter meter = budget().new TreeMeter();
+
+        FileVisitResult result = meter.visitFileFailed(root.resolve("gc.log.lock"),
+                new NoSuchFileException("repository/.git/gc.log.lock"));
+
+        assertEquals(FileVisitResult.CONTINUE, result);
+        assertEquals(new RemoteCloneBudget.TreeMetrics(0L, 0L, 0L, 1L), meter.metrics());
+    }
+
+    @Test
+    void aFileThatCannotBeReadFailsTheWalk() {
+        RemoteCloneBudget.TreeMeter meter = budget().new TreeMeter();
+        AccessDeniedException denied = new AccessDeniedException("repository/.git/objects/pack");
+
+        assertSame(denied, assertThrows(IOException.class, () -> meter.visitFileFailed(root, denied)));
+    }
+
+    @Test
+    void aDirectoryThatVanishesBeforeItsListingEndsIsSkippedAndAnyOtherFailureFailsTheWalk() throws IOException {
+        RemoteCloneBudget.TreeMeter meter = budget().new TreeMeter();
+        AccessDeniedException denied = new AccessDeniedException("repository/.git/refs");
+
+        assertEquals(FileVisitResult.CONTINUE, meter.postVisitDirectory(root, null));
+        assertEquals(FileVisitResult.CONTINUE,
+                meter.postVisitDirectory(root, new NoSuchFileException("repository/.git/refs")));
+        assertSame(denied, assertThrows(IOException.class, () -> meter.postVisitDirectory(root, denied)));
+    }
+
+    private RemoteCloneBudget budget() {
+        return new RemoteCloneBudget(root.resolve("repository"), RemoteRepositoryCachePolicy.DEFAULT);
     }
 
     @Test
