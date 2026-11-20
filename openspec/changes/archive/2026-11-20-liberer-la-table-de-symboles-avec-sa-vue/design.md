@@ -151,7 +151,7 @@ DATA-0085 est `Proposed` : la phrase du point 19 se réécrit au présent pour d
 | AUD-PERF-14 | exploration-semantique › La table de symboles de l'explorateur ne survit pas à sa vue | Vue évincée du store | D1 | 1.1-1.3 | `SemanticCorpusQueryServiceTest#anEvictedViewIsNoLongerReachableFromTheService` étendu : rouge au HEAD, vert après correction (poste Windows) ; CI Linux et Windows : preuve manquante tant que la PR n'a pas tourné |
 | AUD-PERF-14 | idem | Fichier décrit par le symbole de plus petite clé | D1 | 1.1-1.2 | `SemanticCorpusQueryServiceTest#aFileIsDescribedByItsSymbolOfSmallestKeyWhateverItsPosition`, `#aSymbolWithoutLocationDescribesTheFileOfItsFileId` (verts avant et après) |
 | AUD-PERF-14 | idem | Deux pages consécutives ; snapshot actif différent | D1 | 1.2 | tests existants verts |
-| AUD-PERF-14 | — | — | D1 | 2.1 | recommandation C appliquée ; confirmation du propriétaire : preuve manquante (demandée dans la PR) |
+| AUD-PERF-14 | — | — | D1 | 2.1 | recommandation C retenue par le propriétaire le 2026-11-20 |
 | AUD-PERF-14 | — | — | D2 | 2.2 | DATA-0085 point 19 réécrit ; `archgate check` vert |
 | AUD-PERF-14 | — | — | — | 1.4 | mesure du temps d'une page : non faite (preuve manquante) |
 
