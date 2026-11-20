@@ -26,7 +26,8 @@ Changement indépendant des autres changements actifs ; aucun ordre de fusion im
 
 - [x] 3.1 AUD-PERF-14 — Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
   - Preuve : matrice du design complétée ; les preuves manquantes sont nommées (CI Linux et Windows, confirmation du propriétaire pour D1, mesure 1.4).
-- [ ] 3.2 AUD-PERF-14 — Après archivage, mettre à jour la ligne de l'exigence dans `docs/architecture/diagrams/capacites/exploration-semantique.md:298` (4 scénarios, tests de 1.1) ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.2 AUD-PERF-14 — Après archivage, mettre à jour la ligne de l'exigence dans `docs/architecture/diagrams/capacites/exploration-semantique.md:298` (4 scénarios, tests de 1.1) ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+  - Fait à l'archivage (4 scénarios, deux tests ajoutés) ; `python scripts/docs/check-capability-dossiers.py` : 22 dossiers cohérents.
 - [x] 3.3 AUD-PERF-14 — Valider les spécifications ; vérifier par `openspec validate --all --strict` et `python .claude/scripts/run_gates.py`.
   - Preuve : `openspec validate --all --strict` : `Totals: 23 passed, 0 failed (23 items)` ; `python .claude/scripts/run_gates.py` : `83/83 gates passent.`
 - [x] 3.4 AUD-PERF-14 — Lister les documents à mettre à jour avant archivage (DATA-0085, dossier de capacité, ligne AUD-PERF-14 de `docs/project/audits/2026-11-15/SUIVI.md` ; STATUS et ROADMAP ne citent pas le constat) ; vérifier que chacun est fait ou nommé comme reste.
