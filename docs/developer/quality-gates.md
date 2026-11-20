@@ -58,7 +58,7 @@ Le gate `python scripts/quality/check-single-execution.py` (auto-test `test_chec
 
 ## Gardes d'architecture (`check-module-boundaries.py`)
 
-`python scripts/architecture/check-module-boundaries.py` (job `invariants`, auto-test `test_check_module_boundaries.py`) applique, sans compilation :
+`python scripts/architecture/check-module-boundaries.py` (job `invariants`, auto-tests `test_check_module_boundaries*.py`) applique, sans compilation :
 
 - **A7** : la liste `MODULES` est exactement le reactor ; **A2** (ADR 0022, 0042, 0058) : politique de dépendances Maven par module, règles hexagonales (application, surfaces, module de contrat, adaptateurs, racine de composition ; aucune surface ne dépend d'une autre surface, quelle que soit la portée ; le module de contrat `minos-nexus` ne dépend que de `minos-domain` et de `minos-application`, de `minos-bootstrap` en portée test seulement, et aucun adaptateur, ni la racine de composition, ni l'application ne dépend de lui), aucune dépendance interne cachée dans un `<profile>` ou un `<dependencyManagement>`, aucune source qui nomme une classe d'adaptateur hors `minos-bootstrap` ; **A3** (ADR 0044) : un package, un module.
 - Une dépendance est **interne** parce que son `artifactId` est celui d'un module, avec le `groupId` lu dans le POM racine : un `groupId` non résolu (`${…}`) ou voisin est refusé. `sourceDirectory`, `testSourceDirectory` et les `includes`/`excludes` du compilateur sont refusés dans un `<profile>` comme à la racine (les `plugins` d'un profil restent permis).

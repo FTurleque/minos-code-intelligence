@@ -30,4 +30,10 @@ attend qu'une PR fusionnée soit suivie de l'archivage OpenSpec et de la mise à
   ~50 min de CI chacune) et se heurtent sur les lignes adjacentes du SUIVI ; `Verify` échoue en 18 s si main a avancé
   (« main is not an ancestor »). SonarCloud n'importe pas la couverture de `minos-app`.
 
+Sprint 9 (AUD-ARC-11, AUD-PERF-14, ouverts par la vérification du 19/11) : fusionné (#796, #797) et archivé (#798) le
+2026-11-20. Décisions D2 (résidu `FileProgramGraphProvider`) et D1 option C retenues par le propriétaire le 2026-11-20
+(PR #799). Contournements A19 antérieurs (import générique
+`java.net.*`, homonyme d'adaptateur) proposés en session à part. La fusion d'une PR exige un accord explicite pour
+cette PR : le classificateur refuse une fusion couverte seulement par un accord donné pour d'autres PR.
+
 Voir [[fusion-pr-sans-suppression-anticipee]] et [[pr-empilees-sans-ci]].

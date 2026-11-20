@@ -294,7 +294,7 @@ tests hors de leur module.
 
 ## Compliance and Enforcement
 
-- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — politique hexagonale des POM (`check_hexagonal_boundaries`), contrôle des sources (`check_source_boundaries`) et règle A16 (`check_service_loader_class_loaders`) ; auto-test `scripts/architecture/test_check_module_boundaries.py`.
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — politique hexagonale des POM (`check_hexagonal_boundaries`), contrôle des sources (`check_source_boundaries`) et règle A16 (`check_service_loader_class_loaders`) ; auto-tests `scripts/architecture/test_check_module_boundaries*.py`.
 - Test ArchUnit `ModuleArchitectureTest` (`minos-app`) — `applicationOnlyKnowsPorts`, `surfacesDoNotCompileAgainstTheCompositionRootOrAdapters`, `adaptersDoNotReachBackIntoUpperLayers`.
 - Tests `MinosApplicationComposersTest` (`minos-application`) et `ShadedJarCompositionRootIT` (`minos-app`) — découverte en échec rapide et contrat du JAR ombré.
 - Revue : un nouveau câblage d'adaptateur vit dans `minos-bootstrap`.

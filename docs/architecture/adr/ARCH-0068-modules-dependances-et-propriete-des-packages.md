@@ -162,7 +162,7 @@ L'ordre des tâches et leurs prérequis sont dans [le plan du chantier stockage]
 
 ## Compliance and Enforcement
 
-- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`, `.github/workflows/pr-ci.yml:137`) et son auto-test `scripts/architecture/test_check_module_boundaries.py` (`.github/workflows/pr-ci.yml:140`) :
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) et ses auto-tests `scripts/architecture/test_check_module_boundaries*.py`, exécutés par le même job :
   - A2 — dépendances internes des POM bornées par `ALLOWED_DEPENDENCIES`, déclarées comme arêtes simples de `<dependencies>`, rôles hexagonaux par portée et contrôle des sources ([ADR 0042](ARCH-0042-racine-de-composition.md)) ;
   - A3 — aucun package déclaré par les sources de production de deux modules, aucun test dans un package dont la production appartient à un autre module (`check_package_ownership`) ;
   - A7 — la liste `MODULES` du script est exactement les `<modules>` du POM racine (`check_reactor_modules`) ;
