@@ -161,8 +161,20 @@ jobs:
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 
-      - name: Module-boundary checker self-test (A3 packages, A7 reactor)
+      - name: Module-boundary checker self-test (A2 POM rules, policy source, main wiring)
         run: python scripts/architecture/test_check_module_boundaries.py -v
+
+      - name: Module-boundary checker self-test (A3 packages, A7 reactor, A8 cycles, A15 unreferenced types)
+        run: python scripts/architecture/test_check_module_boundaries_packages.py -v
+
+      - name: Module-boundary checker self-test (A2 sources, A10, A14, A16, A18 to A20, storage isolation)
+        run: python scripts/architecture/test_check_module_boundaries_adapters.py -v
+
+      - name: Module-boundary checker self-test (A11 to A13 ratchets)
+        run: python scripts/architecture/test_check_module_boundaries_ratchets.py -v
+
+      - name: Module-boundary checker self-test (A9 documentation, A17 ArchUnit policy, generated document)
+        run: python scripts/architecture/test_check_module_boundaries_documents.py -v
 
       - name: Private I/O primitives gate (no raw createDirectories, write, newInputStream or channel lock)
         run: python scripts/architecture/check-private-io.py

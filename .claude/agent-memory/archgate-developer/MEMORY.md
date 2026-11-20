@@ -2,4 +2,4 @@
 - [review-context sans texte d'ADR](reference_review_context_sans_texte.md) — Archgate 0.18 : lire Decision/Do's des ADR soi-même pour la revue
 - [Clôture finale de l'audit, 2026-11-05](project_cloture_finale_audit_2026_11_05.md) — PR #662-664 fusionnées ; restent findings.json/ETAT (auditeur), R-30 à confirmer
 - [PR empilées sans CI](project_pr_empilees_sans_ci.md) — base ≠ main = aucun check ; re-cibler + fermer/rouvrir ; Gitleaks toutes branches ; 429 curl transitoire
-- [Audit 2026-11-15 clos, 2026-11-19](project_audit_2026_11_15_clos.md) — 8 sprints archivés ; archiver dès la fusion ; groupe 4 d'injecter reporté ; pièges CI
+- [Audit 2026-11-15 clos, 2026-11-20](project_audit_2026_11_15_clos.md) — 9 sprints archivés (sprint 9 : #796-#798) ; archiver dès la fusion ; accord de fusion par PR

@@ -3,9 +3,10 @@
 // Ports des invariants A7 (check_reactor_modules), A3 (check_package_ownership) et A14 (check_package_roots)
 // de scripts/architecture/check-module-boundaries.py, qui reste le gate de la CI. La liste des modules est lue dans la
 // source unique de la politique de frontières (scripts/architecture/module-boundaries.json, AUD-ARC-04), la table
-// PACKAGE_ROOTS_BY_MODULE dans le script ; aucune n'est recopiée ici.
+// PACKAGE_ROOTS_BY_MODULE dans le module de règles que le script importe (scripts/architecture/module_boundary_ratchets.py) ;
+// aucune n'est recopiée ici.
 
-const SCRIPT = "scripts/architecture/check-module-boundaries.py";
+const SCRIPT = "scripts/architecture/module_boundary_ratchets.py";
 const POLICY = "scripts/architecture/module-boundaries.json";
 const ROOT_POM = "pom.xml";
 const PACKAGE_DECLARATION = /^\s*package\s+([A-Za-z_][\w.]*)\s*;/;
