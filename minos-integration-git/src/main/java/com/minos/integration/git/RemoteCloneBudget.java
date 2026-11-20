@@ -3,6 +3,7 @@ package com.minos.integration.git;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -11,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Enforces the absolute time and filesystem cardinality budgets of one remote clone. */
 class RemoteCloneBudget {
+    private static final String TRAVERSAL_ENTRY = "traversal entry";
     private static final String TIMEOUT_MESSAGE = "remote repository clone exceeds the configured time limit";
 
     private final Path destination;
@@ -34,46 +36,89 @@ class RemoteCloneBudget {
     TreeMetrics checkpoint() throws IOException {
         enforceTimeout();
         if (!Files.exists(destination)) return new TreeMetrics(0L, 0L, 0L, 0L);
-        final long[] bytes = {0L};
-        final long[] files = {0L};
-        final long[] directories = {0L};
-        final long[] entries = {0L};
-        Files.walkFileTree(destination, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
-                    throws IOException {
-                enforceTimeout();
-                entries[0] = increment(entries[0], "traversal entry");
-                directories[0] = increment(directories[0], "directory");
-                enforceCardinality(files[0], directories[0], entries[0]);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                enforceTimeout();
-                entries[0] = increment(entries[0], "traversal entry");
-                files[0] = increment(files[0], "file");
-                enforceCardinality(files[0], directories[0], entries[0]);
-                if (attributes.isRegularFile()) {
-                    bytes[0] = checkedAdd(bytes[0], attributes.size());
-                    if (bytes[0] > maxBytes) {
-                        throw new IOException("remote repository exceeds the configured clone byte limit");
-                    }
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
-                enforceTimeout();
-                entries[0] = increment(entries[0], "traversal entry");
-                enforceCardinality(files[0], directories[0], entries[0]);
-                throw failure;
-            }
-        });
+        TreeMeter meter = new TreeMeter();
+        Files.walkFileTree(destination, meter);
         enforceTimeout();
-        return new TreeMetrics(bytes[0], files[0], directories[0], entries[0]);
+        return meter.metrics();
+    }
+
+    /** Counts the entries of one walk against the cardinality, byte and time budgets. */
+    final class TreeMeter extends SimpleFileVisitor<Path> {
+        private long bytes;
+        private long files;
+        private long directories;
+        private long entries;
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+            enforceTimeout();
+            entries = increment(entries, TRAVERSAL_ENTRY);
+            directories = increment(directories, "directory");
+            enforceCardinality(files, directories, entries);
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+            enforceTimeout();
+            entries = increment(entries, TRAVERSAL_ENTRY);
+            files = increment(files, "file");
+            enforceCardinality(files, directories, entries);
+            if (attributes.isRegularFile()) {
+                bytes = checkedAdd(bytes, attributes.size());
+                if (bytes > maxBytes) {
+                    throw new IOException("remote repository exceeds the configured clone byte limit");
+                }
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
+            enforceTimeout();
+            entries = increment(entries, TRAVERSAL_ENTRY);
+            enforceCardinality(files, directories, entries);
+            tolerateVanishedEntry(failure);
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
+            if (failure != null) tolerateVanishedEntry(failure);
+            return FileVisitResult.CONTINUE;
+        }
+
+        TreeMetrics metrics() {
+            return new TreeMetrics(bytes, files, directories, entries);
+        }
+
+        private long increment(long value, String counter) throws IOException {
+            try {
+                return Math.addExact(value, 1L);
+            } catch (ArithmeticException exception) {
+                throw new IOException("remote repository " + counter + " counter overflow", exception);
+            }
+        }
+
+        private void enforceCardinality(long files, long directories, long traversalEntries) throws IOException {
+            if (files > maxFiles) {
+                throw new IOException("remote repository exceeds the configured clone file limit");
+            }
+            if (directories > maxDirectories) {
+                throw new IOException("remote repository exceeds the configured clone directory limit");
+            }
+            if (traversalEntries > maxTraversalEntries) {
+                throw new IOException("remote repository exceeds the configured clone traversal entry limit");
+            }
+        }
+    }
+
+    /**
+     * An entry removed while the tree is walked (a lock file of a background JGit maintenance, for instance) holds
+     * neither bytes nor a file any more: it is skipped. Any other failure fails the budget.
+     */
+    static void tolerateVanishedEntry(IOException failure) throws IOException {
+        if (!(failure instanceof NoSuchFileException)) throw failure;
     }
 
     int transportTimeoutSeconds() {
@@ -118,26 +163,6 @@ class RemoteCloneBudget {
 
     private IOException timeoutFailure() {
         return new IOException(TIMEOUT_MESSAGE);
-    }
-
-    private long increment(long value, String counter) throws IOException {
-        try {
-            return Math.addExact(value, 1L);
-        } catch (ArithmeticException exception) {
-            throw new IOException("remote repository " + counter + " counter overflow", exception);
-        }
-    }
-
-    private void enforceCardinality(long files, long directories, long traversalEntries) throws IOException {
-        if (files > maxFiles) {
-            throw new IOException("remote repository exceeds the configured clone file limit");
-        }
-        if (directories > maxDirectories) {
-            throw new IOException("remote repository exceeds the configured clone directory limit");
-        }
-        if (traversalEntries > maxTraversalEntries) {
-            throw new IOException("remote repository exceeds the configured clone traversal entry limit");
-        }
     }
 
     private static long checkedAdd(long left, long right) throws IOException {
