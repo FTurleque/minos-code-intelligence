@@ -114,21 +114,32 @@ def unreferenced_production_types(root: Path = ROOT) -> dict[str, str]:
     return result
 
 
-def check_unreferenced_production_types(root: Path = ROOT,
-                                        declared: dict[str, str] = UNREFERENCED_PRODUCTION_TYPES) -> int:
-    """A15 — every top-level public type of a reactor src/main is named by production, or listed with a reason."""
+def require_written_reasons(declared: dict[str, str]) -> None:
+    """A15 — every entry of the closed list carries its reason."""
     unreasoned = sorted(entry for entry, reason in declared.items() if not reason.strip())
     if unreasoned:
         fail("A15 UNREFERENCED_PRODUCTION_TYPES entries need a written reason: " + ", ".join(unreasoned))
+
+
+def declared_production_entries(root: Path) -> set[str]:
+    """module/package.Type of every production source of the reactor."""
+    existing = set()
+    for module, source in production_sources(root, MODULES):
+        match = PACKAGE.search(source.read_text(encoding="utf-8"))
+        existing.add(f"{module}/{match.group(1) if match else ''}.{source.stem}")
+    return existing
+
+
+def check_unreferenced_production_types(root: Path = ROOT,
+                                        declared: dict[str, str] = UNREFERENCED_PRODUCTION_TYPES) -> int:
+    """A15 — every top-level public type of a reactor src/main is named by production, or listed with a reason."""
+    require_written_reasons(declared)
     found = unreferenced_production_types(root)
     undeclared = sorted(entry for entry in found if entry not in declared)
     if undeclared:
         fail("A15 public production types without a production caller (delete them, move them to tests, or list "
              "them in UNREFERENCED_PRODUCTION_TYPES with a reason): " + ", ".join(undeclared))
-    existing = set()
-    for module, source in production_sources(root, MODULES):
-        match = PACKAGE.search(source.read_text(encoding="utf-8"))
-        existing.add(f"{module}/{match.group(1) if match else ''}.{source.stem}")
+    existing = declared_production_entries(root)
     stale = sorted(entry for entry in declared if entry not in existing)
     if stale:
         fail("A15 UNREFERENCED_PRODUCTION_TYPES is a ratchet: these types no longer exist, remove the entries: "

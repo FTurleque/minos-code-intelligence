@@ -19,6 +19,17 @@ from module_boundary_sources import (
     COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, SOURCE_WORD, qualified_name_pattern, resolve_adapter_class)
 
 
+def forbidden_names(source: Path, prefixes: tuple[str, ...], qualified: re.Pattern[str]) -> set[str]:
+    """The names below one of the prefixes that a source imports (single, static, wildcard) or writes qualified."""
+    code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for _static, name, wildcard in SOURCE_IMPORT.findall(code):
+        if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
+            found.add(name + (".*" if wildcard else ""))
+    found.update(qualified.findall(SOURCE_IMPORT.sub(" ", code)))
+    return found
+
+
 def adapter_classes(root: Path = ROOT) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
     """Top-level production classes of every adapter module: FQN -> module, package -> name -> module."""
     by_fqn: dict[str, str] = {}
@@ -102,12 +113,7 @@ def check_postgresql_backend_isolation(root: Path = ROOT, group_id: str | None =
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
-            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
-            found: set[str] = set()
-            for _static, name, wildcard in SOURCE_IMPORT.findall(code):
-                if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
-                    found.add(name + (".*" if wildcard else ""))
-            found.update(qualified.findall(SOURCE_IMPORT.sub(" ", code)))
+            found = forbidden_names(source, prefixes, qualified)
             relative = source.relative_to(root).as_posix()
             violations += [f"{rule} {relative} -> {name}" for name in sorted(found)]
     if violations:
@@ -373,12 +379,7 @@ def check_storage_package_isolation(root: Path = ROOT, group_id: str | None = No
             if not package_root.is_dir():
                 continue
             for source in sorted(package_root.rglob("*.java")):
-                code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
-                found: set[str] = set()
-                for _static, name, wildcard in SOURCE_IMPORT.findall(code):
-                    if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
-                        found.add(name + (".*" if wildcard else ""))
-                found.update(qualified.findall(SOURCE_IMPORT.sub(" ", code)))
+                found = forbidden_names(source, prefixes, qualified)
                 relative = source.relative_to(root).as_posix()
                 violations += [f"{label} {relative} -> {name}" for name in sorted(found)]
     if violations:
