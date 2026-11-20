@@ -15,6 +15,7 @@ from module_boundary_policy import (
     ADAPTER_MODULES, APPLICATION_MODULE, ENGINE_TYPE_RATCHETED_MODULES, MODULES, POLICY, ROOT, fail,
     repository_group_id)
 from module_boundary_sources import (
+    production_sources,
     COMMENTS_AND_LITERALS, SOURCE_IMPORT, blank_comments_and_literals, call_argument_count, declared_package,
     literals_as_tokens, production_types, qualified_name_pattern, resolve_adapter_class)
 
@@ -360,15 +361,12 @@ def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
     listed = PROCESS_LAUNCHERS if listed is None else listed
     prefix = (group_id or repository_group_id(root)) + "."
     found: dict[str, tuple[str, int]] = {}
-    for module in modules:
-        source_root = root / module / "src" / "main" / "java"
-        if not source_root.is_dir():
-            continue
-        for source in sorted(source_root.rglob("*.java")):
-            launches, sites = process_launch_sites(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8")))
-            if launches:
-                name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(prefix)
-                found[f"{module}/{name}"] = (source.relative_to(root).as_posix(), sites)
+    for module, source in production_sources(root, modules):
+        launches, sites = process_launch_sites(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8")))
+        if launches:
+            java_root = root / module / "src" / "main" / "java"
+            name = ".".join(source.relative_to(java_root).with_suffix("").parts).removeprefix(prefix)
+            found[f"{module}/{name}"] = (source.relative_to(root).as_posix(), sites)
     problems = [f"{path} launches a process and is not in PROCESS_LAUNCHERS ({entry})"
                 for entry, (path, _) in sorted(found.items()) if entry not in listed]
     problems += [f"PROCESS_LAUNCHERS entry {entry} has the count {count!r}, which is not a count of launch sites"
@@ -455,17 +453,13 @@ def check_service_loader_class_loaders(root: Path = ROOT, modules: tuple[str, ..
     """
     violations: list[str] = []
     sites = 0
-    for module in modules:
-        source_root = root / module / "src" / "main" / "java"
-        if not source_root.is_dir():
-            continue
-        for source in sorted(source_root.rglob("*.java")):
-            code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
-            for match in SERVICE_LOADER_LOAD.finditer(code):
-                sites += 1
-                if call_argument_count(code, match.end() - 1) < 2:
-                    line = code.count("\n", 0, match.start()) + 1
-                    violations.append(f"{source.relative_to(root).as_posix()}:{line}")
+    for module, source in production_sources(root, modules):
+        code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
+        for match in SERVICE_LOADER_LOAD.finditer(code):
+            sites += 1
+            if call_argument_count(code, match.end() - 1) < 2:
+                line = code.count("\n", 0, match.start()) + 1
+                violations.append(f"{source.relative_to(root).as_posix()}:{line}")
     if violations:
         fail("A16 ServiceLoader.load without an explicit class loader (the thread context class loader must not "
              "drive production discovery; pass the loader of the service port): " + "; ".join(violations))
@@ -500,31 +494,28 @@ def check_snapshot_read_port(root: Path = ROOT, group_id: str | None = None,
     core = f"{group}.{CORE_STORE_PACKAGE}"
     problems: list[str] = []
     users: set[str] = set()
-    for module in modules:
-        source_root = root / module / "src" / "main" / "java"
-        if not source_root.is_dir():
+    for module, source in production_sources(root, modules):
+        if module == ENGINE_MODULE and declared_package(source) == core:
             continue
-        for source in sorted(source_root.rglob("*.java")):
-            if module == ENGINE_MODULE and declared_package(source) == core:
-                continue
-            relative = source.relative_to(root).as_posix()
-            name = ".".join(source.relative_to(source_root).with_suffix("").parts).removeprefix(group + ".")
-            entry = f"{module}/{name}"
-            code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
-            for number, line in enumerate(code.splitlines(), start=1):
-                if MEMORY_INDEX.search(line):
-                    problems.append(f"{relative}:{number} names InMemoryCodeKnowledgeStore; read through "
-                                    f"SnapshotReadView and CodeKnowledgeReader")
-                legacy = ", ".join(re.sub(r"\s+", "", match.group(0)).replace("(", "(...)").replace("(...))", "()")
-                                   for match in LEGACY_SNAPSHOT_VIEW.finditer(line))
-                if legacy:
-                    users.add(entry)
-                    if entry not in listed:
-                        problems.append(f"{relative}:{number} uses the deprecated snapshot view ({legacy}); use "
-                                        f"loadActiveReadView and SnapshotReadView")
-                if module == APPLICATION_MODULE and WRITE_PORT.search(line):
-                    problems.append(f"{relative}:{number} names the write port CodeKnowledgeStore; a read use case "
-                                    f"receives CodeKnowledgeReader")
+        relative = source.relative_to(root).as_posix()
+        java_root = root / module / "src" / "main" / "java"
+        name = ".".join(source.relative_to(java_root).with_suffix("").parts).removeprefix(group + ".")
+        entry = f"{module}/{name}"
+        code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
+        for number, line in enumerate(code.splitlines(), start=1):
+            if MEMORY_INDEX.search(line):
+                problems.append(f"{relative}:{number} names InMemoryCodeKnowledgeStore; read through "
+                                f"SnapshotReadView and CodeKnowledgeReader")
+            legacy = ", ".join(re.sub(r"\s+", "", match.group(0)).replace("(", "(...)").replace("(...))", "()")
+                               for match in LEGACY_SNAPSHOT_VIEW.finditer(line))
+            if legacy:
+                users.add(entry)
+                if entry not in listed:
+                    problems.append(f"{relative}:{number} uses the deprecated snapshot view ({legacy}); use "
+                                    f"loadActiveReadView and SnapshotReadView")
+            if module == APPLICATION_MODULE and WRITE_PORT.search(line):
+                problems.append(f"{relative}:{number} names the write port CodeKnowledgeStore; a read use case "
+                                f"receives CodeKnowledgeReader")
     problems += [f"LEGACY_SNAPSHOT_VIEW_USERS entry {entry} does not exist or no longer uses the deprecated view; "
                  f"remove it (the ratchet only shrinks)" for entry in sorted(listed - users)]
     if problems:

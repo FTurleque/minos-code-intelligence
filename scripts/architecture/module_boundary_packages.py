@@ -13,7 +13,7 @@ from pathlib import Path
 
 from module_boundary_policy import MODULES, NS, ROOT, fail, repository_group_id
 from module_boundary_sources import (
-    COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, declared_package, qualified_name_pattern)
+    COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, declared_package, production_sources, qualified_name_pattern)
 
 
 # A15 / AUD-QUA-02 — a public production type is used by production, or declared. Each entry names one top-level
@@ -52,16 +52,6 @@ TOP_LEVEL_PUBLIC_TYPE = re.compile(
 MAIN_METHOD = re.compile(r"\bpublic\s+static\s+void\s+main\s*\(")
 
 
-def production_sources(root: Path = ROOT) -> list[tuple[str, Path]]:
-    """(module, file) of every Java source of a reactor src/main."""
-    sources: list[tuple[str, Path]] = []
-    for module in MODULES:
-        source_root = root / module / "src" / "main" / "java"
-        if source_root.is_dir():
-            sources.extend((module, source) for source in sorted(source_root.rglob("*.java")))
-    return sources
-
-
 def service_registered_types(root: Path = ROOT) -> set[str]:
     """Qualified names that a production META-INF/services file names (service interface or implementation)."""
     names: set[str] = set()
@@ -88,7 +78,7 @@ def unreferenced_production_types(root: Path = ROOT) -> dict[str, str]:
     unreferenced, and a homonym imported from another package (counted as a reference)."""
     services = service_registered_types(root)
     parsed: list[tuple[str, Path, str, str]] = []
-    for module, source in production_sources(root):
+    for module, source in production_sources(root, MODULES):
         if source.name in ("package-info.java", "module-info.java"):
             continue
         text = source.read_text(encoding="utf-8")
@@ -136,7 +126,7 @@ def check_unreferenced_production_types(root: Path = ROOT,
         fail("A15 public production types without a production caller (delete them, move them to tests, or list "
              "them in UNREFERENCED_PRODUCTION_TYPES with a reason): " + ", ".join(undeclared))
     existing = set()
-    for module, source in production_sources(root):
+    for module, source in production_sources(root, MODULES):
         match = PACKAGE.search(source.read_text(encoding="utf-8"))
         existing.add(f"{module}/{match.group(1) if match else ''}.{source.stem}")
     stale = sorted(entry for entry in declared if entry not in existing)

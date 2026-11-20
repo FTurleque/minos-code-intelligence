@@ -19,24 +19,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from module_boundaries_testing import ADAPTERS, MODULES, RATCHETS, RatchetTreeTestCase, _MODULE, write_root_pom
 
 
-class SourceBoundaryRuleTest(unittest.TestCase):
+class SourceBoundaryRuleTest(RatchetTreeTestCase):
     """A2: the POM rules do not see sources, so a source naming an adapter class is refused."""
 
     ADAPTER_CLASS = "com.minos.storage.local.store.FileStore"
 
     def setUp(self):
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
-        write_root_pom(self.root)
+        super().setUp()
         self.write("minos-storage", "com.minos.storage.local.store", "FileStore", "public final class FileStore { "
                    "public static FileStore create() { return new FileStore(); } }")
-
-    def write(self, module, package, name, body, imports=()):
-        directory = self.root / module / "src" / "main" / "java" / Path(*package.split("."))
-        directory.mkdir(parents=True, exist_ok=True)
-        lines = "".join(f"import {line};\n" for line in imports)
-        (directory / f"{name}.java").write_text(f"package {package};\n\n{lines}\n{body}\n", encoding="utf-8")
 
     def refused(self, *fragments):
         with self.assertRaises(RuntimeError) as raised:
