@@ -1,5 +1,6 @@
 package com.minos.integration.git;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -18,8 +19,9 @@ class RemoteCloneBudgetTest {
     Path root;
 
     @Test
-    void anEntryThatVanishesDuringTheWalkIsSkipped() throws IOException {
-        RemoteCloneBudget.tolerateVanishedEntry(new NoSuchFileException("repository/.git/gc.log.lock"));
+    void anEntryThatVanishesDuringTheWalkIsSkipped() {
+        assertDoesNotThrow(() -> RemoteCloneBudget.tolerateVanishedEntry(
+                new NoSuchFileException("repository/.git/gc.log.lock")));
     }
 
     @Test

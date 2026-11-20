@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Enforces the absolute time and filesystem cardinality budgets of one remote clone. */
 class RemoteCloneBudget {
+    private static final String TRAVERSAL_ENTRY = "traversal entry";
     private static final String TIMEOUT_MESSAGE = "remote repository clone exceeds the configured time limit";
 
     private final Path destination;
@@ -51,7 +52,7 @@ class RemoteCloneBudget {
         @Override
         public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
             enforceTimeout();
-            entries = increment(entries, "traversal entry");
+            entries = increment(entries, TRAVERSAL_ENTRY);
             directories = increment(directories, "directory");
             enforceCardinality(files, directories, entries);
             return FileVisitResult.CONTINUE;
@@ -60,7 +61,7 @@ class RemoteCloneBudget {
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
             enforceTimeout();
-            entries = increment(entries, "traversal entry");
+            entries = increment(entries, TRAVERSAL_ENTRY);
             files = increment(files, "file");
             enforceCardinality(files, directories, entries);
             if (attributes.isRegularFile()) {
@@ -75,7 +76,7 @@ class RemoteCloneBudget {
         @Override
         public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
             enforceTimeout();
-            entries = increment(entries, "traversal entry");
+            entries = increment(entries, TRAVERSAL_ENTRY);
             enforceCardinality(files, directories, entries);
             tolerateVanishedEntry(failure);
             return FileVisitResult.CONTINUE;
@@ -89,6 +90,26 @@ class RemoteCloneBudget {
 
         TreeMetrics metrics() {
             return new TreeMetrics(bytes, files, directories, entries);
+        }
+
+        private long increment(long value, String counter) throws IOException {
+            try {
+                return Math.addExact(value, 1L);
+            } catch (ArithmeticException exception) {
+                throw new IOException("remote repository " + counter + " counter overflow", exception);
+            }
+        }
+
+        private void enforceCardinality(long files, long directories, long traversalEntries) throws IOException {
+            if (files > maxFiles) {
+                throw new IOException("remote repository exceeds the configured clone file limit");
+            }
+            if (directories > maxDirectories) {
+                throw new IOException("remote repository exceeds the configured clone directory limit");
+            }
+            if (traversalEntries > maxTraversalEntries) {
+                throw new IOException("remote repository exceeds the configured clone traversal entry limit");
+            }
         }
     }
 
@@ -142,26 +163,6 @@ class RemoteCloneBudget {
 
     private IOException timeoutFailure() {
         return new IOException(TIMEOUT_MESSAGE);
-    }
-
-    private long increment(long value, String counter) throws IOException {
-        try {
-            return Math.addExact(value, 1L);
-        } catch (ArithmeticException exception) {
-            throw new IOException("remote repository " + counter + " counter overflow", exception);
-        }
-    }
-
-    private void enforceCardinality(long files, long directories, long traversalEntries) throws IOException {
-        if (files > maxFiles) {
-            throw new IOException("remote repository exceeds the configured clone file limit");
-        }
-        if (directories > maxDirectories) {
-            throw new IOException("remote repository exceeds the configured clone directory limit");
-        }
-        if (traversalEntries > maxTraversalEntries) {
-            throw new IOException("remote repository exceeds the configured clone traversal entry limit");
-        }
     }
 
     private static long checkedAdd(long left, long right) throws IOException {
