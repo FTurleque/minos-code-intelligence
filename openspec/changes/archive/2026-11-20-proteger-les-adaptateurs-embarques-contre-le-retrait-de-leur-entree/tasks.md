@@ -15,8 +15,8 @@ Changement indépendant des autres changements actifs ; aucun ordre de fusion im
 
 ## 2. ADR et décisions (AUD-ARC-11)
 
-- [ ] 2.1 AUD-ARC-11 — **(manuelle, propriétaire)** trancher D2 du design (résidu `FileProgramGraphProvider` : a recommandée, b). Vérifier : choix consigné dans la PR.
-  - Preuve : recommandation du design appliquée (option a : résidu `FileProgramGraphProvider` accepté et écrit dans ARCH-0087), confirmation du propriétaire demandée dans la PR.
+- [x] 2.1 AUD-ARC-11 — **(manuelle, propriétaire)** trancher D2 du design (résidu `FileProgramGraphProvider` : a recommandée, b). Vérifier : choix consigné dans la PR.
+  - Décision du propriétaire du 2026-11-20 : recommandation du design retenue (option a, résidu `FileProgramGraphProvider` accepté et écrit dans ARCH-0087).
 - [x] 2.2 AUD-ARC-11 — Amender le point 3 d'ARCH-0087 (`Proposed`, `docs/architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md:37`) : la première liste est incluse dans la seconde ; résidu de D2 selon l'option retenue ; compléter « Compliance and Enforcement » avec le nouveau cas d'auto-test. Rédiger au présent. Vérifier : `archgate check` et `python .claude/scripts/run_gates.py --fast` verts.
   - Preuve : point 3 et « Compliance and Enforcement » d'ARCH-0087 amendés au présent ; `archgate check` : pass, 18/18 ; `run_gates.py` : 83/83 gates passent.
 
