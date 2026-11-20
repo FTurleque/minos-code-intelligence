@@ -280,7 +280,7 @@ def check_pom_rules(root: Path = ROOT) -> dict[str, dict[str, str]]:
     return scoped
 
 
-def parse_arguments(arguments: list[str]) -> bool:
+def writes_dependency_document(arguments: list[str]) -> bool:
     """Refuses an unknown argument; returns whether the dependency document is to be written."""
     unknown = [argument for argument in arguments if argument != "--write-doc"]
     if unknown:
@@ -319,13 +319,9 @@ def run_rules(write_doc: bool) -> dict:
 
 def print_module_report(results: dict) -> None:
     """Prints the module, family, package, document and architecture test lines."""
-    graph = results["graph"]
-    counts = results["counts"]
-    packages = results["packages"]
-    cycles = results["cycles"]
-    cycle_packages = results["cycle_packages"]
-    documented = results["documented"]
-    architecture_test = results["architecture_test"]
+    graph, counts, packages, cycles, cycle_packages, documented, architecture_test = (
+        results[name] for name in (
+            "graph", "counts", "packages", "cycles", "cycle_packages", "documented", "architecture_test"))
     for module in MODULES:
         dependencies = ",".join(sorted(graph[module])) or "-"
         print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
@@ -343,11 +339,9 @@ def print_module_report(results: dict) -> None:
 
 def print_ratchet_report(results: dict) -> None:
     """Prints the runtime export, engine type, accessor, launcher and adapter coupling lines."""
-    exported = results["exported"]
-    engine_types = results["engine_types"]
-    engine_accessors = results["engine_accessors"]
-    launchers = results["launchers"]
-    adapter_types = results["adapter_types"]
+    exported, engine_types, engine_accessors, launchers, adapter_types = (
+        results[name] for name in (
+            "exported", "engine_types", "engine_accessors", "launchers", "adapter_types"))
     print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
           f"modules, none other is")
     print("A11 surface and contract module -> minos-engine types: "
@@ -371,16 +365,11 @@ def print_ratchet_report(results: dict) -> None:
 
 def print_rule_report(results: dict) -> None:
     """Prints the assembly, embedded adapter, storage, package root, service and snapshot rule lines."""
-    postgresql_blind = results["postgresql_blind"]
-    assembly_classes = results["assembly_classes"]
-    api_users = results["api_users"]
-    embedded_adapters = results["embedded_adapters"]
-    storage_packages = results["storage_packages"]
-    package_roots = results["package_roots"]
-    service_loaders = results["service_loaders"]
-    snapshot_view_users = results["snapshot_view_users"]
-    unreferenced = results["unreferenced"]
-    runtime_edges = results["runtime_edges"]
+    (postgresql_blind, assembly_classes, api_users, embedded_adapters, storage_packages, package_roots,
+     service_loaders, snapshot_view_users, unreferenced, runtime_edges) = (
+        results[name] for name in (
+            "postgresql_blind", "assembly_classes", "api_users", "embedded_adapters", "storage_packages",
+            "package_roots", "service_loaders", "snapshot_view_users", "unreferenced", "runtime_edges"))
     print(f"A20 assembly classes: {assembly_classes} production class(es) of minos-app listed in ASSEMBLY_CLASSES "
           f"with their role, none other")
     print(f"A19 embedded adapters: {api_users} file(s) of minos-application listed in INFRASTRUCTURE_API_USERS "
@@ -405,7 +394,7 @@ def print_rule_report(results: dict) -> None:
 
 def run_checks() -> str:
     """Runs every rule, prints the report of each on stdout and returns the final success line."""
-    results = run_rules(parse_arguments(sys.argv[1:]))
+    results = run_rules(writes_dependency_document(sys.argv[1:]))
     print_module_report(results)
     print_ratchet_report(results)
     print_rule_report(results)
