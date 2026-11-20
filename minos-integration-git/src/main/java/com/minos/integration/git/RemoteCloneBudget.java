@@ -3,6 +3,7 @@ package com.minos.integration.git;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -69,11 +70,26 @@ class RemoteCloneBudget {
                 enforceTimeout();
                 entries[0] = increment(entries[0], "traversal entry");
                 enforceCardinality(files[0], directories[0], entries[0]);
-                throw failure;
+                tolerateVanishedEntry(failure);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
+                if (failure != null) tolerateVanishedEntry(failure);
+                return FileVisitResult.CONTINUE;
             }
         });
         enforceTimeout();
         return new TreeMetrics(bytes[0], files[0], directories[0], entries[0]);
+    }
+
+    /**
+     * An entry removed while the tree is walked (a lock file of a background JGit maintenance, for instance) holds
+     * neither bytes nor a file any more: it is skipped. Any other failure fails the budget.
+     */
+    static void tolerateVanishedEntry(IOException failure) throws IOException {
+        if (!(failure instanceof NoSuchFileException)) throw failure;
     }
 
     int transportTimeoutSeconds() {
