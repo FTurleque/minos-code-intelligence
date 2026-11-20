@@ -342,22 +342,12 @@ def print_module_report(results: dict) -> None:
 
 
 def print_ratchet_report(results: dict) -> None:
-    """Prints one line per ratchet table and per measured rule."""
-    postgresql_blind = results["postgresql_blind"]
+    """Prints the runtime export, engine type, accessor, launcher and adapter coupling lines."""
     exported = results["exported"]
     engine_types = results["engine_types"]
     engine_accessors = results["engine_accessors"]
     launchers = results["launchers"]
     adapter_types = results["adapter_types"]
-    assembly_classes = results["assembly_classes"]
-    api_users = results["api_users"]
-    embedded_adapters = results["embedded_adapters"]
-    storage_packages = results["storage_packages"]
-    package_roots = results["package_roots"]
-    service_loaders = results["service_loaders"]
-    snapshot_view_users = results["snapshot_view_users"]
-    unreferenced = results["unreferenced"]
-    runtime_edges = results["runtime_edges"]
     print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
           f"modules, none other is")
     print("A11 surface and contract module -> minos-engine types: "
@@ -377,6 +367,20 @@ def print_ratchet_report(results: dict) -> None:
     print(f"A13 adapter -> adapter types: {adapter_types} listed in ADAPTER_TYPES_NAMED_BY_ADAPTER "
           f"({sum(sum(types.values()) for types in ADAPTER_TYPES_NAMED_BY_ADAPTER.values())} files), none other "
           f"is named; {len(ADAPTER_COUPLING_REASONS)} couple(s) justified in ADAPTER_COUPLING_REASONS")
+
+
+def print_rule_report(results: dict) -> None:
+    """Prints the assembly, embedded adapter, storage, package root, service and snapshot rule lines."""
+    postgresql_blind = results["postgresql_blind"]
+    assembly_classes = results["assembly_classes"]
+    api_users = results["api_users"]
+    embedded_adapters = results["embedded_adapters"]
+    storage_packages = results["storage_packages"]
+    package_roots = results["package_roots"]
+    service_loaders = results["service_loaders"]
+    snapshot_view_users = results["snapshot_view_users"]
+    unreferenced = results["unreferenced"]
+    runtime_edges = results["runtime_edges"]
     print(f"A20 assembly classes: {assembly_classes} production class(es) of minos-app listed in ASSEMBLY_CLASSES "
           f"with their role, none other")
     print(f"A19 embedded adapters: {api_users} file(s) of minos-application listed in INFRASTRUCTURE_API_USERS "
@@ -404,6 +408,7 @@ def run_checks() -> str:
     results = run_rules(parse_arguments(sys.argv[1:]))
     print_module_report(results)
     print_ratchet_report(results)
+    print_rule_report(results)
     return (
         f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
         f"(modules={len(MODULES)}, sources={results['total']}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
