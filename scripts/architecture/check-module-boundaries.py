@@ -280,14 +280,16 @@ def check_pom_rules(root: Path = ROOT) -> dict[str, dict[str, str]]:
     return scoped
 
 
-def run_checks() -> str:
-    """Runs every rule, prints the report of each on stdout and returns the final success line."""
-    arguments = sys.argv[1:]
+def parse_arguments(arguments: list[str]) -> bool:
+    """Refuses an unknown argument; returns whether the dependency document is to be written."""
     unknown = [argument for argument in arguments if argument != "--write-doc"]
     if unknown:
         fail(f"unknown arguments: {', '.join(unknown)}")
-    write_doc = "--write-doc" in arguments
+    return "--write-doc" in arguments
 
+
+def run_rules(write_doc: bool) -> dict:
+    """Runs every rule in order; returns the counters the report prints."""
     check_reactor_modules()
     scoped = check_pom_rules()
     graph = {module: frozenset(dependencies) for module, dependencies in scoped.items()}
@@ -312,6 +314,18 @@ def run_checks() -> str:
     architecture_test = check_architecture_test_policy()
     runtime_edges = runtime_service_edges()
     check_or_write_dependency_document(scoped, write_doc, runtime_edges=runtime_edges)
+    return {name: value for name, value in locals().items() if name != "write_doc"}
+
+
+def print_module_report(results: dict) -> None:
+    """Prints the module, family, package, document and architecture test lines."""
+    graph = results["graph"]
+    counts = results["counts"]
+    packages = results["packages"]
+    cycles = results["cycles"]
+    cycle_packages = results["cycle_packages"]
+    documented = results["documented"]
+    architecture_test = results["architecture_test"]
     for module in MODULES:
         dependencies = ",".join(sorted(graph[module])) or "-"
         print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
@@ -325,6 +339,25 @@ def run_checks() -> str:
     print(f"A9 architecture document: {documented} module sections match the POM dependencies")
     print(f"A17 ArchUnit policy: ModuleArchitectureTest reads the single source module-boundaries.json "
           f"({architecture_test} modules), no policy table is copied")
+
+
+def print_ratchet_report(results: dict) -> None:
+    """Prints one line per ratchet table and per measured rule."""
+    postgresql_blind = results["postgresql_blind"]
+    exported = results["exported"]
+    engine_types = results["engine_types"]
+    engine_accessors = results["engine_accessors"]
+    launchers = results["launchers"]
+    adapter_types = results["adapter_types"]
+    assembly_classes = results["assembly_classes"]
+    api_users = results["api_users"]
+    embedded_adapters = results["embedded_adapters"]
+    storage_packages = results["storage_packages"]
+    package_roots = results["package_roots"]
+    service_loaders = results["service_loaders"]
+    snapshot_view_users = results["snapshot_view_users"]
+    unreferenced = results["unreferenced"]
+    runtime_edges = results["runtime_edges"]
     print(f"A10 runtime-local exports: {exported} types of the guarded packages may be named by other "
           f"modules, none other is")
     print("A11 surface and contract module -> minos-engine types: "
@@ -364,9 +397,16 @@ def run_checks() -> str:
           f"names no CodeKnowledgeStore")
     print(f"A15 unreferenced production types: {unreferenced} listed in UNREFERENCED_PRODUCTION_TYPES, "
           f"every other public type is named by production")
+
+
+def run_checks() -> str:
+    """Runs every rule, prints the report of each on stdout and returns the final success line."""
+    results = run_rules(parse_arguments(sys.argv[1:]))
+    print_module_report(results)
+    print_ratchet_report(results)
     return (
         f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
-        f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
+        f"(modules={len(MODULES)}, sources={results['total']}, dependencyPolicy=explicit-v1, hexagonalPolicy=A2-ADR-0042, "
         f"packagePolicy=A3-ADR-0068, cyclePolicy=A8-ratchet, documentation=A9-arc42-05, "
         f"reactor=root-pom-modules)"
     )

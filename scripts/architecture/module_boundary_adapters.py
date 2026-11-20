@@ -15,6 +15,7 @@ from module_boundary_policy import (
     ADAPTER_MODULES, APPLICATION_MODULE, ASSEMBLY_MODULE, BOOTSTRAP_MODULE, MODULES, POLICY, ROOT, fail,
     repository_group_id)
 from module_boundary_sources import (
+    production_sources,
     COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, SOURCE_WORD, qualified_name_pattern, resolve_adapter_class)
 
 
@@ -48,37 +49,33 @@ def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> N
     qualified_name = qualified_name_pattern(group_id or repository_group_id(root))
     guarded = [module for module in MODULES if module not in ADAPTER_MODULES and module != BOOTSTRAP_MODULE]
     violations: list[str] = []
-    for module in guarded:
-        source_root = root / module / "src" / "main" / "java"
-        if not source_root.is_dir():
-            continue
-        for source in sorted(source_root.rglob("*.java")):
-            text = source.read_text(encoding="utf-8")
-            code = COMMENTS_AND_LITERALS.sub(" ", text)
-            package_match = PACKAGE.search(text)
-            package = package_match.group(1) if package_match else ""
-            found: set[str] = set()
-            for static, name, wildcard in SOURCE_IMPORT.findall(code):
-                if wildcard and not static:
-                    if name in by_package:
-                        found.add(name + ".*")
-                    continue
-                resolved = resolve_adapter_class(name, by_fqn)
-                if resolved:
-                    found.add(resolved)
-            body = SOURCE_IMPORT.sub(" ", code)
-            for qualified in qualified_name.findall(body):
-                resolved = resolve_adapter_class(qualified, by_fqn)
-                if resolved:
-                    found.add(resolved)
-            words = set(SOURCE_WORD.findall(body))
-            for simple in by_package.get(package, {}):
-                if simple in words:
-                    found.add(package + "." + simple)
-            relative = source.relative_to(root).as_posix()
-            for adapter_class in sorted(found):
-                owner = by_fqn.get(adapter_class) or sorted(set(by_package[adapter_class[:-2]].values()))[0]
-                violations.append(f"{relative} -> {adapter_class} [{owner}]")
+    for module, source in production_sources(root, guarded):
+        text = source.read_text(encoding="utf-8")
+        code = COMMENTS_AND_LITERALS.sub(" ", text)
+        package_match = PACKAGE.search(text)
+        package = package_match.group(1) if package_match else ""
+        found: set[str] = set()
+        for static, name, wildcard in SOURCE_IMPORT.findall(code):
+            if wildcard and not static:
+                if name in by_package:
+                    found.add(name + ".*")
+                continue
+            resolved = resolve_adapter_class(name, by_fqn)
+            if resolved:
+                found.add(resolved)
+        body = SOURCE_IMPORT.sub(" ", code)
+        for qualified in qualified_name.findall(body):
+            resolved = resolve_adapter_class(qualified, by_fqn)
+            if resolved:
+                found.add(resolved)
+        words = set(SOURCE_WORD.findall(body))
+        for simple in by_package.get(package, {}):
+            if simple in words:
+                found.add(package + "." + simple)
+        relative = source.relative_to(root).as_posix()
+        for adapter_class in sorted(found):
+            owner = by_fqn.get(adapter_class) or sorted(set(by_package[adapter_class[:-2]].values()))[0]
+            violations.append(f"{relative} -> {adapter_class} [{owner}]")
     if violations:
         fail("A2 source boundary violated (a non-adapter module other than minos-bootstrap names a concrete "
              "adapter class; reach it through a port wired by minos-bootstrap): " + "; ".join(violations))

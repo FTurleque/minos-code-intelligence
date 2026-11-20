@@ -38,6 +38,16 @@ def resolve_adapter_class(name: str, by_fqn: dict[str, str]) -> str | None:
     return None
 
 
+def production_sources(root: Path, modules) -> list[tuple[str, Path]]:
+    """The production Java sources of the given modules, as (module, source) pairs in a stable order."""
+    sources: list[tuple[str, Path]] = []
+    for module in modules:
+        source_root = root / module / "src" / "main" / "java"
+        if source_root.is_dir():
+            sources.extend((module, source) for source in sorted(source_root.rglob("*.java")))
+    return sources
+
+
 def production_types(root: Path, module: str) -> dict[str, str]:
     """Top-level production types of one module: qualified name -> package."""
     source_root = root / module / "src" / "main" / "java"

@@ -71,10 +71,10 @@ def load_policy(path: Path = POLICY_FILE, root: Path = ROOT) -> BoundaryPolicy:
     if not path.is_file():
         refuse("missing; the guard and ModuleArchitectureTest read the shared policy from this file")
     try:
-        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_keys)
+        policy_document = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_keys)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         refuse(f"not valid JSON ({type(error).__name__})")
-    if not isinstance(data, dict):
+    if not isinstance(policy_document, dict):
         refuse("the top level is not an object")
 
     def exact_keys(value: object, expected: tuple[str, ...], where: str) -> dict:
@@ -93,14 +93,14 @@ def load_policy(path: Path = POLICY_FILE, root: Path = ROOT) -> BoundaryPolicy:
             refuse(f"{where} needs a non-blank text (reason)")
         return value
 
-    exact_keys(data, POLICY_SECTIONS, "the policy")
-    if data["version"] != 1:
-        refuse(f"unsupported version {data['version']!r}")
-    if not isinstance(data["modules"], list) or not data["modules"]:
+    exact_keys(policy_document, POLICY_SECTIONS, "the policy")
+    if policy_document["version"] != 1:
+        refuse(f"unsupported version {policy_document['version']!r}")
+    if not isinstance(policy_document["modules"], list) or not policy_document["modules"]:
         refuse("modules is not a non-empty list")
     modules: list[str] = []
     families: dict[str, str] = {}
-    for index, entry in enumerate(data["modules"]):
+    for index, entry in enumerate(policy_document["modules"]):
         exact_keys(entry, ("name", "family"), f"modules[{index}]")
         name = text(entry["name"], f"modules[{index}].name")
         if name in families:
@@ -118,7 +118,7 @@ def load_policy(path: Path = POLICY_FILE, root: Path = ROOT) -> BoundaryPolicy:
             refuse(f"{where} names the unknown module {module!r}")
         return module
 
-    allowed = exact_keys(data["allowedDependencies"], tuple(modules), "allowedDependencies")
+    allowed = exact_keys(policy_document["allowedDependencies"], tuple(modules), "allowedDependencies")
     allowed_dependencies: dict[str, frozenset[str]] = {}
     for module in modules:
         targets = allowed[module]
@@ -127,17 +127,17 @@ def load_policy(path: Path = POLICY_FILE, root: Path = ROOT) -> BoundaryPolicy:
         if len(set(targets)) != len(targets):
             refuse(f"allowedDependencies.{module} lists a module twice")
         allowed_dependencies[module] = frozenset(known(target, f"allowedDependencies.{module}") for target in targets)
-    if not isinstance(data["testOnlyDependencies"], list):
+    if not isinstance(policy_document["testOnlyDependencies"], list):
         refuse("testOnlyDependencies is not a list")
     test_only: set[tuple[str, str]] = set()
-    for index, entry in enumerate(data["testOnlyDependencies"]):
+    for index, entry in enumerate(policy_document["testOnlyDependencies"]):
         where = f"testOnlyDependencies[{index}]"
         exact_keys(entry, ("module", "dependency", "reason"), where)
         text(entry["reason"], f"{where}.reason")
         test_only.add((known(entry["module"], where), known(entry["dependency"], where)))
 
     def engine_debt(section: str, counter: str) -> dict[str, dict[str, int]]:
-        value = data[section]
+        value = policy_document[section]
         if not isinstance(value, dict):
             refuse(f"{section} is not an object")
         debt: dict[str, dict[str, int]] = {}
@@ -158,12 +158,12 @@ def load_policy(path: Path = POLICY_FILE, root: Path = ROOT) -> BoundaryPolicy:
         return debt
 
     def reasons(section: str) -> dict[str, str]:
-        value = data[section]
+        value = policy_document[section]
         if not isinstance(value, dict):
             refuse(f"{section} is not an object")
         return {name: text(reason, f"{section}.{name}") for name, reason in value.items()}
 
-    users = data["infrastructureApiUsers"]
+    users = policy_document["infrastructureApiUsers"]
     if not isinstance(users, list) or any(not isinstance(user, str) or not user.strip() for user in users):
         refuse("infrastructureApiUsers is not a list of class names")
     if len(set(users)) != len(users):
