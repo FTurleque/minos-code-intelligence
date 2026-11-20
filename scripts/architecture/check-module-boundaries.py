@@ -225,22 +225,9 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = dict(POLICY.allowed_dependenci
 
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
-ARTIFACT_TO_MODULE = {
-    "minos-domain": "minos-domain",
-    "minos-engine": "minos-engine",
-    "minos-runtime-local": "minos-runtime-local",
-    "minos-storage": "minos-storage",
-    "minos-provider-scip": "minos-provider-scip",
-    "minos-integration-git": "minos-integration-git",
-    "minos-application": "minos-application",
-    "minos-bootstrap": "minos-bootstrap",
-    "minos-nexus": "minos-nexus",
-    "minos-cli": "minos-cli",
-    "minos-api": "minos-api",
-    "minos-mcp": "minos-mcp",
-    "minos-explorer": "minos-explorer",
-    "minos-code-intelligence": "minos-app",
-}
+# Each module's artifact carries the module name, except the final assembly, published under the product name.
+ARTIFACT_TO_MODULE = {module: module for module in MODULES if module != "minos-app"} | {
+    "minos-code-intelligence": "minos-app"}
 
 
 def fail(message: str) -> None:
