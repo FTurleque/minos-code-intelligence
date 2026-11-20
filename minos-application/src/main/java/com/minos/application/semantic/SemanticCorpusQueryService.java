@@ -720,17 +720,17 @@ public final class SemanticCorpusQueryService {
         }
 
         DocumentSummary summarize(SemanticDocument document) {
-            Symbol symbol = document.kind() == SemanticDocumentKind.FILE || !resolved() ? null
-                    : reader.findSymbolById(projectId, document.sourceId()).orElse(null);
-            Symbol described = symbol != null ? symbol : fileSymbol(document.fileId());
+            Optional<Symbol> symbol = document.kind() == SemanticDocumentKind.FILE || !resolved() ? Optional.empty()
+                    : reader.findSymbolById(projectId, document.sourceId());
+            Optional<Symbol> described = symbol.or(() -> fileSymbol(document.fileId()));
             return new DocumentSummary(document.stableKey(), document.kind().name(), document.sourceId(),
                     document.fileId(), document.startLine(), document.endLine(), document.checksum(),
-                    document.content().length(), symbol != null,
-                    symbol == null ? null : symbol.name(),
-                    symbol == null ? null : symbol.qualifiedName(),
-                    symbol == null ? null : symbol.kind().name(),
-                    described == null ? null : described.language(),
-                    described == null ? null : described.moduleId());
+                    document.content().length(), symbol.isPresent(),
+                    symbol.map(Symbol::name).orElse(null),
+                    symbol.map(Symbol::qualifiedName).orElse(null),
+                    symbol.map(found -> found.kind().name()).orElse(null),
+                    described.map(Symbol::language).orElse(null),
+                    described.map(Symbol::moduleId).orElse(null));
         }
 
         /**
@@ -738,15 +738,15 @@ public final class SemanticCorpusQueryService {
          * file, or whose own file is it when they have no location. The reader may also list under a file a
          * symbol whose location names another one; such a symbol does not describe it.
          */
-        private Symbol fileSymbol(String fileId) {
-            if (fileId == null || !resolved()) return null;
+        private Optional<Symbol> fileSymbol(String fileId) {
+            if (fileId == null || !resolved()) return Optional.empty();
             Symbol kept = null;
             for (Symbol candidate : reader.findFileSymbols(projectId, fileId, Integer.MAX_VALUE)) {
                 String located = candidate.location() == null ? candidate.fileId() : candidate.location().fileId();
                 if (!fileId.equals(located)) continue;
                 if (kept == null || candidate.symbolKey().compareTo(kept.symbolKey()) < 0) kept = candidate;
             }
-            return kept;
+            return Optional.ofNullable(kept);
         }
     }
 }
