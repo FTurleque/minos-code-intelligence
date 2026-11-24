@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.MinosApplication;
 import com.minos.registry.RegisteredProject;
@@ -30,7 +31,7 @@ class IndexDryRunSideEffectsTest {
                 """);
         Path source = Files.createDirectories(project.resolve("src/main/java/demo"));
         Files.writeString(source.resolve("Demo.java"), "package demo; public class Demo { }\n");
-        return application.projectRegistry().registerProject(project, "demo");
+        return MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "demo");
     }
 
     @Test
@@ -41,7 +42,7 @@ class IndexDryRunSideEffectsTest {
             // Any read of the registry takes its inter-process lock file, which it creates (storage, not the dry run):
             // one read takes it out of the comparison so that only what the dry run itself does is measured. The CLI
             // wiring itself creates nothing any more (LazyWiringGuardTest).
-            application.projectRegistry().listProjects();
+            MinosApplicationTestAccess.projectRegistry(application).listProjects();
             Map<String, String> before = HomeTree.of(home);
 
             StringBuilder output = new StringBuilder();

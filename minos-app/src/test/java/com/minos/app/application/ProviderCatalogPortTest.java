@@ -2,6 +2,7 @@ package com.minos.app.application;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.ProviderPlatformService;
 import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.IndexerProviderCatalog;
@@ -23,7 +24,7 @@ class ProviderCatalogPortTest {
             List<String> expected = ScipIndexerCatalog.qualifiedProviders().stream()
                     .map(provider -> provider.descriptor().id())
                     .toList();
-            assertEquals(expected, application.compositionRoot().providerCatalog().providers().stream()
+            assertEquals(expected, MinosApplicationTestAccess.compositionRoot(application).providerCatalog().providers().stream()
                     .map(provider -> provider.descriptor().id())
                     .toList());
             assertEquals(expected.stream().sorted().toList(),

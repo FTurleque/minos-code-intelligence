@@ -2,6 +2,7 @@ package com.minos.app.adapter.scip;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.ProviderPlatformService;
 import com.minos.orchestration.CapabilitySupportLevel;
 import com.minos.orchestration.IndexerCapability;
@@ -121,7 +122,8 @@ class M24PolyglotProviderTest {
     @EnabledOnOs(OS.WINDOWS)
     void windowsDoesNotPretendScipClangRuntimeIsReady(@TempDir Path home) throws Exception {
         MinosApplication application = MinosApplication.open(home);
-        ProviderRuntimeStatus status = application.providerRuntimeManager().inspect(ScipIndexerCatalog.SCIP_CLANG_ID);
+        ProviderRuntimeStatus status = MinosApplicationTestAccess.providerRuntimeManager(application)
+                .inspect(ScipIndexerCatalog.SCIP_CLANG_ID);
         assertEquals(ProviderRuntimeStatus.State.BLOCKED, status.state());
         assertTrue(status.diagnostics().stream().anyMatch(value -> value.contains("Windows")));
     }

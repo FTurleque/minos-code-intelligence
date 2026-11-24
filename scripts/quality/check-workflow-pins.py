@@ -18,11 +18,14 @@ active `trap <function> EXIT` calls; a commented-out line, a function nobody tra
 the token on disk and are refused. The test jobs read the PostgreSQL test image before the login
 (`scripts/dev/start-test-postgres.sh --print-image`) and start its container after the logout (AUD-DEP-14).
 
-Secrets and the code of a pull request (AUD-DEP-05): in a workflow started by `pull_request`, a step whose `env:`
-references `secrets.` runs neither the Maven wrapper nor a script of the repository (that code comes from the pull
-request), unless SECRET_WITH_REPOSITORY_CODE_KEPT names the step with its reason; a listed step runs no Maven
-lifecycle phase, and a stale entry is refused. An `env:` of a job or of the workflow references no secret but
-DOCKERHUB_USERNAME (an identifier): raising a token to the job would hand it to every step.
+Secrets and the code of a pull request (AUD-DEP-05): in a workflow started by `pull_request`, a job one of whose steps
+receives a secret (through its `env:`, or the `with:` of an action other than docker/login-action) runs neither the
+Maven wrapper, nor a script of the repository, nor a local action (`uses: ./...`) in any of its steps: that code comes
+from the pull request and shares the runner with the secret. There is no exception list. An `env:` of a job or of the
+workflow references no secret but DOCKERHUB_USERNAME (an identifier): raising a token to the job would hand it to every
+step. A job that hands SONAR_TOKEN to a step refuses a sonar-project.properties of the checked-out tree in a `run:`
+step before the analysis, and its analysis step writes sonar.host.url, sonar.organization and sonar.projectKey as
+literal values.
 
 Release provenance (AUD-DEP-06): a job that publishes release assets (`publish-windows-release.ps1` outside
 `-ValidateOnly`, `gh release create`, `gh release upload`) runs `actions/attest-build-provenance` before it and holds
@@ -137,25 +140,27 @@ DOCKER_LOGIN_KEPT = {
 }
 
 
-# Steps of the workflows started by a pull request that receive a secret in their own `env:` while they run the code
-# of the repository (the Maven wrapper, a script under scripts/): {(workflow file, job id, step name): reason}. The
-# code is the pull request's own, so the entry says why the step needs the secret and what it may run; a step of
-# this list runs a Maven goal, never a lifecycle phase (the build, which runs the plugins and processors the pull
-# request declares, is a step before it that has no secret). An entry that no longer names such a step is refused.
-SECRET_WITH_REPOSITORY_CODE_KEPT = {
-    ("pr-ci.yml", "sonar", "SonarCloud CI-based analysis"):
-        "The analysis is a Maven goal of the scanner plugin, run by the wrapper on the pull request's tree: Maven "
-        "still reads its POMs (a build extension would be loaded). The compilation ran in the step before, with no "
-        "secret; this step runs no lifecycle phase.",
-}
+# Secrets and the code of a pull request (AUD-DEP-05, decision D2 of isoler-l-analyse-sonarcloud-du-code-de-la-pr): in a
+# workflow started by a pull request, a job that hands a secret to one of its steps runs no code of the repository in
+# any step. The steps of a job share the runner, $HOME, ~/.m2 and .mvn/: code that a pull request brings (a Maven
+# plugin, a build extension, a script) can reach a secret given to another step of the same job. There is no exception
+# list; a login to Docker Hub is left to DOCKER_LOGIN_KEPT and its logout rule (AUD-DEP-13).
 # The only secret an `env:` of a job or of a workflow may reference: an identifier, not a token.
 JOB_ENV_SECRET_ALLOWED = frozenset({"DOCKERHUB_USERNAME"})
 SECRET_REFERENCE = re.compile(r"\bsecrets\.[A-Za-z0-9_]+")
-ENV_ENTRY = re.compile(r"^\s*(?P<name>[A-Za-z0-9_]+):\s*(?P<value>.*)$")
+ENV_ENTRY = re.compile(r"^\s*(?P<name>[A-Za-z0-9_-]+):\s*(?P<value>.*)$")
 STEP_NAME = re.compile(r"^\s*(?:-\s+)?name:\s*(?P<name>.+?)\s*$")
 PULL_REQUEST_KEY = re.compile(r"^\s*(?:-\s+)?pull_request(?:_target)?\s*:?\s*$")
 PULL_REQUEST_INLINE = re.compile(r"\bpull_request(?:_target)?\b")
-MAVEN_LIFECYCLE_PHASE = re.compile(r"(?<![\w.:-])(?P<phase>test-compile|compile|test|package|verify|install)(?![\w.:-])")
+# A step that calls an action of the repository itself (`uses: ./...`): its code comes from the pull request.
+LOCAL_ACTION = re.compile(r"^\s*(?:-\s+)?uses:\s*[\"']?\./")
+
+# The analysis of a pull request (AUD-DEP-05, decision D4): a job that hands the SonarCloud token to a step refuses, in
+# a step before the analysis, a scanner configuration file of the checked-out tree, and writes in the workflow the
+# parameters that go with the token. The scanner would otherwise read the host or the proxy the pull request chooses.
+SONAR_TOKEN_SECRET = "secrets.SONAR_TOKEN"
+SCANNER_CONFIGURATION = "sonar-project.properties"
+SCANNER_PARAMETERS = ("sonar.host.url", "sonar.organization", "sonar.projectKey")
 
 # Code of the repository in the step that logs out: a script under scripts/ or the Maven wrapper. That step runs while
 # the token is on disk, so it only pulls what an earlier step computed.
@@ -469,11 +474,13 @@ def triggers_on_pull_request(text: str) -> bool:
     return False
 
 
-def _env_secrets(lines: list[tuple[int, str]], key_indent: int) -> list[tuple[int, str, str]]:
-    """(line number, variable, secret reference) of every entry of the `env:` mapping written at `key_indent` among
-    `lines` that references a secret."""
+def _env_secrets(lines: list[tuple[int, str]], key_indent: int, mapping: str = "env") -> list[tuple[int, str, str]]:
+    """(line number, entry, secret reference) of every secret referenced by the `env:` mapping (or the `mapping` named)
+    written at `key_indent` among `lines`: an inline value, an entry, or a line of a multi-line value (the entry is then
+    the last one read above it)."""
     found: list[tuple[int, str, str]] = []
     inside = False
+    entry_name = mapping
     for number, line in lines:
         indent = _content_indent(line)
         if inside:
@@ -481,44 +488,56 @@ def _env_secrets(lines: list[tuple[int, str]], key_indent: int) -> list[tuple[in
                 inside = False
             else:
                 entry = ENV_ENTRY.match(line)
-                reference = SECRET_REFERENCE.search(entry.group("value")) if entry else None
-                if entry and reference:
-                    found.append((number, entry.group("name"), reference.group(0)))
+                if entry:
+                    entry_name = entry.group("name")
+                reference = SECRET_REFERENCE.search(entry.group("value") if entry else line)
+                if reference:
+                    found.append((number, entry_name, reference.group(0)))
                 continue
         key = MAPPING_KEY.match(line)
-        if key and indent == key_indent and key.group("key") == "env" and not STEP_ITEM.match(line):
-            inside = not line.split(":", 1)[1].strip()
+        if key and indent == key_indent and key.group("key") == mapping and not STEP_ITEM.match(line):
+            inline = line.split(":", 1)[1].strip()
+            inside = not inline
+            entry_name = mapping
+            reference = SECRET_REFERENCE.search(inline)
+            if reference:
+                found.append((number, mapping, reference.group(0)))
     return found
 
 
-def _maven_commands(script: list[str]) -> list[str]:
-    """The Maven wrapper invocations of a script, each with its backslash-continued lines joined."""
-    commands: list[str] = []
-    current: str | None = None
-    for line in script:
-        if current is None and re.search(r"\bmvnw\b", line):
-            current = ""
-        if current is not None:
-            current += " " + line.strip().rstrip("\\")
-            if not line.rstrip().endswith("\\"):
-                commands.append(current)
-                current = None
-    return commands
+def _step_name(step: list[str], step_line: int) -> str:
+    named = next((match.group("name").strip("'\"") for line in step if (match := STEP_NAME.match(line))), "")
+    return named or f"at line {step_line}"
 
 
-def find_secret_violations(label: str, text: str) -> tuple[list[str], set[tuple[str, str, str]]]:
-    """(failures, entries of SECRET_WITH_REPOSITORY_CODE_KEPT used) for one workflow, which only a workflow started by
-    a pull request is subject to.
+def _step_secrets(step: list[str], step_line: int) -> list[tuple[int, str, str]]:
+    """The secrets a step receives: through its own `env:`, or through the `with:` of an action other than
+    docker/login-action (whose token is governed by the Docker Hub logout rule)."""
+    key_indent = _content_indent(step[0]) + 2
+    numbered = [(step_line + offset, line) for offset, line in enumerate(step)]
+    found = _env_secrets(numbered, key_indent)
+    if not _step_uses(step, DOCKER_LOGIN):
+        found += _env_secrets(numbered, key_indent, "with")
+    return found
+
+
+def _runs_repository_code(step: list[str]) -> bool:
+    """Whether a step runs code of the repository: the Maven wrapper or a script of scripts/ in its `run:`, or an
+    action of the repository itself (`uses: ./...`)."""
+    return (any(REPOSITORY_CODE.search(line) for line in _run_script(step))
+            or any(LOCAL_ACTION.match(line) for line in step))
+
+
+def find_secret_violations(label: str, text: str) -> list[str]:
+    """Failures of one workflow, which only a workflow started by a pull request is subject to.
 
     * the `env:` of the workflow or of a job references no secret but those of JOB_ENV_SECRET_ALLOWED;
-    * a step whose `env:` references a secret and whose script runs the Maven wrapper or a script of the repository
-      is named in SECRET_WITH_REPOSITORY_CODE_KEPT, and such a step runs no Maven lifecycle phase.
+    * a job one of whose steps receives a secret (step `env:`, or `with:` of an action other than docker/login-action)
+      runs no repository code (the Maven wrapper, a script of scripts/, a local action) in any of its steps.
     """
     if not triggers_on_pull_request(text):
-        return [], set()
-    workflow = label.rsplit("/", 1)[-1]
+        return []
     failures: list[str] = []
-    used: set[tuple[str, str, str]] = set()
     top_level = [(number, _without_comment(line)) for number, line in enumerate(text.splitlines(), start=1)]
     top_level = [(number, line) for number, line in top_level if line.strip()]
 
@@ -534,40 +553,64 @@ def find_secret_violations(label: str, text: str) -> tuple[list[str], set[tuple[
     for job, _job_line, body in _jobs(text):
         if body:
             forbid_in_env("job", _env_secrets(body, _content_indent(body[0][1])))
+        secret_steps: list[tuple[int, str, str]] = []
+        code_steps: list[tuple[int, str]] = []
         for step_line, step in _steps(body):
-            step_indent = _content_indent(step[0]) + 2
-            numbered = [(step_line + offset, line) for offset, line in enumerate(step)]
-            secrets = _env_secrets(numbered, step_indent)
-            script = _run_script(step)
-            runs_repository_code = any(REPOSITORY_CODE.search(line) for line in script)
-            if not secrets or not runs_repository_code:
-                continue
-            named = next((match.group("name").strip("'\"") for line in step if (match := STEP_NAME.match(line))), "")
-            where = f"{label}:{step_line}: job '{job}' step '{named or 'at line ' + str(step_line)}'"
-            if (workflow, job, named) not in SECRET_WITH_REPOSITORY_CODE_KEPT:
-                failures.append(
-                    f"{where} receives {secrets[0][2]} in its env: and runs repository code (the Maven wrapper or a "
-                    f"script of scripts/), which comes from the pull request -- compute with it in a step that has no "
-                    f"secret, or name the step in SECRET_WITH_REPOSITORY_CODE_KEPT with its reason.")
-                continue
-            used.add((workflow, job, named))
-            for command in _maven_commands(script):
-                phase = MAVEN_LIFECYCLE_PHASE.search(command)
-                if phase:
-                    failures.append(
-                        f"{where} is listed in SECRET_WITH_REPOSITORY_CODE_KEPT but runs the Maven phase "
-                        f"'{phase.group('phase')}' -- build in a step before it that has no secret, and run the goal alone.")
-    return failures, used
+            secrets = _step_secrets(step, step_line)
+            if secrets:
+                secret_steps.append((step_line, _step_name(step, step_line), secrets[0][2]))
+            if _runs_repository_code(step):
+                code_steps.append((step_line, _step_name(step, step_line)))
+        if secret_steps and code_steps:
+            secret_line, secret_step, reference = secret_steps[0]
+            code_line, code_step = code_steps[0]
+            failures.append(
+                f"{label}:{secret_line}: job '{job}' step '{secret_step}' receives {reference} while step "
+                f"'{code_step}' (line {code_line}) of the same job runs repository code (the Maven wrapper, a script "
+                f"of scripts/ or a local action), which comes from the pull request and shares the runner with the "
+                f"secret -- run that code in a job that receives no secret and hand its output over as an artifact.")
+    return failures
 
 
-def find_stale_secret_entries(used: set[tuple[str, str, str]]) -> list[str]:
-    """Entries of SECRET_WITH_REPOSITORY_CODE_KEPT that no longer name a step receiving a secret and running
-    repository code (missing workflow included)."""
-    return [
-        f"{WORKFLOWS}/{workflow}: job '{job}' step '{step}' is listed in SECRET_WITH_REPOSITORY_CODE_KEPT but no "
-        f"longer receives a secret and runs repository code -- remove the entry."
-        for workflow, job, step in sorted(SECRET_WITH_REPOSITORY_CODE_KEPT) if (workflow, job, step) not in used
-    ]
+def find_scanner_configuration_violations(label: str, text: str) -> list[str]:
+    """Failures of one workflow started by a pull request whose jobs hand SONAR_TOKEN to a step.
+
+    The analysis step is the first step that receives the token and calls an action (else the last step that receives
+    it). A `run:` step before it refuses a sonar-project.properties of the tree, and the analysis step writes the host,
+    the organization and the project as literal values (no expression).
+    """
+    if not triggers_on_pull_request(text):
+        return []
+    failures: list[str] = []
+    for job, job_line, body in _jobs(text):
+        steps = _steps(body)
+        given = [index for index, (line, step) in enumerate(steps)
+                 if any(reference == SONAR_TOKEN_SECRET for _n, _e, reference in _step_secrets(step, line))]
+        if not given:
+            continue
+        index = next((i for i in given if any((match := USES.search(line)) is not None
+                                              and not match.group("target").startswith("./") for line in steps[i][1])),
+                     given[-1])
+        line, step = steps[index]
+        name = _step_name(step, line)
+        if not any(_step_runs(before) and any(SCANNER_CONFIGURATION in content for content in _run_script(before))
+                   for _before_line, before in steps[:index]):
+            failures.append(
+                f"{label}:{job_line}: job '{job}' gives SONAR_TOKEN to step '{name}' with no step before it that "
+                f"refuses a {SCANNER_CONFIGURATION} of the checked-out tree -- the scanner would read the configuration "
+                f"the pull request brings (host, proxy) along with the token.")
+        missing = []
+        for parameter in SCANNER_PARAMETERS:
+            value = next((match.group(1) for content in step
+                          if (match := re.search(rf"-D{re.escape(parameter)}=(\S+)", content))), None)
+            if value is None or "$" in value:
+                missing.append(parameter)
+        if missing:
+            failures.append(
+                f"{label}:{line}: job '{job}' step '{name}' does not write {', '.join(missing)} as a literal value of "
+                f"the workflow -- the parameters that go with the token are fixed here, never read from the pull "
+                f"request or an expression.")
+    return failures
 
 
 def _has_unsafe_interpolation(text: str) -> bool:
@@ -896,7 +939,6 @@ def check(root: Path) -> tuple[list[str], int, int]:
     checked = 0
     runners = 0
     kept_logins: set[tuple[str, str]] = set()
-    used_secret_steps: set[tuple[str, str, str]] = set()
     workflows = root / WORKFLOWS
     for workflow in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
         label = relative(root, workflow)
@@ -914,11 +956,9 @@ def check(root: Path) -> tuple[list[str], int, int]:
         failures.extend(job_failures)
         kept_logins.update((workflow.name, job) for job in kept)
         failures.extend(find_release_attestation_violations(label, text))
-        secret_failures, used = find_secret_violations(label, text)
-        failures.extend(secret_failures)
-        used_secret_steps.update(used)
+        failures.extend(find_secret_violations(label, text))
+        failures.extend(find_scanner_configuration_violations(label, text))
     failures.extend(find_stale_docker_login_entries(kept_logins))
-    failures.extend(find_stale_secret_entries(used_secret_steps))
     failures.extend(find_missing_documented_scripts(root))
     failures.extend(find_windows_qualification_coverage_violations(root))
     failures.extend(check_build_windows_installer_script(root))
@@ -933,8 +973,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f" - {failure}", file=sys.stderr)
         return 1
     print(f"WORKFLOW SUPPLY-CHAIN PIN GATE SUCCESS (external uses={checked}, runs-on={runners}, Inno={INNO_VERSION})")
-    for (workflow, job, step), reason in sorted(SECRET_WITH_REPOSITORY_CODE_KEPT.items()):
-        print(f"  secret + repository code kept: {workflow} job '{job}' step '{step}': {reason}")
     return 0
 
 

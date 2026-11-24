@@ -26,6 +26,15 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <!-- AUD-ARC-02: MinosApplicationTestAccess, the test access to the package-private ports of
+                 MinosApplication; test scope only (check-module-boundaries.py) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-application</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <!-- A2 / ADR 0042: composition root discovered by ServiceLoader behind MinosApplication.open; runtime only, never compile -->
             <groupId>com.minos</groupId>
             <artifactId>minos-bootstrap</artifactId>

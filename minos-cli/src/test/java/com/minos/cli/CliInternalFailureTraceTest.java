@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.cli.support.CliCommandSupport;
 import com.minos.io.InternalFailureJournal;
@@ -65,7 +66,7 @@ class CliInternalFailureTraceTest {
         Launch launch = launch(true, (application, arguments, out, err) ->
                 CliCommandSupport.<String[]>run(arguments, out, err, USAGE, options -> options, "probe", options -> {
                     try (MinosApplication opened = MinosApplication.open(home)) {
-                        new ProjectResolver(opened.projectRegistry()).resolve(" ");
+                        new ProjectResolver(MinosApplicationTestAccess.projectRegistry(opened)).resolve(" ");
                     }
                     return 0;
                 }));

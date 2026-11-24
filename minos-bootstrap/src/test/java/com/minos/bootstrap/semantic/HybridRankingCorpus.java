@@ -1,6 +1,7 @@
 package com.minos.bootstrap.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
@@ -68,7 +69,7 @@ final class HybridRankingCorpus {
 
     /** Écrit les sources sous {@code root}, enregistre le projet et publie son snapshot. */
     static RegisteredProject install(MinosApplication application, Path root) throws IOException {
-        RegisteredProject project = application.projectRegistry().registerProject(root, PROJECT);
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(root, PROJECT);
         publish(application, root, project, "hybrid-ranking-snapshot", 0);
         return project;
     }
@@ -121,7 +122,7 @@ final class HybridRankingCorpus {
                         ResolutionStatus.RESOLVED, InformationNature.FACTUAL, null, ORIGIN, List.of()));
             }
         }
-        application.snapshotStore().publish(project.id(), snapshotId, symbols, List.of(), relationships);
+        MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), snapshotId, symbols, List.of(), relationships);
     }
 
     /** Classement complet de chaque requête, à l'octet près : une ligne par résultat. */

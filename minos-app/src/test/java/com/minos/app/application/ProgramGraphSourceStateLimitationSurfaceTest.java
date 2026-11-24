@@ -3,6 +3,7 @@ package com.minos.app.application;
 import com.minos.api.AdvancedCodeIntelligenceApi;
 import com.minos.api.LocalAdvancedCodeIntelligenceApi;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.cli.MinosLauncher;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -83,7 +84,7 @@ class ProgramGraphSourceStateLimitationSurfaceTest {
                 }
                 """, StandardCharsets.UTF_8);
         try (MinosApplication application = MinosApplication.open(home)) {
-            RegisteredProject project = application.projectRegistry().registerProject(projectRoot, PROJECT);
+            RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(projectRoot, PROJECT);
             Symbol symbol = new Symbol(
                     SYMBOL, "demo/Surface#", SymbolIdentityQuality.STRUCTURAL_FALLBACK, project.id().toString(), null,
                     FILE_ID, null, SymbolKind.CLASS, "Surface", "demo.Surface", null, "java",
@@ -91,11 +92,11 @@ class ProgramGraphSourceStateLimitationSurfaceTest {
                     ResolutionStatus.RESOLVED,
                     new Origin("source-state-surface", "FIXTURE", "1", SNAPSHOT, OriginType.OTHER),
                     false, false, Set.of());
-            application.snapshotStore().publish(project.id(), SNAPSHOT, List.of(symbol), List.of(), List.of());
+            MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), SNAPSHOT, List.of(symbol), List.of(), List.of());
             if (exactFingerprint) {
-                application.fingerprintStore().publish(
-                        project.id(), SNAPSHOT, application.fingerprintService().capture(projectRoot));
-                application.fingerprintStore().promote(project.id(), SNAPSHOT);
+                MinosApplicationTestAccess.fingerprintStore(application).publish(
+                        project.id(), SNAPSHOT, MinosApplicationTestAccess.fingerprintService(application).capture(projectRoot));
+                MinosApplicationTestAccess.fingerprintStore(application).promote(project.id(), SNAPSHOT);
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.minos.bootstrap.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
 import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.domain.Origin;
@@ -73,9 +74,10 @@ class SemanticProjectionMeasurementTest {
         LocalHashEmbeddingProvider provider = new LocalHashEmbeddingProvider(DIMENSIONS);
         String projectId;
         try (MinosApplication baseline = MinosApplication.open(home)) {
-            var project = baseline.projectRegistry().registerProject(root, "measure-" + documents);
+            var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(root, "measure-" + documents);
             projectId = project.id().toString();
-            baseline.snapshotStore().publish(project.id(), SNAPSHOT, List.of(symbol(projectId)), List.of(), List.of());
+            MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), SNAPSHOT, List.of(symbol(projectId)), List.of(),
+                    List.of());
         }
         try (MinosApplication application = MinosApplication.builder(home).embeddingProvider(provider).build()) {
             List<SemanticVectorStore.IndexedDocument> indexed = new ArrayList<>(documents);

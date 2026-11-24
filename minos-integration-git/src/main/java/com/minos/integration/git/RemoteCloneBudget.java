@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 class RemoteCloneBudget {
     private static final String TRAVERSAL_ENTRY = "traversal entry";
     private static final String TIMEOUT_MESSAGE = "remote repository clone exceeds the configured time limit";
+    private static final String VANISHED_ROOT_MESSAGE = "remote repository clone root disappeared while it was measured";
 
     private final Path destination;
     private final long maxBytes;
@@ -78,13 +79,13 @@ class RemoteCloneBudget {
             enforceTimeout();
             entries = increment(entries, TRAVERSAL_ENTRY);
             enforceCardinality(files, directories, entries);
-            tolerateVanishedEntry(failure);
+            tolerateVanishedEntry(file, failure);
             return FileVisitResult.CONTINUE;
         }
 
         @Override
         public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
-            if (failure != null) tolerateVanishedEntry(failure);
+            if (failure != null) tolerateVanishedEntry(directory, failure);
             return FileVisitResult.CONTINUE;
         }
 
@@ -114,11 +115,14 @@ class RemoteCloneBudget {
     }
 
     /**
-     * An entry removed while the tree is walked (a lock file of a background JGit maintenance, for instance) holds
-     * neither bytes nor a file any more: it is skipped. Any other failure fails the budget.
+     * An entry under the measured root removed while the tree is walked (a lock file of a background JGit maintenance,
+     * for instance) holds neither bytes nor a file any more: it is skipped. The measured root itself vanishing fails
+     * the budget with a stable message that names no path, so a partial or empty measure is never accepted. Any other
+     * failure fails the budget.
      */
-    static void tolerateVanishedEntry(IOException failure) throws IOException {
+    void tolerateVanishedEntry(Path entry, IOException failure) throws IOException {
         if (!(failure instanceof NoSuchFileException)) throw failure;
+        if (destination.equals(entry)) throw new IOException(VANISHED_ROOT_MESSAGE, failure);
     }
 
     int transportTimeoutSeconds() {

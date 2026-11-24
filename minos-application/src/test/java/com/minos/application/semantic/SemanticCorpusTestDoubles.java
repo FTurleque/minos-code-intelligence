@@ -1,13 +1,16 @@
 package com.minos.application.semantic;
 
 import com.minos.domain.Relationship;
+import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
+import com.minos.domain.SymbolSearchCriteria;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
+import com.minos.store.CodeKnowledgeReader;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.SnapshotDescriptor;
@@ -174,6 +177,70 @@ final class SemanticCorpusTestDoubles {
         @Override
         public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) {
             throw new UnsupportedOperationException("query views are not used by this test");
+        }
+    }
+
+    /**
+     * A reader that delegates every read to the reader of a view and counts the reads that describe documents:
+     * the symbols of a file (calls, symbols returned, time spent) and the symbols read by identifier.
+     */
+    static final class CountingReader implements CodeKnowledgeReader {
+        private final CodeKnowledgeReader delegate;
+        int fileSymbolsCalls;
+        long fileSymbolsReturned;
+        long fileSymbolsNanos;
+        int symbolByIdCalls;
+
+        CountingReader(CodeKnowledgeReader delegate) {
+            this.delegate = delegate;
+        }
+
+        /** The view {@code indexed} with this counting reader in place of its own, same snapshot and build time. */
+        static SnapshotReadView wrap(SnapshotReadView indexed, CountingReader reader) {
+            return new SnapshotReadView(indexed.descriptor(), indexed.snapshot(), reader, indexed.buildNanos());
+        }
+
+        void reset() {
+            fileSymbolsCalls = 0;
+            fileSymbolsReturned = 0L;
+            fileSymbolsNanos = 0L;
+            symbolByIdCalls = 0;
+        }
+
+        @Override
+        public Optional<Symbol> findSymbolById(String projectId, String symbolId) {
+            symbolByIdCalls++;
+            return delegate.findSymbolById(projectId, symbolId);
+        }
+
+        @Override
+        public List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria) {
+            return delegate.findSymbols(projectId, criteria);
+        }
+
+        @Override
+        public boolean lacksModuleAttribution(String projectId) {
+            return delegate.lacksModuleAttribution(projectId);
+        }
+
+        @Override
+        public List<Symbol> findFileSymbols(String projectId, String fileId, int limit) {
+            long started = System.nanoTime();
+            List<Symbol> symbols = delegate.findFileSymbols(projectId, fileId, limit);
+            fileSymbolsNanos += System.nanoTime() - started;
+            fileSymbolsCalls++;
+            fileSymbolsReturned += symbols.size();
+            return symbols;
+        }
+
+        @Override
+        public List<SymbolOccurrence> findUsages(String projectId, String symbolId, int limit) {
+            return delegate.findUsages(projectId, symbolId, limit);
+        }
+
+        @Override
+        public List<Relationship> findRelationships(String projectId, RelationshipSearchCriteria criteria) {
+            return delegate.findRelationships(projectId, criteria);
         }
     }
 
