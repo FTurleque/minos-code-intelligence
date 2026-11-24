@@ -86,6 +86,26 @@ adaptateurs hors liste ; A14 nouvelle racine de packages ; A15 classe publique s
 `ServiceLoader` sans chargeur explicite ; A17 tables Java et Python différentes ; A18 index mémoire ou port
 d'écriture hors du cœur. Aucune règle ne porte les étiquettes A4 à A6.
 
+### Que rend la façade `MinosApplication`, et à qui ?
+
+Type : flowchart (vue de composants, non UML) · Portée : existant vérifié · Exigences : « La façade ne rend ni type
+du moteur ni racine de composition », « Les tests lisent un port de l'application par un accès de test », « Les
+accesseurs de MinosApplication typés moteur sont tenus par un cliquet »
+
+```mermaid
+flowchart LR
+  surf["Surfaces et module de contrat (production)"] -->|"services, cas d'usage, types JDK ou du domaine"| app["MinosApplication (minos-application)"]
+  pkg["Classes de com.minos.application (LocalProjectOperations, ProviderPlatformService)"] -->|"ports et racine de composition, privés au package"| app
+  tests["Tests de minos-api, -app, -bootstrap, -cli, -explorer, -mcp, -nexus"] --> access["MinosApplicationTestAccess (test-jar, portée test)"]
+  access -->|"privé au package"| app
+  guard["Garde A11 : table vide, aucune méthode publique rendant MinosApplicationComposer, test-jar en portée test"] -.->|"refuse toute réintroduction"| app
+```
+
+`MinosApplication` ne déclare aucune méthode publique d'instance qui rend un type de `minos-engine` ou
+`MinosApplicationComposer` ([ARCH-0087](../../adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md) § 2). Le
+`test-jar` de `minos-application` ne contient que la classe d'accès de test, sans déclaration de service ; aucun jar
+livré ne la contient.
+
 ## Traçabilité
 
 | Exigence | Scénarios couverts | Vue | Preuves | Statut |
@@ -125,7 +145,7 @@ d'écriture hors du cœur. Aucune règle ne porte les étiquettes A4 à A6.
 | L'état de reprise est lu sans écriture par l'application | tous | — | `minos-application/src/test/java/com/minos/application/ProjectInspectionServiceResumableRunTest.java#theResumableRunIsReadWithoutAnyWriteOrLease`, `minos-mcp/src/test/java/com/minos/mcp/MinosMcpReadOnlyHomeTest.java#theResumableRunIsReadFromARealHomeWithoutAnyTrace` | couverte |
 | Les choix applicatifs couvrent les énumérations du moteur | tous | — | `minos-application/src/test/java/com/minos/application/indexing/IndexingResumeChoiceTest.java#everyEnginePolicyHasAChoiceOfTheSameNameAndBack`, `minos-application/src/test/java/com/minos/application/remote/RemoteSourceRequestTest.java#everyWorkerNetworkPolicyHasAChoiceOfTheSameNameAndBack` | couverte |
 | Le premier lot ne change aucune sortie publique | contrôle des goldens par `git diff` manuel | — | `minos-app/src/test/java/com/minos/characterization/A2SurfaceCharacterizationTest.java#javaApiOutputsAreUnchanged`, `minos-api/src/test/java/com/minos/api/ProviderDtoOrderTest.java#capabilitiesAreKeptSortedWhateverTheirInsertionOrder` | partielle |
-| Un accesseur de MinosApplication appelé par une surface compte comme un usage du type rendu | tous (arbres synthétiques) | — | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_an_accessor_called_without_naming_the_type_is_refused`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_a_method_reference_counts_as_a_use` | couverte |
+| Un accesseur de MinosApplication appelé par une surface compte comme un usage du type rendu | tous (arbres synthétiques ; aucun accesseur réel n'est public, E8 levé pour cette exigence) | — | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_an_accessor_called_without_naming_the_type_is_refused`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_a_method_reference_counts_as_a_use`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_replacing_the_import_by_var_keeps_the_count`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_a_homonym_with_another_arity_is_ignored` | couverte |
 | Les types du moteur utilisés par le bytecode d'une surface le sont par liste fermée | tous | — | `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#surfacesUseOnlyListedEngineTypes`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#theBytecodeRatchetRefusesANewTypeAChangedCountAndADeadEntry` | couverte |
 | Le mécanisme d'ACL du runtime local n'est nommé par aucun autre module | tous | — | `scripts/architecture/test_check_module_boundaries_adapters.py#test_the_acl_package_is_guarded_and_exports_nothing` | couverte |
 | Le diagnostic de l'hôte est consommé par un service applicatif | réintroductions couvertes par A11 générique ; un type cité non affirmé (E7) | — | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_the_cli_no_longer_uses_the_host_mechanisms_of_the_engine`, `minos-application/src/test/java/com/minos/application/HostDiagnosticsServiceTest.java#aHostCommandIsFoundOrReportedAbsent` | partielle |
@@ -147,7 +167,7 @@ d'écriture hors du cœur. Aucune règle ne porte les étiquettes A4 à A6.
 | Les sous-packages de com.minos.storage appartiennent à minos-storage | tous | — | `scripts/architecture/test_check_module_boundaries_adapters.py#test_a_package_below_the_storage_root_outside_minos_storage_is_refused`, `scripts/architecture/test_check_module_boundaries_adapters.py#test_the_real_tree_keeps_the_storage_packages_apart` | couverte |
 | La part de code concret du moteur est mesurée sans cliquet | tous | — | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_each_file_counts_for_its_first_top_level_declaration_with_all_its_lines`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_the_real_engine_has_no_unclassified_file` | couverte |
 | La correspondance des chemins Docker passe par une façade applicative | tous | — | `minos-application/src/test/java/com/minos/application/ProjectPathMappingServiceTest.java#refusesToReplaceAnotherMappingAndWritesNothing`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_the_cli_no_longer_names_the_project_path_port` | couverte |
-| Les accesseurs de MinosApplication typés moteur sont tenus par un cliquet | tous | — | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_an_accessor_outside_the_list_is_refused_with_its_name_and_type`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_the_real_list_matches_the_real_application` | couverte |
+| Les accesseurs de MinosApplication typés moteur sont tenus par un cliquet | tous (table vide) | V2 | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_an_accessor_outside_the_list_is_refused_with_its_name_and_type`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_an_entry_added_to_the_empty_table_is_refused`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_a_surface_reaching_the_composition_root_is_refused`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_the_real_list_matches_the_real_application` | couverte |
 | Un module de contrat reste sous les surfaces | tous | V1 | `scripts/architecture/test_check_module_boundaries.py#test_a_contract_module_may_not_depend_on_a_surface`, `scripts/architecture/test_check_module_boundaries.py#test_a_contract_module_sees_the_composition_root_in_tests_only`, `scripts/architecture/test_check_module_boundaries_ratchets.py#test_an_engine_type_back_in_nexus_is_refused_against_the_real_list`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#contractModulesSitBelowTheSurfaces` | couverte |
 | Aucune surface ne dépend d'une autre surface | tous | V1 | `scripts/architecture/test_check_module_boundaries.py#test_no_surface_depends_on_another_surface_in_any_scope`, `scripts/architecture/test_check_module_boundaries.py#test_a_surface_may_depend_on_a_contract_module`, `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java#noSurfaceUsesAnotherSurface` | couverte |
 | Le signal sémantique NEXUS est déclaré non qualifié | « Documentation honnête » : recherche textuelle, sans test | — | `scripts/architecture/test_check_module_boundaries_packages.py#test_the_nexus_semantic_signal_stays_declared_as_not_qualified` | partielle |
@@ -184,7 +204,7 @@ Le garde et ses auto-tests tournent dans le job `invariants` de `pr-ci.yml` ; le
 | E5 | L'exemple de type du moteur « déjà listé » pour la CLI (`io.PrivateLocalStorage`) est sorti de la liste ; le test s'appuie sur un autre type | `openspec/specs/frontieres-de-modules/spec.md:361` | [Proposition] Mettre l'exemple à jour |
 | E6 | Un gate cité par une exigence (`check-polyglot-provider-consistency.py`) n'apparaît dans aucun workflow | `scripts/quality/check-polyglot-provider-consistency.py` | [Question] Gate orphelin à câbler ou à retirer ? |
 | E7 | Le test du diagnostic de l'hôte n'affirme pas l'un des trois types que la spec cite (`runtime.HostCommandLocator`) | `scripts/architecture/test_check_module_boundaries.py` (`test_the_cli_no_longer_uses_the_host_mechanisms_of_the_engine`) | [Proposition] Compléter le test |
-| E8 | Trois scénarios supposent des accesseurs de `MinosApplication` encore publics ; ils sont désormais privés au package : c'est la compilation qui échoue, pas la règle A11 | `minos-application/src/main/java/com/minos/application/MinosApplication.java:299`, `minos-application/src/main/java/com/minos/application/MinosApplication.java:318` | [Proposition] Reformuler les scénarios |
+| E8 | Des scénarios supposent des accesseurs de `MinosApplication` encore publics ; ils sont privés au package : c'est la compilation qui échoue, pas la règle A11 | `minos-application/src/main/java/com/minos/application/MinosApplication.java` (`gitIntelligence()`, `hostedControlPlaneService()`, ports du moteur) | Levé pour « Un accesseur de MinosApplication appelé par une surface compte comme un usage du type rendu » (scénarios sur arbre de test, changement `retirer-la-racine-de-composition-de-la-facade`) ; reste pour les exigences du contrôle hébergé et de l'activité Git : [Proposition] Reformuler leurs scénarios |
 | E9 | La spec exige une raison écrite pour chaque entrée de la liste A11 | `scripts/architecture/module-boundaries.json` (section `engineTypesNamedBySurface`), `scripts/architecture/module_boundary_policy.py` (lecture stricte) | Clos : chaque entrée A11 porte une `reason` non vide, contrôlée à la lecture de la politique (AUD-ARC-04) |
 
 ## Questions ouvertes

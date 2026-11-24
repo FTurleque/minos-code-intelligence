@@ -1,6 +1,7 @@
 package com.minos.bootstrap.application;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.InformationNature;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -63,21 +64,23 @@ class MinosApplicationTest {
         MinosApplication application = MinosApplication.open(requestedHome);
 
         assertEquals(requestedHome.toAbsolutePath().normalize(), application.home());
-        assertSame(application.projectRegistry(), application.projectRegistry());
-        assertSame(application.snapshotStore(), application.snapshotStore());
-        assertSame(application.indexStateStore(), application.indexStateStore());
-        assertSame(application.fingerprintStore(), application.fingerprintStore());
-        assertSame(application.discoveryService(), application.discoveryService());
+        assertSame(MinosApplicationTestAccess.projectRegistry(application), MinosApplicationTestAccess.projectRegistry(application));
+        assertSame(MinosApplicationTestAccess.snapshotStore(application), MinosApplicationTestAccess.snapshotStore(application));
+        assertSame(MinosApplicationTestAccess.indexStateStore(application), MinosApplicationTestAccess.indexStateStore(application));
+        assertSame(MinosApplicationTestAccess.fingerprintStore(application), MinosApplicationTestAccess.fingerprintStore(application));
+        assertSame(MinosApplicationTestAccess.discoveryService(application), MinosApplicationTestAccess.discoveryService(application));
         assertSame(application.architectureQuery(), application.architectureQuery());
         assertSame(application.impactQuery(), application.impactQuery());
         assertSame(application.workspaceIntelligence(), application.workspaceIntelligence());
-        assertSame(application.runtimeObservationStore(), application.runtimeObservationStore());
+        assertSame(MinosApplicationTestAccess.runtimeObservationStore(application),
+                MinosApplicationTestAccess.runtimeObservationStore(application));
         assertSame(application.runtimeIntelligenceService(), application.runtimeIntelligenceService());
-        assertSame(application.providerRuntimeManager(), application.providerRuntimeManager());
-        assertSame(application.snapshotStager(), application.snapshotStager());
-        assertSame(application.snapshotPromoter(), application.snapshotPromoter());
+        assertSame(MinosApplicationTestAccess.providerRuntimeManager(application),
+                MinosApplicationTestAccess.providerRuntimeManager(application));
+        assertSame(MinosApplicationTestAccess.snapshotStager(application), MinosApplicationTestAccess.snapshotStager(application));
+        assertSame(MinosApplicationTestAccess.snapshotPromoter(application), MinosApplicationTestAccess.snapshotPromoter(application));
         assertFalse(application.teamControlPlane().isPresent());
-        Set<String> providerIds = application.indexerDescriptors().stream()
+        Set<String> providerIds = MinosApplicationTestAccess.indexerDescriptors(application).stream()
                 .map(value -> value.id())
                 .collect(Collectors.toUnmodifiableSet());
         assertEquals(Set.of(
@@ -224,19 +227,19 @@ class MinosApplicationTest {
         Path home = root.resolve("minos-home");
         String snapshotId = "snapshot-p0-vertical";
         MinosApplication application = MinosApplication.open(home);
-        RegisteredProject project = application.projectRegistry()
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application)
                 .registerProject(projectRoot, "vertical-fixture");
-        application.snapshotStore().publish(
+        MinosApplicationTestAccess.snapshotStore(application).publish(
                 project.id(),
                 snapshotId,
                 List.of(javaSymbol(project, fileId)),
                 List.of(),
                 List.of());
-        application.fingerprintStore().publish(
+        MinosApplicationTestAccess.fingerprintStore(application).publish(
                 project.id(),
                 snapshotId,
-                application.fingerprintService().capture(projectRoot));
-        application.fingerprintStore().promote(project.id(), snapshotId);
+                MinosApplicationTestAccess.fingerprintService(application).capture(projectRoot));
+        MinosApplicationTestAccess.fingerprintStore(application).promote(project.id(), snapshotId);
 
         ProgramGraph graph = application.programGraphService().getGraph(project.id().toString());
         ProgramGraph warm = application.programGraphService().getGraph(project.id().toString());
@@ -319,11 +322,11 @@ class MinosApplicationTest {
                 .snapshotLifecycle(stager, promoter)
                 .build();
 
-        assertSame(snapshots, application.snapshotStore());
-        assertSame(runtimeObservations, application.runtimeObservationStore());
-        assertSame(runtime, application.providerRuntimeManager());
-        assertSame(stager, application.snapshotStager());
-        assertSame(promoter, application.snapshotPromoter());
+        assertSame(snapshots, MinosApplicationTestAccess.snapshotStore(application));
+        assertSame(runtimeObservations, MinosApplicationTestAccess.runtimeObservationStore(application));
+        assertSame(runtime, MinosApplicationTestAccess.providerRuntimeManager(application));
+        assertSame(stager, MinosApplicationTestAccess.snapshotStager(application));
+        assertSame(promoter, MinosApplicationTestAccess.snapshotPromoter(application));
     }
 
     private static Symbol javaSymbol(RegisteredProject project, String fileId) {

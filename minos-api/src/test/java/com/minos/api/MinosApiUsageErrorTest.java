@@ -3,6 +3,7 @@ package com.minos.api;
 import com.minos.api.MinosApi.ErrorCode;
 import com.minos.api.MinosApi.MinosApiException;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.SemanticCorpusQueryService;
@@ -96,7 +97,7 @@ class MinosApiUsageErrorTest {
     void anUnknownProjectIsAnInvalidRequestWithThePublicMessage() throws Exception {
         try (MinosApplication application = MinosApplication.open(temp);
              LogCapture log = new LogCapture(MinosApiSupport.class)) {
-            ProjectResolver resolver = new ProjectResolver(application.projectRegistry());
+            ProjectResolver resolver = new ProjectResolver(MinosApplicationTestAccess.projectRegistry(application));
 
             MinosApiException failure = assertThrows(MinosApiException.class,
                     () -> MinosApiSupport.execute(() -> resolver.resolve("no-such-project")));

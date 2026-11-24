@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDetector;
 import com.minos.discovery.ProjectDiscoveryService;
@@ -36,7 +37,7 @@ class MinosMcpIndexStatusWithoutDiscoveryTest {
         AtomicInteger discoveries = new AtomicInteger();
         try (MinosApplication application = MinosApplication.builder(temp.resolve("home"))
                 .discoveryService(failingDiscovery(discoveries)).build()) {
-            application.projectRegistry().registerProject(project, "fixture");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "fixture");
             MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
 
             var result = McpToolCalls.call(tools, "minos_index_status", Map.of("project", "fixture"));

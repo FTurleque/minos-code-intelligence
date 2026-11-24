@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.discovery.DefaultDiscoveryPlugins;
 import com.minos.discovery.ProjectDetector;
@@ -121,8 +122,8 @@ class MinosMcpArchitectureGraphSingleDiscoveryTest {
                 .discoveryService(countingDiscovery())
                 .snapshotStore(countingStore(new FileSymbolSnapshotStore(home.resolve("counted-snapshots"))))
                 .build();
-        RegisteredProject project = application.projectRegistry().registerProject(projectRoot, PROJECT);
-        application.snapshotStore().publish(project.id(), "snapshot-perf05",
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(projectRoot, PROJECT);
+        MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), "snapshot-perf05",
                 List.of(symbol(project, "api"), symbol(project, "app")), List.of(), List.of());
         return application;
     }

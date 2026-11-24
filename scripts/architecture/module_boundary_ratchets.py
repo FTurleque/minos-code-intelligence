@@ -35,29 +35,13 @@ ENGINE_MODULE = "minos-engine"
 # that removes a use updates both entries of the file.
 ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = POLICY.engine_types_named_by_surface
 
-# A11 / AUD-ARC-01, ADR 0057 point 6 — the public instance accessors of MinosApplication whose return type names a
-# minos-engine type, with that type (as minos_application_accessors reads them). No surface production code calls them
-# (ENGINE_TYPES_NAMED_BY_SURFACE); they serve the use cases of the application sub-packages (ProjectIndexingUseCase,
-# RemoteIndexingUseCase, KnowledgeExportUseCase) and the tests. A new one goes through an application facade instead;
-# an accessor called only inside com.minos.application is package-private and leaves the table.
-MINOS_APPLICATION_ENGINE_ACCESSORS: dict[str, str] = {
-    "discoveryService": "discovery.ProjectDiscoveryService",
-    "fingerprintService": "incremental.ProjectFingerprintService",
-    "fingerprintStore": "incremental.ProjectFingerprintSnapshotStore",
-    "incrementalIndexingPlanner": "orchestration.IncrementalIndexingPlanner",
-    "indexStateStore": "orchestration.IndexStateStore",
-    "indexerDescriptors": "orchestration.IndexerDescriptor",
-    "indexerRegistry": "orchestration.IndexerRegistry",
-    "invalidationService": "orchestration.ProjectInvalidationService",
-    "projectRegistry": "registry.ProjectRegistry",
-    "providerRuntimeManager": "runtime.ProviderRuntimeManager",
-    "retentionService": "storage.StorageRetentionService",
-    # Kept for a test only: MinosMcpWriteProtectedHomeTest seeds runtime sessions on disk through the open application.
-    "runtimeObservationStore": "dynamic.RuntimeObservationStore",
-    "snapshotPromoter": "orchestration.IndexingRuntimePorts",
-    "snapshotStager": "orchestration.IndexingRuntimePorts",
-    "snapshotStore": "store.CodeKnowledgeSnapshotStore",
-}
+# A11 / AUD-ARC-01, AUD-ARC-02, ADR 0057 point 6, ADR 0087 section 2 — the public instance accessors of MinosApplication
+# whose return type names a minos-engine type, with that type (as minos_application_accessors reads them). Empty, and a
+# ratchet at zero: the ports and the composition root are package-private, read by the classes of com.minos.application;
+# the surfaces go through the services and use cases of the facade, and the tests of the other modules through
+# MinosApplicationTestAccess (test-jar of minos-application, test scope only). An entry, or a public accessor returning
+# an engine type, fails.
+MINOS_APPLICATION_ENGINE_ACCESSORS: dict[str, str] = {}
 
 # A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type), with their number
 # of launch sites. Empty: the Windows ACL mechanism of private storage is the PlatformAccessControl port, provided by
@@ -146,6 +130,39 @@ RETURN_TYPE_WORD = re.compile(r"\b[A-Z]\w*(?:\.[A-Z]\w*)*")
 ACCESSOR_USE = re.compile(r"(::|\.)\s*([A-Za-z_]\w*)\b(\s*\()?")
 
 
+def public_instance_methods(code: str):
+    """The public instance methods declared at the top level of the class body of code (comments and literals as
+    tokens): (match, return type text, name), static methods and nested types excluded."""
+    depth = 0
+    position = 0
+    for match in PUBLIC_METHOD.finditer(code):
+        depth += code.count("{", position, match.start()) - code.count("}", position, match.start())
+        position = match.start()
+        modifiers, returned, name = match.groups()
+        if depth == 1 and not re.search(r"\bstatic\b", modifiers):
+            yield match, returned, name
+
+
+def minos_application_source(root: Path, group: str) -> Path:
+    """The source of MinosApplication under root, for the groupId group."""
+    return (root / APPLICATION_MODULE / "src" / "main" / "java" / Path(*group.split(".")) / "application"
+            / "MinosApplication.java")
+
+
+COMPOSITION_ROOT_TYPE = re.compile(r"\bMinosApplicationComposer\b")
+
+
+def public_composition_root_methods(root: Path = ROOT, group_id: str | None = None) -> list[str]:
+    """A11 / AUD-ARC-02 — the public instance methods of MinosApplication whose return type names
+    MinosApplicationComposer, the composition root that hands out engine ports under an application type. Read from the
+    source; empty when the source is missing (minos_application_accessors fails closed on it)."""
+    source = minos_application_source(root, group_id or repository_group_id(root))
+    if not source.is_file():
+        return []
+    code = literals_as_tokens(source.read_text(encoding="utf-8"))
+    return sorted(name for _, returned, name in public_instance_methods(code) if COMPOSITION_ROOT_TYPE.search(returned))
+
+
 def minos_application_accessors(root: Path = ROOT, group_id: str | None = None) -> dict[str, tuple[int, str]]:
     """A11 — the public instance methods of MinosApplication whose return type names a minos-engine type: method name
     -> (parameter count, engine type relative to the groupId). Read from the source, never written in this guard. A
@@ -153,7 +170,7 @@ def minos_application_accessors(root: Path = ROOT, group_id: str | None = None) 
     required as soon as minos-application has production sources (fail-closed)."""
     group = group_id or repository_group_id(root)
     source_root = root / APPLICATION_MODULE / "src" / "main" / "java"
-    source = source_root / Path(*group.split(".")) / "application" / "MinosApplication.java"
+    source = minos_application_source(root, group)
     if not source.is_file():
         if source_root.is_dir():
             fail(f"A11 cannot read the accessors of MinosApplication: {source.relative_to(root).as_posix()} is "
@@ -165,14 +182,7 @@ def minos_application_accessors(root: Path = ROOT, group_id: str | None = None) 
     engine = production_types(root, ENGINE_MODULE)
     qualified_name = qualified_name_pattern(group)
     accessors: dict[str, tuple[int, str]] = {}
-    depth = 0
-    position = 0
-    for match in PUBLIC_METHOD.finditer(code):
-        depth += code.count("{", position, match.start()) - code.count("}", position, match.start())
-        position = match.start()
-        modifiers, returned, name = match.groups()
-        if depth != 1 or re.search(r"\bstatic\b", modifiers):
-            continue
+    for match, returned, name in public_instance_methods(code):
         candidates = qualified_name.findall(returned)
         for word in RETURN_TYPE_WORD.findall(returned):
             head, _, tail = word.partition(".")
@@ -301,8 +311,9 @@ COMPOSITION_ROOT_USE = re.compile(r"\bcompositionRoot\s*\(|::\s*compositionRoot\
 def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = None,
                                       listed: dict[str, str] | None = None) -> int:
     """A11 — the public MinosApplication accessors returning a minos-engine type are exactly those of
-    MINOS_APPLICATION_ENGINE_ACCESSORS, each with its listed type; the table only shrinks. No surface production
-    source reaches the composition root, whose methods return engine ports. Comments and literals are ignored."""
+    MINOS_APPLICATION_ENGINE_ACCESSORS, each with its listed type; the table only shrinks. No public instance method of
+    MinosApplication returns the composition root, and no surface production source reaches it, since its methods
+    return engine ports. Comments and literals are ignored."""
     listed = MINOS_APPLICATION_ENGINE_ACCESSORS if listed is None else listed
     accessors = minos_application_accessors(root, group_id)
     problems = []
@@ -314,6 +325,9 @@ def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = 
             problems.append(f"MinosApplication.{name} returns {engine_type}, listed as {listed[name]}")
     problems += [f"MINOS_APPLICATION_ENGINE_ACCESSORS entry {name} is no longer a public accessor returning an "
                  "engine type; remove it (the ratchet only shrinks)" for name in sorted(set(listed) - set(accessors))]
+    problems += [f"MinosApplication.{name} is a public method returning MinosApplicationComposer, the composition root; "
+                 "keep it package-private (tests read it through MinosApplicationTestAccess)"
+                 for name in public_composition_root_methods(root, group_id)]
     # The composition root hands out engine ports under an application type: a surface or a contract module would
     # bypass the table.
     for surface in sorted(ENGINE_TYPE_RATCHETED_MODULES):

@@ -1,6 +1,7 @@
 package com.minos.bootstrap.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.EmbeddingProvider;
 import com.minos.application.semantic.HybridContextBuilder;
 import com.minos.application.semantic.HybridSearchService;
@@ -37,8 +38,9 @@ class SemanticHybridIntelligenceTest {
     void semanticIsOptionalAndHybridFallsBackToStructuredSignals(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         MinosApplication baseline = MinosApplication.builder(fixture.home()).build();
-        RegisteredProject project = baseline.projectRegistry().registerProject(fixture.projectRoot(), "semantic-fixture");
-        baseline.snapshotStore().publish(project.id(), "snapshot-1",
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(fixture.projectRoot(),
+                "semantic-fixture");
+        MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1",
                 symbols(project.id(), "()"), List.of(), List.of());
 
         SemanticIndexService.Status status = baseline.semanticIndexService().status("semantic-fixture");
@@ -71,8 +73,9 @@ class SemanticHybridIntelligenceTest {
     void controlledSemanticAndHybridRetrievalMeasureGainAndRespectContextBudget(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         MinosApplication baseline = MinosApplication.builder(fixture.home()).build();
-        RegisteredProject project = baseline.projectRegistry().registerProject(fixture.projectRoot(), "semantic-fixture");
-        baseline.snapshotStore().publish(project.id(), "snapshot-1",
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(fixture.projectRoot(),
+                "semantic-fixture");
+        MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1",
                 symbols(project.id(), "()"), List.of(), List.of());
 
         MinosApplication application = MinosApplication.builder(fixture.home())
@@ -124,8 +127,9 @@ class SemanticHybridIntelligenceTest {
     void semanticIndexReusesUnchangedDocumentsAndTargetsChangedEmbeddings(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         MinosApplication baseline = MinosApplication.builder(fixture.home()).build();
-        RegisteredProject project = baseline.projectRegistry().registerProject(fixture.projectRoot(), "semantic-fixture");
-        baseline.snapshotStore().publish(project.id(), "snapshot-1",
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(fixture.projectRoot(),
+                "semantic-fixture");
+        MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1",
                 symbols(project.id(), "()"), List.of(), List.of());
 
         MinosApplication application = MinosApplication.builder(fixture.home())
@@ -136,7 +140,7 @@ class SemanticHybridIntelligenceTest {
         assertEquals(0, unchanged.embeddedCount());
         assertEquals(first.documentCount(), unchanged.reused());
 
-        baseline.snapshotStore().publish(project.id(), "snapshot-2",
+        MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-2",
                 symbols(project.id(), "(Token token)"), List.of(), List.of());
         SemanticIndexService.Status stale = application.semanticIndexService().status("semantic-fixture");
         assertEquals(SemanticIndexService.State.STALE, stale.state());

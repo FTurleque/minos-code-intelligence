@@ -1,6 +1,7 @@
 package com.minos.explorer;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
 import com.minos.application.semantic.SemanticIndexBudget;
 import com.minos.application.semantic.SemanticProjectionService;
@@ -247,13 +248,13 @@ final class SemanticExplorerBenchmark {
 
         private String register(Path home, Path root) throws IOException {
             try (MinosApplication baseline = MinosApplication.open(home)) {
-                if (!baseline.projectRegistry().listProjects().isEmpty()) {
+                if (!MinosApplicationTestAccess.projectRegistry(baseline).listProjects().isEmpty()) {
                     throw new IllegalStateException("the storage of this scratch home already holds a project; "
                             + "use an empty database");
                 }
-                var project = baseline.projectRegistry().registerProject(root, "semantic-benchmark");
+                var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(root, "semantic-benchmark");
                 String projectId = project.id().toString();
-                baseline.snapshotStore().publish(project.id(), SNAPSHOT, List.of(symbol(projectId)), List.of(),
+                MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), SNAPSHOT, List.of(symbol(projectId)), List.of(),
                         List.of());
                 return projectId;
             }

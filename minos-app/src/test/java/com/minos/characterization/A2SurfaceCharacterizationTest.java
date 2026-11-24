@@ -3,6 +3,7 @@ package com.minos.characterization;
 import com.minos.api.LocalMinosApi;
 import com.minos.api.MinosTeamApi;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.api.LocalProviderPlatformApi;
 import com.minos.api.MinosApi;
@@ -296,10 +297,10 @@ class A2SurfaceCharacterizationTest {
                     new com.minos.domain.Origin("a2-characterization", "FIXTURE", "1", snapshotId,
                             com.minos.domain.OriginType.OTHER),
                     false, false, Set.of());
-            application.snapshotStore().publish(projectId, snapshotId, List.of(symbol), List.of(), List.of());
-            application.fingerprintStore().publish(projectId, snapshotId,
-                    application.fingerprintService().capture(projectRoot));
-            application.fingerprintStore().promote(projectId, snapshotId);
+            MinosApplicationTestAccess.snapshotStore(application).publish(projectId, snapshotId, List.of(symbol), List.of(), List.of());
+            MinosApplicationTestAccess.fingerprintStore(application).publish(projectId, snapshotId,
+                    MinosApplicationTestAccess.fingerprintService(application).capture(projectRoot));
+            MinosApplicationTestAccess.fingerprintStore(application).promote(projectId, snapshotId);
         }
         try (MinosMcpTools tools = new MinosMcpTools(home)) {
             List<SyncToolSpecification> specifications = tools.specifications();
@@ -455,14 +456,14 @@ class A2SurfaceCharacterizationTest {
         transcript.text.append("before: ").append(transcript.normalizer.normalize(listing(home))).append('\n');
         java.util.UUID projectId = java.util.UUID.fromString(PINNED_PROJECT_ID);
         try (MinosApplication application = MinosApplication.open(home)) {
-            transcript.api("compact(default)", () -> application.retentionService().compact(projectId));
+            transcript.api("compact(default)", () -> MinosApplicationTestAccess.retentionService(application).compact(projectId));
             transcript.text.append("after compact(default): ").append(transcript.normalizer.normalize(listing(home))).append('\n');
-            transcript.api("compact(0,1,1)", () -> application.retentionService().compact(projectId,
+            transcript.api("compact(0,1,1)", () -> MinosApplicationTestAccess.retentionService(application).compact(projectId,
                     new com.minos.storage.PersistentRetentionPolicy(0, 1, 1)));
             transcript.text.append("after compact(0,1,1): ").append(transcript.normalizer.normalize(listing(home))).append('\n');
-            transcript.api("activeSnapshot", () -> application.snapshotStore().loadActive(projectId)
+            transcript.api("activeSnapshot", () -> MinosApplicationTestAccess.snapshotStore(application).loadActive(projectId)
                     .map(snapshot -> snapshot.snapshotId()));
-            transcript.api("runs", () -> application.indexStateStore().listRuns(projectId).stream()
+            transcript.api("runs", () -> MinosApplicationTestAccess.indexStateStore(application).listRuns(projectId).stream()
                     .map(run -> run.status()).toList());
         }
         transcript.cli(home, "index-status", PROJECT, "--format", "json");

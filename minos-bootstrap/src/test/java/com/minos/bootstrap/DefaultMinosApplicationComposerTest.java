@@ -3,6 +3,7 @@ package com.minos.bootstrap;
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosApplicationComposer;
 import com.minos.application.MinosApplicationComposers;
+import com.minos.application.MinosApplicationTestAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -60,7 +61,7 @@ class DefaultMinosApplicationComposerTest {
         assertEquals(java.util.Optional.of(files.runDirectory(runId)), markers.runDirectory(runId));
         try (MinosApplication application = MinosApplication.open(home)) {
             assertInstanceOf(RunDirectoryResumableRunMarkers.class,
-                    application.compositionRoot().resumableRunMarkers(application.home()));
+                    MinosApplicationTestAccess.compositionRoot(application).resumableRunMarkers(application.home()));
         }
     }
 

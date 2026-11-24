@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.bootstrap.ResumableRunFixtures;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -42,7 +43,7 @@ class MinosMcpReadOnlyHomeTest {
         Files.writeString(project.resolve("pom.xml"), "<project/>");
         CountingRuntimes runtimes = new CountingRuntimes();
         try (MinosApplication application = MinosApplication.builder(home).providerRuntimeManager(runtimes).build()) {
-            application.projectRegistry().registerProject(project, "fixture");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "fixture");
             MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
             // The home is write-protected for the calls: comparing paths, sizes and dates alone would not see a
             // lock file that already exists being opened for writing again.
@@ -93,7 +94,7 @@ class MinosMcpReadOnlyHomeTest {
         CountingRuntimes runtimes = new CountingRuntimes();
         try (MinosApplication application = MinosApplication.builder(temp.resolve("home"))
                 .providerRuntimeManager(runtimes).build()) {
-            application.projectRegistry().registerProject(project, "fixture");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "fixture");
             MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
 
             for (String tool : new String[]{"minos_index_status", "minos_project_structure"}) {
@@ -116,7 +117,7 @@ class MinosMcpReadOnlyHomeTest {
         Path project = Files.createDirectories(temp.resolve("project"));
         Files.writeString(project.resolve("pom.xml"), "<project/>");
         try (MinosApplication application = MinosApplication.open(home)) {
-            application.projectRegistry().registerProject(project, "fixture");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "fixture");
             MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
             Map<String, String> before = snapshot(home);
 

@@ -347,6 +347,21 @@ Pour les détails d’architecture, voir [../developer/public-surfaces.md](../de
 
 ## Ruptures
 
+### Accesseurs de `MinosApplication` retirés : façade sans port du moteur ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), prochaine version
+
+Aucune signature de `com.minos.api` ne change, ni aucune sortie de la CLI, du serveur MCP, du plugin IntelliJ ou de l'export NEXUS. La classe interne `com.minos.application.MinosApplication` ne rend plus publiquement sa racine de composition ni aucun port de `minos-engine` : seize méthodes publiques cessent de l'être, sans période de dépréciation. Un code qui les appelait doit passer par le remplaçant indiqué et être recompilé (rupture de source et binaire) :
+
+| Accesseur retiré | Remplaçant |
+|---|---|
+| `compositionRoot()` | aucun : l'application demande elle-même ses adaptateurs à la racine de composition ; ouvrir l'application par `MinosApplication.open(home)` ou `MinosApplication.builder(home)` |
+| `projectRegistry()`, `snapshotStore()` | les services de requête de la façade (`projectQueryService()`, `projectInspectionService()`, `architectureQuery()`…), `knowledgeExport()` ; `new LocalProjectOperations(application)` pour enregistrer et importer |
+| `indexStateStore()`, `fingerprintStore()`, `discoveryService()`, `fingerprintService()`, `snapshotStager()`, `snapshotPromoter()`, `incrementalIndexingPlanner()`, `invalidationService()`, `indexerRegistry(String)` | `projectIndexing()`, `projectIndexing(executorDecorator)`, `projectIndexingViaWsl(distribution)`, `remoteIndexing()` ; l'état de reprise par `projectInspectionService().resumableRun(...)` |
+| `retentionService()` | `new LocalProjectOperations(application)` (rétention des snapshots) ; la rétention suit aussi chaque indexation |
+| `runtimeObservationStore()` | `runtimeIntelligenceService()` |
+| `providerRuntimeManager()`, `indexerDescriptors()` | `ProviderPlatformService.defaults(application)` (`listProviders()`, `runtimes()`, `installRuntime(...)`) |
+
+Un hôte qui gérait lui-même les magasins ouvre le stockage par `StorageBackends.open(configuration)`, garde la référence au `StorageBackend` et le donne à `MinosApplication.builder(home).storageBackend(backend)`. `MinosApplication` reste nommée par les contrats publics comme type opaque (`MinosApplication.open`, `MinosApplication.builder`, constructeurs `Local*Api(MinosApplication)`) ; ses accesseurs sont internes.
+
 ### Cas d'usage obtenus par la façade ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), version 1.3.0
 
 Aucune signature de `com.minos.api` ne change. Les cas d'usage reçoivent leurs collaborateurs et `com.minos.application.MinosApplication` les expose, construits à la première demande ; leurs fabriques statiques sont retirées (rupture de source et binaire de classes internes) :
@@ -439,7 +454,7 @@ Quatre signatures de classes publiques internes prennent le port de lecture au l
 ### Packages internes renommés : un package, un module ([ADR 0044](../architecture/adr/archive/0044-un-package-un-module.md))
 
 Aucune signature de `com.minos.api` ne change : les contrats publics ne nomment que `com.minos.api.*` et
-`com.minos.application.MinosApplication`. Les points d'entrée de processus gardent leur nom
+`com.minos.application.MinosApplication`, comme type opaque ; les accesseurs de `MinosApplication` sont internes. Les points d'entrée de processus gardent leur nom
 (`com.minos.cli.MinosLauncher`, `com.minos.cli.DockerRuntimeBootstrap`,
 `com.minos.integration.nexus.NexusExportBridgeMain`, `com.minos.mcp.MinosMcpServer`).
 

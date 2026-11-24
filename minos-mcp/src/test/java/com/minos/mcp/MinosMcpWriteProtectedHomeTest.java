@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.diagnostics.InternalFailureReporter;
 import com.minos.io.InternalFailureJournal;
 import com.minos.testsupport.LogCapture;
@@ -102,9 +103,9 @@ class MinosMcpWriteProtectedHomeTest {
     }
 
     private void seed(MinosApplication application) throws Exception {
-        RegisteredProject project = application.projectRegistry().registerProject(
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(
                 Files.createDirectories(temp.resolve("project")), "fixture");
-        application.snapshotStore().publish(project.id(), "snapshot-read-only",
+        MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), "snapshot-read-only",
                 List.of(new Symbol("GreetingService", "key:GreetingService", SymbolIdentityQuality.STRUCTURAL_FALLBACK,
                         project.id().toString(), null, "src/GreetingService.java", null, SymbolKind.CLASS,
                         "GreetingService", "com.acme.GreetingService", null, "java", null,
@@ -115,7 +116,7 @@ class MinosMcpWriteProtectedHomeTest {
         RuntimeSymbolReference reference = new RuntimeSymbolReference("key:GreetingService", null, null, null);
         RuntimeObservation observation = new RuntimeObservation(
                 RuntimeObservationType.SYMBOL_EXECUTION, reference, null, 3, 100);
-        application.runtimeObservationStore().save(new CorrelatedRuntimeSession(
+        MinosApplicationTestAccess.runtimeObservationStore(application).save(new CorrelatedRuntimeSession(
                 new RuntimeObservationSession(RuntimeObservationSession.FORMAT, "run-1", project.id(),
                         "snapshot-read-only", Instant.parse("2026-07-29T06:00:00Z"),
                         Instant.parse("2026-07-29T06:01:00Z"), "fixture", "1", "test",

@@ -145,6 +145,22 @@ def check_no_hidden_internal_dependencies(module: str, root: ET.Element, group_i
             )
 
 
+def check_application_test_jar_scope(module: str, root: ET.Element, group_id: str | None = None) -> None:
+    """A2 / AUD-ARC-02, ADR 0087 section 2 — the test-jar of minos-application (MinosApplicationTestAccess, the test
+    access to the package-private ports of MinosApplication) is declared in test scope only. Reads <type>, which
+    minos_dependencies does not: its merged scopes are those of the edges, unchanged."""
+    group_id = group_id or repository_group_id()
+    for dependency in root.findall("m:dependencies/m:dependency", NS):
+        if (dependency.findtext("m:artifactId", default="", namespaces=NS).strip() != APPLICATION_MODULE
+                or dependency.findtext("m:groupId", default="", namespaces=NS).strip() != group_id
+                or dependency.findtext("m:type", default="", namespaces=NS).strip() != "test-jar"):
+            continue
+        scope = (dependency.findtext("m:scope", default="", namespaces=NS) or "compile").strip()
+        if scope != "test":
+            fail(f"{module}: the test-jar of {APPLICATION_MODULE} is declared in scope {scope}; it carries the test "
+                 "access to the ports of MinosApplication and is allowed in test scope only (ADR 0087)")
+
+
 def test_only_dependency_violations(module: str, dependencies: dict[str, str]) -> list[str]:
     """The TEST_ONLY_DEPENDENCIES of one module declared in a scope other than test."""
     return [f"{module} -> {dependency} [{dependencies[dependency]}] (TEST_ONLY_DEPENDENCIES: this dependency is "
@@ -275,6 +291,7 @@ def check_pom_rules(root: Path = ROOT) -> dict[str, dict[str, str]]:
     for module, pom in poms.items():
         check_pom_layout(module, pom)
         check_no_hidden_internal_dependencies(module, pom, group_id)
+        check_application_test_jar_scope(module, pom, group_id)
     scoped = {module: minos_dependencies(module, pom, group_id) for module, pom in poms.items()}
     check_dependency_policy(scoped)
     return scoped
