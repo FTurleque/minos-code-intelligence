@@ -540,6 +540,22 @@ jobs:
           retention-days: 3
           path: '**/target/site/jacoco/jacoco.xml'
 
+      # The class files of every module of the reactor, main and test, for the SonarCloud job below (AUD-DEP-05): the
+      # analysis no longer compiles anything, so it runs no code of the pull request. These are the classes the Linux
+      # JaCoCo reports were measured on. Class files only: the scanner reads no resource. The analysis job treats them
+      # as data (nothing of them is executed).
+      - name: Upload the class files of every module for the analysis
+        if: ${{ always() && runner.os == 'Linux' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sonar-binaries-${{ runner.os }}
+          overwrite: true
+          if-no-files-found: ignore
+          retention-days: 3
+          path: |
+            minos-*/target/classes/**/*.class
+            minos-*/target/test-classes/**/*.class
+
       - name: Upload verification diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -557,13 +573,14 @@ jobs:
   # CI-based SonarCloud analysis (Automatic Analysis is off in the SonarCloud project: the two modes are
   # mutually exclusive). It runs after both Verify jobs and imports the coverage of both operating systems;
   # until 2026-10-12 it ran inside the Ubuntu Verify job with the Linux reports alone, so code that only
-  # Windows can execute counted as uncovered. It compiles the candidate again (no test is run: the tests ran
-  # in Verify) because the scanner needs the class files. No effect while the repository variable is unset.
-  # Each module receives its Linux report at target/site/jacoco/jacoco.xml and its Windows report at
-  # target/site/jacoco-windows/jacoco.xml: the scanner resolves both paths from the module directory.
-  # When a Verify job failed and left no report, the analysis still runs with the reports that exist, so that
-  # issues are reported; the Linux reports are required, and the job fails if the scanner imported fewer
-  # reports than there are modules with one (a silent zero-coverage analysis is refused).
+  # Windows can execute counted as uncovered. No effect while the repository variable is unset.
+  # AUD-DEP-05: this job receives SONAR_TOKEN, so it runs no code of the repository (no Maven wrapper, no script of
+  # scripts/, no local action; check-workflow-pins.py refuses any). It compiles nothing: the class files come from
+  # Verify (ubuntu-24.04), the JaCoCo reports from both Verify jobs, and the checked-out tree, the classes and the
+  # reports are read as data by the pinned scanner action. The analysis parameters are written in this workflow, and
+  # a sonar-project.properties of the tree is refused before the analysis (the pull request does not choose the host).
+  # When a Verify job failed and left no report, the analysis still runs with the reports that exist, so that issues
+  # are reported; the Linux reports and the class files are required.
   sonar:
     name: SonarCloud analysis (Linux and Windows coverage)
     needs: verify
@@ -578,15 +595,8 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - name: Set up Java 21
-        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-
-      # One step per operating system, each in its own directory. Reports are absent when a Verify job failed
-      # before its tests ended: the download then fails and the analysis step decides what to do without them.
+      # One step per artifact, each in its own directory outside the modules. Reports are absent when a Verify job
+      # failed before its tests ended: the download then fails and the next step decides what to do without them.
       - name: Download the Linux JaCoCo reports
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -601,10 +611,13 @@ jobs:
           name: jacoco-modules-Windows
           path: coverage-reports/windows
 
-      # The token reaches the analysis step alone (AUD-DEP-05). The candidate is built by the step before it, which
-      # has no secret: the plugins and annotation processors a pull request declares run there. The analysis step
-      # still runs the wrapper on the pull request's tree (Maven reads its POMs): check-workflow-pins.py lists it,
-      # with its reason, and refuses any lifecycle phase in it.
+      - name: Download the class files of Verify (ubuntu-24.04)
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sonar-binaries-Linux
+          path: sonar-binaries
+
       - name: Check that the analysis token is available
         shell: bash
         env:
@@ -617,69 +630,86 @@ jobs:
             exit 1
           fi
 
-      # `install` puts the artifacts of the modules in the local Maven repository of the runner: the scanner goal,
-      # run alone in the next step, resolves the modules of the reactor from there.
-      - name: Build the candidate without any secret
-        id: build
+      # No secret here. The scanner reads sonar-project.properties from its base directory: one brought by the pull
+      # request is refused, so the host, the proxy and the project that go with the token are those of this workflow.
+      # The scanner patterns below name the modules as minos-*: the reactor must be exactly those directories, each
+      # with its class files, so that no module is analysed without binaries or left out silently.
+      - name: Check the analysis inputs
         shell: bash
         run: |
           set -euo pipefail
-          # Puts every downloaded report inside its module, where the scanner looks for it.
-          place_reports() {
-            local source="$1" directory="$2" count=0 report module
-            if [ -d "$source" ]; then
-              while IFS= read -r report; do
-                module="${report#"$source"/}"
-                module="${module%%/*}"
-                if [ -f "$module/pom.xml" ]; then
-                  mkdir -p "$module/target/site/$directory"
-                  cp "$report" "$module/target/site/$directory/jacoco.xml"
-                  count=$((count + 1))
-                fi
-              done < <(find "$source" -type f -path '*/target/site/jacoco/jacoco.xml' | sort)
+          configuration="$(find . -path ./.git -prune -o -name sonar-project.properties -print)"
+          if [ -n "$configuration" ]; then
+            echo "The checked-out tree contains a scanner configuration (sonar-project.properties), refused: the analysis" >&2
+            echo "parameters are written in .github/workflows/pr-ci.yml only." >&2
+            printf '%s\n' "$configuration" >&2
+            exit 1
+          fi
+          mapfile -t modules < <(sed -n 's|^[[:space:]]*<module>\([^<]*\)</module>[[:space:]]*$|\1|p' pom.xml)
+          if [ "${#modules[@]}" -eq 0 ]; then
+            echo "No module read from the root pom.xml." >&2
+            exit 1
+          fi
+          for module in "${modules[@]}"; do
+            if ! [[ "$module" =~ ^minos-[a-z0-9-]+$ ]]; then
+              echo "Module '$module' does not match the minos-* pattern the analysis parameters use." >&2
+              exit 1
             fi
-            echo "$count"
+            if [ -d "$module/src/main/java" ] && [ -z "$(find "sonar-binaries/$module/target/classes" -name '*.class' -print -quit 2>/dev/null)" ]; then
+              echo "No class file of $module: Verify (ubuntu-24.04) did not publish the classes the scanner needs." >&2
+              exit 1
+            fi
+          done
+          for sources in minos-*/src/main/java; do
+            [ -d "$sources" ] || continue
+            module="${sources%%/*}"
+            if [ "$module" != "minos-intellij" ] && ! printf '%s\n' "${modules[@]}" | grep -qx "$module"; then
+              echo "$module has Java sources but is not a module of the reactor: add it to the analysis or exclude it." >&2
+              exit 1
+            fi
+          done
+          # count <directory> <find test>...: files below a directory, 0 when the download left no directory.
+          count() {
+            local directory="$1"
+            shift
+            if [ -d "$directory" ]; then find "$directory" -type f "$@" | wc -l; else echo 0; fi
           }
-          linux_modules="$(place_reports coverage-reports/linux jacoco)"
-          windows_modules="$(place_reports coverage-reports/windows jacoco-windows)"
-          echo "JaCoCo reports placed in their module: linux=$linux_modules windows=$windows_modules"
-          if [ "$linux_modules" -eq 0 ]; then
+          linux_reports="$(count coverage-reports/linux -name jacoco.xml)"
+          linux_placed="$(count coverage-reports/linux -path 'coverage-reports/linux/minos-*/target/site/jacoco/jacoco.xml')"
+          windows_reports="$(count coverage-reports/windows -name jacoco.xml)"
+          windows_placed="$(count coverage-reports/windows -path 'coverage-reports/windows/minos-*/target/site/jacoco/jacoco.xml')"
+          echo "JaCoCo reports given to the scanner: linux=$linux_placed windows=$windows_placed"
+          if [ "$linux_placed" -eq 0 ]; then
             echo "No Linux JaCoCo report: Verify (ubuntu-24.04) did not produce any." >&2
             exit 1
           fi
-          if [ "$windows_modules" -eq 0 ]; then
-            echo "::warning::No Windows JaCoCo report: Windows-only code will count as uncovered."
-          fi
-          echo "linux_modules=$linux_modules" >> "$GITHUB_OUTPUT"
-          chmod +x mvnw
-          ./mvnw -B -ntp -DskipTests -Djacoco.skip=true install
-
-      - name: SonarCloud CI-based analysis
-        shell: bash
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          LINUX_MODULES: ${{ steps.build.outputs.linux_modules }}
-        run: |
-          set -euo pipefail
-          linux_modules="$LINUX_MODULES"
-          ./mvnw -B -ntp -DskipTests -Djacoco.skip=true \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
-            -Dsonar.projectKey=FTurleque_atlas \
-            -Dsonar.organization=fturleque \
-            -Dsonar.host.url=https://sonarcloud.io \
-            "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml,target/site/jacoco-windows/jacoco.xml" \
-            | tee sonar-scanner.log
-          # The scanner does not fail when it finds no report: it reports zero coverage. Count what it imported.
-          importing_modules="$(grep -c 'Importing [0-9][0-9]* report(s)' sonar-scanner.log || true)"
-          echo "Modules for which the scanner imported coverage: $importing_modules (expected at least $linux_modules)"
-          if [ "$importing_modules" -lt "$linux_modules" ]; then
-            echo "The scanner imported coverage for $importing_modules module(s), fewer than the $linux_modules with a report." >&2
+          if [ "$linux_reports" -ne "$linux_placed" ] || [ "$windows_reports" -ne "$windows_placed" ]; then
+            echo "A JaCoCo report lies outside minos-*/target/site/jacoco/: the scanner patterns would not read it." >&2
             exit 1
           fi
+          if [ "$windows_placed" -eq 0 ]; then
+            echo "::warning::No Windows JaCoCo report: Windows-only code will count as uncovered."
+          fi
 
-      # The artifacts of the candidate stay out of the Maven cache that setup-java saves at the end of the job: a
-      # pull request does not feed the cache that later builds restore.
-      - name: Remove the candidate's artifacts from the Maven repository
-        if: always()
-        shell: bash
-        run: rm -rf "$HOME/.m2/repository/com/minos"
+      # The scanner action is pinned by commit SHA; it downloads the scanner CLI and checks its GPG signature before
+      # running it (skipSignatureVerification keeps its default, false). No sonar.java.libraries yet: the analysis
+      # runs without the compile classpath, and the scanner says so in its log (limit written in supply-chain.md).
+      # The fixed parameters come last, so that nothing before them can override them.
+      - name: SonarCloud CI-based analysis
+        uses: SonarSource/sonarqube-scan-action@70bad232163b09d998ea0707ee80c0ec80798c16 # v8.5.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >-
+            -Dsonar.sources=.
+            -Dsonar.inclusions=minos-*/src/main/java/**
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=minos-*/src/test/java/**
+            -Dsonar.exclusions=minos-intellij/**
+            -Dsonar.test.exclusions=minos-intellij/**
+            -Dsonar.java.binaries=sonar-binaries/minos-*/target/classes
+            -Dsonar.java.test.binaries=sonar-binaries/minos-*/target/test-classes
+            -Dsonar.coverage.jacoco.xmlReportPaths=coverage-reports/linux/minos-*/target/site/jacoco/jacoco.xml,coverage-reports/windows/minos-*/target/site/jacoco/jacoco.xml
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.organization=fturleque
+            -Dsonar.projectKey=FTurleque_atlas
