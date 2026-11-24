@@ -220,6 +220,8 @@ SCOPES = {
             # A2 / ADR 0042: the concrete M25 wiring of the composition root.
             "com/minos/bootstrap/LocalRemoteIndexingRuntime",
             "com/minos/cli/command/RemoteIndexCommand",
+            # AUD-SEC-11: the fail-closed clone budget (vanished measured root) shared by the materializer.
+            "com/minos/integration/git/RemoteCloneBudget",
         ),
         "line": 0.70,
         "branch": 0.50,

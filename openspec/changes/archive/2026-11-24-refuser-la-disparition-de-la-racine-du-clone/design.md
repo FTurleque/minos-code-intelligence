@@ -193,12 +193,12 @@ Aucun ADR : la règle est locale à une classe et suit un précédent du dépôt
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| analyse-git › La mesure du budget d'un clone distant échoue quand sa racine disparaît | Racine absente au moment du parcours | D1, D3, D4 ; diagramme | 1.1, 1.2, 1.3 | `RemoteCloneBudgetTest` (à écrire) ; CI Windows et Linux manquante |
-| idem | Racine qui disparaît à la fin de son listage | D2, D3 | 1.1, 1.2 | `RemoteCloneBudgetTest` (à écrire, appel direct) |
-| idem | Répertoire sous la racine qui disparaît pendant un parcours réel | D4 | 1.1, 1.2, 1.3 | `RemoteCloneBudgetTest` (à écrire) ; sonde du 2026-11-24 (Windows, WSL) |
-| idem | Autre erreur d'accès à une entrée | inchangé | 1.2 | `RemoteCloneBudgetTest#aFileThatCannotBeReadFailsTheWalk` (existant, chemin à placer sous la racine) |
-| idem | Arbre stable | inchangé | 1.2 | `RemoteCloneBudgetTest#aStableTreeIsMeasured` (existant) |
-| — | — | D6 | 2.1, 2.2 | décision du propriétaire manquante |
+| analyse-git › La mesure du budget d'un clone distant échoue quand sa racine disparaît | Racine absente au moment du parcours | D1, D3, D4 ; diagramme | 1.1, 1.2, 1.3 | `RemoteCloneBudgetTest#aMeasuredRootThatIsMissingWhenItIsWalkedFailsTheMeasure` (rouge au HEAD puis vert, poste Windows, JDK 21) ; CI Windows et Linux manquante |
+| idem | Racine qui disparaît à la fin de son listage | D2, D3 | 1.1, 1.2 | `RemoteCloneBudgetTest#aMeasuredRootThatVanishesBeforeItsListingEndsFailsTheMeasure` (appel direct, rouge au HEAD puis vert, poste Windows) ; parcours réel non provocable |
+| idem | Répertoire sous la racine qui disparaît pendant un parcours réel | D4 | 1.1, 1.2, 1.3 | `RemoteCloneBudgetTest#aDirectoryThatVanishesDuringARealWalkIsCountedAsAnEntryOnly` (vert au HEAD et après, poste Windows, JDK 21) ; sonde du 2026-11-24 (Windows, WSL) ; CI Linux manquante |
+| idem | Autre erreur d'accès à une entrée | inchangé | 1.2 | `RemoteCloneBudgetTest#aFileThatCannotBeReadFailsTheWalk` (chemin placé sous la racine), `#anyOtherFailureOfTheWalkStillFailsTheBudget`, `#aMeasuredRootThatCannotBeReadStillFailsWithItsOwnFailure` |
+| idem | Arbre stable | inchangé | 1.2 | `RemoteCloneBudgetTest#aStableTreeIsMeasured` (existant, vert) |
+| — | — | D6 | 2.1, 2.2 | décision du propriétaire du 2026-11-24 ; préfixe ajouté au scope `m25-remote-distributed-indexing`, `check-jacoco.py --self-test` vert ; scope sur les rapports CI Linux et Windows manquant |
 
 ## Questions ouvertes
 

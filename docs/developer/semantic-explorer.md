@@ -47,10 +47,12 @@ magasin ; il n'est pas garanti identique entre les deux pour des clés non ASCII
 
 Les filtres s'appliquent dans le service, après la lecture d'une page du magasin, sur la description de chaque
 document. Une page filtrée lit au plus 2 000 documents ; au-delà, elle est rendue courte avec un curseur et la
-limite `SEMANTIC_DOCUMENT_FILTER_SCAN_BOUNDED`. Module et langage sont résolus par le snapshot actif, lu par
-`CodeKnowledgeSnapshotStore.loadActiveKnowledge` et gardé pour le dernier couple projet / snapshot ; si l'index
-ne décrit pas le snapshot actif, ils sont absents et la limite
-`SEMANTIC_DOCUMENT_SYMBOLS_UNRESOLVED_INDEX_NOT_ALIGNED` est rendue.
+limite `SEMANTIC_DOCUMENT_FILTER_SCAN_BOUNDED`. Module et langage sont résolus, le temps de la requête, par les lectures de la vue active
+(`CodeKnowledgeSnapshotStore.loadActiveReadView`) : un document de symbole ou de fragment par son symbole
+(`findSymbolById`), un document de fichier par le symbole de plus petite clé de son fichier (`findFileSymbols`,
+une lecture par document de fichier). Le service ne garde aucun symbole au-delà de la requête : une vue évincée
+par le store emporte ses symboles. Si l'index ne décrit pas le snapshot actif, module et langage sont absents et
+la limite `SEMANTIC_DOCUMENT_SYMBOLS_UNRESOLVED_INDEX_NOT_ALIGNED` est rendue.
 
 Pour une recherche, le classement est celui de `SemanticSearchService` ou de `HybridSearchService`, bornes
 comprises ; un filtre retire des résultats et chaque résultat garde le rang (`rank`) que le service lui a donné.
@@ -194,7 +196,7 @@ pages de 5 000. Une projection `PERIMEE` n'est dessinée que sur demande.
 | Fils de connexion | 8, file de 64 | `ExplorerServer` |
 | Page de documents, voisins | 200 | `SemanticCorpusQueryService` |
 | Lecture d'une requête, écriture d'une réponse | 10 s et 60 s | propriétés `sun.net.httpserver.maxReqTime` et `maxRspTime`, posées par `ExplorerServer` si elles sont absentes |
-| Empreintes d'index, tables de symboles gardées | 64 projets, 4 projets | `SemanticCorpusQueryService` |
+| Empreintes d'index gardées | 64 projets | `SemanticCorpusQueryService` |
 
 Le serveur HTTP du JDK lit ces deux propriétés une fois par JVM : une valeur déjà posée par l'hôte est gardée.
 Des connexions qui n'achèvent pas leur requête occupent les fils de connexion jusqu'à ce délai ; une requête
@@ -203,7 +205,12 @@ abandonné après 30 s garde son jeton de concurrence tant que la lecture sous-j
 Aucun seuil de performance n'est fixé. Mesure rejouable de la préparation et de la lecture d'une projection :
 `./mvnw -B -ntp -pl minos-bootstrap -am test "-Dtest=SemanticProjectionMeasurementTest" "-Dminos.projection.measure=true" "-Dsurefire.failIfNoSpecifiedTests=false"`
 (sautée sans la propriété ; relevé écrit dans `target/projection-measurements.md` à la racine du dépôt ; `-Dminos.projection.measure.keep=<dossier>` garde les `MINOS_HOME` mesurés pour les servir).
-Elle ne couvre que la projection, en stockage local et à 256 dimensions. Le banc sémantique de `benchmarks/scalability/` (section « Banc sémantique » de `benchmarks/scalability/README.md`) mesure la préparation de la projection et chaque route de l'API servie en HTTP sur la boucle locale, en stockage local et sous PostgreSQL, sur des index synthétiques à 768 dimensions ; son harnais (`SemanticExplorerBenchmark`) est gardé par `SemanticExplorerBenchmarkSmokeTest`.
+Elle ne couvre que la projection, en stockage local et à 256 dimensions. Mesure rejouable du temps d'une page de
+documents filtrée sur des fichiers à nombreux symboles (de 20 à 5 000 par fichier) :
+`./mvnw -B -ntp -pl minos-application -am test "-Dtest=SemanticCorpusPageMeasurementTest" "-Dminos.explorer.page.measure=true" "-Dsurefire.failIfNoSpecifiedTests=false"`
+(sautée sans la propriété ; relevé écrit dans `minos-application/target/explorer-page-measurements.md` : temps de
+construction de la vue, médiane et p95 de la page filtrée la plus lente, parcours complet, lectures
+`findFileSymbols`). Elle mesure le service seul, sur un index en mémoire, sans HTTP ni chargement de la vue. Le banc sémantique de `benchmarks/scalability/` (section « Banc sémantique » de `benchmarks/scalability/README.md`) mesure la préparation de la projection et chaque route de l'API servie en HTTP sur la boucle locale, en stockage local et sous PostgreSQL, sur des index synthétiques à 768 dimensions ; son harnais (`SemanticExplorerBenchmark`) est gardé par `SemanticExplorerBenchmarkSmokeTest`.
 
 ## Écoute
 

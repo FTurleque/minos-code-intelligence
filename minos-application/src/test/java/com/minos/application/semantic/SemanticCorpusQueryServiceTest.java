@@ -681,6 +681,64 @@ class SemanticCorpusQueryServiceTest {
     }
 
     @Test
+    void aPageReadsTheSymbolsOfAFileOncePerFileDocumentAndNeverForAResolvedSymbolOrChunk() throws Exception {
+        snapshots.active = new CodeKnowledgeSnapshot(projectUuid, ACTIVE, List.of(
+                symbol("alpha", "src/Alpha.java", "core"), symbol("beta", "src/Beta.java", "edge"),
+                fileSymbol("gammaLate", "key-g2", "src/Gamma.java", "src/Gamma.java", 2, "kotlin", "late"),
+                fileSymbol("gammaFirst", "key-g1", "src/Gamma.java", "src/Gamma.java", 9, "scala", "first")),
+                List.of(), List.of());
+        vectors.replace(indexOf(new SemanticDocumentFactory().build(project, snapshots.active), ACTIVE, 8_000L));
+        SemanticCorpusQueryService.DocumentsRequest all =
+                new SemanticCorpusQueryService.DocumentsRequest(null, 200, null, null, null, null);
+        List<SemanticCorpusQueryService.DocumentSummary> reference = corpus.documents(projectId, all).documents();
+        SemanticCorpusTestDoubles.CountingReader reader =
+                new SemanticCorpusTestDoubles.CountingReader(snapshots.view.reader());
+        snapshots.view = SemanticCorpusTestDoubles.CountingReader.wrap(snapshots.view, reader);
+
+        List<SemanticCorpusQueryService.DocumentSummary> counted = corpus.documents(projectId, all).documents();
+
+        long files = counted.stream().filter(document -> "FILE".equals(document.kind())).count();
+        long others = counted.size() - files;
+        assertEquals(3, files);
+        assertEquals(3, reader.fileSymbolsCalls, "one read of the symbols of a file per file document");
+        assertEquals(others, reader.symbolByIdCalls, "a symbol or chunk document is read by its symbol only");
+        assertTrue(counted.stream().filter(document -> !"FILE".equals(document.kind()))
+                .allMatch(SemanticCorpusQueryService.DocumentSummary::symbolResolved));
+        assertEquals(reference, counted, "language and module of every document are unchanged");
+        SemanticCorpusQueryService.DocumentSummary gamma = counted.stream()
+                .filter(document -> "file:src/Gamma.java".equals(document.stableKey())).findFirst().orElseThrow();
+        assertEquals("scala", gamma.language());
+        assertEquals("first", gamma.moduleId());
+    }
+
+    @Test
+    void aChunkWhoseSymbolIsMissingIsDescribedByTheSymbolOfSmallestKeyOfItsFile() throws Exception {
+        snapshots.active = new CodeKnowledgeSnapshot(projectUuid, ACTIVE, List.of(
+                fileSymbol("gammaLate", "key-g2", "src/Gamma.java", "src/Gamma.java", 2, "kotlin", "late"),
+                fileSymbol("gammaFirst", "key-g1", "src/Gamma.java", "src/Gamma.java", 9, "scala", "first")),
+                List.of(), List.of());
+        vectors.replace(indexOf(List.of(new SemanticDocument("id-orphan", "chunk:orphan:3:3", projectId, ACTIVE,
+                SemanticDocumentKind.CHUNK, "sym-missing", "src/Gamma.java", 3, 3, "orphan", "chk-orphan")),
+                ACTIVE, 9_000L));
+        corpus.documents(projectId, SemanticCorpusQueryService.DocumentsRequest.firstPage());
+        SemanticCorpusTestDoubles.CountingReader reader =
+                new SemanticCorpusTestDoubles.CountingReader(snapshots.view.reader());
+        snapshots.view = SemanticCorpusTestDoubles.CountingReader.wrap(snapshots.view, reader);
+
+        SemanticCorpusQueryService.DocumentSummary orphan = corpus.documents(projectId,
+                SemanticCorpusQueryService.DocumentsRequest.firstPage()).documents().getFirst();
+
+        assertFalse(orphan.symbolResolved());
+        assertNull(orphan.symbolName());
+        assertNull(orphan.qualifiedName());
+        assertNull(orphan.symbolKind());
+        assertEquals("scala", orphan.language());
+        assertEquals("first", orphan.moduleId());
+        assertEquals(1, reader.symbolByIdCalls);
+        assertEquals(1, reader.fileSymbolsCalls);
+    }
+
+    @Test
     void anIndexOfAnotherSnapshotLeavesTheSymbolsUnresolvedWithoutAskingForTheView() throws Exception {
         snapshots.active = new CodeKnowledgeSnapshot(projectUuid, "snapshot-2", snapshots.active.symbols(),
                 List.of(), List.of());
