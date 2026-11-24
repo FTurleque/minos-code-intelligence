@@ -190,6 +190,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("grep -F \"rust-analyzer ${RUST_ANALYZER_VERSION}\""));
         assertFalse(dockerfile.contains("grep -E \"${RUST_ANALYZER_RELEASE}|${RUST_ANALYZER_COMMIT}\""),
                 "rust-analyzer --version does not expose artifact release/commit provenance");
+        assertTrue(dockerfile.contains("until cs fetch \"org.scip-code:scip-java:${SCIP_JAVA_VERSION}\""),
+                "the scip-java graph must be fetched with retries before launch: Maven Central answers 429");
         assertTrue(dockerfile.contains("cs launch \"org.scip-code:scip-java:${SCIP_JAVA_VERSION}\""));
         assertTrue(dockerfile.contains("grep -F \"scip-java version ${SCIP_JAVA_VERSION}\" /tmp/scip-java-coordinate.version"),
                 "build must verify the exact Maven coordinate before standalone packaging");

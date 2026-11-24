@@ -270,10 +270,21 @@ RUN set -eux; \
 # No provider indexes in a container: indexing is refused in the administration plane (no OS sandbox, SEC-0074),
 # so this launcher is only run for its version, by the tools probe; it is not part of any lockfile of the
 # repository (R-13). The persistent MCP query plane remains networkless.
+# Maven Central answers 429 to bursts of requests: the graph is fetched into the build cache first, retried with a
+# growing delay against the same repository, and the launch and bootstrap below read that cache.
 RUN set -eux; \
     export COURSIER_CACHE=/tmp/minos-coursier-build-cache; \
     mkdir -p /run/minos-native; \
     chmod 1777 /run/minos-native; \
+    attempt=1; \
+    until cs fetch "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" > /dev/null; do \
+      if [ "$attempt" -ge 5 ]; then \
+        echo "scip-java ${SCIP_JAVA_VERSION} could not be fetched after ${attempt} attempts" >&2; \
+        exit 1; \
+      fi; \
+      sleep $((attempt * 30)); \
+      attempt=$((attempt + 1)); \
+    done; \
     cs launch "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
       --jvm system --main org.scip_code.scip_java.ScipJava -- --version \
       | tee /tmp/scip-java-coordinate.version; \
