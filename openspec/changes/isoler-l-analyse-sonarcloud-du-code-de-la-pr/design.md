@@ -75,6 +75,8 @@ Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont
 
 [Question] Action du scanner : `sonarsource/sonarqube-scan-action` épinglée par SHA (le gate l'exige déjà) ou archive du scanner CLI téléchargée et vérifiée par empreinte SHA-256 dans le workflow. Recommandation : l'action, à une version sans avis de sécurité ouvert, vérifiés au moment de l'épinglage (non vérifiés ici) ; noter si l'action télécharge le scanner avec ou sans contrôle d'intégrité.
 
+[Décision] Relevé à l'épinglage (2026-11-24, tâche 2.2) : `SonarSource/sonarqube-scan-action` **v8.5.1**, commit `70bad232163b09d998ea0707ee80c0ec80798c16` (`gh api repos/SonarSource/sonarqube-scan-action/commits/v8.5.1`, publiée le 2026-11-23). Avis publiés du dépôt (`gh api repos/SonarSource/sonarqube-scan-action/security-advisories`) : deux, tous deux corrigés bien avant la v8 (`GHSA-f79p-9c5r-xg88`, ≤ 5.3.0 ; `GHSA-5xq9-5g24-4g6f`, ≥ 4 et < 6) ; aucun avis ouvert sur la v8.5.1. Intégrité : l'action (`src/main/install-sonar-scanner.js` au commit épinglé) télécharge le scanner CLI 8.5.0.16571 puis vérifie sa **signature GPG** avant extraction, sauf `skipSignatureVerification: true` (non utilisé). Les arguments (`args`) sont découpés par `string-argv`, sans shell, et passés à `@actions/exec`.
+
 ### D2 — Règle par job, sans exception
 
 [Décision] `check-workflow-pins.py`, pour un workflow dont le `on:` contient `pull_request` : un job dont une étape reçoit un `secrets.` par son `env:` d'étape, ou par le `with:` d'une action autre que `docker/login-action`, SHALL NOT contenir d'étape qui lance `mvnw`, un script de `scripts/` ou une action locale (`uses: ./…`). La table `SECRET_WITH_REPOSITORY_CODE_KEPT`, sa raison et le contrôle de phase disparaissent ; le contrôle des `env:` de job ou de workflow (seul `DOCKERHUB_USERNAME`) est conservé. `docker/login-action` reste régi par `DOCKER_LOGIN_KEPT` et la déconnexion (exigence AUD-DEP-13, inchangée) : sans cette exclusion, `verify` serait signalé alors que son jeton est retiré avant le code. Écarté : garder une liste fermée par job (aucun job n'en aurait besoin après D1, et une exception rouvrirait E1).
@@ -82,6 +84,8 @@ Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont
 ### D3 — Classes et bibliothèques publiées par `Verify (ubuntu-24.04)`
 
 [Proposition] `Verify (ubuntu-24.04)` publie un artefact `sonar-binaries-Linux` (`**/target/classes/**`, `**/target/test-classes/**`, rétention 3 jours). Pour les bibliothèques, deux formes sont mesurées par la PR d'essai : (i) une étape **sans secret** de `Verify` copie les JAR des dépendances de compilation dans l'artefact ; (ii) aucune bibliothèque, analyse acceptée avec l'avertissement du scanner. Recommandation : (i) si l'artefact reste raisonnable et que l'écart d'anomalies remontées par rapport à l'analyse Maven est nul ou expliqué ; sinon (ii), écrit comme limite dans `supply-chain.md`. Les artefacts viennent d'un job qui a exécuté le code de la PR : le job `sonar` les traite comme des données (aucune exécution, aucune extraction hors du répertoire de travail).
+
+[Décision] État à l'implémentation (2026-11-24), en attendant la PR d'essai (tâche 2.1) : forme **(ii)**. `Verify (ubuntu-24.04)` publie `sonar-binaries-Linux` restreint aux fichiers `.class` (`minos-*/target/classes/**/*.class`, `minos-*/target/test-classes/**/*.class`) ; aucune bibliothèque n'est transmise, limite écrite dans `supply-chain.md`. La forme (i) demanderait une invocation Maven de plus dans `Verify` (plugin de dépendances non épinglé dans le POM) : elle n'est ajoutée qu'après la mesure. Le job `sonar` désigne les modules par motifs `minos-*` (sources, binaires, rapports) et vérifie, sans secret, que le reactor du POM racine est exactement ces répertoires, chacun avec ses classes ; aucune donnée de la PR n'entre dans les arguments du scanner. E6 : le journal de l'action n'est pas lisible par une étape suivante ; le contrôle fail-closed porte, avant l'analyse, sur les rapports donnés au scanner (Linux présents, tous lus par ses motifs), et l'import réel reste à constater dans le journal de la CI (tâches 1.4, 2.1).
 
 ### D4 — Aucune configuration du scanner venue de la PR
 
@@ -125,20 +129,20 @@ Question à laquelle répond le diagramme : quel job reçoit le jeton, et quel c
 
 | Exigence (capacité › titre) | Scénario | Conception | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| controles-de-fusion › Un secret n'accompagne pas la compilation du code d'une pull request | Compilation avec le jeton d'analyse | D2 | 1.1 | cas existant conservé |
-| idem | Étape hors liste qui reçoit un secret et lance un script du dépôt | D2 | 1.1 | cas existant, adapté (plus de liste) |
-| idem | Entrée de liste sans objet | D2 | 1.1 | cas réécrit : absence de la table — **manquante** |
-| idem | Identifiant Docker Hub au niveau du job | D2 | 1.1 | cas existant conservé |
-| idem | Job à secret qui compile dans une autre étape | D2 | 1.1, 1.3 | `test_check_workflow_pins.py` (cas à écrire) — **manquante** |
-| idem | Job à secret qui lance un script ou une action locale | D2 | 1.1, 1.3 | idem — **manquante** |
-| idem | Secret passé par `with:` | D2 | 1.1, 1.3 | idem — **manquante** |
-| idem | Connexion à un registre | D2 | 1.1 | idem — **manquante** |
-| idem | Secret remonté au niveau du job | D2 | 1.1 | cas existant conservé |
-| idem | Workflow sans déclencheur pull_request | D2 | 1.1 | cas existant conservé |
-| idem | Dépôt réel | D1, D2 | 1.2, 1.3, 2.1 | `check-workflow-pins.py` sur le dépôt ; run CI — **manquante** |
-| controles-de-fusion › L'analyse d'une pull request ne lit aucune configuration du scanner venue de la pull request | Job d'analyse sans contrôle du fichier de configuration | D4 | 1.1, 1.3 | `test_check_workflow_pins.py` — **manquante** |
-| idem | Hôte de l'analyse absent du workflow | D4 | 1.1, 1.3 | idem — **manquante** |
-| idem | Dépôt réel | D4 | 1.3, 1.4, 2.1 | gate ; run CI — **manquante** |
+| controles-de-fusion › Un secret n'accompagne pas la compilation du code d'une pull request | Compilation avec le jeton d'analyse | D2 | 1.1 | `scripts/quality/test_check_workflow_pins.py` `SecretWithRepositoryCodeTest.test_the_analysis_token_given_to_a_compilation_is_refused` |
+| idem | Étape hors liste qui reçoit un secret et lance un script du dépôt | D2 | 1.1 | `test_a_step_that_receives_a_secret_and_runs_a_script_of_the_repository_is_refused` |
+| idem | Entrée de liste sans objet | D2 | 1.1 | `RepositoryTest.test_no_exception_list_for_a_secret_and_repository_code_is_declared` |
+| idem | Identifiant Docker Hub au niveau du job | D2 | 1.1 | `test_the_docker_hub_identifier_may_stay_in_the_job_env` |
+| idem | Job à secret qui compile dans une autre étape | D2 | 1.1, 1.3 | `test_a_job_that_compiles_in_another_step_than_the_one_with_the_secret_is_refused` ; copie mutée du vrai `pr-ci.yml` : `RepositoryTest.test_the_analysis_job_of_the_repository_runs_no_repository_code` |
+| idem | Job à secret qui lance un script ou une action locale | D2 | 1.1, 1.3 | `test_a_job_that_runs_a_script_or_a_local_action_in_another_step_is_refused` |
+| idem | Secret passé par `with:` | D2 | 1.1, 1.3 | `test_a_secret_passed_through_with_counts_as_given_to_the_job` |
+| idem | Connexion à un registre | D2 | 1.1 | `test_a_registry_login_then_the_wrapper_is_left_to_the_registry_rule` ; `RepositoryTest.test_the_verify_job_of_the_repository_is_not_named_for_its_registry_login` |
+| idem | Secret remonté au niveau du job | D2 | 1.1 | `test_a_secret_raised_to_the_job_or_to_the_workflow_is_refused` ; `RepositoryTest.test_the_token_moved_to_the_job_is_named` |
+| idem | Workflow sans déclencheur pull_request | D2 | 1.1 | `test_a_workflow_that_no_pull_request_starts_is_not_concerned` |
+| idem | Dépôt réel | D1, D2 | 1.2, 1.3, 2.1 | `python scripts/quality/check-workflow-pins.py` sur le dépôt (succès) ; run CI — **manquante** (tâches 1.4, 2.1) |
+| controles-de-fusion › L'analyse d'une pull request ne lit aucune configuration du scanner venue de la pull request | Job d'analyse sans contrôle du fichier de configuration | D4 | 1.1, 1.3 | `ScannerConfigurationTest.test_an_analysis_job_without_the_refusal_is_refused` ; `RepositoryTest.test_the_analysis_job_of_the_repository_refuses_a_scanner_configuration` |
+| idem | Hôte de l'analyse absent du workflow | D4 | 1.1, 1.3 | `ScannerConfigurationTest.test_an_analysis_step_without_its_host_is_refused_and_names_the_parameter` ; `RepositoryTest.test_the_analysis_step_of_the_repository_writes_its_host` |
+| idem | Dépôt réel | D4 | 1.3, 1.4, 2.1 | gate sur le dépôt (succès) ; refus effectif du fichier par le job : simulation locale du script de l'étape, pas de run CI — **manquante** (tâches 1.4, 2.1) |
 
 ## Documentation durable à mettre à jour
 
