@@ -1,5 +1,6 @@
 package com.minos.cli.operations;
 
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.cli.QualifiedSandboxForTests;
 import com.minos.application.MinosApplication;
 import com.minos.application.remote.RemoteSourceRequest;
@@ -91,7 +92,7 @@ class LocalRemoteIndexOperationsIntegrationTest {
         assertEquals("PROCESS_EPHEMERAL_WORKSPACE", result.artifacts().getFirst().isolation());
         assertFalse(result.artifacts().getFirst().networkDenyEnforced());
         assertEquals("", result.artifacts().getFirst().projectRelativeRoot());
-        var snapshot = application.snapshotStore().loadActiveKnowledge(
+        var snapshot = MinosApplicationTestAccess.snapshotStore(application).loadActiveKnowledge(
                 java.util.UUID.fromString(result.projectId())).orElseThrow();
         assertEquals(result.execution().activeSnapshotId(), snapshot.snapshotId());
         assertTrue(snapshot.symbols().stream().anyMatch(symbol -> "RemoteType".equals(symbol.name())));

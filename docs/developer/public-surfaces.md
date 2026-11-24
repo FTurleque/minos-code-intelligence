@@ -23,7 +23,9 @@ classDiagram
       workspaceIntelligence()
       runtimeIntelligenceService()
       teamControlPlane()
-      providerRuntimeManager()
+      projectIndexing()
+      remoteIndexing()
+      knowledgeExport()
     }
     class MinosCli { <<adapter>> }
     class MinosIdeProtocolV1 { <<external JSON protocol>> }

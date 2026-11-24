@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.cli.command.RelationshipCommand;
 import com.minos.application.MinosApplication;
 import com.minos.registry.RegisteredProject;
@@ -180,11 +181,11 @@ class LazyWiringGuardTest {
                 "package demo; public class Demo { }\n");
         String projectId;
         try (MinosApplication application = MinosApplication.open(home)) {
-            RegisteredProject project = application.projectRegistry().registerProject(projectRoot, "demo");
+            RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(projectRoot, "demo");
             projectId = project.id().toString();
             // Un home « initialisé » : ouvert, un projet enregistré, et le registre lu une fois (toute lecture du
             // registre prend son verrou inter-processus, qu'elle crée : c'est le stockage, pas le câblage).
-            application.projectRegistry().listProjects();
+            MinosApplicationTestAccess.projectRegistry(application).listProjects();
         }
         // Et un home sur lequel la sonde du bac à sable des workers a déjà tourné : sous Windows, elle matérialise
         // sandbox/ (script AppContainer) la première fois qu'une commande qualifie le runtime, c'est la sonde et non

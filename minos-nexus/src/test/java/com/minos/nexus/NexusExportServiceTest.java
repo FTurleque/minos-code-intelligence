@@ -1,6 +1,7 @@
 package com.minos.nexus;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.export.KnowledgeExportUseCase;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
@@ -43,7 +44,7 @@ class NexusExportServiceTest {
         Files.createDirectories(root.resolve("src"));
         Files.writeString(root.resolve("src/Greeting.java"), "class Greeting { }");
         try (MinosApplication application = MinosApplication.open(temp.resolve("home"))) {
-            var project = application.projectRegistry().registerProject(root, "fixture");
+            var project = MinosApplicationTestAccess.projectRegistry(application).registerProject(root, "fixture");
             String projectId = project.id().toString();
             Symbol greeting = symbol(projectId, "a-greeting", "Greeting", "demo.Greeting", "class Greeting");
             Symbol helperSymbol = symbol(projectId, "b-helper", "helper", null, null);
@@ -51,7 +52,8 @@ class NexusExportServiceTest {
                     new CodeEntityRef(CodeEntityType.SYMBOL, helperSymbol.id()), null, RelationshipKind.CALLS, null,
                     ResolutionStatus.RESOLVED, InformationNature.DERIVED, 0.5, ORIGIN,
                     List.of(new Evidence(EvidenceType.DIRECT_CALL, "call site", null, null, null, 0.75)));
-            application.snapshotStore().publish(project.id(), "snapshot-1", List.of(helperSymbol, greeting), List.of(),
+            MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), "snapshot-1", List.of(helperSymbol, greeting),
+                    List.of(),
                     List.of(call));
 
             NexusExportContract.ExportSnapshot export = new NexusExportService(application).export(root);

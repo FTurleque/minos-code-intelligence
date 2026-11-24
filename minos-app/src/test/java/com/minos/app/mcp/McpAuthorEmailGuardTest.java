@@ -1,6 +1,7 @@
 package com.minos.app.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.mcp.MinosMcpApplicationTools;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
@@ -42,7 +43,7 @@ class McpAuthorEmailGuardTest {
         }
 
         try (MinosApplication application = MinosApplication.open(temp.resolve("home"))) {
-            application.projectRegistry().registerProject(root, "guard");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(root, "guard");
             List<SyncToolSpecification> specifications = MinosMcpApplicationTools.specifications(application);
             assertEquals(com.minos.mcp.MinosMcpTools.TOOL_COUNT, specifications.size());
 

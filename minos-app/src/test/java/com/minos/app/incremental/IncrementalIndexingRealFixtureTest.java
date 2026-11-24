@@ -2,6 +2,7 @@ package com.minos.app.incremental;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerCapability;
@@ -53,14 +54,16 @@ class IncrementalIndexingRealFixtureTest {
                         request -> "snapshot-" + snapshots.incrementAndGet(),
                         (projectId, runId, stagedSnapshotId) -> {
                             try {
-                                self.get().snapshotStore().publish(projectId, stagedSnapshotId, List.of(), List.of(), List.of());
+                                MinosApplicationTestAccess.snapshotStore(self.get()).publish(projectId, stagedSnapshotId, List.of(),
+                                        List.of(), List.of());
                             } catch (java.io.IOException exception) {
                                 throw new UncheckedIOException(exception);
                             }
                         })
                 .build()) {
             self.set(application);
-            RegisteredProject registered = application.projectRegistry().registerProject(project, "typescript-modules");
+            RegisteredProject registered = MinosApplicationTestAccess.projectRegistry(application).registerProject(project,
+                    "typescript-modules");
             ProjectIndexingUseCase indexing = application.projectIndexing(UnaryOperator.identity());
             String id = registered.id().toString();
 
@@ -85,7 +88,7 @@ class IncrementalIndexingRealFixtureTest {
             assertFalse(ScipIndexerCatalog.scipTypeScript().capabilities()
                     .contains(IndexerCapability.INCREMENTAL_INDEXING));
             assertEquals("snapshot-2",
-                    application.fingerprintStore().loadActive(registered.id()).orElseThrow().indexSnapshotId());
+                    MinosApplicationTestAccess.fingerprintStore(application).loadActive(registered.id()).orElseThrow().indexSnapshotId());
         }
     }
 

@@ -1,6 +1,7 @@
 package com.minos.characterization;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.InMemoryIndexStateStore;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -72,11 +73,11 @@ class A2CompositionCharacterizationTest {
             // Le magasin surchargé n'est pas demandé au backend, et la rétention du backend non plus.
             assertEquals(List.of("projectRegistry", "snapshotStore", "fingerprintStore",
                     "semanticVectorStore", "runtimeObservationStore", "id"), calls);
-            assertSame(override, application.indexStateStore());
-            assertSame(local.projectRegistry(), application.projectRegistry());
-            assertNotSame(local.retentionService(), application.retentionService());
+            assertSame(override, MinosApplicationTestAccess.indexStateStore(application));
+            assertSame(local.projectRegistry(), MinosApplicationTestAccess.projectRegistry(application));
+            assertNotSame(local.retentionService(), MinosApplicationTestAccess.retentionService(application));
             assertEquals("RetentionResult[deletedKnowledgeSnapshots=0, deletedFingerprintSnapshots=0, deletedIndexingRuns=0]",
-                    String.valueOf(application.retentionService().compact(UUID.randomUUID())));
+                    String.valueOf(MinosApplicationTestAccess.retentionService(application).compact(UUID.randomUUID())));
         }
     }
 
@@ -108,10 +109,11 @@ class A2CompositionCharacterizationTest {
             }
             assertEquals(List.of("scip-java", "scip-typescript", "scip-python", "scip-clang", "scip-dotnet",
                             "scip-go", "rust-analyzer-scip"),
-                    application.indexerDescriptors().stream().map(IndexerDescriptor::id).toList());
+                    MinosApplicationTestAccess.indexerDescriptors(application).stream().map(IndexerDescriptor::id).toList());
             assertEquals(List.of("rust-analyzer-scip", "scip-clang", "scip-dotnet", "scip-go", "scip-java",
                             "scip-python", "scip-typescript"),
-                    application.providerRuntimeManager().list().stream().map(ProviderRuntimeStatus::providerId).toList());
+                    MinosApplicationTestAccess.providerRuntimeManager(application).list().stream()
+                            .map(ProviderRuntimeStatus::providerId).toList());
         }
     }
 

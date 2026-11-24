@@ -237,6 +237,56 @@ class InternalDependencyRecognitionTest(unittest.TestCase):
         self.assertEqual("com.minos", BOUNDARY_POLICY.repository_group_id())
 
 
+class ApplicationTestJarScopeRuleTest(unittest.TestCase):
+    """AUD-ARC-02 — the test-jar of minos-application (MinosApplicationTestAccess) is declared in test scope only."""
+
+    @staticmethod
+    def pom(artifact="minos-application", kind="test-jar", scope="test"):
+        declared = (f"<dependency><groupId>com.minos</groupId><artifactId>{artifact}</artifactId>"
+                    + (f"<type>{kind}</type>" if kind else "") + (f"<scope>{scope}</scope>" if scope else "")
+                    + "</dependency>")
+        return element(f'<project xmlns="{POM_NAMESPACE}"><artifactId>minos-cli</artifactId>'
+                       f"<dependencies>{declared}</dependencies></project>")
+
+    def check(self, pom):
+        _MODULE.check_application_test_jar_scope("minos-cli", pom, "com.minos")
+
+    def test_the_test_jar_in_test_scope_is_accepted(self):
+        self.check(self.pom())
+
+    def test_the_test_jar_in_another_scope_is_refused_with_module_type_and_scope(self):
+        for scope in ("compile", None, "runtime", "provided"):
+            with self.subTest(scope=scope), self.assertRaises(RuntimeError) as raised:
+                self.check(self.pom(scope=scope))
+            for fragment in ("minos-cli", "minos-application", "test-jar", scope or "compile"):
+                self.assertIn(fragment, str(raised.exception))
+
+    def test_the_main_jar_and_other_test_jars_are_not_concerned(self):
+        self.check(self.pom(kind=None, scope=None))
+        self.check(self.pom(artifact="minos-bootstrap", scope="runtime"))
+
+    def test_the_merged_scope_of_a2_is_unchanged(self):
+        pom = element(f'<project xmlns="{POM_NAMESPACE}"><artifactId>minos-cli</artifactId><dependencies>'
+                      "<dependency><groupId>com.minos</groupId><artifactId>minos-application</artifactId></dependency>"
+                      "<dependency><groupId>com.minos</groupId><artifactId>minos-application</artifactId>"
+                      "<type>test-jar</type><scope>test</scope></dependency></dependencies></project>")
+        self.check(pom)
+        self.assertEqual({"minos-application": "compile"}, _MODULE.minos_dependencies("minos-cli", pom, "com.minos"))
+
+    def test_the_real_poms_declare_the_test_jar_in_test_scope(self):
+        group = BOUNDARY_POLICY.repository_group_id()
+        consumers = []
+        for module in MODULES:
+            pom = _MODULE.parse_pom(module)
+            _MODULE.check_application_test_jar_scope(module, pom, group)
+            if any(dependency.findtext("m:artifactId", namespaces=_MODULE.NS) == "minos-application"
+                   and dependency.findtext("m:type", namespaces=_MODULE.NS) == "test-jar"
+                   for dependency in pom.findall("m:dependencies/m:dependency", _MODULE.NS)):
+                consumers.append(module)
+        self.assertEqual(sorted(["minos-api", "minos-app", "minos-bootstrap", "minos-cli", "minos-explorer",
+                                 "minos-mcp", "minos-nexus"]), sorted(consumers))
+
+
 class HiddenDependencyRuleTest(unittest.TestCase):
 
     def refused(self, text, *fragments):

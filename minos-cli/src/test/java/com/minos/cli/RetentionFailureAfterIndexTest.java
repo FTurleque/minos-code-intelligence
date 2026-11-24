@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.cli.operations.AutonomousIndexOperations;
 import com.minos.cli.operations.LocalAutonomousIndexOperations;
 import com.minos.application.MinosApplication;
@@ -55,15 +56,15 @@ class RetentionFailureAfterIndexTest {
                 """);
         Path source = Files.createDirectories(root.resolve("src/main/java/demo"));
         Files.writeString(source.resolve("Demo.java"), "package demo; public class Demo { }\n");
-        RegisteredProject project = application.projectRegistry().registerProject(root, "demo");
-        CodeKnowledgeSnapshot snapshot = application.snapshotStore().publish(
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(root, "demo");
+        CodeKnowledgeSnapshot snapshot = MinosApplicationTestAccess.snapshotStore(application).publish(
                 project.id(), "snapshot-1", List.of(), List.of(), List.of());
-        application.indexStateStore().saveProjectState(new ProjectIndexState(project.id(),
+        MinosApplicationTestAccess.indexStateStore(application).saveProjectState(new ProjectIndexState(project.id(),
                 ProjectIndexState.Availability.READY, Optional.of(snapshot.snapshotId()), Optional.empty(),
                 Instant.parse("2026-09-30T08:00:00Z"), Optional.empty()));
-        var fingerprint = application.fingerprintService().capture(project.rootPath());
-        application.fingerprintStore().publish(project.id(), snapshot.snapshotId(), fingerprint);
-        application.fingerprintStore().promote(project.id(), snapshot.snapshotId());
+        var fingerprint = MinosApplicationTestAccess.fingerprintService(application).capture(project.rootPath());
+        MinosApplicationTestAccess.fingerprintStore(application).publish(project.id(), snapshot.snapshotId(), fingerprint);
+        MinosApplicationTestAccess.fingerprintStore(application).promote(project.id(), snapshot.snapshotId());
         return project;
     }
 

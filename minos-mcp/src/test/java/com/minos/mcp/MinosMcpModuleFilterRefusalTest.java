@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ResolutionStatus;
@@ -33,9 +34,9 @@ class MinosMcpModuleFilterRefusalTest {
     @Test
     void aModuleFilterOnASnapshotWithoutModulesIsAnActionableErrorAndTheUnfilteredSearchStillAnswers() throws Exception {
         try (MinosApplication application = MinosApplication.open(home.resolve("app"))) {
-            RegisteredProject project = application.projectRegistry().registerProject(
+            RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(
                     Files.createDirectories(home.resolve("project")), "f04");
-            application.snapshotStore().publish(project.id(), "snapshot-f04",
+            MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), "snapshot-f04",
                     List.of(symbol(project, "a"), symbol(project, "b")), List.of(), List.of());
             MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
 
