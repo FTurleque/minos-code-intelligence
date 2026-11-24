@@ -3,6 +3,7 @@ package com.minos.bootstrap.scalability;
 import com.minos.adapter.scip.ingestion.ScipIndexReader;
 import com.minos.adapter.scip.ingestion.ScipIngestionLimits;
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.resolution.ProjectResolver;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.SemanticDocumentFactory;
@@ -105,7 +106,7 @@ public final class SnapshotScalabilityBenchmark {
         environment(options);
 
         MinosApplication application = MinosApplication.open(options.home());
-        RegisteredProject mainProject = application.projectRegistry()
+        RegisteredProject mainProject = MinosApplicationTestAccess.projectRegistry(application)
                 .registerProject(options.sourceRoot(), "scalability-main");
         long persistedLimit = persistedSnapshotLimit();
         metric("limits", "all", "persistedSnapshotLimitBytes", persistedLimit);
@@ -115,7 +116,7 @@ public final class SnapshotScalabilityBenchmark {
 
         CodeKnowledgeSnapshot base = null;
         for (ScipInput input : options.scipInputs()) {
-            RegisteredProject project = input.main() ? mainProject : application.projectRegistry()
+            RegisteredProject project = input.main() ? mainProject : MinosApplicationTestAccess.projectRegistry(application)
                     .registerProject(Files.createDirectories(options.out().resolve("ratio-roots").resolve(input.label())),
                             "scalability-" + input.label());
             CodeKnowledgeSnapshot imported = ratio(application, project, input, options, persistedLimit);
@@ -139,21 +140,25 @@ public final class SnapshotScalabilityBenchmark {
             if (!publish(application, mainProject, slice, "scalability-" + dataset, dataset)) continue;
             slice = null;
             if (options.enabled("memory")) guarded("memory", dataset, () -> memory(options, mainProject, dataset));
-            CodeKnowledgeSnapshot active = application.snapshotStore().loadActiveKnowledge(mainProject.id()).orElseThrow();
+            CodeKnowledgeSnapshot active = MinosApplicationTestAccess.snapshotStore(application)
+                    .loadActiveKnowledge(mainProject.id()).orElseThrow();
             runQuerySections(application, application.hybridSearchService(), application.architectureQuery(),
-                    application.snapshotStore(), mainProject, active, options, dataset);
+                    MinosApplicationTestAccess.snapshotStore(application), mainProject, active, options, dataset);
         }
 
         // Niveau 2 - en mémoire, sans persistance : le corpus réel entier (non persistable en V2) et ses
         // répliques. HybridSearchService interroge SemanticIndexService.status, qui charge le snapshot actif
         // du magasin fichier de l'application même fournisseur sémantique désactivé : un snapshot actif vide
         // rend ce chargement négligeable, et le niveau 2 mesure la recherche elle-même.
-        application.snapshotStore().publish(mainProject.id(), "scalability-reset", List.of(), List.of(), List.of());
+        MinosApplicationTestAccess.snapshotStore(application).publish(mainProject.id(), "scalability-reset", List.of(), List.of(),
+                List.of());
         InMemorySnapshotStore memoryStore = new InMemorySnapshotStore();
-        HybridSearchService memoryHybrid = new HybridSearchService(new ProjectResolver(application.projectRegistry()),
+        HybridSearchService memoryHybrid = new HybridSearchService(
+                new ProjectResolver(MinosApplicationTestAccess.projectRegistry(application)),
                 memoryStore, application.semanticIndexService(), application.semanticSearchService());
         ProjectArchitectureQuery memoryArchitecture = LocalProjectArchitectureQuery.defaults(
-                application.projectRegistry(), memoryStore, application.discoveryService());
+                MinosApplicationTestAccess.projectRegistry(application), memoryStore,
+                        MinosApplicationTestAccess.discoveryService(application));
         for (int k : options.replicas()) {
             String dataset = "mem-k" + k;
             CodeKnowledgeSnapshot scaled = k == 1 ? full : replicate(full, k, mainProject.id());
@@ -175,7 +180,8 @@ public final class SnapshotScalabilityBenchmark {
         if (options.enabled("hybrid")) guarded("hybrid", dataset, () -> hybrid(hybrid, project, active, options, dataset));
         if (options.enabled("impact")) guarded("impact", dataset, () -> impact(active, options, dataset));
         if (options.enabled("architecture") && options.architectureDatasets().contains(dataset)) {
-            guarded("architecture", dataset, () -> architecture(application.discoveryService(), architecture, store,
+            guarded("architecture", dataset, () -> architecture(MinosApplicationTestAccess.discoveryService(application), architecture,
+                    store,
                     project, options, dataset));
         }
     }
@@ -255,7 +261,7 @@ public final class SnapshotScalabilityBenchmark {
             InMemorySnapshotStore capture = new InMemorySnapshotStore();
             snapshot = null;
             long started = System.nanoTime();
-            application.compositionRoot().scipArtifactImporter().importSnapshot(input.path(),
+            MinosApplicationTestAccess.compositionRoot(application).scipArtifactImporter().importSnapshot(input.path(),
                     importRequest(project, dataset, "capture-" + index, input), capture);
             captureNanos[index] = System.nanoTime() - started;
             snapshot = capture.loadActiveKnowledge(project.id()).orElseThrow();
@@ -288,8 +294,8 @@ public final class SnapshotScalabilityBenchmark {
         for (int index = 0; index < importNanos.length; index++) {
             long started = System.nanoTime();
             try {
-                application.compositionRoot().scipArtifactImporter().importSnapshot(input.path(),
-                        importRequest(project, dataset, "import-" + index, input), application.snapshotStore());
+                MinosApplicationTestAccess.compositionRoot(application).scipArtifactImporter().importSnapshot(input.path(),
+                        importRequest(project, dataset, "import-" + index, input), MinosApplicationTestAccess.snapshotStore(application));
             } catch (IOException refused) {
                 outcome = "REFUSED " + refused.getClass().getSimpleName() + ": " + refused.getMessage();
             }
@@ -369,7 +375,7 @@ public final class SnapshotScalabilityBenchmark {
                                    String snapshotId, String dataset) {
         long started = System.nanoTime();
         try {
-            application.snapshotStore().publish(project.id(), snapshotId,
+            MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), snapshotId,
                     snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
             metric("size", dataset, "publishOutcome", "PUBLISHED");
             return true;

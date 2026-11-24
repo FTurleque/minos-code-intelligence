@@ -265,35 +265,34 @@ public final class MinosApplication implements AutoCloseable {
     public String storageBackendId() { return storageBackendId; }
 
     /**
-     * Composition root that built this application (ADR 0042): the surfaces ask it for the adapters they
-     * create themselves, at the point where they used to create them.
+     * Composition root that built this application (ADR 0042). Package-private, like the ports below: the classes of
+     * this package read them, the surfaces go through the services and use cases of this facade (ADR 0087), and the
+     * tests of the other modules through MinosApplicationTestAccess, published by the test-jar of this module.
      */
-    public MinosApplicationComposer compositionRoot() { return compositionRoot; }
+    MinosApplicationComposer compositionRoot() { return compositionRoot; }
 
     // Storage (ADR 0045: grouped in Stores).
-    public ProjectRegistry projectRegistry() { return stores.projectRegistry(); }
-    public CodeKnowledgeSnapshotStore snapshotStore() { return stores.snapshotStore(); }
-    public IndexStateStore indexStateStore() { return stores.indexStateStore(); }
-    public ProjectFingerprintSnapshotStore fingerprintStore() { return stores.fingerprintStore(); }
+    ProjectRegistry projectRegistry() { return stores.projectRegistry(); }
+    CodeKnowledgeSnapshotStore snapshotStore() { return stores.snapshotStore(); }
+    IndexStateStore indexStateStore() { return stores.indexStateStore(); }
+    ProjectFingerprintSnapshotStore fingerprintStore() { return stores.fingerprintStore(); }
     public SemanticVectorStore semanticVectorStore() { return stores.semanticVectorStore(); }
-    public RuntimeObservationStore runtimeObservationStore() { return stores.runtimeObservationStore(); }
-    public StorageRetentionService retentionService() { return stores.retentionService(); }
+    RuntimeObservationStore runtimeObservationStore() { return stores.runtimeObservationStore(); }
+    StorageRetentionService retentionService() { return stores.retentionService(); }
 
     // Indexing (ADR 0045: grouped in Indexing).
-    public ProjectDiscoveryService discoveryService() { return indexing.discoveryService(); }
-    public ProjectFingerprintService fingerprintService() { return indexing.fingerprintService(); }
-    public ProjectInvalidationService invalidationService() { return indexing.invalidationService(); }
-    public IncrementalIndexingPlanner incrementalIndexingPlanner() { return indexing.incrementalIndexingPlanner(); }
-    public ProviderRuntimeManager providerRuntimeManager() { return indexing.providerRuntimeManager(); }
-    public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
+    ProjectDiscoveryService discoveryService() { return indexing.discoveryService(); }
+    ProjectFingerprintService fingerprintService() { return indexing.fingerprintService(); }
+    ProviderRuntimeManager providerRuntimeManager() { return indexing.providerRuntimeManager(); }
+    List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
     /** Provider catalog port; consulted on demand, never frozen at composition (ProviderPlatformService). */
     IndexerProviderCatalog providerCatalog() { return indexing.providerCatalog(); }
     /** Explicit SCIP import port (import-scip, LocalProjectOperations); the adapter is instantiated for each import. */
     ScipArtifactImporter scipArtifactImporter() { return indexing.scipArtifactImporter(); }
-    public SnapshotStager snapshotStager() { return indexing.snapshotStager(); }
-    public SnapshotPromoter snapshotPromoter() { return indexing.snapshotPromoter(); }
+    SnapshotStager snapshotStager() { return indexing.snapshotStager(); }
+    SnapshotPromoter snapshotPromoter() { return indexing.snapshotPromoter(); }
 
-    public IndexerRegistry indexerRegistry(String providerOverride) {
+    private IndexerRegistry indexerRegistry(String providerOverride) {
         IndexerRegistry registry = new IndexerRegistry();
         if (providerOverride == null || providerOverride.isBlank()) {
             registry.registerAll(indexerDescriptors);

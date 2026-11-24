@@ -1,6 +1,7 @@
 package com.minos.nexus;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ResolutionStatus;
@@ -27,8 +28,9 @@ class NexusSemanticSignalServiceTest {
         Path home = temp.resolve("home");
         Path projectRoot = Files.createDirectories(temp.resolve("project"));
         MinosApplication baseline = MinosApplication.open(home);
-        var project = baseline.projectRegistry().registerProject(projectRoot, "fixture");
-        baseline.snapshotStore().publish(project.id(), "snapshot-1", List.of(symbol(project.id().toString())), List.of(), List.of());
+        var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(projectRoot, "fixture");
+        MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1", List.of(symbol(project.id().toString())),
+                List.of(), List.of());
 
         MinosApplication application = MinosApplication.builder(home)
                 .embeddingProvider(new LocalHashEmbeddingProvider(64))

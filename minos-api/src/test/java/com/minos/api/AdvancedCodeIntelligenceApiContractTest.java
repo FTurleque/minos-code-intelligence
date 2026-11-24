@@ -1,6 +1,7 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.InformationNature;
@@ -48,7 +49,7 @@ class AdvancedCodeIntelligenceApiContractTest {
                     }
                 }
                 """, StandardCharsets.UTF_8);
-        var project = application.projectRegistry().registerProject(root, "advanced-api");
+        var project = MinosApplicationTestAccess.projectRegistry(application).registerProject(root, "advanced-api");
         Origin origin = new Origin("fixture", "TEST", "1", "snapshot-api", OriginType.OTHER);
         Symbol caller = symbol(project.id().toString(), "caller", fileId, origin);
         Symbol callee = symbol(project.id().toString(), "callee", fileId, origin);
@@ -58,11 +59,11 @@ class AdvancedCodeIntelligenceApiContractTest {
                 new CodeEntityRef(CodeEntityType.SYMBOL, callee.id()),
                 null, RelationshipKind.CALLS, null, ResolutionStatus.RESOLVED,
                 InformationNature.FACTUAL, null, origin, List.of());
-        application.snapshotStore().publish(
+        MinosApplicationTestAccess.snapshotStore(application).publish(
                 project.id(), "snapshot-api", List.of(caller, callee), List.of(), List.of(call));
-        application.fingerprintStore().publish(
-                project.id(), "snapshot-api", application.fingerprintService().capture(root));
-        application.fingerprintStore().promote(project.id(), "snapshot-api");
+        MinosApplicationTestAccess.fingerprintStore(application).publish(
+                project.id(), "snapshot-api", MinosApplicationTestAccess.fingerprintService(application).capture(root));
+        MinosApplicationTestAccess.fingerprintStore(application).promote(project.id(), "snapshot-api");
 
         AdvancedCodeIntelligenceApi api = new LocalAdvancedCodeIntelligenceApi(application);
         var graph = api.getProgramGraph(

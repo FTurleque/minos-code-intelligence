@@ -24,3 +24,12 @@ Un appelant qui traitait `INVALID_REQUEST` comme « corrigez votre requête » p
 
 Un genre de symbole inconnu (`kind`) est une erreur d'argument qui nomme l'argument sans recopier la valeur envoyée ; il
 était rendu par l'erreur générique d'exécution d'outil.
+
+## API Java : accesseurs internes de `MinosApplication` retirés
+
+Rupture d'une classe interne, sans changement de `com.minos.api` ni d'aucune sortie de la CLI, du MCP, du plugin IntelliJ
+ou de NEXUS : `com.minos.application.MinosApplication` ne rend plus publiquement sa racine de composition
+(`compositionRoot()`) ni les quinze accesseurs qui rendaient un port du moteur (`projectRegistry()`, `snapshotStore()`,
+`providerRuntimeManager()`…). Un code qui les appelait passe par les services, les cas d'usage de la façade,
+`LocalProjectOperations` ou `ProviderPlatformService`, et doit être recompilé. Table de remplacement :
+[API Java, « Accesseurs de `MinosApplication` retirés »](../java-api.md#ruptures).

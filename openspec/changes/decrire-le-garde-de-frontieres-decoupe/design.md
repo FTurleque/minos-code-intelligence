@@ -106,7 +106,7 @@ Statut : [Proposition]. L'ADR n'étant pas accepté, la phrase de `:37` se corri
 
 | Exigence (capacité › titre) | Scénario | Conception | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| frontieres-de-modules › La documentation courante ne cite aucune ligne du garde de frontières | Documentation alignée | D1, D3, D4 | 1.1, 1.2, 2.1, 2.2 | commande `git grep` de la spec : aucune ligne, code 1 |
-| idem | Citation de ligne réintroduite | D2 | 1.1 | rouge consigné en 1.1 (8 lignes, code 0) ; pas de gate (D2 A) |
-| frontieres-de-modules › La documentation des gates nomme chaque fichier du garde de frontières | Chaque fichier du garde est nommé | D1 | 1.1, 1.3 | boucle `grep -c` de la spec : chaque compte ≥ 1 |
-| idem | Module de règles ajouté sans documentation | D2 | 1.1 | rouge consigné en 1.1 (comptes à 0) ; tenu par la revue (D2 A) ou par A9 (D2 B) |
+| frontieres-de-modules › La documentation courante ne cite aucune ligne du garde de frontières | Documentation alignée | D1, D3, D4 | 1.1, 1.2, 2.1, 2.2, 2.3, 2.4 | obtenue (2.4) : commande `git grep` de la spec, aucune ligne, code 1 |
+| idem | Citation de ligne réintroduite | D2 | 1.1 | obtenue : rouge consigné en 1.1 (8 lignes, code 0) ; récidive tenue par la revue, pas de gate (D2 A) |
+| frontieres-de-modules › La documentation des gates nomme chaque fichier du garde de frontières | Chaque fichier du garde est nommé | D1 | 1.1, 1.3 | obtenue (1.3) : boucle `grep -c` de la spec, chaque compte ≥ 1 |
+| idem | Module de règles ajouté sans documentation | D2 | 1.1 | obtenue : rouge consigné en 1.1 (comptes à 0) ; récidive tenue par la revue (D2 A), aucun contrôle automatique |

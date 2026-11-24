@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.PositionEncoding;
@@ -80,13 +81,14 @@ class M28VerticalProgramGraphCliTest {
         Files.writeString(config, "sources=source\nsanitizers=sanitize\nsinks=sink\n", StandardCharsets.UTF_8);
 
         MinosApplication application = MinosApplication.open(root.resolve("minos-home"));
-        RegisteredProject project = application.projectRegistry().registerProject(projectRoot, "m28-cli-vertical");
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(projectRoot,
+                "m28-cli-vertical");
         String snapshotId = "snapshot-m28-cli-vertical";
-        application.snapshotStore().publish(
+        MinosApplicationTestAccess.snapshotStore(application).publish(
                 project.id(), snapshotId, List.of(symbol(project, snapshotId, fileId)), List.of(), List.of());
-        application.fingerprintStore().publish(
-                project.id(), snapshotId, application.fingerprintService().capture(projectRoot));
-        application.fingerprintStore().promote(project.id(), snapshotId);
+        MinosApplicationTestAccess.fingerprintStore(application).publish(
+                project.id(), snapshotId, MinosApplicationTestAccess.fingerprintService(application).capture(projectRoot));
+        MinosApplicationTestAccess.fingerprintStore(application).promote(project.id(), snapshotId);
         return new Fixture(application, project);
     }
 

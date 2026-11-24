@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.diagnostics.UsageException;
 import com.minos.testsupport.LogCapture;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,8 @@ class MinosMcpUsageErrorTest {
     @Test
     void anUnknownSymbolKindIsAnArgumentErrorThatNamesTheArgumentWithoutTheValue(@TempDir Path home) throws Exception {
         try (MinosApplication application = MinosApplication.open(home.resolve("app"))) {
-            application.projectRegistry().registerProject(Files.createDirectories(home.resolve("project")), "demo");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(Files.createDirectories(home.resolve("project")),
+                    "demo");
             MinosMcpTools tools = new MinosMcpTools(new MinosApplicationMcpBackend(application));
 
             try (LogCapture log = new LogCapture(MinosMcpTools.class)) {

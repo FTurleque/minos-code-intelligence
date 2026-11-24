@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
 import com.minos.application.semantic.SemanticProjectionService;
 import com.minos.cli.command.SemanticProjectionCommand;
@@ -44,7 +45,7 @@ class SemanticProjectionCommandLineTest {
     @Test
     void thePreparationPublishesTheSameFileTwiceAndTheStatusReadsItBack() throws Exception {
         try (MinosApplication application = indexedApplication(true)) {
-            String projectId = application.projectRegistry().listProjects().getFirst().id().toString();
+            String projectId = MinosApplicationTestAccess.projectRegistry(application).listProjects().getFirst().id().toString();
             Path file = temp.resolve("home").resolve("semantic-projections").resolve(projectId)
                     .resolve("projection-v1.bin");
 
@@ -183,7 +184,7 @@ class SemanticProjectionCommandLineTest {
         List<Symbol> symbols = new ArrayList<>();
         String projectId;
         try (MinosApplication baseline = MinosApplication.open(home)) {
-            var project = baseline.projectRegistry().registerProject(projectRoot, PROJECT);
+            var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(projectRoot, PROJECT);
             projectId = project.id().toString();
             for (int number = 0; number < 12; number++) {
                 String name = "Service" + number;
@@ -192,7 +193,7 @@ class SemanticProjectionCommandLineTest {
                         StandardCharsets.UTF_8);
                 symbols.add(symbol(projectId, name, "src/" + name + ".java"));
             }
-            baseline.snapshotStore().publish(project.id(), "snapshot-1", symbols, List.of(), List.of());
+            MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1", symbols, List.of(), List.of());
         }
         if (!withIndex) return MinosApplication.open(home);
         MinosApplication application = MinosApplication.builder(home)
