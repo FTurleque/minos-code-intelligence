@@ -50,7 +50,7 @@
         <minos.sandbox.tests.required>false</minos.sandbox.tests.required>
 
         <scip.java.bindings.version>0.10.0</scip.java.bindings.version>
-        <mcp.sdk.version>2.1.0</mcp.sdk.version>
+        <mcp.sdk.version>2.2.0</mcp.sdk.version>
         <!--
           Keep both Jackson generations centrally pinned. MINOS' PostgreSQL codec uses
           Jackson 2 while the MCP SDK brings Jackson 3 through mcp-json-jackson3.
