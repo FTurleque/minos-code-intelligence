@@ -1,8 +1,9 @@
 """Shared command-line runner of the architecture gates: one report on success, one failure line on stderr.
 
-This module is not a gate: it has no ``check-`` in its name and no self-test of its own. The self-tests of the gates
-that use it exercise it (``test_check_module_boundaries.py``, ``test_check_private_io.py``). A gate imports it as
-follows, whether it runs as a script or is loaded by its self-test:
+This module is not a gate: it has no ``check-`` in its name. Its own self-test, ``test_gate_runner.py``, run by the
+``invariants`` job, proves the report and code 0, the ``<label> FAILED: <message>`` line and code 1, and that an
+interruption which is not an Exception is never returned as a success. Its users are check-module-boundaries.py and
+check-private-io.py. A gate imports it as follows, whether it runs as a script or is loaded by its self-test:
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from gate_runner import run_gate
