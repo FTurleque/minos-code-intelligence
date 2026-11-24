@@ -2,15 +2,18 @@
 """Self-test of check-module-boundaries.py: the POM rules (A2 dependency policy, hexagonal families, hidden
 internal dependencies, source layout), the policy source module-boundaries.json and the wiring of main().
 
-Each case builds a throw-away tree or POM and runs one rule of the real script against it. main() is checked to
-run every rule (failing spies), and every check_* function of the script is referenced by one of the
-test_check_module_boundaries*.py files, which together cover A2, A3, A7 to A20. The repository itself is checked by
-running the script directly, as the CI does just before these self-tests.
+Each case builds a throw-away tree or POM and runs one rule of the real script against it. MainWiringTest derives
+every check_* function of the gate and of its rule modules, rather than copying a list, and proves that main() runs
+each of them and that the error of each turns main() red (one failing spy per rule, the other rules replaying the
+results of one real run). Every check_* function is also referenced by one of the test_check_module_boundaries*.py
+files, which together cover A2, A3, A7 to A20. The repository itself is checked by running the script directly, as
+the CI does just before these self-tests.
 """
 
 from __future__ import annotations
 
 import contextlib
+import copy
 import io
 import shutil
 import sys
@@ -398,90 +401,136 @@ class PomRulesOnRealPomsTest(unittest.TestCase):
         self.assertNotIn("minos-domain", scoped["minos-runtime-local"])
 
 
+# Functions of the entry point that are not check_* rules but can fail: each gets its own wiring sub-test.
+ENTRY_POINT_FUNCTIONS = {
+    "runtime_service_edges": "derives the execution edges of the generated document and fails on a service "
+                             "implementation outside the module that registers it",
+}
+
+# check_* functions of the gate and its rule modules that are not rules of main(): name -> reason. A ratchet, empty
+# at delivery: an entry that names no check_* function, or a function main() runs, fails the self-test.
+RULES_NOT_RUN_BY_MAIN: dict[str, str] = {}
+
+
+def rule_functions() -> list[str]:
+    """Every check_* function of the gate and of the rule modules it imports, derived rather than copied."""
+    modules = (_MODULE, BOUNDARY_POLICY, ADAPTERS, RATCHETS, PACKAGES, DOCUMENTS)
+    return sorted({name for module in modules for name in dir(module)
+                   if name.startswith("check_") and callable(getattr(module, name))})
+
+
 class EveryRuleHasATest(unittest.TestCase):
 
     def test_every_check_function_of_the_script_is_referenced_by_a_test(self):
         # The rules are spread over the gate and the modules it imports; their tests over the test files.
         source = "\n".join(path.read_text(encoding="utf-8")
                            for path in sorted(Path(__file__).resolve().parent.glob("test_check_module_boundaries*.py")))
-        modules = (_MODULE, BOUNDARY_POLICY, ADAPTERS, RATCHETS, PACKAGES, DOCUMENTS)
-        names = sorted({name for module in modules for name in dir(module)
-                        if name.startswith("check_") and callable(getattr(module, name))})
+        names = rule_functions()
         self.assertGreaterEqual(len(names), 10, names)
         untested = [name for name in names if f"_MODULE.{name}" not in source and f"{name} = _MODULE" not in source]
         self.assertEqual([], untested, "rules of check-module-boundaries.py without any test")
 
 
 class MainWiringTest(unittest.TestCase):
-    """main() must run both rules: a spy that fails must turn the whole gate red."""
+    """main() runs every check_* function of the gate and its rule modules, and the error of each turns it red.
 
-    def run_main_with(self, **spies):
+    The expected rules are every check_* function (rule_functions), not the calls main() happens to make: a call
+    removed from run_rules, a rule added to a rule module and called by nobody, or an error swallowed on the way to
+    main() fails the sub-test named after the function. One real run of main() records the result of every rule and
+    which rules were running when it was called. Then, for each rule, main() runs again with that rule replaced by a
+    spy that raises: the rules that call it (check_pom_rules for the POM rules) run for real, every other rule
+    replays its recorded result without reading the repository again. The self-test thus costs one run of the gate.
+    """
+
+    @staticmethod
+    def run_main_with(spies):
         originals = {name: getattr(_MODULE, name) for name in spies}
         argv = sys.argv
         try:
             for name, spy in spies.items():
                 setattr(_MODULE, name, spy)
             sys.argv = [str(_MODULE_PATH)]
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as error:
+            with contextlib.redirect_stdout(io.StringIO()) as output, \
+                    contextlib.redirect_stderr(io.StringIO()) as error:
                 code = _MODULE.main()
-            return code, error.getvalue()
+            return code, output.getvalue(), error.getvalue()
         finally:
             sys.argv = argv
             for name, original in originals.items():
                 setattr(_MODULE, name, original)
 
-    @staticmethod
-    def spy(calls, name, fail=True, result=None):
+    @classmethod
+    def setUpClass(cls):
+        cls.expected = [name for name in rule_functions() if name not in RULES_NOT_RUN_BY_MAIN]
+        cls.expected += sorted(ENTRY_POINT_FUNCTIONS)
+        watched = cls.expected + sorted(RULES_NOT_RUN_BY_MAIN)
+        # main() can only reach a function through a global name of the gate script.
+        cls.reachable = [name for name in watched if callable(getattr(_MODULE, name, None))]
+        cls.results: dict[str, list] = {}
+        cls.callers: dict[str, set[str]] = {}
+        running: list[str] = []
+
+        def recorder(name, function):
+            def spy(*arguments, **keywords):
+                cls.callers.setdefault(name, set()).update(running)
+                running.append(name)
+                try:
+                    result = function(*arguments, **keywords)
+                finally:
+                    running.pop()
+                cls.results.setdefault(name, []).append(result)
+                return result
+            return spy
+
+        cls.code, cls.output, cls.error = cls.run_main_with(
+            {name: recorder(name, getattr(_MODULE, name)) for name in cls.reachable})
+
+    @classmethod
+    def replay(cls, name):
+        recorded = iter(cls.results.get(name, ()))
+
         def spy(*arguments, **keywords):
-            calls.append(name)
-            if fail:
-                raise RuntimeError(f"spy {name} failed")
-            return result
+            return copy.deepcopy(next(recorded))
         return spy
 
-    def test_main_runs_the_reactor_rule(self):
-        calls: list[str] = []
-        code, error = self.run_main_with(check_reactor_modules=self.spy(calls, "reactor"))
-        self.assertEqual(code, 1)
-        self.assertEqual(calls, ["reactor"])
-        self.assertIn("spy reactor failed", error)
+    @staticmethod
+    def failing(name):
+        def spy(*arguments, **keywords):
+            raise RuntimeError(f"spy {name} failed")
+        return spy
 
-    def test_main_runs_the_package_ownership_rule(self):
-        calls: list[str] = []
-        code, error = self.run_main_with(
-            check_reactor_modules=self.spy(calls, "reactor", fail=False),
-            check_package_ownership=self.spy(calls, "ownership"))
-        self.assertEqual(code, 1)
-        self.assertEqual(calls, ["reactor", "ownership"])
-        self.assertIn("spy ownership failed", error)
+    def test_the_real_run_passes_and_calls_every_rule(self):
+        self.assertEqual(0, self.code, self.error)
+        self.assertIn("M21 MODULE BOUNDARY CONSISTENCY SUCCESS", self.output)
+        self.assertGreaterEqual(len(self.expected), 27, self.expected)
+        self.assertEqual([], [name for name in self.expected if name not in self.results],
+                         "rules that main() does not run")
 
-
-    def test_main_runs_the_runtime_local_export_rule(self):
-        calls: list[str] = []
-        code, error = self.run_main_with(check_runtime_local_exports=self.spy(calls, "exports"))
-        self.assertEqual(code, 1)
-        self.assertEqual(calls, ["exports"])
-        self.assertIn("spy exports failed", error)
-
-    def test_main_runs_the_ratchet_rules_a11_to_a14(self):
-        for name in ("check_engine_types_named_by_surfaces", "check_minos_application_accessors",
-                     "check_process_launchers",
-                     "check_adapter_types_named_by_adapters", "check_package_roots",
-                     "check_architecture_test_policy", "check_snapshot_read_port",
-                     "check_postgresql_backend_isolation", "check_storage_package_isolation"):
+    def test_the_error_of_every_rule_turns_main_red(self):
+        for name in self.expected:
             with self.subTest(rule=name):
-                calls: list[str] = []
-                code, error = self.run_main_with(**{name: self.spy(calls, name)})
-                self.assertEqual(code, 1)
-                self.assertEqual(calls, [name])
-                self.assertIn(f"spy {name} failed", error)
+                self.assertIn(name, self.reachable,
+                              f"{name} is not a global name of check-module-boundaries.py: main() cannot run it")
+                self.assertIn(name, self.results, f"{name} is not run by main()")
+                spies = {other: self.replay(other) for other in self.reachable
+                         if other != name and other not in self.callers[name]}
+                spies[name] = self.failing(name)
+                code, output, error = self.run_main_with(spies)
+                self.assertEqual(1, code, f"the error of {name} does not reach main()")
+                self.assertIn(f"M21 MODULE BOUNDARY CONSISTENCY FAILED: spy {name} failed", error)
+                self.assertNotIn("SUCCESS", output)
 
-    def test_main_runs_the_unreferenced_production_type_rule(self):
-        calls: list[str] = []
-        code, error = self.run_main_with(check_unreferenced_production_types=self.spy(calls, "unreferenced"))
-        self.assertEqual(code, 1)
-        self.assertEqual(calls, ["unreferenced"])
-        self.assertIn("spy unreferenced failed", error)
+    def test_the_lists_of_exceptions_are_closed(self):
+        rules = rule_functions()
+        for name, reason in RULES_NOT_RUN_BY_MAIN.items():
+            with self.subTest(exempted=name):
+                self.assertIn(name, rules, f"{name} is no check_* function of the gate or its rule modules")
+                self.assertTrue(reason.strip(), f"{name} has no reason")
+                self.assertNotIn(name, self.results, f"{name} is run by main(): remove its exemption")
+        for name, reason in ENTRY_POINT_FUNCTIONS.items():
+            with self.subTest(entry_point=name):
+                self.assertFalse(name.startswith("check_"), f"{name} is a rule: it is derived, not listed")
+                self.assertTrue(reason.strip(), f"{name} has no reason")
 
 
 class PolicySourceTest(unittest.TestCase):
