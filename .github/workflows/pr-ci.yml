@@ -176,6 +176,9 @@ jobs:
       - name: Module-boundary checker self-test (A9 documentation, A17 ArchUnit policy, generated document)
         run: python scripts/architecture/test_check_module_boundaries_documents.py -v
 
+      - name: Architecture gate runner self-test
+        run: python scripts/architecture/test_gate_runner.py -v
+
       - name: Private I/O primitives gate (no raw createDirectories, write, newInputStream or channel lock)
         run: python scripts/architecture/check-private-io.py
 
