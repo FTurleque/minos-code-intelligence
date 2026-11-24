@@ -552,9 +552,12 @@ jobs:
           overwrite: true
           if-no-files-found: ignore
           retention-days: 3
+          # minos-app builds into the target/ directory of the repository root (minos-app/pom.xml, <directory>).
           path: |
             minos-*/target/classes/**/*.class
             minos-*/target/test-classes/**/*.class
+            target/classes/**/*.class
+            target/test-classes/**/*.class
 
       - name: Upload verification diagnostics
         if: always()
@@ -655,7 +658,12 @@ jobs:
               echo "Module '$module' does not match the minos-* pattern the analysis parameters use." >&2
               exit 1
             fi
-            if [ -d "$module/src/main/java" ] && [ -z "$(find "sonar-binaries/$module/target/classes" -name '*.class' -print -quit 2>/dev/null)" ]; then
+            # A module that builds into the target/ directory of the repository root (minos-app) publishes from there.
+            build="$module/target"
+            if grep -qF '<directory>${maven.multiModuleProjectDirectory}/target</directory>' "$module/pom.xml"; then
+              build="target"
+            fi
+            if [ -d "$module/src/main/java" ] && [ -z "$(find "sonar-binaries/$build/classes" -name '*.class' -print -quit 2>/dev/null)" ]; then
               echo "No class file of $module: Verify (ubuntu-24.04) did not publish the classes the scanner needs." >&2
               exit 1
             fi
@@ -675,16 +683,18 @@ jobs:
             if [ -d "$directory" ]; then find "$directory" -type f "$@" | wc -l; else echo 0; fi
           }
           linux_reports="$(count coverage-reports/linux -name jacoco.xml)"
-          linux_placed="$(count coverage-reports/linux -path 'coverage-reports/linux/minos-*/target/site/jacoco/jacoco.xml')"
+          linux_placed="$(count coverage-reports/linux \( -path 'coverage-reports/linux/minos-*/target/site/jacoco/jacoco.xml' \
+            -o -path 'coverage-reports/linux/target/site/jacoco/jacoco.xml' \))"
           windows_reports="$(count coverage-reports/windows -name jacoco.xml)"
-          windows_placed="$(count coverage-reports/windows -path 'coverage-reports/windows/minos-*/target/site/jacoco/jacoco.xml')"
+          windows_placed="$(count coverage-reports/windows \( -path 'coverage-reports/windows/minos-*/target/site/jacoco/jacoco.xml' \
+            -o -path 'coverage-reports/windows/target/site/jacoco/jacoco.xml' \))"
           echo "JaCoCo reports given to the scanner: linux=$linux_placed windows=$windows_placed"
           if [ "$linux_placed" -eq 0 ]; then
             echo "No Linux JaCoCo report: Verify (ubuntu-24.04) did not produce any." >&2
             exit 1
           fi
           if [ "$linux_reports" -ne "$linux_placed" ] || [ "$windows_reports" -ne "$windows_placed" ]; then
-            echo "A JaCoCo report lies outside minos-*/target/site/jacoco/: the scanner patterns would not read it." >&2
+            echo "A JaCoCo report lies outside minos-*/target/site/jacoco/ and target/site/jacoco/: the scanner patterns would not read it." >&2
             exit 1
           fi
           if [ "$windows_placed" -eq 0 ]; then
@@ -707,9 +717,9 @@ jobs:
             -Dsonar.test.inclusions=minos-*/src/test/java/**
             -Dsonar.exclusions=minos-intellij/**
             -Dsonar.test.exclusions=minos-intellij/**
-            -Dsonar.java.binaries=sonar-binaries/minos-*/target/classes
-            -Dsonar.java.test.binaries=sonar-binaries/minos-*/target/test-classes
-            -Dsonar.coverage.jacoco.xmlReportPaths=coverage-reports/linux/minos-*/target/site/jacoco/jacoco.xml,coverage-reports/windows/minos-*/target/site/jacoco/jacoco.xml
+            -Dsonar.java.binaries=sonar-binaries/minos-*/target/classes,sonar-binaries/target/classes
+            -Dsonar.java.test.binaries=sonar-binaries/minos-*/target/test-classes,sonar-binaries/target/test-classes
+            -Dsonar.coverage.jacoco.xmlReportPaths=coverage-reports/linux/minos-*/target/site/jacoco/jacoco.xml,coverage-reports/linux/target/site/jacoco/jacoco.xml,coverage-reports/windows/minos-*/target/site/jacoco/jacoco.xml,coverage-reports/windows/target/site/jacoco/jacoco.xml
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.organization=fturleque
             -Dsonar.projectKey=FTurleque_atlas
