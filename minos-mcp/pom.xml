@@ -32,6 +32,15 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <!-- AUD-ARC-02: MinosApplicationTestAccess, the test access to the package-private ports of
+                 MinosApplication; test scope only (check-module-boundaries.py) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-application</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>
             <artifactId>mcp</artifactId>
         </dependency>

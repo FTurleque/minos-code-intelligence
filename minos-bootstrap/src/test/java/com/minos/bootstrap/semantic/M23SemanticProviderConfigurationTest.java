@@ -1,6 +1,7 @@
 package com.minos.bootstrap.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.EmbeddingProvider;
 import com.minos.application.semantic.OllamaEmbeddingProvider;
 import com.minos.application.semantic.SemanticIndexService;
@@ -81,9 +82,9 @@ class M23SemanticProviderConfigurationTest {
         Path project = Files.createDirectory(temp.resolve("project"));
         withProperties(managedOllamaSettings(null), () -> {
             try (MinosApplication application = MinosApplication.open(temp.resolve("home"))) {
-                assertTrue(application.projectRegistry().listProjects().isEmpty());
+                assertTrue(MinosApplicationTestAccess.projectRegistry(application).listProjects().isEmpty());
 
-                application.projectRegistry().registerProject(project, "unusable-provider");
+                MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "unusable-provider");
                 SemanticIndexService.Status status = application.semanticIndexService().status("unusable-provider");
                 assertTrue(status.limitations().contains(OllamaEmbeddingProvider.MANAGED_SERVICE_OUTSIDE_DOCKER_LIMITATION),
                         status.limitations().toString());

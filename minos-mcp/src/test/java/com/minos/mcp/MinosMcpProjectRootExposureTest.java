@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -26,7 +27,7 @@ class MinosMcpProjectRootExposureTest {
     void projectStructureRendersTheRootDirectoryNameNotTheAbsolutePath() throws Exception {
         Path root = Files.createDirectories(temp.resolve("workspace").resolve("demo-root"));
         try (MinosApplication application = MinosApplication.open(temp.resolve("home"))) {
-            application.projectRegistry().registerProject(root, "demo");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(root, "demo");
 
             String text = structure(application);
 
@@ -40,7 +41,7 @@ class MinosMcpProjectRootExposureTest {
     void aMissingRootIsReportedUnavailableWithoutAnyAbsolutePath() throws Exception {
         Path root = Files.createDirectories(temp.resolve("workspace").resolve("gone-root"));
         try (MinosApplication application = MinosApplication.open(temp.resolve("home"))) {
-            application.projectRegistry().registerProject(root, "demo");
+            MinosApplicationTestAccess.projectRegistry(application).registerProject(root, "demo");
             Files.delete(root);
 
             String text = structure(application);

@@ -1,6 +1,7 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ResolutionStatus;
@@ -27,7 +28,7 @@ class SemanticCodeIntelligenceApiContractTest {
     void keepsHistoricalContractsAndSemanticCapabilityIsDisabledByDefault(@TempDir Path temp) throws Exception {
         MinosApplication application = MinosApplication.open(temp.resolve("home"));
         Path projectRoot = Files.createDirectories(temp.resolve("project"));
-        application.projectRegistry().registerProject(projectRoot, "fixture");
+        MinosApplicationTestAccess.projectRegistry(application).registerProject(projectRoot, "fixture");
         SemanticCodeIntelligenceApi api = new LocalSemanticCodeIntelligenceApi(application);
 
         assertEquals("1", MinosApi.CONTRACT_VERSION);
@@ -45,8 +46,9 @@ class SemanticCodeIntelligenceApiContractTest {
         Path home = temp.resolve("home");
         Path projectRoot = Files.createDirectories(temp.resolve("project"));
         MinosApplication baseline = MinosApplication.open(home);
-        var project = baseline.projectRegistry().registerProject(projectRoot, "fixture");
-        baseline.snapshotStore().publish(project.id(), "snapshot-1", List.of(symbol(project.id().toString())), List.of(), List.of());
+        var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(projectRoot, "fixture");
+        MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1", List.of(symbol(project.id().toString())),
+                List.of(), List.of());
 
         MinosApplication application = MinosApplication.builder(home)
                 .embeddingProvider(new LocalHashEmbeddingProvider(64))

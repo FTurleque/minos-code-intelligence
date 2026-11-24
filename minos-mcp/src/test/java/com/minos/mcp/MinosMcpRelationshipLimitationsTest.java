@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.InformationNature;
@@ -43,9 +44,9 @@ class MinosMcpRelationshipLimitationsTest {
     @Test
     void callersCalleesAndDependentsDeclareTheirLimitationWhereImplementationsStayUnchanged() throws Exception {
         try (MinosApplication application = MinosApplication.open(home.resolve("app"))) {
-            RegisteredProject project = application.projectRegistry().registerProject(
+            RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(
                     Files.createDirectories(home.resolve("project")), "f01");
-            application.snapshotStore().publish(project.id(), "snapshot-f01",
+            MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), "snapshot-f01",
                     List.of(symbol(project, "a"), symbol(project, "b")),
                     List.of(new SymbolOccurrence("occurrence-1", project.id().toString(), new ResolvedSymbolReference("a"),
                             new SymbolLocation("src/b.java", 3, 0, 3, 4, PositionEncoding.UTF16_CODE_UNITS),

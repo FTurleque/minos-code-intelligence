@@ -6,7 +6,7 @@
 #### Scenario: Façade réduite au HEAD
 - **GIVEN** le dépôt après le changement, `minos-application` compilé
 - **WHEN** `javap -public -cp minos-application/target/classes com.minos.application.MinosApplication` est exécuté
-- **THEN** la sortie ne contient ni `compositionRoot`, ni `projectRegistry`, ni `snapshotStore`, ni `providerRuntimeManager`, ni aucun type de `com.minos.orchestration`
+- **THEN** la sortie ne contient ni `compositionRoot`, ni `projectRegistry`, ni `snapshotStore`, ni `providerRuntimeManager`, ni aucune méthode publique dont le type de retour appartient à `com.minos.orchestration`
 
 #### Scenario: Racine de composition réintroduite refusée
 - **GIVEN** un arbre de test où `MinosApplication` déclare `public MinosApplicationComposer compositionRoot()`

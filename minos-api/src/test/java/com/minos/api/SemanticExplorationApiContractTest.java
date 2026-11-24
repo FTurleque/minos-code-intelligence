@@ -1,6 +1,7 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -54,8 +55,8 @@ class SemanticExplorationApiContractTest {
                 "package fixture;\n\nclass GreetingService {\n    String greet() { return \"hello\"; }\n}\n",
                 StandardCharsets.UTF_8);
         MinosApplication baseline = MinosApplication.open(home);
-        var project = baseline.projectRegistry().registerProject(projectRoot, "fixture");
-        baseline.snapshotStore().publish(project.id(), "snapshot-1",
+        var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(projectRoot, "fixture");
+        MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1",
                 List.of(symbol(project.id().toString())), List.of(), List.of());
         application = MinosApplication.builder(home).embeddingProvider(new LocalHashEmbeddingProvider(64)).build();
         semantic = new LocalSemanticCodeIntelligenceApi(application);

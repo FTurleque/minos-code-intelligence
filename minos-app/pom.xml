@@ -21,6 +21,9 @@
         <dependency><groupId>com.minos</groupId><artifactId>minos-provider-scip</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-integration-git</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-application</artifactId><version>${project.version}</version></dependency>
+        <!-- AUD-ARC-02: MinosApplicationTestAccess, the test access to the package-private ports of
+             MinosApplication; test scope only (check-module-boundaries.py) -->
+        <dependency><groupId>com.minos</groupId><artifactId>minos-application</artifactId><version>${project.version}</version><type>test-jar</type><scope>test</scope></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-bootstrap</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-nexus</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.minos</groupId><artifactId>minos-cli</artifactId><version>${project.version}</version></dependency>
@@ -73,7 +76,7 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId><version>${maven.surefire.plugin.version}</version>
-                <configuration><useModulePath>false</useModulePath><workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory><systemPropertyVariables><minos.shaded.jar>${project.build.directory}/${project.build.finalName}-all.jar</minos.shaded.jar></systemPropertyVariables></configuration>
+                <configuration><useModulePath>false</useModulePath><workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory><systemPropertyVariables><minos.shaded.jar>${project.build.directory}/${project.build.finalName}-all.jar</minos.shaded.jar><minos.application.jar>${maven.multiModuleProjectDirectory}/minos-application/target/minos-application-${project.version}.jar</minos.application.jar><minos.application.tests.jar>${maven.multiModuleProjectDirectory}/minos-application/target/minos-application-${project.version}-tests.jar</minos.application.tests.jar></systemPropertyVariables></configuration>
                 <executions><execution><goals><goal>integration-test</goal><goal>verify</goal></goals></execution></executions>
             </plugin>
             <plugin>
