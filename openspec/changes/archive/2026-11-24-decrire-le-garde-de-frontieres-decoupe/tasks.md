@@ -30,7 +30,8 @@ Constat **AUD-ARC-12** (sprint 10). Changement documentaire : aucun code, test, 
 
 - [x] 3.1 [AUD-ARC-12] Mettre à jour la matrice de traçabilité du design en nommant les preuves obtenues et manquantes (les scénarios de récidive restent tenus par la revue si D2 A est retenu).
   - Matrice du design complétée (colonne « Test ou preuve » : preuves obtenues ; scénarios de récidive tenus par la revue, D2 A).
-- [ ] 3.2 [AUD-ARC-12] Préparer l'entrée des deux exigences ajoutées dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (traçabilité), à écrire à l'archivage ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 3.2 [AUD-ARC-12] Préparer l'entrée des deux exigences ajoutées dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (traçabilité), à écrire à l'archivage ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+  - Fait à l'archivage (deux lignes, statut `partielle` : commandes de la spécification, aucun gate) ; `check-capability-dossiers.py` : 22 dossiers cohérents.
 - [x] 3.3 [AUD-ARC-12] `openspec validate --all --strict`, `python .claude/scripts/run_gates.py --fast`, `python scripts/docs/check-current-docs.py`, `python scripts/docs/product-facts.py --check`, `archgate check`.
   - `openspec validate --all --strict` : « Totals: 28 passed, 0 failed (28 items) » ; `run_gates.py --fast` : 30/30 ; `run_gates.py` complet : 87/87 ; `check-current-docs.py`, `product-facts.py --check` : SUCCESS ; `archgate check` : 15/15, `"failed":0`.
 - [x] 3.4 [AUD-ARC-12] Lister les documents à mettre à jour avant archivage (`docs/project/audits/2026-11-15/SUIVI.md` ou le relevé d'état en cours, `docs/project/governance/STATUS.md` s'il décrit le garde) ; vérifier que chacun est fait ou nommé comme reste.

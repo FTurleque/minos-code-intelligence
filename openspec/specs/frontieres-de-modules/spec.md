@@ -6,7 +6,7 @@ Garantit que les gardes d'architecture internes de MINOS (dépendances Maven, so
 ## Requirements
 
 ### Requirement: Chaque règle de frontière du garde Python est couverte par un cas refusé et un cas accepté
-Chaque règle de `scripts/architecture/check-module-boundaries.py` (A2 hexagonale, politique de dépendances, dépendances cachées, mise en page, frontières de sources, disposition Java, document généré) SHALL avoir au moins un cas refusé et un cas accepté dans `test_check_module_boundaries.py`. Le test SHALL échouer si une fonction `check_*` du module n'est référencée par aucun test.
+Chaque règle du garde `scripts/architecture/check-module-boundaries.py` et de ses modules de règles `module_boundary_*.py` (A2 hexagonale, politique de dépendances, dépendances cachées, mise en page, frontières de sources, disposition Java, document généré, A3 et A7 à A20) SHALL avoir au moins un cas refusé et un cas accepté dans les auto-tests `test_check_module_boundaries*.py`. L'auto-test SHALL échouer si une fonction `check_*` n'est référencée par aucun test.
 
 #### Scenario: Règle sans test
 - **WHEN** une fonction `check_*` est ajoutée au script sans qu'aucun test la référence
@@ -604,19 +604,19 @@ Les sorties de `minos index`, `minos remote`, `minos project`, `minos index-stat
 Le garde SHALL lire dans la source de `MinosApplication` ses méthodes publiques d'instance dont le type de retour nomme un type de `minos-engine`. Dans une surface, un appel de même arité ou une référence `::nom` à l'une d'elles SHALL compter comme un usage du type rendu, dans le compteur de la règle A11. Un appel homonyme d'arité différente SHALL être ignoré.
 
 #### Scenario: Accesseur appelé sans nommer le type
-- **GIVEN** une copie du dépôt où un fichier de `minos-api` appelle `app.snapshotStore()` sans importer `CodeKnowledgeSnapshotStore`, absent de la liste de l'API
-- **WHEN** le garde est exécuté sur cette copie
-- **THEN** il échoue en nommant la surface, le fichier et le type rendu
+- **GIVEN** un arbre de test où `MinosApplication` déclare un accesseur public `snapshotStore()` qui rend `CodeKnowledgeSnapshotStore`, et où un fichier de `minos-api` l'appelle sans importer ce type, absent de la liste de l'API
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que le garde échoue en nommant la surface, le fichier et le type rendu
 
 #### Scenario: Import remplacé par var
-- **GIVEN** une copie du dépôt où un fichier qui importait `GitIntelligence` écrit `var g = app.gitIntelligence()` sans l'import
-- **WHEN** le garde est exécuté sur cette copie
-- **THEN** il réussit avec le même compteur : le fichier utilise toujours le type
+- **GIVEN** un arbre de test où `MinosApplication` déclare un accesseur public qui rend `GitIntelligence`, et où un fichier qui importait ce type écrit `var g = app.gitIntelligence()` sans l'import
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que le garde réussit avec le même compteur : le fichier utilise toujours le type
 
 #### Scenario: Méthode homonyme d'arité différente
-- **GIVEN** une copie du dépôt où une surface appelle `builder.gitIntelligence(supplier)`, à un argument
-- **WHEN** le garde est exécuté sur cette copie
-- **THEN** cet appel n'est pas compté comme un usage de `GitIntelligence`
+- **GIVEN** un arbre de test où une surface appelle `builder.gitIntelligence(supplier)`, à un argument
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que cet appel n'est pas compté comme un usage de `GitIntelligence`
 
 ### Requirement: Les types du moteur utilisés par le bytecode d'une surface le sont par liste fermée
 Le test `ModuleArchitectureTest` SHALL appliquer, par surface et par module de contrat, la liste des types de premier niveau de `minos-engine` dont dépendent ses classes compilées, chacun avec le nombre de classes de premier niveau qui en dépendent. Cette liste SHALL être lue dans la source unique de la politique de frontières. Un type hors liste, un compteur différent ou une entrée inutilisée SHALL faire échouer le test.
@@ -972,7 +972,7 @@ Le garde de frontières SHALL afficher à chaque exécution, pour `minos-engine`
 - **THEN** le garde échoue en A11 en nommant `minos-cli`, le fichier et le type
 
 ### Requirement: Les accesseurs de MinosApplication typés moteur sont tenus par un cliquet
-Les accesseurs publics d'instance de `MinosApplication` qui rendent un type de `minos-engine` SHALL être exactement ceux de `MINOS_APPLICATION_ENGINE_ACCESSORS`, chacun avec son type rendu. Un accesseur hors table, un type rendu différent, une entrée sans accesseur ou une surface de production qui atteint la racine de composition SHALL faire échouer A11. `gitIntelligence`, `providerCatalog`, `scipArtifactImporter` et `hostedControlPlaneService` SHALL ne plus être publics.
+La table `MINOS_APPLICATION_ENGINE_ACCESSORS` SHALL être vide, et les accesseurs publics d'instance de `MinosApplication` qui rendent un type de `minos-engine` SHALL être exactement ceux de cette table. Un accesseur hors table, un type rendu différent, une entrée sans accesseur ou une surface de production qui atteint la racine de composition SHALL faire échouer A11. `gitIntelligence`, `providerCatalog`, `scipArtifactImporter` et `hostedControlPlaneService` SHALL ne plus être publics.
 
 #### Scenario: Un nouvel accesseur public refusé
 - **GIVEN** une copie du dépôt où `MinosApplication` gagne `public GitIntelligence git() { return gitIntelligence; }`
@@ -989,10 +989,15 @@ Les accesseurs publics d'instance de `MinosApplication` qui rendent un type de `
 - **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en demandant de retirer l'entrée
 
+#### Scenario: Entrée ajoutée à la table vide refusée
+- **GIVEN** un arbre de test où la table reçoit l'entrée `projectRegistry` pendant que `MinosApplication` garde cet accesseur privé au package
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que le garde échoue en demandant de retirer l'entrée
+
 #### Scenario: Table à jour au HEAD
 - **GIVEN** le dépôt
-- **WHEN** le garde est exécuté
-- **THEN** il réussit et annonce 15 accesseurs publics typés moteur, et la CLI ne liste plus `registry.ProjectPathMappings` dans aucune table A11
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il réussit et annonce 0 accesseur public typé moteur, et la CLI ne liste plus `registry.ProjectPathMappings` dans aucune table A11
 
 ### Requirement: Un module de contrat reste sous les surfaces
 Le garde SHALL tenir une famille de modules de contrat, distincte des surfaces, qui contient `minos-nexus`. Un module de contrat SHALL ne dépendre que de `minos-domain` et de `minos-application` en production, et de `minos-bootstrap` en portée test seulement. Il SHALL NOT dépendre d'une surface, d'un adaptateur, de `minos-engine` ni de `minos-app`. `ModuleArchitectureTest` SHALL appliquer la même règle sur le bytecode.
@@ -1419,6 +1424,126 @@ Le garde de frontières SHALL tenir la liste fermée des classes de production d
 
 ### Requirement: L'injection des cas d'usage ne change aucune sortie publique
 Le passage des cas d'usage à l'injection SHALL laisser identiques à l'octet les sorties caractérisées de la CLI, de l'API Java et du MCP, et SHALL conserver le refus de l'indexation distante avant tout effet.
+
+#### Scenario: Goldens inchangés
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify` puis `git diff --exit-code minos-app/src/test/resources/characterization/` sont exécutés
+- **THEN** la commande `git diff` se termine avec le code 0
+
+#### Scenario: Refus de l'indexation distante conservé
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=LocalRemoteIndexOperationsRefusalTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit : le refus intervient avant toute matérialisation, bail, enregistrement ou épingle
+
+### Requirement: La documentation courante ne cite aucune ligne du garde de frontières
+Hors des documents figés (`docs/project/history/`, `docs/project/audits/`, `docs/project/roadmap/`, archives, `.claude/agent-memory/`), `docs/` et `.claude/` SHALL ne citer aucune ligne de `scripts/architecture/check-module-boundaries.py`, ni décrire une copie de la politique de frontières dans `ModuleArchitectureTest`, ni situer « dans le script » une table que porte `module-boundaries.json` ou un module de règles.
+
+#### Scenario: Documentation alignée
+- **GIVEN** le dépôt après correction
+- **WHEN** `git grep -nE "check-module-boundaries\.py:[0-9]|liste .MODULES. du script|lue dans le script|ALLOWED. égale" -- docs .claude ':!docs/project/history' ':!docs/project/audits' ':!docs/project/roadmap' ':!**/archive/**' ':!.claude/agent-memory'` est exécuté
+- **THEN** la commande ne rend aucune ligne et se termine avec le code 1
+
+#### Scenario: Citation de ligne réintroduite
+- **GIVEN** une copie de travail où le dossier de la capacité cite de nouveau `check-module-boundaries.py:59-85`
+- **WHEN** la même commande est exécutée
+- **THEN** elle rend cette ligne et se termine avec le code 0, ce que la revue refuse
+
+### Requirement: La documentation des gates nomme chaque fichier du garde de frontières
+Le chapitre « Gardes d'architecture » de `docs/developer/quality-gates.md` SHALL nommer `check-module-boundaries.py`, chaque fichier `scripts/architecture/module_boundary_*.py` avec les règles qu'il porte, `gate_runner.py`, et `scripts/architecture/module-boundaries.json` comme source unique de la politique.
+
+#### Scenario: Chaque fichier du garde est nommé
+- **GIVEN** le dépôt après correction
+- **WHEN** pour chaque fichier `f` de `scripts/architecture/module_boundary_*.py`, `gate_runner.py` et `module-boundaries.json`, `grep -c "$(basename f)" docs/developer/quality-gates.md` est exécuté
+- **THEN** chaque compte est au moins 1
+
+#### Scenario: Module de règles ajouté sans documentation
+- **GIVEN** une copie de travail où un fichier `scripts/architecture/module_boundary_x.py` est ajouté sans modifier `docs/developer/quality-gates.md`
+- **WHEN** la même boucle est exécutée
+- **THEN** le compte de `module_boundary_x.py` vaut 0, ce que la revue refuse
+
+### Requirement: Le point d'entrée du garde exécute chacune de ses règles
+L'auto-test du câblage SHALL dériver la liste des règles de toutes les fonctions `check_*` du garde et de ses modules de règles, sans liste recopiée, et prouver pour chacune qu'un espion qui lève une exception rend `main()` rouge : code 1, message de l'espion sur stderr. Une fonction `check_*` que `main()` n'exécute pas, ou dont l'erreur n'atteint pas `main()`, SHALL faire échouer l'auto-test en la nommant, sauf entrée d'une liste d'exemptions fermée et justifiée, vide à la livraison.
+
+#### Scenario: Appel d'une règle retiré du point d'entrée
+- **GIVEN** une copie de `scripts/architecture/` dans un répertoire temporaire, où la ligne `service_loaders = check_service_loader_class_loaders()` de `run_rules` est remplacée par `service_loaders = 0`
+- **WHEN** `python test_check_module_boundaries.py MainWiringTest` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `check_service_loader_class_loaders`
+- **AND** la même mutation sur `check_embedded_adapters` (`api_users, embedded_adapters = 0, 0`) échoue de même
+
+#### Scenario: Règle atteinte par une autre règle
+- **GIVEN** une copie de `scripts/architecture/` où l'appel `check_pom_layout(module, pom)` de `check_pom_rules` est supprimé
+- **WHEN** `python test_check_module_boundaries.py MainWiringTest` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `check_pom_layout`
+
+#### Scenario: Règle nouvelle non câblée
+- **GIVEN** une copie de `scripts/architecture/` où un module de règles définit une fonction `check_demo` que `run_rules` n'appelle pas, référencée par un test
+- **WHEN** `python test_check_module_boundaries.py MainWiringTest` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `check_demo`
+
+#### Scenario: Erreur d'une règle avalée
+- **GIVEN** une copie de `scripts/architecture/` où `run_rules` entoure l'appel de `check_package_cycles` d'un `try` / `except Exception` qui rend `0, 0`
+- **WHEN** `python test_check_module_boundaries.py MainWiringTest` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `check_package_cycles`
+
+#### Scenario: Dépôt au HEAD
+- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté sur le dépôt
+- **THEN** l'auto-test réussit et chaque fonction `check_*` du garde et de ses modules de règles a son sous-test de câblage
+
+### Requirement: Le lanceur partagé des gardes d'architecture a son propre auto-test
+`scripts/architecture/gate_runner.py` SHALL avoir un auto-test exécuté par le job `invariants` de `pr-ci.yml`. Il SHALL prouver qu'un rapport rendu est imprimé sur stdout avec le code 0 et rien sur stderr, qu'une exception est rapportée sur stderr sous la forme `<label> FAILED: <message>` avec le code 1 et rien sur stdout, et qu'une interruption qui n'est pas une `Exception` (`SystemExit`, `KeyboardInterrupt`) n'est jamais rendue comme un succès.
+
+#### Scenario: Rapport d'un garde vert
+- **WHEN** `python scripts/architecture/test_gate_runner.py` est exécuté sur le dépôt
+- **THEN** l'auto-test réussit, dont le cas où `run_gate` reçoit une vérification qui rend un rapport : code 0, rapport sur stdout, stderr vide
+
+#### Scenario: Échec rendu comme un succès
+- **GIVEN** une copie de `scripts/architecture/` dans un répertoire temporaire, où `return 1` de `run_gate` est remplacé par `return 0`
+- **WHEN** `python test_gate_runner.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1
+
+#### Scenario: Auto-test du lanceur sans exécutant
+- **GIVEN** une copie du dépôt dont le job `invariants` de `.github/workflows/pr-ci.yml` n'a plus d'étape qui lance `scripts/architecture/test_gate_runner.py`
+- **WHEN** `python scripts/quality/check-ci-wiring.py --root <copie>` est exécuté
+- **THEN** le gate se termine avec le code 1 et nomme `scripts/architecture/test_gate_runner.py`
+
+### Requirement: La façade ne rend ni type du moteur ni racine de composition
+`MinosApplication` SHALL NOT déclarer de méthode publique d'instance dont le type de retour nomme un type de `minos-engine` ou `MinosApplicationComposer`. Ses ports et sa racine de composition SHALL rester lisibles par les seules classes du package `com.minos.application`. Le garde de frontières SHALL faire échouer la règle A11 dès qu'une telle méthode publique apparaît, en la nommant avec le type rendu.
+
+#### Scenario: Façade réduite au HEAD
+- **GIVEN** le dépôt après le changement, `minos-application` compilé
+- **WHEN** `javap -public -cp minos-application/target/classes com.minos.application.MinosApplication` est exécuté
+- **THEN** la sortie ne contient ni `compositionRoot`, ni `projectRegistry`, ni `snapshotStore`, ni `providerRuntimeManager`, ni aucune méthode publique dont le type de retour appartient à `com.minos.orchestration`
+
+#### Scenario: Racine de composition réintroduite refusée
+- **GIVEN** un arbre de test où `MinosApplication` déclare `public MinosApplicationComposer compositionRoot()`
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que le garde échoue en A11 en nommant `compositionRoot` et `MinosApplicationComposer`
+
+#### Scenario: Accesseur typé moteur réintroduit refusé
+- **GIVEN** un arbre de test où `MinosApplication` déclare `public ProjectRegistry projectRegistry()` et où la table des accesseurs est vide
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que le garde échoue en A11 en nommant `projectRegistry` et `registry.ProjectRegistry`
+
+### Requirement: Les tests lisent un port de l'application par un accès de test
+Un test d'un autre module qui lit un port d'une application ouverte SHALL passer par une classe d'accès des sources de test de `minos-application`, dans le package `com.minos.application`, publiée par le `test-jar` de ce module. Ce `test-jar` SHALL être déclaré en portée `test` seulement, et le garde SHALL refuser toute autre portée. Aucun jar livré SHALL contenir la classe d'accès.
+
+#### Scenario: Jar livré sans accès de test
+- **GIVEN** le reactor construit par `./mvnw -B -ntp verify`
+- **WHEN** le test de packaging liste le contenu du jar de `minos-application` et du jar ombré `target/minos-code-intelligence-*-all.jar`
+- **THEN** aucun des deux ne contient la classe d'accès de test
+
+#### Scenario: Test d'une surface sur un home protégé
+- **GIVEN** un `MINOS_HOME` en lecture seule préparé par la classe d'accès de test sur une application ouverte par `MinosApplication.open`
+- **WHEN** `./mvnw -B -ntp -pl minos-mcp -am test "-Dtest=MinosMcpWriteProtectedHomeTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit
+
+#### Scenario: Accès de test hors portée de test refusé
+- **GIVEN** un arbre de test où le `pom.xml` d'une surface déclare le `test-jar` de `minos-application` en portée `compile`
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **THEN** le cas de test vérifie que le garde échoue en nommant le module, `minos-application`, le type `test-jar` et la portée
+
+### Requirement: Le retrait des accesseurs de la façade ne change aucune sortie publique
+Le retrait du public de `compositionRoot()` et des accesseurs typés moteur de `MinosApplication` SHALL laisser identiques à l'octet les sorties caractérisées de la CLI, de l'API Java et du MCP. Aucune signature de `com.minos.api` SHALL changer, et le refus de l'indexation distante SHALL intervenir avant tout effet.
 
 #### Scenario: Goldens inchangés
 - **GIVEN** le dépôt après le changement

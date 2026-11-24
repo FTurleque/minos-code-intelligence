@@ -44,7 +44,8 @@ Ordre de fusion : après `decrire-le-garde-de-frontieres-decoupe` (ARCH-0087 et 
   - « Capability dossiers consistent: 22 dossier(s) for 22 capability spec(s). »
 - [x] 5.3 AUD-ARC-02 — Valider les spécifications ; vérifier par `openspec validate --all --strict`.
   - `openspec validate --all --strict` : « Totals: 28 passed, 0 failed ».
-- [ ] 5.4 AUD-ARC-02 — Lister les documents à mettre à jour avant archivage (`docs/project/governance/STATUS.md` si la façade y est décrite, `docs/user/java-api.md`, notes de version, ARCH-0087, ARCH-0057, index des ADR, `docs/project/audits/2026-11-15/SUIVI.md` avec le statut d'AUD-ARC-02) ; vérifier que chacun est fait ou nommé comme reste.
+- [x] 5.4 AUD-ARC-02 — Lister les documents à mettre à jour avant archivage (`docs/project/governance/STATUS.md` si la façade y est décrite, `docs/user/java-api.md`, notes de version, ARCH-0087, ARCH-0057, index des ADR, `docs/project/audits/2026-11-15/SUIVI.md` avec le statut d'AUD-ARC-02) ; vérifier que chacun est fait ou nommé comme reste.
+  - `docs/user/java-api.md`, `unreleased.md`, `public-surfaces.md`, `quality-gates.md`, ARCH-0087 et ARCH-0057 faits par la PR #816 ; dossier `frontieres-de-modules.md` (trois exigences) et suivi faits à l'archivage ; STATUS et ROADMAP ne citent pas la façade.
   - Faits : `docs/user/java-api.md`, `docs/user/release-notes/unreleased.md`, `docs/developer/public-surfaces.md`, `docs/developer/quality-gates.md`, ARCH-0087, ARCH-0057, index des ADR. Restes nommés : lignes de traçabilité des trois exigences ajoutées dans le dossier de capacité (à l'archivage) ; `docs/project/audits/2026-11-15/SUIVI.md` (statut d'AUD-ARC-02, hors de cette PR) ; `STATUS.md` ne décrit pas les accesseurs de la façade. Case laissée ouverte tant que l'archivage n'a pas eu lieu.
 
 ## Workflow follow-up
