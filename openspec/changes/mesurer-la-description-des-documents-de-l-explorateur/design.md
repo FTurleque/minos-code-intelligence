@@ -134,6 +134,34 @@ Comparaison facultative (manuelle) avec la table d'avant la PR #797 : la classe 
 
 Non mesuré par ce protocole : le temps de bout en bout HTTP, le chargement de la vue, le backend PostgreSQL au-delà du lecteur commun, un snapshot réel (tâche manuelle).
 
+### Relevé « avant » (tâche 1.2)
+
+Mesure faite le 2026-11-24 au commit `0c48cc35b` (branche `perf/mesurer-la-description-des-documents-de-l-explorateur`, code de production identique à `535a50176`), poste Windows 10 amd64, JDK `21.0.13.0.2+1-LTS`, 16 processeurs, tas maximal 12,9 Go, aucune autre charge Maven. Commande : `./mvnw -B -ntp -pl minos-application -am test "-Dtest=SemanticCorpusPageMeasurementTest" "-Dminos.explorer.page.measure=true" "-Dsurefire.failIfNoSpecifiedTests=false"`, trois exécutions de la JVM. Requête filtrée sur un module absent, limite 50 ; page la plus lente : 3 échauffements, 15 mesures (le p95 de 15 mesures est le maximum) ; parcours complet : 5 mesures après un parcours d'échauffement. Valeurs en ms ; « part » = temps passé dans `findFileSymbols` rapporté au temps de la page.
+
+| Fixture | Fichiers | Symboles par fichier | Documents | Construction de vue (ms), 3 exécutions | Page la plus lente p50 (ms) | Page la plus lente p95 (ms) | Part `findFileSymbols` | Appels par page | Symboles rendus par page | Parcours complet p50 (ms) | Pages par parcours | Appels par parcours |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2 000 × 20 | 2 000 | 20 | 82 000 | 155,6 / 156,3 / 161,4 | 11,0 / 9,5 / 10,8 | 16,4 / 13,0 / 16,4 | 77 / 80 / 79 % | 2 000 | 40 000 | 39,4 / 39,8 / 31,1 | 41 | 2 000 |
+| 400 × 500 | 400 | 500 | 400 400 | 427,0 / 482,6 / 369,9 | 40,4 / 40,2 / 44,0 | 43,0 / 46,1 / 68,1 | 89 / 86 / 85 % | 400 | 200 000 | 137,6 / 149,4 / 187,1 | 201 | 400 |
+| 40 × 5 000 | 40 | 5 000 | 400 040 | 476,4 / 461,0 / 440,2 | 37,3 / 35,3 / 38,6 | 44,5 / 69,5 / 48,2 | 87 / 87 / 85 % | 40 | 200 000 | 142,3 / 153,0 / 134,9 | 201 | 40 |
+| distribution `morpheus-engine` (Zipf 0,8) | 1 488 | 10 à 3 534 | 122 432 | 92,7 / 124,9 / 94,4 | 14,2 / 13,8 / 15,9 | 17,7 / 15,4 / 23,0 | 83 / 84 / 81 % | 1 488 | 60 472 | 43,7 / 44,9 / 69,4 | 62 | 1 488 |
+
+Lecture : la page filtrée la plus lente est celle qui couvre la région `file:` ; elle lit chaque fichier une fois (appels par page = nombre de fichiers de la région) et un parcours complet lit chaque fichier exactement une fois (assertion de la mesure). Le coût de `findFileSymbols` domine la page (77 à 89 %), mais la page la plus lente reste sous 45 ms en médiane, soit moins d'un cinquième du seuil de 250 ms et moins de la moitié du seuil secondaire de 100 ms.
+
+Conditions et limites du relevé :
+
+- L'agent JaCoCo du build est actif pendant la mesure (`jacoco:prepare-agent` lié à la phase de test) : les temps sont majorés par l'instrumentation, ce qui joue contre la conclusion « sous le seuil », pas pour elle.
+- Écart avec la tâche 1.1 : l'index est servi par un double `SeekingVectorStore` propre à la mesure (documents triés une fois, page lue par recherche dichotomique) et non par `InMemoryVectorStore`, dont la page par défaut du port (`SemanticVectorStore.documentPage`) trie tout l'index à chaque lot de 200 : sur 400 000 documents, ce coût du double aurait masqué celui de la description. Les stores local et PostgreSQL lisent une page par recherche, comme le double.
+- La fixture « `morpheus-engine` » reprend le nombre de symboles (60 472) et de fichiers (1 488) du snapshot réel, avec une répartition synthétique décroissante (Zipf d'exposant 0,8) : la répartition réelle par fichier n'est pas connue ici.
+- Non mesuré : snapshot réel (tâche 4.1), table d'avant la PR #797 au commit `acd79cb86` (tâche 4.2), Linux et PostgreSQL de bout en bout (tâche 4.3), temps HTTP et chargement de la vue.
+
+### Relevé « après »
+
+Sans objet : le seuil de D3 n'est pas franchi (voir « Décisions »), aucune correction n'est faite ; « après = avant ».
+
+### Fermeture de la tâche 1.4 d'AUD-PERF-14 (tâche 1.3)
+
+Le relevé ci-dessus est la mesure du temps d'une page que demandait la tâche 1.4 du changement archivé `2026-11-20-liberer-la-table-de-symboles-avec-sa-vue` (`openspec/changes/archive/2026-11-20-liberer-la-table-de-symboles-avec-sa-vue/tasks.md:14`), faite sur des fichiers à nombreux symboles plutôt que sur la fixture du test (écart 4). Elle mesure l'état « après » la PR #797 ; la comparaison avec l'état « avant » (`acd79cb86`) reste facultative et non faite (tâche 4.2). L'archive n'est pas modifiée.
+
 ## Compatibilité, migration et retour arrière
 
 Aucune donnée ni sortie ne change ; retour arrière par revert.
@@ -141,7 +169,10 @@ Aucune donnée ni sortie ne change ; retour arrière par revert.
 ## Décisions
 
 
-Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
+Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues (D1 = A, D2 = A, seuil de D3 à 250 ms, D4 = B si le seuil est franchi, D5 conditionné à D4 = B).
+
+**Application du seuil (tâche 2.1), 2026-11-24.** Sur le relevé « avant », la médiane de la page filtrée la plus lente vaut au plus 44,0 ms (fixture `400 × 500`, troisième exécution), sous les 250 ms de la condition principale. La part de `findFileSymbols` dépasse la moitié du temps de page (77 à 89 %), mais la page reste sous 100 ms : la condition secondaire n'est pas remplie non plus. Le seuil n'est pas franchi : le groupe 3 (D4 = B) est **sans objet**, `minos-engine` et DATA-0085 (D5) ne sont pas touchés ; la mesure est la preuve.
+
 ### D1 — Mesurer d'abord, corriger ensuite [Question, recommandation : mesurer d'abord]
 
 Options :
@@ -204,15 +235,15 @@ Aucune branche propre à un système dans le code touché. Les tests de caracté
 
 ## Traçabilité
 
-| Constat | Exigence | Scénario | Décision | Tâches | Preuve attendue |
-|---|---|---|---|---|---|
-| AUD-PERF-15 | exploration-semantique › Le temps d'une page de documents est mesurable sur des fichiers à nombreux symboles | Mesure demandée ; Mesure absente du build | D1, D2 | 1.1-1.3 | relevé `target/explorer-page-measurements.md` au HEAD ; rapport Surefire du build sans la propriété : test sauté |
-| AUD-PERF-15 | exploration-semantique › Un document n'est décrit par les symboles de son fichier qu'une fois par requête et sans table gardée | Page mêlée de symboles, fragments et fichiers ; Vue évincée après la page | D4 | 1.4 | test de caractérisation vert au HEAD et après ; tests d'éviction existants verts |
-| AUD-PERF-15 | — | — | D3, D4 | 2.1 | seuil et forme consignés par le propriétaire dans la PR |
-| AUD-PERF-15 | idem caractérisation | Page mêlée… | D4 = B | 3.1-3.4 | rouge `assertSame` au HEAD ; vert après ; mesure « après » ; JaCoCo |
-| AUD-PERF-14 (réserve) | — | — | D2 | 1.3, 4.2 | tâche 1.4 d'AUD-PERF-14 fermée par le relevé ; comparaison avec `acd79cb86` facultative |
-| AUD-PERF-15 | — | — | — | 4.1, 4.3 | mesure sur snapshot réel, PostgreSQL et Linux : manuelles, nommées comme manquantes si non faites |
+| Constat | Exigence | Scénario | Décision | Tâches | Preuve attendue | Preuve obtenue (2026-11-24) |
+|---|---|---|---|---|---|---|
+| AUD-PERF-15 | exploration-semantique › Le temps d'une page de documents est mesurable sur des fichiers à nombreux symboles | Mesure demandée ; Mesure absente du build | D1, D2 | 1.1-1.3 | relevé `target/explorer-page-measurements.md` au HEAD ; rapport Surefire du build sans la propriété : test sauté | relevé de trois exécutions recopié dans « Performance et mesure » ; `SemanticCorpusPageMeasurementTest` sauté (`Skipped: 1`) sans la propriété, aucun relevé écrit |
+| AUD-PERF-15 | exploration-semantique › Un document n'est décrit par les symboles de son fichier qu'une fois par requête et sans table gardée | Page mêlée de symboles, fragments et fichiers ; Symbole introuvable ; Vue évincée après la page | D4 | 1.4 | test de caractérisation vert au HEAD et après ; tests d'éviction existants verts | `aPageReadsTheSymbolsOfAFileOncePerFileDocumentAndNeverForAResolvedSymbolOrChunk`, `aChunkWhoseSymbolIsMissingIsDescribedByTheSymbolOfSmallestKeyOfItsFile` et `anEvictedViewIsNoLongerReachableFromTheService` verts (poste Windows) ; CI Linux et Windows et scope JaCoCo `explorer-surface` sur les rapports CI : à constater sur la PR |
+| AUD-PERF-15 | — | — | D3, D4 | 2.1 | seuil et forme consignés par le propriétaire dans la PR | décision du 2026-11-24 et application du seuil consignées dans « Décisions » : seuil non franchi |
+| AUD-PERF-15 | idem caractérisation | Page mêlée… | D4 = B | 3.1-3.4 | rouge `assertSame` au HEAD ; vert après ; mesure « après » ; JaCoCo | sans objet (seuil non franchi) : aucun rouge, aucune correction, DATA-0085 non touché |
+| AUD-PERF-14 (réserve) | — | — | D2 | 1.3, 4.2 | tâche 1.4 d'AUD-PERF-14 fermée par le relevé ; comparaison avec `acd79cb86` facultative | 1.4 d'AUD-PERF-14 fermée par le relevé (« Performance et mesure ») ; comparaison avec `acd79cb86` non faite |
+| AUD-PERF-15 | — | — | — | 4.1, 4.3 | mesure sur snapshot réel, PostgreSQL et Linux : manuelles, nommées comme manquantes si non faites | non faites : snapshot réel, Linux (WSL) et PostgreSQL de bout en bout non mesurés |
 
 ## Questions ouvertes
 
-D1, D3 et D4 attendent le propriétaire ; chacune a une recommandation. Aucune ne bloque la mesure « avant ».
+Aucune : D1, D3 et D4 ont été tranchées par le propriétaire le 2026-11-24 (recommandations retenues) ; le seuil de D3 n'est pas franchi.
