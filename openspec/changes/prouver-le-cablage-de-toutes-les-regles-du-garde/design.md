@@ -120,8 +120,8 @@ Option écartée : des cas ajoutés à `test_check_module_boundaries.py`, sans �
 
 ## Traçabilité
 
-| Constat | Exigence | Décision | Tâches | Preuve attendue |
-|---|---|---|---|---|
-| AUD-TST-13 | frontieres-de-modules › Le point d'entrée du garde exécute chacune de ses règles | D1, D2 | 1.1-1.5 | sous-tests rouges au HEAD puis verts ; mutations de l'état vérifié rouges ; durée mesurée |
-| AUD-TST-13 | frontieres-de-modules › Le lanceur partagé des gardes d'architecture a son propre auto-test | D3 | 2.1-2.4 | auto-test vert, mutation `return 0` rouge, `check-ci-wiring.py` rouge sans l'étape |
-| AUD-TST-13 | frontieres-de-modules › Chaque règle de frontière du garde Python est couverte par un cas refusé et un cas accepté | — | 3.2 | `EveryRuleHasATest` vert ; dossier de capacité à jour |
+| Constat | Exigence | Décision | Tâches | Preuve exécutée (2026-11-24, poste Windows) | Preuve manquante |
+|---|---|---|---|---|---|
+| AUD-TST-13 | frontieres-de-modules › Le point d'entrée du garde exécute chacune de ses règles | D1, D2 | 1.1-1.5 | les 16 mutations de « Mutations rejouées », sur copie : l'ancien auto-test reste vert pour les dix règles silencieuses, l'erreur avalée et `check_demo` ; le nouveau `MainWiringTest` rend le code 1 sur chacune et nomme la fonction mutée ; 27 sous-tests de câblage (26 `check_*` et `runtime_service_edges`) verts sur le dépôt ; auto-test : 51 s avant, 21 s après ; sortie du garde identique octet pour octet | durée en CI (Linux) |
+| AUD-TST-13 | frontieres-de-modules › Le lanceur partagé des gardes d'architecture a son propre auto-test | D3 | 2.1-2.4 | `test_gate_runner.py` vert ; rouge sur copie avec `return 0` et avec `except BaseException` ; `check-ci-wiring.py` rouge sans l'étape (nomme `scripts/architecture/test_gate_runner.py`), vert avec | exécution par le job `invariants` en CI |
+| AUD-TST-13 | frontieres-de-modules › Chaque règle de frontière du garde Python est couverte par un cas refusé et un cas accepté | — | 3.2 | `EveryRuleHasATest` vert, calcul partagé `rule_functions` | dossier de capacité, à l'archivage (3.2) |

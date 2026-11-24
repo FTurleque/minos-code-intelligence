@@ -1,6 +1,7 @@
 package com.minos.bootstrap.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.EmbeddingProvider;
 import com.minos.application.semantic.SemanticIndexService;
 import com.minos.domain.Origin;
@@ -62,10 +63,10 @@ class SemanticSyncConsistencyTest {
         SlowEmbeddingProvider slow = new SlowEmbeddingProvider(embedStarted, proceed);
 
         MinosApplication app = MinosApplication.builder(home).embeddingProvider(slow).build();
-        RegisteredProject reg = app.projectRegistry().registerProject(project, "test-project");
+        RegisteredProject reg = MinosApplicationTestAccess.projectRegistry(app).registerProject(project, "test-project");
 
         // Publish snap-1 as the initial active structural snapshot
-        app.snapshotStore().publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
+        MinosApplicationTestAccess.snapshotStore(app).publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
 
         // Launch sync A (for snap-1), which will block during embedding
         Future<Object> syncA;
@@ -84,7 +85,7 @@ class SemanticSyncConsistencyTest {
                     "sync A must start embedding before snap-2 is promoted");
 
             // Promote snap-2 while sync A is blocked inside embed
-            app.snapshotStore().publish(reg.id(), "snap-2", symbols(reg.id()), List.of(), List.of());
+            MinosApplicationTestAccess.snapshotStore(app).publish(reg.id(), "snap-2", symbols(reg.id()), List.of(), List.of());
 
             // Release sync A — embed continues, then replaceConditionally detects the staleness
             proceed.countDown();
@@ -116,8 +117,8 @@ class SemanticSyncConsistencyTest {
         Path project = setupProjectFiles(temp.resolve("project"));
 
         MinosApplication app = MinosApplication.builder(home).embeddingProvider(new FastEmbeddingProvider()).build();
-        RegisteredProject reg = app.projectRegistry().registerProject(project, "test-project");
-        app.snapshotStore().publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
+        RegisteredProject reg = MinosApplicationTestAccess.projectRegistry(app).registerProject(project, "test-project");
+        MinosApplicationTestAccess.snapshotStore(app).publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
 
         SemanticIndexService.UpdateReport first = app.semanticIndexService().synchronize(reg.id());
         assertEquals(SemanticIndexService.State.READY, first.state());
@@ -152,11 +153,11 @@ class SemanticSyncConsistencyTest {
         MinosApplication appX = MinosApplication.builder(home).embeddingProvider(slowForX).build();
         MinosApplication appY = MinosApplication.builder(home).embeddingProvider(new FastEmbeddingProvider()).build();
 
-        RegisteredProject regX = appX.projectRegistry().registerProject(projectX, "project-x");
-        RegisteredProject regY = appX.projectRegistry().registerProject(projectY, "project-y");
+        RegisteredProject regX = MinosApplicationTestAccess.projectRegistry(appX).registerProject(projectX, "project-x");
+        RegisteredProject regY = MinosApplicationTestAccess.projectRegistry(appX).registerProject(projectY, "project-y");
 
-        appX.snapshotStore().publish(regX.id(), "snap-x1", symbols(regX.id()), List.of(), List.of());
-        appX.snapshotStore().publish(regY.id(), "snap-y1", symbols(regY.id()), List.of(), List.of());
+        MinosApplicationTestAccess.snapshotStore(appX).publish(regX.id(), "snap-x1", symbols(regX.id()), List.of(), List.of());
+        MinosApplicationTestAccess.snapshotStore(appX).publish(regY.id(), "snap-y1", symbols(regY.id()), List.of(), List.of());
 
         AtomicReference<SemanticIndexService.UpdateReport> reportY = new AtomicReference<>();
         AtomicReference<Throwable> errorY = new AtomicReference<>();
@@ -201,8 +202,8 @@ class SemanticSyncConsistencyTest {
         Path project = setupProjectFiles(temp.resolve("project"));
 
         MinosApplication app = MinosApplication.builder(home).embeddingProvider(new FastEmbeddingProvider()).build();
-        RegisteredProject reg = app.projectRegistry().registerProject(project, "test-project");
-        app.snapshotStore().publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
+        RegisteredProject reg = MinosApplicationTestAccess.projectRegistry(app).registerProject(project, "test-project");
+        MinosApplicationTestAccess.snapshotStore(app).publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
 
         // Sync with a reader that throws — simulates a snapshot-store I/O failure
         SemanticVectorStore.IndexSnapshot stub = new SemanticVectorStore.IndexSnapshot(
@@ -217,7 +218,7 @@ class SemanticSyncConsistencyTest {
         }
 
         // The lock must have been released — a follow-up sync must complete successfully
-        app.snapshotStore().publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
+        MinosApplicationTestAccess.snapshotStore(app).publish(reg.id(), "snap-1", symbols(reg.id()), List.of(), List.of());
         SemanticIndexService.UpdateReport report = app.semanticIndexService().synchronize(reg.id());
         assertEquals(SemanticIndexService.State.READY, report.state(),
                 "lock must be released even after an exception in the active-reader");

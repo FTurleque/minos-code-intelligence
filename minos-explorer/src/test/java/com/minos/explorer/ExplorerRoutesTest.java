@@ -1,5 +1,6 @@
 package com.minos.explorer;
 
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.SemanticSearchService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -218,7 +219,7 @@ class ExplorerRoutesTest {
         RawHttp.Response tooMany = RawHttp.send(port, "POST", search, json,
                 "{\"query\":\"x\",\"mode\":\"hybrid\",\"limit\":501}");
         RawHttp.Response get = RawHttp.get(port, search, bearer);
-        fixture.application.snapshotStore().publish(java.util.UUID.fromString(fixture.projectId), "snapshot-2",
+        MinosApplicationTestAccess.snapshotStore(fixture.application).publish(java.util.UUID.fromString(fixture.projectId), "snapshot-2",
                 List.of(), List.of(), List.of());
 
         RawHttp.Response stale = RawHttp.send(port, "POST", search, json, "{\"query\":\"greet\"}");

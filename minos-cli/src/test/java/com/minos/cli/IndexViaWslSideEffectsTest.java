@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.cli.support.CliExitCodes;
 import com.minos.registry.RegisteredProject;
 import org.junit.jupiter.api.Test;
@@ -34,8 +35,8 @@ class IndexViaWslSideEffectsTest {
         Files.writeString(source.resolve("Demo.java"), "package demo; public class Demo { }\n");
 
         try (MinosApplication application = MinosApplication.open(home)) {
-            RegisteredProject registered = application.projectRegistry().registerProject(project, "demo");
-            application.projectRegistry().listProjects();
+            RegisteredProject registered = MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "demo");
+            MinosApplicationTestAccess.projectRegistry(application).listProjects();
             Map<String, String> before = HomeTree.of(home);
 
             StringBuilder output = new StringBuilder();

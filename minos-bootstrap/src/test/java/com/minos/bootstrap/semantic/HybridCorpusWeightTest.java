@@ -1,6 +1,7 @@
 package com.minos.bootstrap.semantic;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -67,7 +68,7 @@ class HybridCorpusWeightTest {
         MinosApplication application = MinosApplication.builder(temp.resolve(label).resolve("home")).build();
         RegisteredProject project = install(application, Files.createDirectories(temp.resolve(label).resolve("project")),
                 vocabularies, wordsPerLine);
-        application.snapshotStore().loadActiveKnowledge(project.id());
+        MinosApplicationTestAccess.snapshotStore(application).loadActiveKnowledge(project.id());
         application.semanticIndexService().status(project.id().toString());
         long before = settledHeap();
         application.hybridSearchService().search(project.id().toString(),
@@ -88,7 +89,7 @@ class HybridCorpusWeightTest {
     private static RegisteredProject install(MinosApplication application, Path root, List<String[]> vocabularies,
                                              int wordsPerLine) throws Exception {
         Random random = new Random(0xA611L);
-        RegisteredProject project = application.projectRegistry().registerProject(root, "corpus-weight");
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(root, "corpus-weight");
         List<Symbol> symbols = new ArrayList<>();
         for (int file = 0; file < 120; file++) {
             String fileId = String.format(Locale.ROOT, "src/File%03d.txt", file);
@@ -114,7 +115,8 @@ class HybridCorpusWeightTest {
                         ResolutionStatus.RESOLVED, ORIGIN, false, false, Set.of()));
             }
         }
-        application.snapshotStore().publish(project.id(), "corpus-weight-snapshot", symbols, List.of(), List.of());
+        MinosApplicationTestAccess.snapshotStore(application).publish(project.id(), "corpus-weight-snapshot", symbols, List.of(),
+                List.of());
         return project;
     }
 
