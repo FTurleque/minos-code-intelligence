@@ -161,6 +161,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("MAVEN_ZIP_SHA256=" + EmbeddedToolsCatalog.load().artifact("maven", "any").sha256()));
         assertTrue(dockerfile.contains("apache-maven-${MAVEN_VERSION}-bin.zip"));
         assertTrue(dockerfile.contains("${MAVEN_ZIP_SHA256}"));
+        assertTrue(dockerfile.contains("curl --continue-at - --retry"),
+                "a slow mirror must resume the Maven archive across retries instead of restarting it");
+        assertFalse(dockerfile.contains("--retry-delay 5 --max-time 120"),
+                "a 429 from Maven Central needs more than 25 seconds of retries");
         assertTrue(dockerfile.contains("sha256sum -c -"));
         assertFalse(dockerfile.contains("maven.sha512"),
                 "Maven integrity must not depend on a checksum downloaded beside the payload");
