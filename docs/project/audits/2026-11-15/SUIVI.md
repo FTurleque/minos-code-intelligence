@@ -2,9 +2,9 @@
 
 Suivi de la correction des constats de [`findings.md`](findings.md), dans l'ordre de [`sprints.md`](sprints.md). Une ligne par constat ; la preuve d'une fermeture est une commande ou une assertion de test, pas « la CI est verte ».
 
-## État au 2026-11-20
+## État au 2026-11-24
 
-Les huit sprints sont fusionnés et archivés. Le sprint 9, ouvert par la vérification du 19/11, est fusionné et archivé (PR #796 et #797). Les tâches non faites sont des mesures et des preuves manuelles, nommées dans la colonne « Statut » de chaque sprint et dans « Tâches manuelles », et le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, reporté.
+Les neuf premiers sprints sont fusionnés et archivés. Le sprint 10, ouvert par la vérification du 20/11, et les deux constats partiels AUD-DEP-05 et AUD-ARC-02 sont spécifiés par six changements OpenSpec actifs, non implémentés. Les tâches non faites sont des mesures et des preuves manuelles, nommées dans la colonne « Statut » de chaque sprint et dans « Tâches manuelles », et le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, reporté.
 
 ## État au 2026-11-15
 
@@ -141,7 +141,22 @@ Les deux constats de ce sprint ne figurent pas dans les versions suivies de `fin
 | AUD-ARC-11 | `proteger-les-adaptateurs-embarques-contre-le-retrait-de-leur-entree` | Fait (PR #796, archivé) ; D2 option a, décision du propriétaire du 2026-11-20 | Mutation en mémoire des 17 entrées : 4 retraits silencieux, non 1 (`OllamaEmbeddingProvider`, `JavaAstSupport`, `JavaProgramModel`, `FileProgramGraphProvider`). L'inclusion des utilisateurs d'API dans la liste des adaptateurs couvre les trois premiers ; `FileProgramGraphProvider` ne nomme aucune API du JDK et reste à la revue (D2). |
 | AUD-PERF-14 | `liberer-la-table-de-symboles-avec-sa-vue` | Fait (PR #797, archivé) ; D1 option C, décision du propriétaire du 2026-11-20 ; mesure du temps d'une page non faite (fixture trop petite, tâche 1.4) | Purger la `WeakHashMap` avant le chargement ne suffit pas : la collecte déclenchée par le chargement suivant libère la vue, pas la valeur. Une table par projet laisse retenue celle du projet évincé. Le service lit les symboles par les index de la vue, sans table propre (D1) ; les deux backends construisent leurs vues par `SnapshotReadView.indexed`. |
 
-Fusionnés dans l'ordre #796 puis #797, puis archivés. Les partiels AUD-DEP-05 (sprint 2) et AUD-ARC-02 (sprint 7, groupe 4 reporté) restent dans leurs sprints et ne sont repris par aucun changement.
+Fusionnés dans l'ordre #796 puis #797, puis archivés.
+
+## Sprint 10 — Reprises de la vérification du 20/11, et constats partiels (spécifié le 2026-11-24)
+
+Les quatre constats du sprint 10 ne figurent pas dans les versions suivies de `findings.md`, `findings.json` et `sprints.md` : ils viennent de la vérification du 20/11 et portent les numéros qui suivent ceux de l'audit. Les partiels AUD-DEP-05 (sprint 2) et AUD-ARC-02 (sprint 7) sont repris ici.
+
+| Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
+|---|---|---|---|
+| AUD-SEC-11 | `refuser-la-disparition-de-la-racine-du-clone` | Spécifié | La racine passe aussi par `postVisitDirectory`, pas seulement par `visitFileFailed` ; un test par `checkpoint()` reste vert au HEAD (contrôle d'existence avant le parcours) ; relancer l'exception d'origine écrirait un chemin absolu. Un frère supprimé pendant la marche n'échoue sur Windows et Linux que si c'est un répertoire. `RemoteCloneBudget` n'est dans aucun scope JaCoCo. |
+| AUD-TST-13 | `prouver-le-cablage-de-toutes-les-regles-du-garde` | Spécifié | 10 retraits d'appel silencieux sur 13 règles non espionnées, non 8 ; A2 est déjà protégée par `PomRulesOnRealPomsTest`. Une liste d'espions recopiée ou dérivée des appels de `main()` ne voit ni la règle suivante ni l'appel retiré ; un espion qui délègue ne voit pas une erreur avalée. `gate_runner.py` n'est exercé par aucun auto-test, contrairement à sa docstring. |
+| AUD-ARC-12 | `decrire-le-garde-de-frontieres-decoupe` | Spécifié | 18 passages dans 6 fichiers, dont le dossier de capacité (écarts E1, E4, E9), l'en-tête `files:` d'ARCH-0058, ARCH-0087 et le skill `minos-literal-gates` ; quatre puces fausses dans ARCH-0068, non deux. |
+| AUD-PERF-15 | `mesurer-la-description-des-documents-de-l-explorateur` | Spécifié | Un CHUNK porte le symbole qu'il découpe : seuls les documents FILE paient le tri. Une page ne demande chaque fichier qu'une fois : la mémoïsation par requête ne fait rien gagner. Aucun banc ne mesure ce coût ; `docs/developer/semantic-explorer.md` décrit encore la table retirée. |
+| AUD-DEP-05 | `isoler-l-analyse-sonarcloud-du-code-de-la-pr` | Spécifié (partiel depuis le sprint 2) | La PR #749 a séparé les étapes, pas les jobs : `.mvn/maven.config` de la PR est relu à chaque appel du wrapper, et le dépôt local est purgé après l'analyse. `Verify` ne publie pas les classes dont un scanner hors Maven a besoin ; un `sonar-project.properties` venu de la PR serait lu. |
+| AUD-ARC-02 | `retirer-la-racine-de-composition-de-la-facade` | Spécifié (partiel depuis le sprint 7) | Aucun appelant de production hors du package ; 216 appels dans 54 fichiers de test de 7 modules. Rendre les accesseurs package-private ou passer par le `Builder` ne suffit pas. Le report du 2026-11-19 n'est porté par aucune décision acceptée ; `runtimeObservationStore` sert trois tests, non un. |
+
+Ordre recommandé : `decrire-le-garde-de-frontieres-decoupe` et `prouver-le-cablage-de-toutes-les-regles-du-garde` (le second complète `docs/developer/quality-gates.md`), puis `retirer-la-racine-de-composition-de-la-facade` (touche ARCH-0087 et le dossier `frontieres-de-modules.md` après AUD-ARC-12) ; `refuser-la-disparition-de-la-racine-du-clone`, `mesurer-la-description-des-documents-de-l-explorateur` et `isoler-l-analyse-sonarcloud-du-code-de-la-pr` sont indépendants.
 
 ## Recouvrements entre changements
 
@@ -178,7 +193,7 @@ Aucun numéro n'est réservé : chaque ADR prend le prochain numéro libre de `d
 
 ## Décisions du propriétaire
 
-Chaque design donne les options et une recommandation. Au 2026-11-20, toutes sont tranchées selon la recommandation, sauf le retrait de `compositionRoot()` et des 15 accesseurs (sprint 7), reporté avec le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage` :
+Chaque design donne les options et une recommandation. Au 2026-11-24, toutes sont tranchées selon la recommandation jusqu'au sprint 9, sauf le retrait de `compositionRoot()` et des 15 accesseurs (sprint 7), repris par le sprint 10 ; les décisions du sprint 10 sont en attente :
 
 | Sprint | Décision | Recommandation du design |
 |---|---|---|
@@ -204,6 +219,12 @@ Chaque design donne les options et une recommandation. Au 2026-11-20, toutes son
 | 8 | Langue du contrat de l'explorateur | Anglais pour toute constante nouvelle, valeurs françaises de v1 figées |
 | 9 | Retrait silencieux de l'entrée de `FileProgramGraphProvider` (aucune API du JDK) | Résidu accepté, écrit dans ARCH-0087 |
 | 9 | Table de symboles de l'explorateur : lectures de la vue, ou table attachée à la vue | Lectures de la vue, sans table |
+| 10 | AUD-SEC-11 : racine du clone refusée dans `visitFileFailed` et `postVisitDirectory`, message sans chemin | Oui, comparaison `equals` à la racine, comme `ProviderWriteQuotaSupervisor` (en attente) |
+| 10 | AUD-TST-13 : liste des règles attendues | Toutes les `check_*` des modules du garde, cliquet des exceptions vide ; auto-test propre de `gate_runner.py` (en attente) |
+| 10 | AUD-ARC-12 : gate contre la récidive de prose | Aucun gate nouveau, commande de la spécification rejouée à la clôture (en attente) |
+| 10 | AUD-PERF-15 : mesurer d'abord ou corriger d'emblée | Mesurer d'abord, corriger au-delà de 250 ms en médiane par un index par fichier déjà trié dans la vue (en attente) |
+| 10 | AUD-DEP-05 : job d'analyse séparé, `workflow_run` ou exception écrite | Job séparé sans code de la PR, scanner autonome épinglé (en attente) |
+| 10 | AUD-ARC-02 : retrait en une version, dépréciation ou report écrit | Retrait en une version, accès de test par un `test-jar`, ARCH-0087 `Accepted` (en attente) |
 
 ## Tâches manuelles
 
