@@ -67,6 +67,8 @@ Non mesuré : toute exécution du job `sonar` sous une autre forme ; le journal 
 
 ## Décisions
 
+
+Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 ### D1 — Option A : un job qui ne lance que le scanner
 
 [Proposition, en attente du propriétaire] Le job `sonar` garde son identifiant et sa condition. Étapes : checkout du head de la PR (`persist-credentials: false`, profondeur complète pour l'historique SCM) ; contrôle de présence du jeton ; téléchargement des artefacts de `Verify` (rapports Linux et Windows, classes, bibliothèques si D3 les retient) ; placement des rapports et des classes dans leur module par un script **en ligne** du workflow (`bash` sans `scripts/`, sans `mvnw`) ; contrôle D4 ; analyse par une action du scanner épinglée par SHA, paramètres en ligne de commande. Plus de `setup-java` avec `cache: maven`, plus d'étape de purge de `~/.m2`. Recommandation : A, seule option qui ferme le constat sans élargir l'exposition. B est écartée (secrets donnés aux runs de forks, empoisonnement d'artefacts, décoration manuelle) ; C est le repli si la PR d'essai montre une perte d'analyse inacceptable.

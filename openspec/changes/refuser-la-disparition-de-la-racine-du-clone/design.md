@@ -129,6 +129,8 @@ Le diagramme répond à la question du constat : seule la branche « non racine 
 
 ## Décisions
 
+
+Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 ### D1 — Critère de racine : égalité avec la racine mesurée [Proposition, recommandation]
 
 - (A) **recommandée** : refuser quand `chemin.equals(destination)`, comme `ProviderWriteQuotaSupervisor.java:261`. `Files.walkFileTree` rend la racine sous l'objet `Path` de départ, l'égalité est donc exacte sur les deux systèmes ; les entrées rendues par le parcours sont toutes sous la racine.

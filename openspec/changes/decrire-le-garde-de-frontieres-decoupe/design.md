@@ -69,6 +69,8 @@ Non mesuré : aucun gate exécuté pendant la spécification ; seule la commande
 
 ## Décisions
 
+
+Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 ### D1 — Une seule description du découpage, dans `docs/developer/quality-gates.md`
 
 Statut : [Décision] de conception. Le chapitre « Gardes d'architecture » reçoit une table « fichier → règles », le lanceur et les fixtures ; le dossier de capacité et les ADR y renvoient sans recopier la liste. Les ADR disent quelle règle tient la décision et où vit la politique, pas comment le code est rangé. Aucun numéro de ligne n'est cité dans la prose durable pour le garde : on cite le fichier, la section JSON ou le nom de la règle.

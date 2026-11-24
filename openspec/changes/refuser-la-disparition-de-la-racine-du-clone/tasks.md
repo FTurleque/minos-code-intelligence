@@ -11,8 +11,10 @@ Changement indépendant des autres changements du sprint 10 ; aucun ordre de fus
 
 ## 2. Décisions et couverture (AUD-SEC-11)
 
-- [ ] 2.1 AUD-SEC-11 — **(manuelle, propriétaire)** Confirmer D1 à D5 du design (recommandations : égalité avec la racine, refus dans les deux méthodes, message stable avec cause, parcours réels par `Files.walkFileTree` avec un répertoire frère supprimé, contrôle d'existence préalable conservé). Vérifier : choix consigné dans la PR.
-- [ ] 2.2 AUD-SEC-11 — **(manuelle, propriétaire)** Trancher D6. Si retenue : ajouter le préfixe `com/minos/integration/git/RemoteCloneBudget` au scope `m25-remote-distributed-indexing` de `scripts/quality/check-jacoco.py`, puis vérifier `python scripts/quality/check-jacoco.py --self-test` (option déclarée `scripts/quality/check-jacoco.py:549`) et le scope vert sur les rapports CI Linux et Windows. Sinon : nommer l'écart (classe hors scope JaCoCo) dans `docs/architecture/diagrams/capacites/analyse-git.md`, section « Écarts » ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 2.1 AUD-SEC-11 — **(manuelle, propriétaire)** Confirmer D1 à D5 du design (recommandations : égalité avec la racine, refus dans les deux méthodes, message stable avec cause, parcours réels par `Files.walkFileTree` avec un répertoire frère supprimé, contrôle d'existence préalable conservé). Vérifier : choix consigné dans la PR.
+  - Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
+- [x] 2.2 AUD-SEC-11 — **(manuelle, propriétaire)** Trancher D6. Si retenue : ajouter le préfixe `com/minos/integration/git/RemoteCloneBudget` au scope `m25-remote-distributed-indexing` de `scripts/quality/check-jacoco.py`, puis vérifier `python scripts/quality/check-jacoco.py --self-test` (option déclarée `scripts/quality/check-jacoco.py:549`) et le scope vert sur les rapports CI Linux et Windows. Sinon : nommer l'écart (classe hors scope JaCoCo) dans `docs/architecture/diagrams/capacites/analyse-git.md`, section « Écarts » ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+  - Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 
 ## 3. Clôture
 

@@ -140,6 +140,8 @@ Aucune donnée ni sortie ne change ; retour arrière par revert.
 
 ## Décisions
 
+
+Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 ### D1 — Mesurer d'abord, corriger ensuite [Question, recommandation : mesurer d'abord]
 
 Options :

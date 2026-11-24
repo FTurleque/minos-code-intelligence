@@ -189,6 +189,8 @@ sequenceDiagram
 
 ## Décisions
 
+
+Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 ### D1 — Sort de `compositionRoot()` et des 15 accesseurs typés moteur [Proposition, attend le propriétaire ; objet d'ARCH-0087 § 2]
 
 | Option | Appelants à migrer | Tests à déplacer | Gates littéraux | Effet sur ARCH-0087 |

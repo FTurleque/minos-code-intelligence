@@ -74,6 +74,8 @@ Non mesuré : la durée de `MainWiringTest` en CI (Linux et Windows) ; aucun tes
 
 ## Décisions
 
+
+Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 ### D1 — La liste attendue est l'ensemble des `check_*` des six modules, pas les appels de `run_rules` [Proposition, recommandation]
 
 `MainWiringTest` calcule l'ensemble des fonctions `check_*` appelables de `_MODULE`, `BOUNDARY_POLICY`, `ADAPTERS`, `RATCHETS`, `PACKAGES` et `DOCUMENTS`, avec le même calcul qu'`EveryRuleHasATest` (`test_check_module_boundaries.py:407-409`), partagé plutôt que recopié. Il ouvre un sous-test par nom. Chaque nom doit être un global de `_MODULE` : sinon `main()` ne peut pas l'appeler, et le sous-test échoue en nommant la fonction. Une constante `RULES_NOT_RUN_BY_MAIN` (dictionnaire nom → raison) accueille une fonction `check_*` qui ne serait pas une règle de `main()`. Elle est vide à la livraison ; une entrée qui désigne une fonction absente, ou exécutée par `main()`, fait échouer le test (cliquet).

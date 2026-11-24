@@ -11,7 +11,8 @@ Changement indépendant des autres changements du sprint 10 ; aucun ordre de fus
 
 ## 2. Décision (AUD-PERF-15)
 
-- [ ] 2.1 AUD-PERF-15 — **(manuelle, propriétaire)** Sur le relevé de 1.2, confirmer D1 (mesurer d'abord), le seuil de D3 (250 ms recommandés) et la forme de D4 (B recommandée) ; dire si le groupe 3 est fait. Vérifier : choix consigné dans la PR et dans « Décisions » du design ; si le seuil n'est pas franchi, le groupe 3 est marqué « sans objet » avec la mesure pour preuve.
+- [x] 2.1 AUD-PERF-15 — **(manuelle, propriétaire)** Sur le relevé de 1.2, confirmer D1 (mesurer d'abord), le seuil de D3 (250 ms recommandés) et la forme de D4 (B recommandée) ; dire si le groupe 3 est fait. Vérifier : choix consigné dans la PR et dans « Décisions » du design ; si le seuil n'est pas franchi, le groupe 3 est marqué « sans objet » avec la mesure pour preuve.
+  - Décision du propriétaire du 2026-11-24 : les recommandations de ce design sont retenues.
 
 ## 3. Correction, seulement si 2.1 la déclenche (AUD-PERF-15)
 
