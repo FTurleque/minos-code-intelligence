@@ -41,7 +41,8 @@ Changement indépendant des autres changements du sprint 10 ; aucun ordre de fus
 
 - [x] 6.1 AUD-PERF-15 — Mettre à jour la matrice de traçabilité du design en nommant les preuves manquantes (CI, mesures manuelles, groupe 3 sans objet le cas échéant) ; aucune ligne n'affirme une couverture sans preuve.
 - [x] 6.2 AUD-PERF-15 — Valider : `openspec validate --all --strict` et `python .claude/scripts/run_gates.py`.
-- [ ] 6.3 AUD-PERF-15 — Après archivage, ajouter à `docs/architecture/diagrams/capacites/exploration-semantique.md` (section Traçabilité, près de `:299`) les lignes des deux exigences ajoutées avec leurs tests, et un écart pour toute mesure non faite (snapshot réel, Linux, PostgreSQL). Vérifier : `python scripts/docs/check-capability-dossiers.py` vert.
+- [x] 6.3 AUD-PERF-15 — Après archivage, ajouter à `docs/architecture/diagrams/capacites/exploration-semantique.md` (section Traçabilité, près de `:299`) les lignes des deux exigences ajoutées avec leurs tests, et un écart pour toute mesure non faite (snapshot réel, Linux, PostgreSQL). Vérifier : `python scripts/docs/check-capability-dossiers.py` vert.
+  - Fait à l'archivage (deux lignes) ; `check-capability-dossiers.py` : 22 dossiers cohérents.
 - [x] 6.4 AUD-PERF-15 — Lister les documents à mettre à jour avant archivage : `docs/developer/semantic-explorer.md`, dossier de capacité, DATA-0085 si 3.4, ligne AUD-PERF-15 (et réserve AUD-PERF-14) de `docs/project/audits/2026-11-15/SUIVI.md` ; STATUS et ROADMAP ne citent pas le constat. Vérifier : chacun fait ou nommé comme reste.
   - Fait : `docs/developer/semantic-explorer.md` mis à jour (5.1) ; DATA-0085 non touché (3.4 sans objet) ; restes avant archivage : dossier de capacité (6.3) et ligne AUD-PERF-15 (et réserve AUD-PERF-14) de `docs/project/audits/2026-11-15/SUIVI.md`, hors de cette PR.
 

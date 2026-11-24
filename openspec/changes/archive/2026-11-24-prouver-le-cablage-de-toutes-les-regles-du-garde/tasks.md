@@ -22,6 +22,8 @@ Tous les scripts de mutation vivent dans le scratchpad de la session et travaill
 ## 3. Clôture
 
 - [x] 3.1 AUD-TST-13 — Mettre à jour la matrice de traçabilité du design en nommant les preuves exécutées et celles qui manquent ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
-- [ ] 3.2 AUD-TST-13 — Après archivage, mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` : preuves de l'exigence modifiée (les cinq fichiers de test) et lignes des deux exigences ajoutées (`MainWiringTest`, `test_gate_runner.py`). Vérifier : `python scripts/docs/check-capability-dossiers.py` vert.
+- [x] 3.2 AUD-TST-13 — Après archivage, mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` : preuves de l'exigence modifiée (les cinq fichiers de test) et lignes des deux exigences ajoutées (`MainWiringTest`, `test_gate_runner.py`). Vérifier : `python scripts/docs/check-capability-dossiers.py` vert.
+  - Fait à l'archivage (lignes des deux exigences ajoutées) ; `check-capability-dossiers.py` : 22 dossiers cohérents.
 - [x] 3.3 AUD-TST-13 — Valider les spécifications ; vérifier : `openspec validate --all --strict` vert.
-- [ ] 3.4 AUD-TST-13 — Lister les documents à mettre à jour avant archivage : dossier de capacité (3.2) ; `docs/developer/quality-gates.md` si AUD-ARC-12 est déjà fusionné (mention de `test_gate_runner.py`) ; ligne AUD-TST-13 du suivi de l'audit `docs/project/audits/2026-11-15/`, après fusion. STATUS et ROADMAP ne citent pas le constat. Vérifier : chacun est fait ou nommé comme reste dans la PR.
+- [x] 3.4 AUD-TST-13 — Lister les documents à mettre à jour avant archivage : dossier de capacité (3.2) ; `docs/developer/quality-gates.md` si AUD-ARC-12 est déjà fusionné (mention de `test_gate_runner.py`) ; ligne AUD-TST-13 du suivi de l'audit `docs/project/audits/2026-11-15/`, après fusion. STATUS et ROADMAP ne citent pas le constat. Vérifier : chacun est fait ou nommé comme reste dans la PR.
+  - `quality-gates.md` complété par la PR #810 ; dossier fait à l'archivage ; suivi de l'audit mis à jour à l'archivage.
