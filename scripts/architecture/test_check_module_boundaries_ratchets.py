@@ -194,6 +194,11 @@ class MinosApplicationTreeTestCase(RatchetTreeTestCase):
     private GitIntelligence hidden() { return null; }
 }"""
 
+    APPLICATION_IMPORTS = ("com.minos.store.CodeKnowledgeSnapshotStore", "com.minos.git.GitIntelligence",
+                           "com.minos.hosted.HostedControlPlaneService",
+                           "com.minos.orchestration.IndexingRuntimePorts.SnapshotStager",
+                           "com.minos.orchestration.IndexerRegistry", "java.util.Optional")
+
     def setUp(self):
         super().setUp()
         for package, name in (("store", "CodeKnowledgeSnapshotStore"), ("git", "GitIntelligence"),
@@ -201,10 +206,7 @@ class MinosApplicationTreeTestCase(RatchetTreeTestCase):
                               ("orchestration", "IndexerRegistry")):
             self.write("minos-engine", f"com.minos.{package}", name, f"public interface {name} {{ }}")
         self.write("minos-application", "com.minos.application", "MinosApplication", self.APPLICATION,
-                   ["com.minos.store.CodeKnowledgeSnapshotStore", "com.minos.git.GitIntelligence",
-                    "com.minos.hosted.HostedControlPlaneService",
-                    "com.minos.orchestration.IndexingRuntimePorts.SnapshotStager",
-                    "com.minos.orchestration.IndexerRegistry", "java.util.Optional"])
+                   self.APPLICATION_IMPORTS)
 
     def surface(self, module, name, body, imports=()):
         self.write(module, f"com.minos.{module.removeprefix('minos-')}", name, body, imports)
@@ -286,15 +288,11 @@ class MinosApplicationAccessorRuleTest(MinosApplicationTreeTestCase):
         self.write("minos-application", "com.minos.application", "Other", "final class Other { }")
         self.refused(lambda: self.check({}), "A11", "MinosApplication")
 
-    def test_the_real_application_exposes_the_accessors_the_use_cases_call(self):
-        accessors = RATCHETS.minos_application_accessors()
-        for name, engine_type in (("projectRegistry", "registry.ProjectRegistry"),
-                                  ("snapshotStore", "store.CodeKnowledgeSnapshotStore"),
-                                  ("snapshotStager", "orchestration.IndexingRuntimePorts")):
-            self.assertEqual((0, engine_type), accessors[name])
-        # AUD-ARC-01: called only inside com.minos.application, so package-private and not counted.
-        for name in ("gitIntelligence", "hostedControlPlaneService", "providerCatalog", "scipArtifactImporter"):
-            self.assertNotIn(name, accessors)
+    def test_the_real_application_exposes_no_engine_accessor(self):
+        # AUD-ARC-02: the ports and the composition root are package-private; the tests of the other modules read
+        # them through MinosApplicationTestAccess, published by the test-jar of minos-application.
+        self.assertEqual({}, RATCHETS.minos_application_accessors())
+        self.assertEqual([], RATCHETS.public_composition_root_methods())
 
 
 class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
@@ -345,7 +343,40 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
     def test_the_real_list_matches_the_real_application(self):
         self.assertEqual(len(RATCHETS.MINOS_APPLICATION_ENGINE_ACCESSORS),
                          _MODULE.check_minos_application_accessors())
-        self.assertEqual(15, len(RATCHETS.MINOS_APPLICATION_ENGINE_ACCESSORS))
+        self.assertEqual(0, len(RATCHETS.MINOS_APPLICATION_ENGINE_ACCESSORS))
+
+    def test_a_public_composition_root_is_refused_and_a_package_private_one_accepted(self):
+        # AUD-ARC-02: the composition root hands out engine ports under an application type.
+        application = self.APPLICATION.replace(
+            "    private GitIntelligence hidden()",
+            "    public MinosApplicationComposer compositionRoot() { return null; }\n    private GitIntelligence hidden()")
+        self.write("minos-application", "com.minos.application", "MinosApplication", application,
+                   self.APPLICATION_IMPORTS)
+        self.refused(lambda: self.check_accessors(self.LISTED), "A11", "MinosApplication.compositionRoot",
+                     "MinosApplicationComposer")
+        self.write("minos-application", "com.minos.application", "MinosApplication",
+                   application.replace("public MinosApplicationComposer", "MinosApplicationComposer"),
+                   self.APPLICATION_IMPORTS)
+        self.assertEqual(5, self.check_accessors(self.LISTED))
+
+    def test_an_engine_accessor_reintroduced_with_an_empty_table_is_refused(self):
+        self.write("minos-engine", "com.minos.registry", "ProjectRegistry", "public interface ProjectRegistry { }")
+        self.write("minos-application", "com.minos.application", "MinosApplication",
+                   "public final class MinosApplication {\n"
+                   "    public ProjectRegistry projectRegistry() { return null; }\n}",
+                   ["com.minos.registry.ProjectRegistry"])
+        self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.projectRegistry",
+                     "registry.ProjectRegistry")
+
+    def test_an_entry_added_to_the_empty_table_is_refused(self):
+        self.write("minos-engine", "com.minos.registry", "ProjectRegistry", "public interface ProjectRegistry { }")
+        self.write("minos-application", "com.minos.application", "MinosApplication",
+                   "public final class MinosApplication {\n"
+                   "    ProjectRegistry projectRegistry() { return null; }\n}",
+                   ["com.minos.registry.ProjectRegistry"])
+        self.assertEqual(0, self.check_accessors({}))
+        self.refused(lambda: self.check_accessors({"projectRegistry": "registry.ProjectRegistry"}), "A11",
+                     "projectRegistry", "remove it")
 
     def test_the_cli_no_longer_names_the_project_path_port(self):
         self.assertNotIn("registry.ProjectPathMappings", RATCHETS.ENGINE_TYPES_NAMED_BY_SURFACE["minos-cli"])

@@ -69,6 +69,7 @@ Non mesuré : le décompte est textuel ; un appel sur une variable nommée autre
 | E7 — Le garde ne lit pas le type d'une dépendance | `check-module-boundaries.py:114-117` | ARCH-0087 § 2.3 (« admis en portée `test` seulement ») ; `SUIVI.md`, « Restes de la spécification » (lecture du type `test-jar` non tranchée) | D4 : le garde lit `<type>` et refuse le `test-jar` de `minos-application` hors portée `test` |
 | E8 — Deux scénarios de la spec de référence supposent des accesseurs réels publics | `openspec/specs/frontieres-de-modules/spec.md:606-609` (`app.snapshotStore()`), `:992-995` (« 15 accesseurs ») | Après retrait, le garde ne voit plus `snapshotStore` comme accesseur public : la compilation échoue, pas A11 (même cas que l'écart E8 du dossier `docs/architecture/diagrams/capacites/frontieres-de-modules.md:186`) | Exigences modifiées par ce changement : scénarios sur un arbre de test ; 0 accesseur |
 | E9 — Le diagramme de la composition partagée liste `providerRuntimeManager()` | `docs/developer/public-surfaces.md:11-26` | accesseur retiré du public | Groupe 4 (documentation) |
+| E10 — Le scénario « Façade réduite au HEAD » exclut de la sortie de `javap -public` « aucun type de `com.minos.orchestration` » ; l'exigence ne vise que le type de retour | `specs/frontieres-de-modules/spec.md` (scénario) ; `javap` à l'implémentation : aucune des 16 méthodes, mais `projectIndexing(UnaryOperator<IndexingRuntimePorts$IndexerExecutor>)`, méthode de cas d'usage hors périmètre (« inchangées ») dont le paramètre nomme un type du moteur | `MinosApplication.java` (`projectIndexing(UnaryOperator<IndexerExecutor>)`) | Constaté à l'implémentation, non corrigé : le cas d'usage et le `Builder` restent hors périmètre ; à l'archivage, lire le scénario sur les types de retour, ou ouvrir un changement pour le paramètre |
 
 ## Exigences couvertes
 
@@ -252,17 +253,18 @@ Aucune capacité produit nouvelle ni retirée : qualifiée à l'identique. Windo
 
 | Exigence (capacité › titre) | Scénario | Conception ou diagramme | Tâche | Test ou preuve |
 |---|---|---|---|---|
-| frontieres-de-modules › La façade ne rend ni type du moteur ni racine de composition | Façade réduite au HEAD | D1, D3, flowchart | 3.1, 3.4 | `check-module-boundaries.py` (0 accesseur) |
-| idem | Racine de composition réintroduite refusée | D4 | 2.1, 3.3 | `test_check_module_boundaries_ratchets.py`, à écrire |
-| idem | Accesseur typé moteur réintroduit refusé | D4 | 2.1, 3.3 | `test_check_module_boundaries_ratchets.py`, à écrire |
-| frontieres-de-modules › Les tests lisent un port de l'application par un accès de test | Jar livré sans accès de test | D2, Sécurité | 2.2, 3.2 | test de packaging, à écrire |
-| idem | Test d'une surface sur un home protégé | D2, séquence | 3.2 | `MinosMcpWriteProtectedHomeTest` |
-| idem | Accès de test hors portée de test refusé | D2, D4 | 2.1, 3.3 | `test_check_module_boundaries.py`, à écrire |
+| frontieres-de-modules › La façade ne rend ni type du moteur ni racine de composition | Façade réduite au HEAD | D1, D3, flowchart | 3.1, 3.4 | `check-module-boundaries.py` (« 0 public accessor(s) ») ; `scripts/architecture/test_check_module_boundaries_ratchets.py#test_the_real_application_exposes_no_engine_accessor` ; `minos-application/src/test/java/com/minos/application/MinosApplicationTestAccessTest.java#theFacadeKeepsEveryRelayedPortPackagePrivate` |
+| idem | Racine de composition réintroduite refusée | D4 | 2.1, 3.3 | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_a_public_composition_root_is_refused_and_a_package_private_one_accepted` |
+| idem | Accesseur typé moteur réintroduit refusé | D4 | 2.1, 3.3 | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_an_engine_accessor_reintroduced_with_an_empty_table_is_refused` |
+| frontieres-de-modules › Les tests lisent un port de l'application par un accès de test | Jar livré sans accès de test | D2, Sécurité | 2.2, 3.2 | `minos-app/src/test/java/com/minos/packaging/ApplicationTestAccessPackagingIT.java#neitherTheApplicationJarNorTheShadedJarCarriesTheTestAccess`, `#theTestJarOfTheApplicationCarriesTheTestAccessAndNoService` |
+| idem | Test d'une surface sur un home protégé | D2, séquence | 3.2 | `minos-mcp/src/test/java/com/minos/mcp/MinosMcpWriteProtectedHomeTest.java` ; `minos-application/src/test/java/com/minos/application/MinosApplicationTestAccessTest.java#everyRelayReturnsTheInstanceTheApplicationWasBuiltWith` |
+| idem | Accès de test hors portée de test refusé | D2, D4 | 2.1, 3.3 | `scripts/architecture/test_check_module_boundaries.py#test_the_test_jar_in_another_scope_is_refused_with_module_type_and_scope`, `#test_the_test_jar_in_test_scope_is_accepted`, `#test_the_real_poms_declare_the_test_jar_in_test_scope` |
 | frontieres-de-modules › Le retrait des accesseurs de la façade ne change aucune sortie publique | Goldens inchangés ; Refus distant conservé | Vérification | 3.4 | caractérisation, `LocalRemoteIndexOperationsRefusalTest` |
-| frontieres-de-modules › Les accesseurs de MinosApplication typés moteur sont tenus par un cliquet (modifiée) | Table vide au HEAD ; Entrée ajoutée refusée ; refus existants | D4 | 3.3 | `test_check_module_boundaries_ratchets.py#test_the_real_list_matches_the_real_application` |
+| frontieres-de-modules › Les accesseurs de MinosApplication typés moteur sont tenus par un cliquet (modifiée) | Table vide au HEAD ; Entrée ajoutée refusée ; refus existants | D4 | 3.3 | `scripts/architecture/test_check_module_boundaries_ratchets.py#test_the_real_list_matches_the_real_application`, `#test_an_entry_added_to_the_empty_table_is_refused`, `#test_an_entry_without_a_public_accessor_is_refused`, `#test_a_surface_reaching_the_composition_root_is_refused` |
 | frontieres-de-modules › Un accesseur de MinosApplication appelé par une surface compte comme un usage du type rendu (modifiée) | trois scénarios sur arbre de test | D4, E8 | 3.3 | `test_check_module_boundaries_ratchets.py#test_an_accessor_called_without_naming_the_type_is_refused`, `#test_a_method_reference_counts_as_a_use` |
 
 ## Questions ouvertes
 
 - D1 et D2 : décisions du propriétaire attendues avant le groupe 2 (recommandations : D1 = a, D2 = i).
-- Nom de la classe d'accès de test : fixé à l'implémentation.
+- Nom de la classe d'accès de test : `MinosApplicationTestAccess` (fixé à l'implémentation).
+- Dossier de capacité : `check-capability-dossiers.py` refuse une ligne de traçabilité qui nomme une exigence absente de la spec de référence ; les lignes des trois exigences ajoutées entrent dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` à l'archivage (preuves ci-dessus), la vue de la façade réduite et les deux exigences modifiées y sont dès l'implémentation.

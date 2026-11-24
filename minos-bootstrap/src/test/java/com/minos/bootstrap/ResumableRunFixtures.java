@@ -1,6 +1,7 @@
 package com.minos.bootstrap;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRun;
@@ -41,10 +42,11 @@ public final class ResumableRunFixtures {
         Files.createDirectories(project.resolve("src"));
         Files.writeString(project.resolve("pom.xml"), "<project/>");
         Files.writeString(project.resolve("src/App.java"), "class App {}");
-        RegisteredProject registered = application.projectRegistry().registerProject(project, PROJECT_NAME);
+        RegisteredProject registered = MinosApplicationTestAccess.projectRegistry(application).registerProject(project, PROJECT_NAME);
         UUID runId = UUID.randomUUID();
         Instant checkpointAt = Instant.now().minusSeconds(120);
-        application.indexStateStore().saveRun(new IndexingRun(runId, registered.id(), IndexingRun.Status.INTERRUPTED,
+        MinosApplicationTestAccess.indexStateStore(application).saveRun(new IndexingRun(runId, registered.id(),
+                IndexingRun.Status.INTERRUPTED,
                 IndexingRun.Phase.PROVIDER_EXECUTION, checkpointAt.minusSeconds(60), Optional.of(checkpointAt.plusSeconds(30)),
                 List.of(new IndexerExecution(Language.JAVA, "scip-java",
                         application.home().resolve("runs").resolve(runId.toString()).resolve("scip-java/index.scip"),
@@ -52,7 +54,7 @@ public final class ResumableRunFixtures {
                                 IndexingMode.FULL, List.of(), checkpointAt)))),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.of("interrupted"),
                 IndexingRun.CURRENT_FORMAT_VERSION));
-        application.indexStateStore().saveProjectState(new ProjectIndexState(registered.id(),
+        MinosApplicationTestAccess.indexStateStore(application).saveProjectState(new ProjectIndexState(registered.id(),
                 ProjectIndexState.Availability.FAILED, Optional.empty(), Optional.of(runId),
                 checkpointAt.plusSeconds(30), Optional.of("interrupted"), Optional.of(runId)));
         return runId;

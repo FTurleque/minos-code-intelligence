@@ -1,6 +1,7 @@
 package com.minos.explorer;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
@@ -52,9 +53,9 @@ final class IndexedHome implements AutoCloseable {
                 StandardCharsets.UTF_8);
         String projectId;
         try (MinosApplication baseline = MinosApplication.open(home)) {
-            var project = baseline.projectRegistry().registerProject(projectRoot, PROJECT);
+            var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(projectRoot, PROJECT);
             projectId = project.id().toString();
-            baseline.snapshotStore().publish(project.id(), "snapshot-1", List.of(
+            MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), "snapshot-1", List.of(
                     symbol(projectId, "GreetingService", "src/Greeting.java"),
                     symbol(projectId, "PartingService", "src/Parting.java")), List.of(), List.of());
         }

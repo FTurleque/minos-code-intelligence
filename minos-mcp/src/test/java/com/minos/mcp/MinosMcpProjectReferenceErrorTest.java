@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -60,7 +61,7 @@ class MinosMcpProjectReferenceErrorTest {
     void aNameNotFoundBesideAnUnreadableRegistryEntryCountsThemAndSaysExistenceCannotBeEstablished() throws Exception {
         Path home = temp.resolve("home");
         try (MinosApplication application = MinosApplication.open(home)) {
-            var project = application.projectRegistry().registerProject(
+            var project = MinosApplicationTestAccess.projectRegistry(application).registerProject(
                     Files.createDirectories(temp.resolve("alpha")), "alpha");
             Path entry = home.resolve("registry").resolve("projects").resolve(project.id() + ".properties");
             Files.writeString(entry, Files.readString(entry, StandardCharsets.UTF_8)

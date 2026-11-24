@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -19,7 +20,7 @@ class MinosApplicationMcpBackendM17Test {
         Files.writeString(project.resolve("src/main.py"), "value = 1\n");
 
         MinosApplication application = MinosApplication.open(temp.resolve("home"));
-        application.projectRegistry().registerProject(project, "python-fixture");
+        MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "python-fixture");
         MinosApplicationMcpBackend backend = new MinosApplicationMcpBackend(application);
 
         String structure = backend.projectStructure("python-fixture");

@@ -1,6 +1,7 @@
 package com.minos.api;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
@@ -26,14 +27,15 @@ class LocalMinosApiResumeStatusTest {
         Path project = Files.createDirectories(temp.resolve("project"));
         Files.writeString(project.resolve("pom.xml"), "<project/>");
         MinosApplication application = MinosApplication.open(temp.resolve("home"));
-        RegisteredProject registered = application.projectRegistry().registerProject(project, "api-resume");
+        RegisteredProject registered = MinosApplicationTestAccess.projectRegistry(application).registerProject(project, "api-resume");
         UUID runId = UUID.randomUUID();
         Instant interruptedAt = Instant.now().minusSeconds(45);
-        application.indexStateStore().saveRun(new IndexingRun(runId, registered.id(), IndexingRun.Status.INTERRUPTED,
+        MinosApplicationTestAccess.indexStateStore(application).saveRun(new IndexingRun(runId, registered.id(),
+                IndexingRun.Status.INTERRUPTED,
                 IndexingRun.Phase.PROMOTION, interruptedAt.minusSeconds(60), Optional.of(interruptedAt), List.of(),
                 Optional.of("snapshot-staged"), Optional.empty(), Optional.empty(), Optional.of("interrupted"),
                 IndexingRun.CURRENT_FORMAT_VERSION));
-        application.indexStateStore().saveProjectState(new ProjectIndexState(registered.id(),
+        MinosApplicationTestAccess.indexStateStore(application).saveProjectState(new ProjectIndexState(registered.id(),
                 ProjectIndexState.Availability.FAILED, Optional.empty(), Optional.of(runId), interruptedAt,
                 Optional.of("interrupted"), Optional.of(runId)));
 
@@ -47,7 +49,7 @@ class LocalMinosApiResumeStatusTest {
         }
 
         MinosApplication fresh = MinosApplication.open(temp.resolve("home-empty"));
-        fresh.projectRegistry().registerProject(project, "api-plain");
+        MinosApplicationTestAccess.projectRegistry(fresh).registerProject(project, "api-plain");
         try (LocalMinosApi api = new LocalMinosApi(fresh)) {
             MinosApi.ProjectDto dto = api.getProject("api-plain");
             assertNull(dto.resumableRunId());

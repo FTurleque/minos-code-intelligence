@@ -1,6 +1,7 @@
 package com.minos.cli.operations;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.remote.RemoteSourceRequest;
 import com.minos.application.remote.WorkerNetworkChoice;
 import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
@@ -46,7 +47,8 @@ class LocalRemoteIndexOperationsRefusalTest {
         RemoteRepositoryMaterializer materializer = refusingMaterializer(materializeCalls);
         try (MinosApplication application = MinosApplication.builder(home).build()) {
             LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(RemoteIndexingUseCases.wired(
-                    application, materializer, application.compositionRoot().remoteIndexingRuntime(application.home())));
+                    application, materializer,
+                            MinosApplicationTestAccess.compositionRoot(application).remoteIndexingRuntime(application.home())));
             RemoteSourceRequest request = RemoteSourceRequest.of(
                     "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
 
@@ -64,7 +66,7 @@ class LocalRemoteIndexOperationsRefusalTest {
             assertEquals(0, materializeCalls.get(), "the revision must never be materialized");
             assertFalse(Files.exists(home.resolve("remote-index-leases")), "no lease may be taken");
             assertFalse(Files.exists(home.resolve("remote-cache")), "no remote cache may be created");
-            assertTrue(application.projectRegistry().listProjects().isEmpty(), "no project may be registered");
+            assertTrue(MinosApplicationTestAccess.projectRegistry(application).listProjects().isEmpty(), "no project may be registered");
         }
     }
 
@@ -114,7 +116,7 @@ class LocalRemoteIndexOperationsRefusalTest {
             assertTrue(message.contains(host.refusalReport()), message);
             assertFalse(message.contains("/") || message.contains("\\"), "no filesystem path in the refusal: " + message);
             assertFalse(Files.exists(home.resolve("remote-index-leases")), "no lease may be taken");
-            assertTrue(application.projectRegistry().listProjects().isEmpty(), "no project may be registered");
+            assertTrue(MinosApplicationTestAccess.projectRegistry(application).listProjects().isEmpty(), "no project may be registered");
         }
     }
 

@@ -1,6 +1,7 @@
 package com.minos.bootstrap.application;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -46,16 +47,20 @@ class MinosApplicationWiringTest {
     @Test
     void derivedServicesReadTheExposedStoresAndDiscovery(@TempDir Path root) throws Exception {
         try (MinosApplication application = MinosApplication.open(root.resolve("home"))) {
-            assertSame(application.snapshotStore(), field(application.semanticIndexService(), "snapshots"));
+            assertSame(MinosApplicationTestAccess.snapshotStore(application), field(application.semanticIndexService(), "snapshots"));
             assertSame(application.semanticVectorStore(), field(application.semanticIndexService(), "store"));
-            assertSame(application.snapshotStore(), field(application.hybridSearchService(), "snapshots"));
-            assertSame(application.runtimeObservationStore(), field(application.runtimeIntelligenceService(), "store"));
-            assertSame(application.snapshotStore(), field(application.architectureQuery(), "snapshotStore"));
-            assertSame(application.discoveryService(), field(application.architectureQuery(), "discoveryService"));
-            assertSame(application.discoveryService(), field(application.projectInspectionService(), "discoveryService"));
-            assertSame(application.indexStateStore(), field(application.projectInspectionService(), "stateStore"));
-            assertSame(application.snapshotStore(), field(application.projectQueryService(), "snapshotStore"));
-            assertSame(application.snapshotStore(), field(application.programGraphService(), "snapshotStore"));
+            assertSame(MinosApplicationTestAccess.snapshotStore(application), field(application.hybridSearchService(), "snapshots"));
+            assertSame(MinosApplicationTestAccess.runtimeObservationStore(application), field(application.runtimeIntelligenceService(),
+                    "store"));
+            assertSame(MinosApplicationTestAccess.snapshotStore(application), field(application.architectureQuery(), "snapshotStore"));
+            assertSame(MinosApplicationTestAccess.discoveryService(application), field(application.architectureQuery(),
+                    "discoveryService"));
+            assertSame(MinosApplicationTestAccess.discoveryService(application), field(application.projectInspectionService(),
+                    "discoveryService"));
+            assertSame(MinosApplicationTestAccess.indexStateStore(application), field(application.projectInspectionService(),
+                    "stateStore"));
+            assertSame(MinosApplicationTestAccess.snapshotStore(application), field(application.projectQueryService(), "snapshotStore"));
+            assertSame(MinosApplicationTestAccess.snapshotStore(application), field(application.programGraphService(), "snapshotStore"));
         }
     }
 

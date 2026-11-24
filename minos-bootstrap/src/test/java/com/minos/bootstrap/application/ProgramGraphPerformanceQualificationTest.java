@@ -1,6 +1,7 @@
 package com.minos.bootstrap.application;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.PositionEncoding;
@@ -54,19 +55,20 @@ class ProgramGraphPerformanceQualificationTest {
         List<String> fileIds = generateCorpus(projectRoot, fileCount);
         Path home = root.resolve("minos-home");
         MinosApplication application = MinosApplication.open(home);
-        RegisteredProject project = application.projectRegistry().registerProject(projectRoot, "m28-program-graph-scale");
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application).registerProject(projectRoot,
+                "m28-program-graph-scale");
         String snapshotId = "snapshot-m28-program-graph-scale";
-        application.snapshotStore().publish(
+        MinosApplicationTestAccess.snapshotStore(application).publish(
                 project.id(),
                 snapshotId,
                 symbols(project, snapshotId, fileIds),
                 List.of(),
                 List.of());
-        application.fingerprintStore().publish(
+        MinosApplicationTestAccess.fingerprintStore(application).publish(
                 project.id(),
                 snapshotId,
-                application.fingerprintService().capture(projectRoot));
-        application.fingerprintStore().promote(project.id(), snapshotId);
+                MinosApplicationTestAccess.fingerprintService(application).capture(projectRoot));
+        MinosApplicationTestAccess.fingerprintStore(application).promote(project.id(), snapshotId);
 
         long coldStarted = System.nanoTime();
         ProgramGraph cold = application.programGraphService().getGraph(
@@ -175,19 +177,19 @@ class ProgramGraphPerformanceQualificationTest {
             throws Exception {
         Path projectRoot = Files.createDirectories(root.resolve("project-without-fingerprint"));
         List<String> fileIds = generateCorpus(projectRoot, fileCount);
-        RegisteredProject project = application.projectRegistry()
+        RegisteredProject project = MinosApplicationTestAccess.projectRegistry(application)
                 .registerProject(projectRoot, "m28-program-graph-without-fingerprint");
         String snapshotId = "snapshot-m28-program-graph-without-fingerprint";
-        application.snapshotStore().publish(
+        MinosApplicationTestAccess.snapshotStore(application).publish(
                 project.id(), snapshotId, symbols(project, snapshotId, fileIds), List.of(), List.of());
         AtomicLong monotonicNanos = new AtomicLong(1L);
         ProgramGraphService service = new ProgramGraphService(
-                application.projectRegistry(),
-                application.snapshotStore(),
+                MinosApplicationTestAccess.projectRegistry(application),
+                MinosApplicationTestAccess.snapshotStore(application),
                 new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(
                         List.of(new RelationshipProgramGraphProvider(),
                                 new FingerprintConstrainedJavaProgramGraphProvider(
-                                        application.fingerprintStore(), monotonicNanos::get))));
+                                        MinosApplicationTestAccess.fingerprintStore(application), monotonicNanos::get))));
         String id = project.id().toString();
 
         ProgramGraph first = service.getGraph(id, QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES);

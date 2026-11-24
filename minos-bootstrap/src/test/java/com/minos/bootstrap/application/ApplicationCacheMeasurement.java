@@ -1,6 +1,7 @@
 package com.minos.bootstrap.application;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationTestAccess;
 import com.minos.application.semantic.HybridSearchService;
 import com.minos.application.semantic.LocalHashEmbeddingProvider;
 import com.minos.application.semantic.SemanticCorpusQueryService;
@@ -92,7 +93,7 @@ class ApplicationCacheMeasurement {
         try (MinosApplication application = MinosApplication.builder(home)
                 .embeddingProvider(new LocalHashEmbeddingProvider(VECTOR_DIMENSIONS)).build()) {
             long started = System.nanoTime();
-            SnapshotReadView view = application.snapshotStore().loadActiveReadView(projectId).orElseThrow();
+            SnapshotReadView view = MinosApplicationTestAccess.snapshotStore(application).loadActiveReadView(projectId).orElseThrow();
             report("snapshot.view.load.millis", millis(started));
             report("snapshot.symbols", view.descriptor().symbolCount());
             report("snapshot.occurrences", view.descriptor().occurrenceCount());
@@ -200,9 +201,10 @@ class ApplicationCacheMeasurement {
 
     private void measureProgramGraph(MinosApplication application, String id) throws Exception {
         FingerprintConstrainedJavaProgramGraphProvider fingerprints =
-                new FingerprintConstrainedJavaProgramGraphProvider(application.fingerprintStore());
-        ProgramGraphService service = new ProgramGraphService(application.projectRegistry(),
-                application.snapshotStore(), new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(
+                new FingerprintConstrainedJavaProgramGraphProvider(MinosApplicationTestAccess.fingerprintStore(application));
+        ProgramGraphService service = new ProgramGraphService(MinosApplicationTestAccess.projectRegistry(application),
+                MinosApplicationTestAccess.snapshotStore(application),
+                        new com.minos.bootstrap.DefaultMinosApplicationComposer().completeProgramGraphProviders(
                         List.of(new RelationshipProgramGraphProvider(), fingerprints)));
         long before = settledHeap();
         resetPeaks();
@@ -282,9 +284,10 @@ class ApplicationCacheMeasurement {
         String snapshot = "snapshot-measure";
         String projectId;
         try (MinosApplication baseline = MinosApplication.open(home)) {
-            var project = baseline.projectRegistry().registerProject(root, "measure-" + points);
+            var project = MinosApplicationTestAccess.projectRegistry(baseline).registerProject(root, "measure-" + points);
             projectId = project.id().toString();
-            baseline.snapshotStore().publish(project.id(), snapshot, List.of(new Symbol("Measure", "measure:Measure",
+            MinosApplicationTestAccess.snapshotStore(baseline).publish(project.id(), snapshot, List.of(new Symbol("Measure",
+                    "measure:Measure",
                     SymbolIdentityQuality.CANONICAL, projectId, "module-a", "src/Measure.java", null, SymbolKind.CLASS,
                     "Measure", "measure.Measure", "class Measure", "java",
                     new SymbolLocation("src/Measure.java", 1, 0, 3, 1, PositionEncoding.UTF16_CODE_UNITS),
