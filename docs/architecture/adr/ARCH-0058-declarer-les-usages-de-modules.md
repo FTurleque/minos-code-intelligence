@@ -3,7 +3,7 @@ id: ARCH-0058
 title: "Déclarer chaque module utilisé"
 domain: architecture
 rules: true
-files: ["scripts/architecture/check-module-boundaries.py", "minos-app/src/test/java/**/ModuleArchitectureTest.java"]
+files: ["scripts/architecture/check-module-boundaries.py", "scripts/architecture/module-boundaries.json", "minos-app/src/test/java/**/ModuleArchitectureTest.java", "minos-app/src/test/java/**/ModuleBoundaryPolicy.java"]
 ---
 
 # Déclarer chaque module utilisé
@@ -52,10 +52,10 @@ Un usage transitif échappe aux deux contrôles de frontière : un module peut d
 ## Compliance and Enforcement
 
 - Test `ModuleArchitectureTest.everyModuleOnlyUsesItsAllowedModules` (`minos-app`, build Maven des jobs `Verify`) — une classe qui utilise un module non déclaré fait échouer le build.
-- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — table `ALLOWED_DEPENDENCIES` (règle A2) et règle A11 (types de `minos-engine` utilisés par chaque surface, avec le nombre de fichiers qui les utilisent, appels d'accesseurs de `MinosApplication` compris ; table `ENGINE_TYPES_NAMED_BY_SURFACE`) ; auto-tests `test_check_module_boundaries*.py`.
+- Gate `scripts/architecture/check-module-boundaries.py` (job `invariants`) — règle A2, sur la section `allowedDependencies` de `scripts/architecture/module-boundaries.json`, et règle A11 (types de `minos-engine` utilisés par chaque surface, avec le nombre de fichiers qui les utilisent, appels d'accesseurs de `MinosApplication` compris), sur sa section `engineTypesNamedBySurface` ; auto-tests `test_check_module_boundaries*.py`.
 - Test `ModuleArchitectureTest.surfacesUseOnlyListedEngineTypes` (`minos-app`, jobs `Verify`) — règle A11 sur le bytecode (table `ENGINE_TYPES_USED_BY_SURFACE_BYTECODE`), qui voit les appels chaînés sur un résultat du moteur.
-- Règle Archgate `ARCH-0058-declarer-les-usages-de-modules.rules.ts` / `allowed-dependency-tables-identical` : refuse un module ou une arête présent dans `ALLOWED_DEPENDENCIES` (`check-module-boundaries.py`) et absent de la table `ALLOWED` de `ModuleArchitectureTest`, ou l'inverse ; contrôle propre à Archgate, aucun gate Python ne le fait (lancée par `archgate check`, pas par la CI).
-- Règle A17 de `scripts/architecture/check-module-boundaries.py` (job `invariants`) : `ModuleArchitectureTest.ALLOWED` égale `ALLOWED_DEPENDENCIES`, module par module ; la règle Archgate ci-dessus en est le second exécutant.
+- Règle Archgate `ARCH-0058-declarer-les-usages-de-modules.rules.ts` / `allowed-dependency-tables-identical` : refuse une section `allowedDependencies` absente, vide ou illisible dans `module-boundaries.json`, un `ModuleArchitectureTest` qui ne charge plus la politique par `ModuleBoundaryPolicy.load`, un lecteur `ModuleBoundaryPolicy` qui ne nomme plus `module-boundaries.json`, et toute table littérale de modules recopiée dans le test (lancée par `archgate check`, pas par la CI).
+- Règle A17 du garde de frontières (`scripts/architecture/check-module-boundaries.py`, job `invariants`) : `ModuleArchitectureTest` charge la politique par `ModuleBoundaryPolicy.load`, dont le lecteur nomme `module-boundaries.json`, et ne déclare aucune table littérale de modules, de dépendances ou de types du moteur ; la règle Archgate ci-dessus en est le second exécutant.
 - Revue : une arête ajoutée l'est dans les deux tables, dans le même changement.
 
 ## Mise en œuvre
