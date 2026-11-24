@@ -58,7 +58,23 @@ Le gate `python scripts/quality/check-single-execution.py` (auto-test `test_chec
 
 ## Gardes d'architecture (`check-module-boundaries.py`)
 
-`python scripts/architecture/check-module-boundaries.py` (job `invariants`, auto-tests `test_check_module_boundaries*.py`) applique, sans compilation :
+Le garde est un script d'entrée et des modules de règles qu'il importe, tous dans `scripts/architecture/`. La politique de frontières a une source unique, `scripts/architecture/module-boundaries.json`, qu'aucune table du garde ne recopie :
+
+| Fichier | Rôle et règles portées |
+|---|---|
+| `check-module-boundaries.py` | point d'entrée (et `--write-doc`) ; règles des POM : A2 (politique de dépendances Maven), familles hexagonales, dépendances internes cachées ; lance toutes les règles |
+| `module_boundary_policy.py` | lecture stricte de `module-boundaries.json` : modules et familles, `ALLOWED_DEPENDENCIES` dérivé de `allowedDependencies`, `groupId` du POM racine |
+| `module_boundary_sources.py` | lecture des sources Java partagée par les règles : packages, imports, commentaires et littéraux |
+| `module_boundary_adapters.py` | A2 sources, R1/R2 (isolation du backend PostgreSQL), A10, A19, A20, isolation des packages de stockage |
+| `module_boundary_ratchets.py` | A11 à A14, A16, A18 et la mesure du code concret du moteur ; `PACKAGE_ROOTS_BY_MODULE` |
+| `module_boundary_packages.py` | A3, A7, A8, A15 et la disposition des sources Java ; `KNOWN_PACKAGE_CYCLES` |
+| `module_boundary_documents.py` | A9, A17 et le document généré `diagrams/module-dependencies.md` |
+| `gate_runner.py` | lanceur partagé des gates d'architecture (le rapport sur stdout, ou une ligne d'échec sur stderr et le code 1), utilisé aussi par `check-private-io.py` |
+| `module_boundaries_testing.py` | fixtures communes des auto-tests ; ni gate ni test |
+
+Les auto-tests sont les cinq fichiers `test_check_module_boundaries*.py` (un général, puis `_packages`, `_adapters`, `_ratchets`, `_documents`), chacun lancé par le job `invariants`.
+
+`python scripts/architecture/check-module-boundaries.py` (job `invariants`) applique, sans compilation :
 
 - **A7** : la liste `MODULES` est exactement le reactor ; **A2** (ADR 0022, 0042, 0058) : politique de dépendances Maven par module, règles hexagonales (application, surfaces, module de contrat, adaptateurs, racine de composition ; aucune surface ne dépend d'une autre surface, quelle que soit la portée ; le module de contrat `minos-nexus` ne dépend que de `minos-domain` et de `minos-application`, de `minos-bootstrap` en portée test seulement, et aucun adaptateur, ni la racine de composition, ni l'application ne dépend de lui), aucune dépendance interne cachée dans un `<profile>` ou un `<dependencyManagement>`, aucune source qui nomme une classe d'adaptateur hors `minos-bootstrap` ; **A3** (ADR 0044) : un package, un module.
 - Une dépendance est **interne** parce que son `artifactId` est celui d'un module, avec le `groupId` lu dans le POM racine : un `groupId` non résolu (`${…}`) ou voisin est refusé. `sourceDirectory`, `testSourceDirectory` et les `includes`/`excludes` du compilateur sont refusés dans un `<profile>` comme à la racine (les `plugins` d'un profil restent permis).
@@ -80,7 +96,7 @@ Le gate `python scripts/quality/check-single-execution.py` (auto-test `test_chec
 - **A18, port de lecture des snapshots** ([ADR 0056](../architecture/adr/ARCH-0056-ports-de-lecture-des-snapshots.md), AUD-ARC-07) : les cas d'usage de lecture lisent le snapshot actif par `SnapshotReadView` et le port `CodeKnowledgeReader`. Dans les sources de production du reactor, seul le package `com.minos.store` de `minos-engine` nomme `InMemoryCodeKnowledgeStore` ; la vue dépréciée `SnapshotQueryView`, qui expose cet index et ses écritures, n'est nommée ou atteinte (`loadActiveQueryView(`, `queryStore()`) que par les classes de `LEGACY_SNAPSHOT_VIEW_USERS` (les deux stores de snapshots et la surcharge dépréciée de `ImpactAnalysisService`) ; `minos-application` ne nomme pas le port d'écriture `CodeKnowledgeStore`. Les mots sont cherchés dans le code privé de ses commentaires et littéraux : import simple, statique ou par joker, nom qualifié, type imbriqué et appel chaîné sans aucun nom sont vus. L'échec nomme le fichier et la ligne. La liste est un **cliquet** : une entrée dont la classe n'existe plus ou n'utilise plus l'ancienne vue échoue.
 - **A15, types publics de production sans appelant** (AUD-QUA-02) : tout type public de premier niveau d'un `src/main` du reactor doit être nommé par un autre fichier de production (même package, import du type, d'un de ses membres ou de son package, ou nom qualifié ; commentaires et chaînes ignorés), sauf s'il est nommé dans un fichier `META-INF/services` de production ou déclare `public static void main`. Une référence de test ne compte pas. Les autres figurent dans `UNREFERENCED_PRODUCTION_TYPES`, une entrée `module/package.Type` par type avec sa raison (surface publique, frontière déclarée, outil d'évaluation) ; 12 entrées à la création. La liste est un **cliquet** : une entrée sans raison, dont le type n'existe plus ou que la production nomme désormais échoue. Pour la réduire : supprimer le type, le déplacer dans les sources de test du module qui l'utilise, ou le brancher, puis retirer l'entrée. Limites assumées : réflexion, référence depuis un type lui-même sans appelant, homonyme importé d'un autre package. Le plugin `minos-intellij` n'est pas couvert.
 - **A16, découverte de services par chargeur explicite** (ADR 0042, AUD-ARC-04) : tout appel `ServiceLoader.load` des sources de production du reactor passe deux arguments, le second étant un chargeur de classes (celui du port, en pratique). La forme à un argument utilise le chargeur de contexte du thread : un hôte Java qui embarque MINOS avec un autre chargeur perdrait silencieusement un fournisseur. L'échec nomme le fichier et la ligne ; commentaires, littéraux et sources de test sont ignorés.
-- L'auto-test échoue si une fonction `check_*` du script n'est référencée par aucun test, et rejoue des mutations sur une copie des vrais POM.
+- L'auto-test échoue si une fonction `check_*` du script ou d'un de ses modules de règles n'est référencée par aucun test, et rejoue des mutations sur une copie des vrais POM.
 
 ## Garde des helpers bornés et des caches LRU (`check-bounded-helpers.py`)
 
