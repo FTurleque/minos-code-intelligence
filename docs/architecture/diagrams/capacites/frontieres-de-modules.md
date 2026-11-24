@@ -7,8 +7,9 @@ Spec de référence : [openspec/specs/frontieres-de-modules/spec.md](../../../..
 
 [Exigence] Les frontières entre les modules du reactor suivent la direction domain → engine → runtime/storage →
 adapters → application → surfaces (ARCH-0068), avec `minos-bootstrap` pour racine de composition (ARCH-0042) ;
-elles sont tenues par trois mécanismes : le garde Python `scripts/architecture/check-module-boundaries.py` et son
-auto-test, les tests ArchUnit de `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java`
+elles sont tenues par trois mécanismes : le garde Python (le script d'entrée
+`scripts/architecture/check-module-boundaries.py`, ses modules de règles et leurs auto-tests, décrits dans
+[quality-gates.md](../../../developer/quality-gates.md)), les tests ArchUnit de `minos-app/src/test/java/com/minos/app/architecture/ModuleArchitectureTest.java`
 sur le bytecode, et les règles Archgate des ADR. Les dettes encore tolérées sont des listes fermées (cliquets) qui
 ne peuvent que se resserrer. Acteurs : le développeur qui ajoute une dépendance ou déplace une classe, la CI.
 
@@ -68,8 +69,8 @@ flowchart BT
   ij -.->|"processus CLI versionné"| cli
 ```
 
-Vue simplifiée de `ALLOWED_DEPENDENCIES` (`scripts/architecture/check-module-boundaries.py:59-85`), dont une copie
-identique vit dans `ModuleArchitectureTest` (égalité contrôlée par la règle A17) ; les flèches transitives vers le
+Vue simplifiée de la section `allowedDependencies` de `scripts/architecture/module-boundaries.json`, source unique
+que le garde et `ModuleArchitectureTest` lisent sans copie (la règle A17 refuse toute table recopiée) ; les flèches transitives vers le
 domaine et le moteur sont omises. Les surfaces n'atteignent la racine de composition qu'en portée `runtime` ou
 `test`, le module de contrat en portée `test` seulement. Aucune flèche ne relie deux surfaces : `minos-cli`
 dépend du module de contrat `minos-nexus`, qui ne dépend que du domaine et de l'application. Le plugin IntelliJ
@@ -169,22 +170,22 @@ d'écriture hors du cœur. Aucune règle ne porte les étiquettes A4 à A6.
 | La façade expose les cas d'usage, construits à la demande | 3/4 (surfaces servies par la façade : recherche de `UseCase.of(` et `UseCase.viaWsl(` sans gate, garantie seulement par la compilation du reactor) | — | `minos-mcp/src/test/java/com/minos/mcp/MinosMcpWriteProtectedHomeTest.java#aSymbolQueryAnswersOnAWriteProtectedHomeAndLeavesItUntouched`, `minos-application/src/test/java/com/minos/application/UseCaseFacadeTest.java#openingAsksNoUseCaseCollaboratorOfTheCompositionRoot`, `minos-application/src/test/java/com/minos/application/UseCaseFacadeTest.java#theLocalIndexingAndTheExportAreBuiltOnceOnFirstRequest`, `minos-application/src/test/java/com/minos/application/UseCaseFacadeTest.java#noWslRouteYieldsEmptyWithoutResolvingAnything`, `minos-application/src/test/java/com/minos/application/UseCaseFacadeTest.java#aFailingMaterializerIsPropagatedAndTheNextRequestTriesAgain` | partielle |
 | L'injection des cas d'usage ne change aucune sortie publique | tous (goldens comparés par les tests de caractérisation ; `git diff --exit-code` non rejoué en CI) | — | `minos-app/src/test/java/com/minos/characterization/A2SurfaceCharacterizationTest.java#cliJsonOutputsAreUnchanged`, `minos-app/src/test/java/com/minos/characterization/A2SurfaceCharacterizationTest.java#mcpToolOutputsAreUnchanged`, `minos-app/src/test/java/com/minos/characterization/A2SurfaceCharacterizationTest.java#javaApiOutputsAreUnchanged`, `minos-cli/src/test/java/com/minos/cli/operations/LocalRemoteIndexOperationsRefusalTest.java#productionWiringRefusesBeforeAnyMaterializationOnTheCurrentHost` | couverte |
 
-Le garde et son auto-test tournent dans le job `invariants` de `pr-ci.yml` ; les tests ArchUnit dans les jobs
+Le garde et ses auto-tests tournent dans le job `invariants` de `pr-ci.yml` ; les tests ArchUnit dans les jobs
 `Verify` (Linux et Windows).
 
 ## Écarts
 
 | Id | Écart | Preuve | Suite proposée |
 |---|---|---|---|
-| E1 | La spec se contredit : une exigence veut une table des cycles connus à quatre cycles (15 packages) et un affichage « 4 cycles connus », une autre une table vide et « 0 known cycles over 0 packages » ; le code suit la seconde | `openspec/specs/frontieres-de-modules/spec.md:58`, `openspec/specs/frontieres-de-modules/spec.md:114`, `scripts/architecture/check-module-boundaries.py:1442` | [Proposition] Mettre la première exigence à l'état final (table vide) par un changement |
+| E1 | La spec se contredit : une exigence veut une table des cycles connus à quatre cycles (15 packages) et un affichage « 4 cycles connus », une autre une table vide et « 0 known cycles over 0 packages » ; le code suit la seconde | `openspec/specs/frontieres-de-modules/spec.md:58`, `openspec/specs/frontieres-de-modules/spec.md:114`, `scripts/architecture/module_boundary_packages.py` (`KNOWN_PACKAGE_CYCLES`) | [Proposition] Mettre la première exigence à l'état final (table vide) par un changement |
 | E2 | La spec écrit « 14 modules » dans trois exigences et « 13 modules » dans le scénario du stockage réuni ; le reactor et `MODULES` comptent 14 modules, seul le « 13 » est faux | `pom.xml`, `scripts/architecture/module-boundaries.json` (section `modules`) | Le scénario modifié par `aligner-la-prose-d-architecture-sur-le-code` n'écrit plus de nombre : il se lit dans la liste des modules |
 | E3 | Une exigence parle de quatre découvertes de service de production ; le test en affirme cinq | `scripts/architecture/test_check_module_boundaries.py` (`test_the_real_tree_passes_a_loader_at_every_site`) | [Proposition] Corriger le compte ou ne plus l'écrire dans la spec |
-| E4 | Le scénario « Décomptes du cliquet » attend `minos-api=14, minos-cli=15, minos-mcp=4, minos-nexus=6` ; le garde en est à 3, 4, 1 et 0, avec un autre format d'affichage : le scénario échouerait tel qu'écrit | `openspec/specs/frontieres-de-modules/spec.md:524`, `scripts/architecture/check-module-boundaries.py:561-584` | [Proposition] Décrire le cliquet sans compte figé (il ne fait que baisser) |
+| E4 | Le scénario « Décomptes du cliquet » attend `minos-api=14, minos-cli=15, minos-mcp=4, minos-nexus=6` ; le garde en est à 3, 4, 1 et 0, avec un autre format d'affichage : le scénario échouerait tel qu'écrit | `openspec/specs/frontieres-de-modules/spec.md:524`, `scripts/architecture/module-boundaries.json` (section `engineTypesNamedBySurface`) | [Proposition] Décrire le cliquet sans compte figé (il ne fait que baisser) |
 | E5 | L'exemple de type du moteur « déjà listé » pour la CLI (`io.PrivateLocalStorage`) est sorti de la liste ; le test s'appuie sur un autre type | `openspec/specs/frontieres-de-modules/spec.md:361` | [Proposition] Mettre l'exemple à jour |
 | E6 | Un gate cité par une exigence (`check-polyglot-provider-consistency.py`) n'apparaît dans aucun workflow | `scripts/quality/check-polyglot-provider-consistency.py` | [Question] Gate orphelin à câbler ou à retirer ? |
 | E7 | Le test du diagnostic de l'hôte n'affirme pas l'un des trois types que la spec cite (`runtime.HostCommandLocator`) | `scripts/architecture/test_check_module_boundaries.py` (`test_the_cli_no_longer_uses_the_host_mechanisms_of_the_engine`) | [Proposition] Compléter le test |
 | E8 | Trois scénarios supposent des accesseurs de `MinosApplication` encore publics ; ils sont désormais privés au package : c'est la compilation qui échoue, pas la règle A11 | `minos-application/src/main/java/com/minos/application/MinosApplication.java:299`, `minos-application/src/main/java/com/minos/application/MinosApplication.java:318` | [Proposition] Reformuler les scénarios |
-| E9 | La spec exige une raison écrite pour chaque entrée de la liste A11 ; ce ne sont que des commentaires, non contrôlés (contrairement aux raisons A13) | `scripts/architecture/check-module-boundaries.py:562-575` | [Proposition] Contrôler les raisons A11 comme celles d'A13 |
+| E9 | La spec exige une raison écrite pour chaque entrée de la liste A11 | `scripts/architecture/module-boundaries.json` (section `engineTypesNamedBySurface`), `scripts/architecture/module_boundary_policy.py` (lecture stricte) | Clos : chaque entrée A11 porte une `reason` non vide, contrôlée à la lecture de la politique (AUD-ARC-04) |
 
 ## Questions ouvertes
 
