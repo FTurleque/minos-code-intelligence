@@ -1,13 +1,13 @@
 ---
 name: audit-2026-11-15-clos
-description: Audit 2026-11-15 clos le 2026-11-19 (8 sprints fusionnés et archivés) ; restes manuels, groupe 4 d'injecter reporté ; pièges CI et fusion en série
+description: Audit 2026-11-15 : 10 sprints fusionnés et archivés au 2026-11-24 (sprint 10 : #809-#818, partiels DEP-05 et ARC-02 repris) ; restes manuels ; pièges CI, Dependabot et fusion en série
 metadata:
   type: project
 ---
 
-Les huit sprints de l'audit 2026-11-15 sont fusionnés et archivés au 2026-11-19 ; aucun changement OpenSpec de cet
+Les dix sprints de l'audit 2026-11-15 sont fusionnés et archivés au 2026-11-24 ; aucun changement OpenSpec de cet
 audit n'est actif. Les restes vivent dans `docs/project/audits/2026-11-15/SUIVI.md` (colonne « Statut », « Tâches
-manuelles ») et dans les tâches non cochées des archives `openspec/changes/archive/2026-11-19-*`.
+manuelles ») et dans les tâches non cochées des archives `openspec/changes/archive/2026-11-{19,20,24}-*`.
 
 **Why:** des changements fusionnés sont restés actifs des jours faute d'archivage (sprints 2, 3, 4, 7) : l'utilisateur
 attend qu'une PR fusionnée soit suivie de l'archivage OpenSpec et de la mise à jour du SUIVI sans qu'il le demande.
@@ -35,5 +35,17 @@ Sprint 9 (AUD-ARC-11, AUD-PERF-14, ouverts par la vérification du 19/11) : fusi
 (PR #799). Contournements A19 antérieurs (import générique
 `java.net.*`, homonyme d'adaptateur) proposés en session à part. La fusion d'une PR exige un accord explicite pour
 cette PR : le classificateur refuse une fusion couverte seulement par un accord donné pour d'autres PR.
+
+Sprint 10 (2026-11-24) : AUD-ARC-12, TST-13, SEC-11, PERF-15 et les partiels DEP-05 (job SonarCloud sans code de la
+PR, scanner autonome ; `minos-app` construit dans le `target/` de la racine, à lire à part) et ARC-02 (façade sans
+racine de composition, `test-jar` en portée test, ARCH-0087 `Accepted`). Maven Central répond 429 aux runners GitHub
+pendant plus de cinq minutes certains jours : les réessais de l'image Docker (#815) ne suffisent pas toujours ; un
+miroir est une décision de chaîne d'approvisionnement laissée au propriétaire. Une PR fusionnée avant les autres ne
+coûte rien si sa CI a tourné sur un `main` à jour : en tenir compte pour ordonner la série.
+
+PR Dependabot : relever l'instantané apt `UBUNTU_APT_SNAPSHOT` de `docker/Dockerfile.mcp.release` avec chaque image
+Temurin (un instantané plus ancien que l'image casse l'installation des paquets) ; remettre `mvnw.cmd` en LF quand
+Dependabot le réécrit en CRLF (le candidat Windows refuse l'arbre modifié) ; aligner sur une montée de Gradle tous
+les documents gardés par `check-toolchain-baseline.py` et `check-audit-remediation-v2.py`.
 
 Voir [[fusion-pr-sans-suppression-anticipee]] et [[pr-empilees-sans-ci]].
