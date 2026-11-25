@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligence;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
@@ -11,6 +12,7 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState;
+import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.orchestration.ScipSymbolSnapshotReport;
 import com.minos.program.analysis.TestProgramGraphProviders;
 import com.minos.registry.ProjectRegistry;
@@ -31,17 +33,20 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * An explicit SCIP import applies the retention the indexing applies, once its snapshot is published, and a busy
- * retention leaves the import successful. The application is built from in-memory ports: no adapter, no composition
- * root.
+ * retention leaves the import successful. The operations receive in-memory collaborators (LocalProjectOperations
+ * .Dependencies), without any application; one case goes through the public constructor over an application built
+ * from the same ports, without adapter or composition root.
  */
 class LocalProjectOperationsRetentionTest {
 
@@ -105,6 +110,32 @@ class LocalProjectOperationsRetentionTest {
     }
 
     @Test
+    void aMissingCollaboratorIsNamedBeforeTheRegistryIsRead() throws Exception {
+        Fixture fixture = new Fixture(temp);
+        ProjectRegistry unread = unused(ProjectRegistry.class);
+        List<UnaryOperator<Object[]>> withoutOne = List.of(
+                values -> set(values, 0, null), values -> set(values, 1, null), values -> set(values, 2, null),
+                values -> set(values, 3, null), values -> set(values, 4, null), values -> set(values, 5, null),
+                values -> set(values, 6, null));
+        List<String> names = List.of("registry", "snapshotStore", "stateStore", "inspectionService",
+                "scipArtifactImporter", "retentionService", "historyStore");
+        for (int index = 0; index < names.size(); index++) {
+            Object[] values = fixture.collaborators(unread);
+            Object[] missing = withoutOne.get(index).apply(values);
+            NullPointerException refused = assertThrows(NullPointerException.class, () -> new LocalProjectOperations(
+                    new LocalProjectOperations.Dependencies((ProjectRegistry) missing[0],
+                            (CodeKnowledgeSnapshotStore) missing[1], (IndexStateStore) missing[2],
+                            (ProjectInspectionService) missing[3], (ScipArtifactImporter) missing[4],
+                            (StorageRetentionService) missing[5],
+                            (com.minos.orchestration.IndexImportHistoryStore) missing[6])));
+            assertEquals(names.get(index), refused.getMessage());
+        }
+        assertThrows(NullPointerException.class, () -> new LocalProjectOperations(
+                (LocalProjectOperations.Dependencies) null));
+        assertTrue(fixture.events.isEmpty());
+    }
+
+    @Test
     void aFailedPublicationAppliesNoRetention() throws Exception {
         Fixture fixture = new Fixture(temp);
         fixture.publicationFailure = new IOException("SCIP index could not be decoded");
@@ -133,19 +164,50 @@ class LocalProjectOperationsRetentionTest {
             this.state = new RecordingStateStore(events);
         }
 
+        /** The import over the collaborators alone: no MinosApplication is opened. */
         ProjectOperations.IndexImportResult importScip(String snapshotId) throws IOException {
-            try (LocalProjectOperations operations = new LocalProjectOperations(application())) {
+            try (LocalProjectOperations operations = new LocalProjectOperations(dependencies())) {
                 return operations.importScip(project.id().toString(), artifact, "scip-java", "1.0", null, snapshotId);
             }
         }
 
-        MinosApplication application() throws IOException {
-            StorageRetentionService retention = (projectId, policy) -> {
+        LocalProjectOperations.Dependencies dependencies() {
+            Object[] values = collaborators(registry());
+            return new LocalProjectOperations.Dependencies((ProjectRegistry) values[0],
+                    (CodeKnowledgeSnapshotStore) values[1], (IndexStateStore) values[2],
+                    (ProjectInspectionService) values[3], (ScipArtifactImporter) values[4],
+                    (StorageRetentionService) values[5], (com.minos.orchestration.IndexImportHistoryStore) values[6]);
+        }
+
+        /** The seven collaborators, in the order of LocalProjectOperations.Dependencies. */
+        Object[] collaborators(ProjectRegistry registry) {
+            CodeKnowledgeSnapshotStore snapshots = unused(CodeKnowledgeSnapshotStore.class);
+            var history = ImportHistoryStores.inMemory();
+            ProjectInspectionService inspection = new ProjectInspectionService(history, registry, snapshots, state,
+                    new ProjectDiscoveryService(), List.of());
+            return new Object[]{registry, snapshots, state, inspection, importer(), retention(), history};
+        }
+
+        private StorageRetentionService retention() {
+            return (projectId, policy) -> {
                 events.add("retention " + state.findProjectState(projectId)
                         .flatMap(ProjectIndexState::activeSnapshotId).orElse("none"));
                 if (retentionFailure != null) throw retentionFailure;
                 return new StorageRetentionService.RetentionResult(0, 0, 0);
             };
+        }
+
+        private ScipArtifactImporter importer() {
+            return (indexFile, request, snapshots) -> {
+                if (publicationFailure != null) throw publicationFailure;
+                events.add("publish " + request.snapshotId());
+                return new ScipSymbolSnapshotReport(request.snapshotId(),
+                        1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            };
+        }
+
+        /** An application over the same ports, for the public constructor. */
+        MinosApplication application() throws IOException {
             MinosApplication.Builder builder = MinosApplication.builder(home)
                     .storageBackend(unused(StorageBackend.class))
                     .projectRegistry(registry())
@@ -154,19 +216,14 @@ class LocalProjectOperationsRetentionTest {
                     .fingerprintStore(unused(ProjectFingerprintSnapshotStore.class))
                     .semanticVectorStore(unused(SemanticVectorStore.class))
                     .runtimeObservationStore(unused(RuntimeObservationStore.class))
-                    .retentionService(retention)
+                    .retentionService(retention())
                     .indexerDescriptors(List.of())
                     .providerCatalog(unused(IndexerProviderCatalog.class))
                     .providerRuntimeManager(unused(ProviderRuntimeManager.class))
                     .snapshotLifecycle(unused(SnapshotStager.class), unused(SnapshotPromoter.class))
                     .gitIntelligence(unused(GitIntelligence.class))
                     .programGraphProviders(TestProgramGraphProviders.production())
-                    .scipArtifactImporter((indexFile, request, snapshots) -> {
-                        if (publicationFailure != null) throw publicationFailure;
-                        events.add("publish " + request.snapshotId());
-                        return new ScipSymbolSnapshotReport(request.snapshotId(),
-                                1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-                    });
+                    .scipArtifactImporter(importer());
             // Every adapter is supplied above: the composition root is never asked for one.
             builder.composer = unused(MinosApplicationComposer.class);
             return builder.build();
@@ -210,6 +267,12 @@ class LocalProjectOperationsRetentionTest {
             delegate.saveProjectState(state);
             events.add("state " + state.activeSnapshotId().orElse("none"));
         }
+    }
+
+    private static Object[] set(Object[] values, int index, Object value) {
+        Object[] copy = values.clone();
+        copy[index] = value;
+        return copy;
     }
 
     @FunctionalInterface

@@ -17,6 +17,7 @@ import com.minos.orchestration.ScipSymbolSnapshotRequest;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.domain.registry.UnreadableRegistryException;
+import com.minos.storage.StorageRetentionService;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.diagnostics.UsageException;
 
@@ -44,20 +45,54 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private final PublishedSnapshotRetention retention;
     private final IndexImportHistoryStore historyStore;
 
+    /**
+     * The collaborators of the local operations. MinosApplication assembles them from its ports
+     * (localProjectOperationsDependencies): no other class reads those ports (ADR 0087).
+     */
+    record Dependencies(
+            ProjectRegistry registry,
+            CodeKnowledgeSnapshotStore snapshotStore,
+            IndexStateStore stateStore,
+            ProjectInspectionService inspectionService,
+            ScipArtifactImporter scipArtifactImporter,
+            StorageRetentionService retentionService,
+            IndexImportHistoryStore historyStore
+    ) {
+        Dependencies {
+            Objects.requireNonNull(registry, "registry");
+            Objects.requireNonNull(snapshotStore, "snapshotStore");
+            Objects.requireNonNull(stateStore, "stateStore");
+            Objects.requireNonNull(inspectionService, "inspectionService");
+            Objects.requireNonNull(scipArtifactImporter, "scipArtifactImporter");
+            Objects.requireNonNull(retentionService, "retentionService");
+            Objects.requireNonNull(historyStore, "historyStore");
+        }
+    }
+
+    /** Opens the application of {@code home} and owns it: {@link #close()} closes it. */
     public LocalProjectOperations(Path home) throws IOException { this(MinosApplication.open(home), true); }
+
+    /** Operations over an application the caller keeps open and closes. */
     public LocalProjectOperations(MinosApplication application) { this(application, false); }
 
+    LocalProjectOperations(Dependencies dependencies) { this(dependencies, null); }
+
     private LocalProjectOperations(MinosApplication application, boolean ownsApplication) {
-        MinosApplication value = Objects.requireNonNull(application, "application");
-        this.ownedApplication = ownsApplication ? value : null;
-        this.registry = value.projectRegistry();
+        this(Objects.requireNonNull(application, "application").localProjectOperationsDependencies(),
+                ownsApplication ? application : null);
+    }
+
+    private LocalProjectOperations(Dependencies dependencies, MinosApplication ownedApplication) {
+        Dependencies value = Objects.requireNonNull(dependencies, "dependencies");
+        this.ownedApplication = ownedApplication;
+        this.registry = value.registry();
         this.projectResolver = new ProjectResolver(registry);
         this.snapshotStore = value.snapshotStore();
-        this.stateStore = value.indexStateStore();
-        this.inspectionService = value.projectInspectionService();
+        this.stateStore = value.stateStore();
+        this.inspectionService = value.inspectionService();
         this.scipArtifactImporter = value.scipArtifactImporter();
         this.retention = new PublishedSnapshotRetention(value.retentionService());
-        this.historyStore = value.indexImportHistoryStore();
+        this.historyStore = value.historyStore();
     }
 
     @Override public ProjectView addProject(Path rootPath, String displayName) throws IOException {
