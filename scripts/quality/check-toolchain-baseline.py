@@ -71,8 +71,8 @@ What this rule does not prove: that the sum is the one of the published archive 
 the first download, in the first `Verify` or plugin job), nor anything about `gradle-wrapper.jar` (setup-gradle
 validates it in the plugin jobs) or about `MVNW_REPOURL`, which changes the URL at run time but not the sum checked.
 
-The wrapper and the image each name one Maven version; current documents used to copy the wrapper's and fell behind
-at each raise. Rule:
+The wrapper and the image each name one Maven version; a current document that copies a Maven version falls behind
+at the next raise unless it names one of these two. Rule:
 
 14. In the closed list MAVEN_DOCUMENTS (status, roadmap, toolchain policy, code audit method, Docker runtime page,
     supply chain page), every Maven version written (`Maven X.Y.Z`, `apache-maven-X.Y.Z`, or `X.Y.Z` after `wrapper`
