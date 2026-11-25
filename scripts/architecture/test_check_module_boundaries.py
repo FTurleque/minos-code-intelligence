@@ -3,17 +3,19 @@
 internal dependencies, source layout), the policy source module-boundaries.json and the wiring of main().
 
 Each case builds a throw-away tree or POM and runs one rule of the real script against it. MainWiringTest derives
-every check_* function of the gate and of its rule modules, rather than copying a list, and proves that main() runs
-each of them and that the error of each turns main() red (one failing spy per rule, the other rules replaying the
-results of one real run). Every check_* function is also referenced by one of the test_check_module_boundaries*.py
-files, which together cover A2, A3, A7 to A20. The repository itself is checked by running the script directly, as
-the CI does just before these self-tests.
+every check_* function of the gate and of its rule modules, rather than copying a list: the rule modules are the
+module_boundary_*.py files found on disk next to the gate, imported by name whether the gate imports them or not, and
+an empty glob fails. It proves that main() runs each of them and that the error of each turns main() red (one
+failing spy per rule, the other rules replaying the results of one real run). Every check_* function is also
+referenced by one of the test_check_module_boundaries*.py files, which together cover A2, A3, A7 to A20. The
+repository itself is checked by running the script directly, as the CI does just before these self-tests.
 """
 
 from __future__ import annotations
 
 import contextlib
 import copy
+import importlib
 import io
 import shutil
 import sys
@@ -27,8 +29,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from module_boundaries_testing import (
-    ADAPTERS, BOUNDARY_POLICY, DOCUMENTS, MODULES, PACKAGES, POM_NAMESPACE, RATCHETS, _MODULE, _MODULE_PATH, element,
-    pom_text)
+    BOUNDARY_POLICY, MODULES, POM_NAMESPACE, RATCHETS, _MODULE, _MODULE_PATH, element, pom_text)
 
 
 def scoped_graph(**dependencies: dict) -> dict[str, dict[str, str]]:
@@ -462,11 +463,51 @@ ENTRY_POINT_FUNCTIONS = {
 RULES_NOT_RUN_BY_MAIN: dict[str, str] = {}
 
 
+# The rule modules of the gate: every file of its directory that matches this glob, found on disk.
+RULE_MODULE_DIRECTORY = Path(__file__).resolve().parent
+RULE_MODULE_GLOB = "module_boundary_*.py"
+RULE_MODULE_PREFIX = "module_boundary_"
+
+
+def rule_module_names(directory: Path = RULE_MODULE_DIRECTORY) -> list[str]:
+    """The rule modules found on disk, fail-closed: an empty glob, or a module the gate has loaded that the glob does
+    not find, raises instead of reducing the rules to the names of the gate script."""
+    names = sorted(path.stem for path in directory.glob(RULE_MODULE_GLOB))
+    if not names:
+        raise AssertionError(f"no {RULE_MODULE_GLOB} file in {directory.name}: the rule modules cannot be derived")
+    loaded = sorted(name for name in sys.modules if name.startswith(RULE_MODULE_PREFIX) and name not in names)
+    if loaded:
+        raise AssertionError(f"rule modules loaded by the gate but not found by {RULE_MODULE_GLOB}: {loaded}")
+    return names
+
+
 def rule_functions() -> list[str]:
-    """Every check_* function of the gate and of the rule modules it imports, derived rather than copied."""
-    modules = (_MODULE, BOUNDARY_POLICY, ADAPTERS, RATCHETS, PACKAGES, DOCUMENTS)
+    """Every check_* function of the gate and of its rule modules, derived rather than copied.
+
+    Each rule module is imported by name: a module the gate already imports is that very module, a module it does not
+    import is loaded here, so that its check_* functions are expected too.
+    """
+    modules = [_MODULE] + [importlib.import_module(name) for name in rule_module_names()]
     return sorted({name for module in modules for name in dir(module)
                    if name.startswith("check_") and callable(getattr(module, name))})
+
+
+class RuleModulesTest(unittest.TestCase):
+    """AUD-TST-14: the rule modules are found on disk, and the derivation fails rather than shrinking silently."""
+
+    def test_the_rule_modules_are_found_on_disk(self):
+        names = rule_module_names()
+        for module in ("module_boundary_adapters", "module_boundary_documents", "module_boundary_packages",
+                       "module_boundary_ratchets"):
+            self.assertIn(module, names)
+        self.assertEqual([], [name for name in sys.modules
+                              if name.startswith(RULE_MODULE_PREFIX) and name not in names])
+        with tempfile.TemporaryDirectory() as empty:
+            with self.assertRaisesRegex(AssertionError, "cannot be derived"):
+                rule_module_names(Path(empty))
+        with mock.patch.dict(sys.modules, {"module_boundary_elsewhere": sys.modules[__name__]}):
+            with self.assertRaisesRegex(AssertionError, "module_boundary_elsewhere"):
+                rule_module_names()
 
 
 class EveryRuleHasATest(unittest.TestCase):
@@ -485,11 +526,12 @@ class MainWiringTest(unittest.TestCase):
     """main() runs every check_* function of the gate and its rule modules, and the error of each turns it red.
 
     The expected rules are every check_* function (rule_functions), not the calls main() happens to make: a call
-    removed from run_rules, a rule added to a rule module and called by nobody, or an error swallowed on the way to
-    main() fails the sub-test named after the function. One real run of main() records the result of every rule and
-    which rules were running when it was called. Then, for each rule, main() runs again with that rule replaced by a
-    spy that raises: the rules that call it (check_pom_rules for the POM rules) run for real, every other rule
-    replays its recorded result without reading the repository again. The self-test thus costs one run of the gate.
+    removed from run_rules, a rule added to a rule module and called by nobody, a rule module that the gate does not
+    import or reaches only as a module, or an error swallowed on the way to main() fails the sub-test named after the
+    function: main() can only run a rule bound to a global name of the gate script. One real run of main() records
+    the result of every rule and which rules were running when it was called. Then, for each rule, main() runs again
+    with that rule replaced by a spy that raises: the rules that call it (check_pom_rules for the POM rules) run for
+    real, every other rule replays its recorded result without reading the repository again. The self-test thus costs one run of the gate.
     """
 
     @staticmethod
