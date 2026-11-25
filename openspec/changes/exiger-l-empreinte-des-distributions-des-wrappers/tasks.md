@@ -1,0 +1,26 @@
+# Tasks
+
+Ce changement touche les mêmes fichiers que `consigner-les-pieges-des-montees-de-version` (AUD-DEP-11, AUD-DEP-12) : `scripts/quality/check-toolchain-baseline.py` et son auto-test, `.claude/skills/minos-dependency-update/SKILL.md`, `docs/developer/TOOLCHAIN_POLICY.md` et l'ADR GEN-0077. Il est fusionné **en premier** ; l'autre rebase dessus. Il ajoute aussi une exigence à `socle-d-execution`, comme `verrouiller-l-empreinte-de-maven-dans-l-image` (AUD-DEP-10) : le second fusionné complète le dossier de capacité.
+
+Toutes les mutations se font sur une copie du dépôt dans le scratchpad de la session, jamais sur le dépôt. Aucun `mvnw` n'est nécessaire.
+
+## 1. Règle 13 du gate de baseline (AUD-DEP-09)
+
+- [ ] 1.1 AUD-DEP-09 — Rouge (état actuel) : sur une copie extraite par `git archive HEAD`, supprimer les deux lignes `distributionSha256Sum`, puis, sur une autre copie, passer l'URL Maven en `http://`. Vérifier : `python scripts/quality/check-toolchain-baseline.py --root <copie>` rend 0 dans les deux cas (trou reproduit, tableau « Mutations rejouées » du design). Consigner le résultat dans la PR. Exigence : socle-d-execution › Chaque wrapper de build exige l'empreinte de sa distribution.
+- [ ] 1.2 AUD-DEP-09 — Rouge (auto-test) : dans `scripts/quality/test_check_toolchain_baseline.py`, écrire les cas : somme absente, vide, `00`, en majuscules, doublée ; URL en `http` ; URL hors de `repo.maven.apache.org/maven2/` ou de `services.gradle.org/distributions/` ; `distributionType=bin` ; fichier de propriétés Maven absent. Remplacer la fixture `distributionSha256Sum=00` (`:22`) par une somme de 64 caractères et ajouter un wrapper Maven conforme au `setUp`. Vérifier : l'auto-test échoue sur ces cas tant que la règle n'existe pas.
+- [ ] 1.3 AUD-DEP-09 — Correction : ajouter à `scripts/quality/check-toolchain-baseline.py` la règle 13 selon D1 et D2 du design (constante `MAVEN_WRAPPER`, appel depuis `check`, messages qui nomment le fichier et la ligne, échappement `\:` accepté, `\r\n` toléré, fichier absent refusé). Décrire la règle 13 et ce qu'elle ne prouve pas dans la docstring (anglais, sans numéro de jalon). Vérifier : `python scripts/quality/test_check_toolchain_baseline.py -v` vert ; `python scripts/quality/check-toolchain-baseline.py` vert sur le dépôt, compte des sites augmenté de 2 ; sur les copies de 1.1, le gate rend 1 et nomme le fichier.
+- [ ] 1.4 AUD-DEP-09 — Gates : `python scripts/quality/check-ci-wiring.py` (aucune étape ajoutée), `python scripts/quality/check-posix-script-eol.py`, `python scripts/ci/test_docker_gate.py`, `python scripts/quality/check-comment-language.py`, `python .claude/scripts/run_gates.py --fast`. Aucun scope JaCoCo.
+
+## 2. Politique, skill et ADR (AUD-DEP-09)
+
+- [ ] 2.1 AUD-DEP-09 — Rouge documentaire : relever les phrases qui affirment une somme épinglée sans la garder (`docs/developer/TOOLCHAIN_POLICY.md:20`) ou qui omettent le wrapper Maven (`TOOLCHAIN_POLICY.md:11-12`, `.claude/skills/minos-dependency-update/SKILL.md:15`). Vérifier : la liste est dans la PR.
+- [ ] 2.2 AUD-DEP-09 — Correction : `TOOLCHAIN_POLICY.md` dit que les deux sommes sont exigées par la règle 13 de `check-toolchain-baseline.py`. L'étape 5 du skill nomme le wrapper Maven : relever `distributionUrl` et `distributionSha256Sum` ensemble, jamais retirer la somme, garder `only-script`. Vérifier : `python scripts/docs/check-current-docs.py` et `python scripts/docs/product-facts.py --check` verts.
+- [ ] 2.3 AUD-DEP-09 — Après la fusion de la section 1 : compléter « Compliance and Enforcement » de l'ADR GEN-0077 par une ligne qui nomme la règle 13 de `check-toolchain-baseline.py` (décision D4, option a ; la décision de l'ADR n'est pas réécrite). Vérifier : `archgate check` vert si l'outil est disponible sur le poste, sinon le dire dans la PR ; aucun lien cassé.
+- [ ] 2.4 AUD-DEP-09 — **(manuelle)** Sur la PR, constater que le job `invariants` exécute le gate et son auto-test sous Ubuntu, et que `Verify (windows-2022)` (qui lance `mvnw.cmd`) reste vert.
+
+## 3. Clôture
+
+- [ ] 3.1 AUD-DEP-09 — Mettre à jour la matrice de traçabilité du design (preuves exécutées, preuves manquantes : exécution de `mvnw` sans somme non rejouée).
+- [ ] 3.2 AUD-DEP-09 — Après archivage, ajouter l'exigence au dossier `docs/architecture/diagrams/capacites/socle-d-execution.md` (preuve : règle 13, cas de l'auto-test). Vérifier : `python scripts/docs/check-capability-dossiers.py` vert.
+- [ ] 3.3 AUD-DEP-09 — Valider : `openspec validate --all --strict` vert.
+- [ ] 3.4 AUD-DEP-09 — Documents à mettre à jour avant archivage : `docs/developer/TOOLCHAIN_POLICY.md` (2.2), skill `minos-dependency-update` (2.2), ADR GEN-0077 (2.3), dossier de capacité (3.2), ligne AUD-DEP-09 du suivi de l'audit `docs/project/audits/2026-11-15/` (après fusion, par le coordinateur). STATUS.md:303 (« avec checksum ») devient exact sans changement de texte ; sa version de Maven relève d'AUD-DEP-12. Vérifier : chacun est fait ou nommé comme reste dans la PR.
