@@ -22,7 +22,12 @@
       "Moyenne": 2,
       "Faible": 6
     },
-    "ordre_interne": []
+    "ordre_interne": [],
+    "statuts": {
+      "Fermé avec réserve": 4,
+      "Fermé": 4
+    },
+    "fermes": 8
   },
   {
     "numero": 2,
@@ -47,7 +52,12 @@
       "Faible": 7,
       "Moyenne": 1
     },
-    "ordre_interne": []
+    "ordre_interne": [],
+    "statuts": {
+      "Fermé avec réserve": 6,
+      "Fermé": 2
+    },
+    "fermes": 8
   },
   {
     "numero": 3,
@@ -69,7 +79,12 @@
       "Moyenne": 2,
       "Faible": 3
     },
-    "ordre_interne": []
+    "ordre_interne": [],
+    "statuts": {
+      "Fermé avec réserve": 3,
+      "Fermé": 2
+    },
+    "fermes": 5
   },
   {
     "numero": 4,
@@ -90,28 +105,38 @@
       "Moyenne": 2,
       "Faible": 2
     },
-    "ordre_interne": []
+    "ordre_interne": [],
+    "statuts": {
+      "Fermé avec réserve": 4
+    },
+    "fermes": 4
   },
   {
     "numero": 5,
     "titre": "Budget mémoire et PostgreSQL",
-    "pourquoi": "Mêmes fichiers que le budget des vues (DATA-0081) : les deux constats laissés ouverts le 11/11 et les caches qui échappent au budget se traitent ensemble, après le sprint 4 qui touche les mêmes stores.",
-    "sortie": "Tout cache applicatif est soit compté dans le budget de mémoire des vues, soit plafonné par une fraction du tas écrite dans l'ADR ; la charge utile PostgreSQL est relue sur (project_id, snapshot_id, sha256) ; une vue hors cache reste comptée jusqu'à sa libération ; la zone de travail PostgreSQL du plan de requête est dimensionnée pour le nombre de JVM.",
+    "pourquoi": "Mêmes fichiers que le budget des vues (DATA-0081) : les deux constats laissés ouverts le 11/11 et les caches qui échappent au budget se traitent ensemble, après le sprint 4 qui touche les mêmes stores. Ouvert le 17/11 : AUD-DEP-08, défaut introduit par la correction d'AUD-DEP-03, court et indépendant, se traite en tête de sprint.",
+    "sortie": "Une PR qui renomme un fichier de production vers une zone exclue déclenche la qualification Docker (test de renommage dans test_docker_gate.py) ; tout cache applicatif est soit compté dans le budget de mémoire des vues, soit plafonné par une fraction du tas écrite dans l'ADR ; la charge utile PostgreSQL est relue sur (project_id, snapshot_id, sha256) ; une vue hors cache reste comptée jusqu'à sa libération ; la zone de travail PostgreSQL du plan de requête est dimensionnée pour le nombre de JVM.",
     "constats": [
+      "AUD-DEP-08",
       "AUD-PERF-04",
       "AUD-PERF-05",
       "AUD-PERF-06",
       "AUD-PERF-09"
     ],
     "charge_jours": [
-      1.75,
-      6
+      2.0,
+      7
     ],
     "composition": {
-      "Moyenne": 1,
-      "Faible": 3
+      "Faible": 4,
+      "Moyenne": 1
     },
-    "ordre_interne": []
+    "ordre_interne": [],
+    "statuts": {
+      "Fermé": 1,
+      "Fermé avec réserve": 4
+    },
+    "fermes": 5
   },
   {
     "numero": 6,
@@ -134,7 +159,12 @@
     "composition": {
       "Faible": 7
     },
-    "ordre_interne": []
+    "ordre_interne": [],
+    "statuts": {
+      "Fermé avec réserve": 6,
+      "Fermé": 1
+    },
+    "fermes": 7
   },
   {
     "numero": 7,
@@ -157,7 +187,12 @@
       "Moyenne": 2,
       "Faible": 4
     },
-    "ordre_interne": []
+    "ordre_interne": [],
+    "statuts": {
+      "Fermé avec réserve": 3,
+      "Fermé": 3
+    },
+    "fermes": 6
   },
   {
     "numero": 8,
@@ -180,6 +215,89 @@
     },
     "ordre_interne": [
       "AUD-ARC-08 avant AUD-ARC-07"
-    ]
+    ],
+    "statuts": {
+      "Fermé": 2,
+      "Fermé avec réserve": 3
+    },
+    "fermes": 5
+  },
+  {
+    "numero": 9,
+    "titre": "Reprises de la vérification du 19/11",
+    "pourquoi": "Deux défauts courts introduits ou laissés par les corrections des sprints 5 et 7, ouverts après leur clôture ; indépendants, ils se traitent avec les restes partiels AUD-DEP-05 et AUD-ARC-02, qui demeurent dans leurs sprints d'origine.",
+    "sortie": "Toute entrée retirée de la liste des adaptateurs embarqués alors que la classe nomme encore une API d'infrastructure fait échouer le garde (cas d'auto-test) ; la table de symboles de l'explorateur est libérée avec sa vue ou comptée dans le budget, prouvé par un test d'éviction.",
+    "constats": [
+      "AUD-ARC-11",
+      "AUD-PERF-14"
+    ],
+    "ordre_interne": [],
+    "charge_jours": [
+      0.5,
+      2
+    ],
+    "composition": {
+      "Faible": 2
+    },
+    "statuts": {
+      "Fermé avec réserve": 2
+    },
+    "fermes": 2
+  },
+  {
+    "numero": 10,
+    "titre": "Reprises de la vérification du 20/11",
+    "pourquoi": "Quatre défauts courts révélés par les sprints 8 et 9 et par le découpage du garde de frontières (PR #800, #802 à #804) : trois portent sur des gardes ou des tests qui disent plus qu'ils ne prouvent, un sur la mesure du correctif d'AUD-PERF-14. Indépendants entre eux, ils se traitent avec les restes partiels AUD-DEP-05 et AUD-ARC-02, qui demeurent dans leurs sprints d'origine.",
+    "sortie": "Le câblage de main() du garde de frontières est prouvé pour toutes ses règles ; la racine du clone disparue échoue (fail-closed) avec un test sur un vrai parcours ; la prose d'architecture décrit le garde découpé ; le temps d'une page de l'explorateur est mesuré avant et après le correctif.",
+    "constats": [
+      "AUD-ARC-12",
+      "AUD-TST-13",
+      "AUD-SEC-11",
+      "AUD-PERF-15"
+    ],
+    "ordre_interne": [],
+    "charge_jours": [
+      1.0,
+      4
+    ],
+    "composition": {
+      "Faible": 4
+    },
+    "statuts": {
+      "Fermé avec réserve": 3,
+      "Fermé": 1
+    },
+    "fermes": 4
+  },
+  {
+    "numero": 11,
+    "titre": "Reprises de la vérification du 25/11",
+    "pourquoi": "Onze défauts courts révélés par le sprint 10 et par les montées de version : des gardes qui disent plus qu'ils ne prouvent (A11, test-jar, câblage du garde, sommes SHA-256 des wrappers, contrôle d'empreinte de l'image Maven) et de la prose restée derrière le code (report d'ARCH-0087, frontieres-de-modules, java-api, version de Maven). Indépendants entre eux et de gravité Faible.",
+    "sortie": "Chaque garde nouvellement posé est prouvé par une mutation rouge ; la prose d'architecture, de l'API publique et de la chaîne d'approvisionnement décrit le code du HEAD.",
+    "constats": [
+      "AUD-ARC-13",
+      "AUD-ARC-14",
+      "AUD-ARC-15",
+      "AUD-ARC-16",
+      "AUD-DEP-09",
+      "AUD-DEP-10",
+      "AUD-DEP-11",
+      "AUD-DEP-12",
+      "AUD-QUA-08",
+      "AUD-SEC-12",
+      "AUD-TST-14"
+    ],
+    "ordre_interne": [],
+    "charge_jours": [
+      3.5,
+      13
+    ],
+    "composition": {
+      "Faible": 11
+    },
+    "statuts": {
+      "Ouvert": 11
+    },
+    "fermes": 0
   }
 ]

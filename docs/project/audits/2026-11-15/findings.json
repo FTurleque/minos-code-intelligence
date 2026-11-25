@@ -16,7 +16,37 @@
     "sprint": 1,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #739, ci/borner-couverture-zones-nouvelles (OpenSpec borner-la-couverture-des-zones-nouvelles, archivé)",
+    "verification": {
+      "verdict": "check-jacoco.py : un seul diff, +1 préfixe com/minos/integration/git/RemoteCloneBudget dans le scope m25-remote-distributed-indexing (scripts/quality/check-jacoco.py:223-224, AUD-SEC-11).",
+      "preuve": "check-jacoco.py : un seul diff, +1 préfixe com/minos/integration/git/RemoteCloneBudget dans le scope m25-remote-distributed-indexing (scripts/quality/check-jacoco.py:223-224, AUD-SEC-11). Planchers (line 0.70/branch 0.50, prefixMinimums) inchangés, aucun scope ni plancher retiré ou abaissé ; le scope est élargi (plus strict).",
+      "reserve": "Le gate n'a pu être rejoué : pas de rapport target/site/jacoco-aggregate/jacoco.xml (pas de Maven) donc pas de mutation rouge ni de mesure de RemoteCloneBudget contre 0.70/0.50 ; la couverture du nouveau préfixe n'est pas mesurée.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-TST-02",
@@ -39,7 +69,37 @@
       "AUD-PERF-10",
       "AUD-QUA-03"
     ],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #741, ci/executer-front-explorateur-en-test (OpenSpec executer-le-front-de-l-explorateur-en-test, archivé) ; app.js retouché par PR #781 (AUD-QUA-03, codes d'erreur)",
+    "verification": {
+      "verdict": "Tient : app.js, check-explorer-front.py, compose, cmp identiques ; check-explorer-front.py rc=0 et --self-test OK (12 cas).",
+      "preuve": "Tient : app.js, check-explorer-front.py, compose, cmp identiques ; check-explorer-front.py rc=0 et --self-test OK (12 cas).",
+      "reserve": "Pas de mutation rejouée.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ]
   },
   {
     "id": "AUD-PERF-13",
@@ -64,7 +124,40 @@
       "AUD-PERF-02",
       "AUD-PERF-03"
     ],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #740, feat/mesurer-projection-explorateur-banc (OpenSpec mesurer-la-projection-et-l-explorateur-au-banc, archivé)",
+    "verification": {
+      "verdict": "Tient au acd79cb8, réserve NON levée : le banc (semantic.json, run-semantic-benchmark.ps1, README, SemanticExplorerBenchmark.java) est identique au 182ae1df ; le test de fumée n'a changé que pour le type de code d'erreur. Aucune sortie de référence n'est consignée : les tâches 2.3, 3.1 et 3.2 restent non cochées et le suivi range encore la référence en tâche manuelle.",
+      "preuve": "diff -rq audit2/src/benchmarks audit3/src/benchmarks -> aucune différence ; minos-explorer/src/test/java/com/minos/explorer/SemanticExplorerBenchmark.java identique ; SemanticExplorerBenchmarkSmokeTest.java:179 (seul changement : ExplorerErrorCode.INTERNAL_ERROR) ; openspec/changes/archive/2026-11-15-mesurer-la-projection-et-l-explorateur-au-banc/tasks.md:15, :21, :22 `- [ ]` ; docs/project/audits/2026-11-15/SUIVI.md:27 (« reste manuel : la référence complète, PostgreSQL compris ... tâches 2.3, 3.1, 3.2 ») et :197 (« Mesures de référence : banc complet deux fois ... avant la première PR du sprint 4 ») ; les gains du sprint 4 (SUIVI.md:73-75) restent des exécutions uniques « bruitées » sur le poste.",
+      "reserve": "La référence avant sprint 4 n'existe toujours pas (ni exécution complète avec PostgreSQL, ni extrait dans SUIVI.md), alors que les sprints 4 et 5 sont désormais tous fusionnés : la comparaison avant/après demandée ne peut plus être faite au commit qui précède le sprint 4 que par reconstruction. Banc non exécutable ici (PowerShell, Maven).",
+      "date": "2026-11-19",
+      "head": "acd79cb8",
+      "desaccord_suivi": "Le suivi (SUIVI.md:27) dit « Fait (PR #740, archivé, constat partiel) » et range la référence en reste manuel : conforme pour le banc, mais le critère de sortie du sprint 4 (« gain mesuré » contre une référence) n'est toujours pas tenu alors que le suivi déclare le sprint 4 « fusionné et archivé le 2026-11-19 »."
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-04",
@@ -83,7 +176,37 @@
     "sprint": 1,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #742, fix/compter-sautes-tests-plateforme (OpenSpec compter-comme-sautes-les-tests-propres-a-une-plateforme, archivé)",
+    "verification": {
+      "verdict": "Tient : check-test-platform-guards.py rc=0 (984 fichiers de test, 2 exceptions) ; --self-test SUCCESS (17 cas).",
+      "preuve": "Tient : check-test-platform-guards.py rc=0 (984 fichiers de test, 2 exceptions) ; --self-test SUCCESS (17 cas).",
+      "reserve": "Pas de mutation rejouée.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ]
   },
   {
     "id": "AUD-TST-05",
@@ -102,7 +225,39 @@
     "sprint": 1,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #743, fix/faire-echouer-preuves-verrou-muettes (OpenSpec faire-echouer-les-preuves-de-verrou-muettes, archivé)",
+    "verification": {
+      "verdict": "Tient au acd79cb8 : FileSemanticSyncConsistencyTest.java est identique au 182ae1df ; aucun assumeTrue ni stderr jeté, l'échec du fils READY reste un fail() avec code de sortie et fin de stderr. Test Java non exécuté ici.",
+      "preuve": "minos-storage/src/test/java/com/minos/storage/local/store/FileSemanticSyncConsistencyTest.java identique (cmp) ; :358-369 (awaitReady -> fail avec stderr tail) ; `grep -c 'assumeTrue\\|DISCARD'` -> 0.",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-07",
@@ -121,7 +276,39 @@
     "sprint": 1,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #743, fix/faire-echouer-preuves-verrou-muettes (OpenSpec faire-echouer-les-preuves-de-verrou-muettes, archivé)",
+    "verification": {
+      "verdict": "Tient au acd79cb8 : ProjectLeaseOwnershipTest.java et SnapshotProjectLeaseTest.java sont identiques au 182ae1df ; l'assertion du bail toujours tenu est en place et aucun assertTrue(true) ne subsiste. Tests Java non exécutés ici.",
+      "preuve": "minos-storage/src/test/java/com/minos/storage/local/orchestration/ProjectLeaseOwnershipTest.java:147-148 (awaitParkedIn puis `assertEquals(1, acquired.getCount(), \"a contender must not get a lease its owner still holds\")`) ; SnapshotProjectLeaseTest.java identique (cmp) ; `grep -c 'assertTrue(true)'` sur les deux fichiers -> 0 et 0.",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-09",
@@ -140,7 +327,37 @@
     "sprint": 1,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #738, ci/doter-chaque-gate-d-un-auto-test (OpenSpec doter-chaque-gate-d-un-auto-test, archivé)",
+    "verification": {
+      "verdict": "Tient : check-ci-wiring.py rc=0 (58 auto-tests câblés dans invariants) ; pr-ci.yml:179-180 ajoute le câblage de test_gate_runner.py.",
+      "preuve": "Tient : check-ci-wiring.py rc=0 (58 auto-tests câblés dans invariants) ; pr-ci.yml:179-180 ajoute le câblage de test_gate_runner.py.",
+      "reserve": "Réserve du 20/11 non levée ; pas de mutation rouge rejouée.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-DEP-02",
@@ -159,7 +376,37 @@
     "sprint": 1,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #737, build/epingler-fins-de-ligne-posix (OpenSpec epingler-les-fins-de-ligne-des-scripts-posix, archivé)",
+    "verification": {
+      "verdict": "Tient : gitattributes, check-posix-script-eol.py, cmp identiques ; --self-test SUCCESS (13 cas).",
+      "preuve": "Tient : gitattributes, check-posix-script-eol.py, cmp identiques ; --self-test SUCCESS (13 cas). Le script sans dépôt Git échoue rc=1 (copie sans .git) : non rejoué avec git. maven-wrapper.properties change (Maven 3.10.1 -> 3.10.2, URL + distributionSha256Sum renseignés) : empreinte épinglée conservée mais non vérifiée hors réseau.",
+      "reserve": "Pas de mutation rejouée (gate identique à la version du 20/11). Remise à niveau du clone principal et des worktrees du mainteneur : non vérifiable ici (inchangé). État `i/lf` de mvnw.cmd dans l'index du dépôt réel non vérifié (src n'est pas un dépôt git). Voir le nouveau constat : aucun gate ne garde mvnw.cmd en LF dans l'index (copie avec mvnw.cmd `i/crlf` -> check-posix-script-eol rc=0).",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-SEC-01",
@@ -178,7 +425,40 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #764, couvrir-le-clone-distant-par-l-ouverture-de-confiance (archivé) ; ADR SEC-0083 (Proposed)",
+    "verification": {
+      "verdict": "Code inchangé depuis le 17/11 (minos-integration-git identique). Seules les deux ouvertures de TrustedRepositoryOpening construisent un dépôt, et le gate passe. SEC-0083 reste Proposed, mais le choix « aucun pilote exécuté » figure maintenant dans la section « Décisions du propriétaire » du suivi. Statut du 17/11 maintenu.",
+      "preuve": "`diff -rq audit2/src/minos-integration-git/src audit3/src/minos-integration-git/src` -> aucune différence ; `grep -rn 'Git.open(\\|new FileRepositoryBuilder' minos-*/src/main` -> TrustedRepositoryOpening.java:73 et :92 seulement ; `check-remote-distributed-consistency.py` -> SUCCESS ; docs/architecture/adr/SEC-0083-filtres-git-a-la-materialisation-d-un-depot-distant.md:10 (« Proposed ... confirmation du propriétaire attendue ») ; docs/architecture/adr/README.md:88 (Proposed) ; SUIVI.md, « Décisions du propriétaire » (sprint 2 : « Aucun pilote exécuté »).",
+      "reserve": "SEC-0083 est toujours Proposed : la décision est écrite dans le suivi, l'ADR n'est pas accepté. Rapport JaCoCo agrégé (2.4) et tests Java non exécutés ici. La configuration système n'est pas couverte par un test.",
+      "date": "2026-11-19",
+      "head": "acd79cb8",
+      "desaccord_suivi": "Le suivi donne la décision tranchée au 2026-11-19, alors que SEC-0083:10 et l'index des ADR la disent encore « en attente de confirmation du propriétaire ». Les deux sources se contredisent."
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-05",
@@ -197,7 +477,39 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #763 (OpenSpec refuser-un-nom-de-secret-herite-et-une-garde-illisible, archivé) ; ProviderProcessEnvironment retouché par AUD-TST-03 (règles des deux systèmes testées partout)",
+    "verification": {
+      "verdict": "Tient au acd79cb8 : ProviderProcessEnvironment a été modifié (isSafeInheritedKey paramétrée par système pour être testée sur les deux), mais `!isDeniedName(key)` reste appliqué aux deux boucles héritées et aux variables déclarées ; le test des trois listes est identique et un test des règles de plateforme s'ajoute. Le plancher de classe passe à 0,95/0,95 avec un minimum de branches de 0,80 imposé par le gate. Tests Java non exécutés ici.",
+      "preuve": "minos-runtime-local/src/main/java/com/minos/runtime/local/process/ProviderProcessEnvironment.java:168, :211 (`allowed.test(key) && !isDeniedName(key)`), :222 ; :228-243 (isSafeInheritedKey(candidate, windows), diff limité à ce découpage) ; ProviderProcessEnvironmentInheritedSecretsTest.java identique (cmp) ; ProviderProcessEnvironmentPlatformRulesTest.java:21-25 ; scripts/quality/check-jacoco.py:254 (plancher 0,95/0,95) et :441 (TRUST_BOUNDARY_MINIMUMS 0,80).",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-QUA-05",
@@ -217,7 +529,39 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #763 (OpenSpec refuser-un-nom-de-secret-herite-et-une-garde-illisible, archivé)",
+    "verification": {
+      "verdict": "Tient au acd79cb8 : WindowsAppContainerWorkerSandboxBackend.java et WindowsOverBroadGrantGuardTest.java sont identiques au 182ae1df ; la garde échoue toujours fermée sur une valeur illisible. Tests Java non exécutés ici.",
+      "preuve": "minos-runtime-local/src/main/java/com/minos/runtime/local/sandbox/WindowsAppContainerWorkerSandboxBackend.java identique (cmp) : :769-782 (catch InvalidPathException -> return true), :790-798 (isWindowsSystemRoot) ; WindowsOverBroadGrantGuardTest.java identique : :37-61.",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-DEP-05",
@@ -236,7 +580,37 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #812, sprint 10 (archivé 2026-11-24)",
+    "verification": {
+      "verdict": "Au 75e10c68 le job sonar (.github/workflows/pr-ci.yml:593-) n'exécute plus aucun code du dépôt : plus de setup-java, ni mvnw, ni script, ni action locale ; SONAR_TOKEN n'est donné qu'à deux étapes (vérification bash inline :630, scanner :714) ; l'analyse est faite par SonarSource/sonarqube-scan-action épinglée par SHA de 40 caractères (:712, v8.5.1, vérification GPG du scanner par défaut) avec host/organisation/projectKey littéraux (:724-726).",
+      "preuve": "Au 75e10c68 le job sonar (.github/workflows/pr-ci.yml:593-) n'exécute plus aucun code du dépôt : plus de setup-java, ni mvnw, ni script, ni action locale ; SONAR_TOKEN n'est donné qu'à deux étapes (vérification bash inline :630, scanner :714) ; l'analyse est faite par SonarSource/sonarqube-scan-action épinglée par SHA de 40 caractères (:712, v8.5.1, vérification GPG du scanner par défaut) avec host/organisation/projectKey littéraux (:724-726). Le checkout PR (:601, persist-credentials false) est lu comme donnée ; une étape refuse tout sonar-project.properties de l'arbre avant l'analyse (:640-650). Trigger pull_request/push/workflow_dispatch seulement (:3-8), aucun pull_request_target ni workflow_run, permissions workflow contents: read (:10-11), pas de GITHUB_ENV/GITHUB_PATH dans pr-ci.yml, pas de cache (setup-java retiré) ; fork PR : pas de secret, l'étape :630 échoue. Gate rejoué : check-workflow-pins.py rc=0 (106 uses, 30 runners) ; 6 mutations sur copie /tmp rouges (rc=1) : SONAR_TOKEN ajouté à un step du job verify, scanner @v8 non épinglé, ./mvnw ajouté au job sonar, action locale ./ ajoutée au job sonar, contrôle sonar-project.properties retiré, host par expression, SONAR_TOKEN dans env: du job ; test_check_workflow_pins.py 108 tests OK (100 au 20/11). La règle est par job, sans liste d'exceptions (SECRET_WITH_REPOSITORY_CODE_KEPT supprimée).",
+      "reserve": "Non mesuré : exécution réelle du job sur GitHub (variable SONAR_CI_ANALYSIS_ENABLED, secret, import des 28 rapports, nombre de rapports/binaires : le contrôle d'import 'Importing N report(s)' a été retiré, remplacé par un décompte de fichiers placés avant scan) ; le SHA 70bad232... = v8.5.1 non vérifiable hors réseau. Résiduel faible : les class files et rapports JaCoCo viennent du job verify qui exécute le code de la PR (artefacts filtrés *.class / jacoco.xml, analysés par le scanner comme données ; un fichier forgé ne porte pas de code exécuté par le job mais cible un parseur ASM/XML) ; la liste d'artefacts n'est pas vérifiée par empreinte ; sonar.java.libraries absent (analyse sans classpath, limite déclarée). Le gate ne refuse que le nom exact sonar-project.properties (cohérent avec ce que lit le scanner). Les 13 workflows 'uses: ./' restants sont des workflows réutilisables sans secret.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Partiel"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Partiel"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Partiel"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-DEP-03",
@@ -255,7 +629,38 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #751, borner-la-qualification-docker-aux-pr-concernees (archivé le 2026-11-19) ; PR #767 (AUD-DEP-08)",
+    "verification": {
+      "verdict": "Inchangé : la règle secret/code de PR est devenue plus stricte (par job, sans exception : scripts/quality/check-workflow-pins.py find_secret_violations, remplace SECRET_WITH_REPOSITORY_CODE_KEPT).",
+      "preuve": "Inchangé : la règle secret/code de PR est devenue plus stricte (par job, sans exception : scripts/quality/check-workflow-pins.py find_secret_violations, remplace SECRET_WITH_REPOSITORY_CODE_KEPT). .claude/rules/workflows-ci.md:17 est mis à jour de façon cohérente avec le code (règle par job, SONAR_TOKEN, sonar-project.properties). Les workflows modifiés ne changent ni permissions ni triggers (diff : uniquement setup-java) ; aucun pull_request_target.",
+      "reserve": "Les tâches 3.1/3.2/1.1 notées non faites au 20/11 ne sont pas réexaminées ici (secrets Dependabot : le message de l'étape :634 le rappelle toujours). Inchangées : DOCKER_LOGIN_KEPT non réévalué (tâche 3.1), pas de secrets Dependabot Docker Hub (3.2), durées non relevées (1.1). Le SUIVI.md (sprint 10) ne les reprend pas.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-DEP-04",
@@ -274,7 +679,38 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #748, solder-les-restes-de-java-25-et-de-develop (archivé)",
+    "verification": {
+      "verdict": "Aucune ligne `java-version` hors '21' dans .github/workflows (grep -vc = 0) ; pom.xml:207 `[21,22)` ; check-toolchain-baseline SUCCESS (gradle=9.9.2, java=21) et ses 47 tests OK.",
+      "preuve": "Aucune ligne `java-version` hors '21' dans .github/workflows (grep -vc = 0) ; pom.xml:207 `[21,22)` ; check-toolchain-baseline SUCCESS (gradle=9.9.2, java=21) et ses 47 tests OK. Les montées Temurin passent de 21.0.13_9 à 21.0.13.1_2 : même majeure 21, `FROM eclipse-temurin:21…` garde la règle 6 du gate ; dependabot.yml:65-67 ignore toujours la majeure d'eclipse-temurin.",
+      "reserve": "STATUS.md:47 écrit toujours « Reste à faire : le retrait de l'installation de Java 24 dans les deux workflows de qualification A → B » alors qu'aucun workflow n'installe d'autre Java que 21 (phrase fausse, inchangée). Journal d'une qualification A -> B sans JDK 25 (1.4) non rejouable ici.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-DEP-06",
@@ -293,7 +729,37 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #748, solder-les-restes-de-java-25-et-de-develop (archivé)",
+    "verification": {
+      "verdict": "Tous les workflows ne déclarent que `branches: [main]` (grep `branches:` hors [main] = 0), dependabot.yml : 5 × target-branch main (identique), required-checks.json inchangé.",
+      "preuve": "Tous les workflows ne déclarent que `branches: [main]` (grep `branches:` hors [main] = 0), dependabot.yml : 5 × target-branch main (identique), required-checks.json inchangé. STATUS.md:15 écrit désormais « ruleset « Protect main » » (plus « main & develop ») ; R-25 est Clos (risks/register.md:42) ; check-current-docs.py SUCCESS. Les mentions restantes de `develop` dans STATUS/ROADMAP sont historiques (sprints fusionnés « dans develop »).",
+      "reserve": "docs/project/roadmap/storage-hexagonal-2026-10/README.md:7 « Partir de la tête à jour de develop, pas de main » et :113 identiques (cmp) au 20/11. `verify-ruleset.py` contre GitHub et la suppression de la branche distante non vérifiables ici (SUIVI affirme rc=0 le 2026-11-19).",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-DEP-01",
@@ -312,7 +778,38 @@
     "sprint": 2,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #750, aligner-les-compose-sur-l-absence-de-provider-en-docker (archivé)",
+    "verification": {
+      "verdict": "Inchangé sur le fond au 75e10c68 : docker/compose-mcp.prod.yaml et compose-mcp.connected.yaml identiques (cmp) à 535a5017, commentaires « indexing is refused here (SEC-0074), no provider runs » (prod.yaml:71, connected.yaml:177), `grep 'launch the providers' docker/` -> 0 ; scip-java-classpath.lock.json identique (cmp).",
+      "preuve": "Inchangé sur le fond au 75e10c68 : docker/compose-mcp.prod.yaml et compose-mcp.connected.yaml identiques (cmp) à 535a5017, commentaires « indexing is refused here (SEC-0074), no provider runs » (prod.yaml:71, connected.yaml:177), `grep 'launch the providers' docker/` -> 0 ; scip-java-classpath.lock.json identique (cmp). L'image admin garde toolchains et scip-java avec la raison écrite (Dockerfile.mcp.release:272-275, R-13) ; le diff n'y ajoute que le préchargement `until cs fetch` borné à 5 essais, exit 1 au dernier (:282-290), et ARG SCIP_JAVA_VERSION=0.13.2 est inchangé (:89). Les trois FROM temurin jdk/jre portent tag 21.0.13.1_2 + digest identiques entre Dockerfile.mcp et Dockerfile.mcp.release (:26, :37, :73) ; check-image-pins rc=0.",
+      "reserve": "Le préchargement `cs fetch` ne vérifie aucune empreinte : le graphe transitif de scip-java reste hors verrou (R-13, assumé et écrit). Messages d'assertion de M29DockerAdministrationContractTest.java:52,55,64 toujours « ephemeral indexing » / « admin/indexing » (messages seulement). Plan d'administration non relu dans un journal de qualification (1.3, non rejouable ici). Aucun build Docker possible ici (pas de démon) : le comportement de la boucle `cs fetch` n'est pas mesuré.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-QUA-02",
@@ -331,7 +828,38 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #757 (OpenSpec tracer-les-echecs-internes-des-surfaces) ; PR #762 (explorateur) ; ADR SEC-0084 (Accepted)",
+    "verification": {
+      "verdict": "check-private-io.py modifié par #804 : seul changement fonctionnel, la fin de main() passe par gate_runner.run_gate(label, run_checks) (check-private-io.py:540-556, gate_runner.py:17-28) ; diff avec acd79cb8 limité à cette extraction.",
+      "preuve": "check-private-io.py modifié par #804 : seul changement fonctionnel, la fin de main() passe par gate_runner.run_gate(label, run_checks) (check-private-io.py:540-556, gate_runner.py:17-28) ; diff avec acd79cb8 limité à cette extraction. Copie saine : rc=0 « SUCCESS (sources=708, allowlisted-occurrences=54, forbidden=21, primitives=4) », identique à la sortie du 19/11 ; `--inventory` produit le même md5 qu'avant ; argument inconnu -> rc=1 ; test_check_private_io.py 62 OK dont test_main_reports_failure_and_success (:670-676, rc 1 puis 0). Mutations dans minos-application : Files.writeString -> rc=1 « not in the allowlist » ; exception construite avec p.toAbsolutePath() -> rc=1 « message(Path) » ; FileChannel.open/lock -> rc=1.",
+      "reserve": "Réserve du 19/11 inchangée (journal opt-in, non supporté en Docker ni dans la distribution WSL, ADR SEC-0084:82-84 ; CLI limitée au cadre commun ; tâche 5.4 sur distribution WSL non faite). gate_runner.py n'a pas d'auto-test propre : il n'est exercé qu'au travers de main() des deux gardes. Tests Java non exécutés.",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-QUA-01",
@@ -350,7 +878,40 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #759 (distinguer-l-erreur-d-usage-de-l-echec-interne) et PR #762 (explorateur), archivés",
+    "verification": {
+      "verdict": "Inchangé depuis le 17/11 (MinosApiSupport.java identique). UsageException reste le seul type rendu comme erreur d'usage par les trois surfaces dans execute. Le reste localisé est toujours là : l'ouverture d'une façade de l'API Java traduit toute IllegalArgumentException en INVALID_REQUEST.",
+      "preuve": "diff 182ae1df..acd79cb8 de minos-api/src/main/java/com/minos/api/MinosApiSupport.java -> vide ; MinosApiSupport.java:148-151 (`catch (IllegalArgumentException exception)` -> LOGGER WARNING diagnosticSummary puis publicFailure(ErrorCode.INVALID_REQUEST, exception)).",
+      "reserve": "MinosApiSupport.openApplication (MinosApiSupport.java:148-151) traduit encore toute IllegalArgumentException levée à l'ouverture en INVALID_REQUEST, journalisée par sa seule classe, sans trace. L'écart à l'action est voulu par le code (commentaire :149), sans décision écrite.",
+      "date": "2026-11-19",
+      "head": "acd79cb8",
+      "desaccord_suivi": "SUIVI.md:58 ne mentionne pas le reste de MinosApiSupport.openApplication."
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-02",
@@ -369,7 +930,37 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #762 (OpenSpec fiabiliser-la-surface-de-l-explorateur, archivé)",
+    "verification": {
+      "verdict": "Tient : ExplorerServer, docker/compose-mcp.connected.yaml identiques ; check-compose-limits.py rc=0.",
+      "preuve": "Tient : ExplorerServer, docker/compose-mcp.connected.yaml identiques ; check-compose-limits.py rc=0.",
+      "reserve": "Pas de mutation rejouée.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ]
   },
   {
     "id": "AUD-SEC-03",
@@ -388,7 +979,39 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #762 (OpenSpec fiabiliser-la-surface-de-l-explorateur, archivé)",
+    "verification": {
+      "verdict": "Tient au acd79cb8 : le diff d'ExplorerServer.java remplace seulement les chaînes de code d'erreur par ExplorerErrorCode (ARCH-0086), sans déplacer de ligne ; la machine à états des lectures abandonnées et la borne de 8 sont inchangées, ExplorerAbandonedReadsTest.java est identique. Réserve NON levée : aucun statement_timeout ni délai réseau inférieur au délai de requête n'a été ajouté.",
+      "preuve": "minos-explorer/src/main/java/com/minos/explorer/ExplorerServer.java:49-52 (4 créneaux, borne 8, DEFAULT_REQUEST_TIMEOUT 30 s), :302-310, :315-343, :377-415 (inchangés hors codes) ; ExplorerAbandonedReadsTest.java identique (cmp) ; `grep -rn 'statement_timeout\\|setQueryTimeout' --include=*.java` hors tests -> aucune occurrence ; minos-storage/src/main/java/com/minos/storage/postgresql/support/PostgresConnectionFactory.java:25 (DEFAULT_SOCKET_TIMEOUT_SECONDS = 120) et :572, identiques au 182ae1df.",
+      "reserve": "Pas de statement_timeout ni de délai réseau sous le délai de requête (choix écrit, SUIVI.md:60). Précision : la fabrique PostgreSQL pose déjà un socketTimeout de 120 s, quatre fois le délai de requête de 30 s ; une lecture PostgreSQL bloquée sur le réseau rend donc son fil au plus tard après ~120 s, mais une requête serveur lente qui échange des octets n'est pas bornée. Le reste de la réserve du 17/11 tient (borne non atomique, au plus 11 ; lecture réellement bloquée non observée).",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-04",
@@ -407,7 +1030,38 @@
     "sprint": 3,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #762 (OpenSpec fiabiliser-la-surface-de-l-explorateur, archivé)",
+    "verification": {
+      "verdict": "Tient au 535a5017.",
+      "preuve": "Tient au 535a5017. ExplorerServer.segments (ExplorerServer.java:432-441, test `\".\".equals(decoded) || \"..\".equals(decoded)` :439) est identique à acd79cb8 (cmp), de même ExplorerUnitsTest.java, ProjectResolver.java (:76 resolve : nom ou UUID). Le seul fichier cité qui a changé est SemanticCorpusQueryService : la borne du stableKey y est toujours là (requireStableKey :415-419, 8 Kio UTF-8 :44) ; aucun segment n'atteint le système de fichiers.",
+      "reserve": "",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-01",
@@ -428,7 +1082,39 @@
       "AUD-PERF-13"
     ],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #760, retirer-le-comptage-par-page-des-lectures-postgresql (archivé)",
+    "verification": {
+      "verdict": "Code inchangé depuis le 17/11 (PostgresSemanticReadQueries, PostgresSemanticWriteQueries, PostgresSchemaMigrator identiques). La décision D1 (colonne document_count, migration 6, retour arrière non transparent) est maintenant écrite par le propriétaire (tasks.md 1.3 archivé, 2026-11-17) et reprise dans le suivi.",
+      "preuve": "diff 182ae1df..acd79cb8 des trois fichiers -> vide ; openspec/changes/archive/2026-11-17-retirer-le-comptage-par-page-des-lectures-postgresql/tasks.md:7 (« Décision du propriétaire (2026-11-17) : recommandations retenues. D1 ... ; seuil d'acceptation non fixé ») ; SUIVI.md « Décisions du propriétaire » (sprint 4) ; preuves de test du 17/11 inchangées (PostgresSemanticPagePlanTest.java:35-82, PostgresSchemaUpgradeFromV4Test.java:57,79).",
+      "reserve": "La mesure sur 100 000 documents et la référence sur la machine de référence restent manuelles, non faites. Seuil d'acceptation non fixé. Retour arrière non transparent, accepté par D1. Tests PostgreSQL non rejoués ici.",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-02",
@@ -449,7 +1135,39 @@
       "AUD-PERF-13"
     ],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #761, ajuster-la-projection-sur-l-echantillon-en-memoire (archivé)",
+    "verification": {
+      "verdict": "ProjectionPreparation est inchangée. SemanticProjectionService ajoute seulement le statut PROJECTION_TOO_LARGE (AUD-PERF-04). La décision D4 (arrondi float commun, METHOD_VERSION inchangée) est écrite par le propriétaire (tasks.md 1.3 archivé, 2026-11-17).",
+      "preuve": "diff 182ae1df..acd79cb8 : ProjectionPreparation.java vide ; SemanticProjectionService.java +6 lignes (TOO_LARGE :33-34, capture de ProjectionTooLargeException :139-142) ; openspec/changes/archive/2026-11-17-ajuster-la-projection-sur-l-echantillon-en-memoire/tasks.md:7 (« Décision du propriétaire (2026-11-17) : recommandations retenues. D4 ... ») ; tests du 17/11 inchangés (SemanticProjectionServiceTest.java:112-177).",
+      "reserve": "La mesure avant/après sur un index réel à 768 dimensions, construit par la synchronisation, n'est pas faite (jeux synthétiques, une exécution). Seuil non fixé. Repli en flux à 43 parcours sous un budget abaissé. Nouveau : sous la part de 1 % du tas (environ 10,8 Mio sous le tas Docker par défaut), une projection de plus d'environ 65 000 à 88 000 points est refusée à la lecture (PROJECTION_TOO_LARGE, DATA-0085 Risques).",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-03",
@@ -470,7 +1188,38 @@
       "AUD-PERF-13"
     ],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #758, paginer-l-index-semantique-local-sans-le-charger (archivé) ; PR #777 (part du tas)",
+    "verification": {
+      "verdict": "Réserves du 19/11 inchangées.",
+      "preuve": "Réserves du 19/11 inchangées. FileSemanticVectorStore.java, SemanticVectorStore.java et FileSemanticVectorStoreWalkedReadsTest ne figurent pas dans diff-names.txt ; le seul changement du service (SemanticCorpusQueryService.java) retire la table de symboles et laisse intactes la pagination par lots (batch :146, MAX_PAGE_SIZE :41) et le balayage borné (:48, :164). DATA-0085 point 19 écarte toujours float[] et reste Proposed (DATA-0085:9).",
+      "reserve": "Mêmes réserves qu'au 19/11 (reprise par (taille, mtime), voisins à deux parcours, mesure de référence non faite, partie float[] écartée par un ADR Proposed ; décodage complet à chaque recherche sous la part de 2 %). Aucun test rejoué.",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-10",
@@ -491,7 +1240,40 @@
       "AUD-TST-02"
     ],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #746 (OpenSpec rendre-le-survol-de-la-carte-independant-du-nombre-de-points, archivé le 2026-11-19) ; PR #747 (découpage app.js / map.js)",
+    "verification": {
+      "verdict": "Tient au acd79cb8 : map.js et map-grid.test.mjs sont identiques au 182ae1df, le gate du front (map.js et app.js) passe avec 39 tests. La réserve est réduite d'un point : le format compact est écarté par la décision D3 (« contrat des points inchangé »), que le suivi donne pour confirmée par le propriétaire le 2026-11-19.",
+      "preuve": "minos-explorer/src/main/resources/com/minos/explorer/web/map.js identique (cmp) : :35-55, :70-130, :245-262, :321-327, :366-369 ; map-grid.test.mjs identique ; scripts/quality/check-explorer-front.py identique ; `python3 -I scripts/quality/check-explorer-front.py` -> « map.js, app.js parse, 39 tests passed » ; docs/project/audits/2026-11-15/SUIVI.md:76 (« D3 confirmée, décision du propriétaire du 2026-11-19 ; reste : parcours dans un navigateur (4.2) ») et section « Décisions du propriétaire » (« toutes sont tranchées selon la recommandation ») ; openspec/changes/archive/2026-11-19-rendre-le-survol-de-la-carte-independant-du-nombre-de-points/design.md:172 (D3) ; tasks.md:22-23 (4.2 et 4.3 non cochées).",
+      "reserve": "Le chargement reste en pages séquentielles de 5 000 points (map.js:9 et :219) et le tracé linéaire ; le format compact n'est pas fait, désormais par décision D3 du propriétaire. Cette décision n'est écrite que dans SUIVI.md:76 : la table « Décisions du propriétaire » ne la nomme pas, et la tâche 4.3 qui devait la consigner est restée non cochée à l'archivage. Le parcours dans un vrai navigateur (4.2) reste manuel et non fait.",
+      "date": "2026-11-19",
+      "head": "acd79cb8",
+      "desaccord_suivi": "Le suivi dit D3 « confirmée » (SUIVI.md:76) alors que la tâche 4.3 du changement, qui porte cette confirmation, a été archivée non cochée (tasks.md:23) et que la table des décisions ne liste pas D3 du sprint 4 : la décision n'est attestée que par une ligne du suivi."
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-04",
@@ -510,7 +1292,38 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #775 (mesure 1.1) et PR #777, borner-les-caches-applicatifs-par-le-tas (archivé 2026-11-17) ; ADR DATA-0085 point 19 (Proposed)",
+    "verification": {
+      "verdict": "Les six parts HeapShare et leurs constructeurs sont inchangés (HeapShare.java, HybridSearchService, ProgramGraphService, FileSemanticVectorStore… absents de diff-names.txt).",
+      "preuve": "Les six parts HeapShare et leurs constructeurs sont inchangés (HeapShare.java, HybridSearchService, ProgramGraphService, FileSemanticVectorStore… absents de diff-names.txt). La réserve (3) du 19/11 est levée : la table de symboles (deux HashMap, poids non compté) n'existe plus, minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java ne garde que `fingerprints` (:70-71, une SHA-256 par projet, 64 projets max, :68), inscrit comme COUNT_BOUNDED avec la bonne raison (minos-app/src/test/java/com/minos/packaging/WeightedCacheInventoryTest.java:33-35, fichier inchangé) ; DATA-0085 point 19 (:56) et point final de la liste des interdits (:99, « ne pas garder une table de symboles au-delà de sa vue ») disent la même chose que le code. Les références de preuve du 19/11 (SemanticCorpusQueryService.java:79 et :405-424, test :691-701) sont devenues :70-71 / :398-413 et :612-627.",
+      "reserve": "Réserves (1), (2), (4), (5) du 19/11 maintenues : DATA-0085 toujours Proposed (DATA-0085:9) ; décodage complet d'un index vectoriel local plus lourd que sa part refait à chaque recherche ; inventaire jugé au fichier entier ; mesure 7.2 non faite (DATA-0085:154). Désaccord du suivi maintenu : SUIVI.md:89 (« une exigence refuse le décodage complet d'un index plus lourd que sa part du tas ») et SUIVI.md:196 (« Refus explicite … Oui ») contredisent toujours DATA-0085 point 19 ; SUIVI.md:89 dit aussi « symboles lus par parcours, sans index dérivé » alors que le code lit par les index de la vue. Incohérence de doc résiduelle : DATA-0085:154 écrit encore « table de l'explorateur dans `SemanticCorpusQueryService` » dans la liste des fichiers du point 19, alors que le code n'a plus de table (voir DATA-0085:56).",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-05",
@@ -529,7 +1342,39 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #769, compter-toute-vue-admise-et-lier-le-rapatriement-postgresql (archivé) ; ADR DATA-0085 point 16 (Proposed)",
+    "verification": {
+      "verdict": "La charge utile est demandée par (project_id, snapshot_id, sha256), avec les métadonnées qui ont servi à la réservation. Si aucune ligne ne revient, la réservation est libérée (try-with-resources) et la résolution reprend depuis les métadonnées, 4 tentatives au plus. Un test PostgreSQL publie une version plus lourde avant le rapatriement et vérifie que seule la version réservée est copiée. Un gate littéral garde le filtre, et une mutation le rend rouge.",
+      "preuve": "minos-storage/src/main/java/com/minos/storage/postgresql/snapshot/PostgresCodeKnowledgeSnapshotStore.java:192-243 (boucle, reserve dans try-with-resources :212, activeRow(projectId, metadata) :218), :445-462 (`ACTIVE_SNAPSHOT_FROM + \" AND s.snapshot_id=? AND s.sha256=?\"`, paramètres :452-454) ; PostgresCodeKnowledgeSnapshotStoreViewBudgetTest.java:151-165 (version plus lourde publiée avant le rapatriement : nouvelle résolution, 1 seule copie, reservedBytes = 0), :169-186, :204-217 (4 tentatives, aucune copie, aucune réservation gardée) ; scripts/remediation/check-mne.py:67-72 ; `check-mne.py` -> SUCCESS ; copie mutée sous /tmp/mne (filtre retiré de la requête) -> « MNE REMEDIATION INVARIANTS FAILED: ... missing MNE invariant: \" AND s.snapshot_id=? AND s.sha256=?\" ».",
+      "reserve": "DATA-0085 est Proposed. La mesure 2.1 n'est pas faite. Les tests PostgreSQL n'ont pas été rejoués ici (pas de build, pas de serveur).",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-06",
@@ -548,7 +1393,40 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #769, compter-toute-vue-admise-et-lier-le-rapatriement-postgresql (archivé) ; ADR DATA-0085 points 14 et 18 (Proposed)",
+    "verification": {
+      "verdict": "Une vue admise par le budget mais plus lourde que le plafond effectif du cache est retenue seule par BudgetedViewCache. Son poids entre dans weight(), donc dans residentWeightBytes du locataire, jusqu'à l'éviction du budget (evictAll -> clear), une publication du projet ou l'arrivée d'une autre vue. Aucune fuite de réservation trouvée : Reservation.close est idempotent (done), convert libère dans un finally sous le verrou du budget, et tout échec de décodage ou de copie passe par le close du try-with-resources (tests : reservedBytes = 0 après chaque issue). La seconde moitié de l'action n'est pas faite, par décision écrite : l'index des arêtes entrantes entre dans l'estimation du poids, pas dans l'invariant requireCacheCoversPersistable, et le contrat publie des seuils de relations.",
+      "preuve": "minos-storage/src/main/java/com/minos/storage/codec/BudgetedViewCache.java:55-71 (put : vue lourde retenue seule, cache vidé), :73-84, :87-91 (weight = cache + held) ; QueryViewMemoryBudget.java:202-215 (convert, libération en finally), :290-318 (Reservation, done) ; PostgresCodeKnowledgeSnapshotStore.java:212 et :271-281 ; FileSymbolSnapshotStore.java:451-458 et PostgresCodeKnowledgeSnapshotStore.java:617-624 (residentWeightBytes = queryCache.weight(), evictAll = clear) ; SnapshotLimits.java:142-163 (poids avec arêtes entrantes), :166-182 (invariant limité à l'amplification) ; tests : PostgresCodeKnowledgeSnapshotStoreViewBudgetTest.java:221-238 (vue retenue seule : même instance, heldWeight = poids, residentBytes >= poids, reservedBytes = 0), :241-295 ; BudgetedViewCacheTest.java:26-63 ; FileSymbolSnapshotStoreViewBudgetTest ; M29DockerQueryImageContractTest.java:257-281 (seuils 131 061 / 410 681).",
+      "reserve": "DATA-0085 (points 14 et 18) est Proposed. La part « inclure l'index des arêtes entrantes dans requireCacheCoversPersistable » est écartée par ce texte non accepté. Une vue évincée mais encore tenue par une requête n'est plus comptée : c'est un risque déclaré, couvert par la marge de 34 %. Les mesures 3.1 ne sont pas faites. Tests Java non rejoués ici.",
+      "date": "2026-11-19",
+      "head": "acd79cb8",
+      "desaccord_suivi": "SUIVI.md:87 dit « D1 et D3 selon la recommandation du design, en attente du propriétaire ». La section « Décisions du propriétaire » dit toutes les décisions tranchées au 2026-11-19 (sprint 5 : « retenue seule par le store et comptée »). Le suivi se contredit, et l'ADR reste Proposed."
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-09",
@@ -567,7 +1445,39 @@
     "sprint": 5,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #770, dimensionner-la-zone-de-travail-postgresql-du-plan-de-requete (archivé) ; ADR DATA-0085 point 17 (Proposed)",
+    "verification": {
+      "verdict": "Le tmpfs de travail PostgreSQL de minos-mcp et de minos-explorer vaut ${MINOS_MCP_SCRATCH_SIZE:-384m}. Il est dimensionné pour 2 JVM × la plus grande charge utile admise par le budget par défaut (environ 173 Mio). Le store vérifie l'espace disponible avant de demander la charge utile, et requalifie une écriture qui échoue en SnapshotScratchSpaceExhaustedException (message public, sans chemin). La CLI et le MCP le rendent. Le test de contrat recalcule le minimum et vérifie 2 tas + tmpfs ≤ limite mémoire.",
+      "preuve": "docker/compose-mcp.connected.yaml:99 et :163 (size=${MINOS_MCP_SCRATCH_SIZE:-384m}) ; PostgresCodeKnowledgeSnapshotStore.java:214 (requireScratchSpace avant activeRow), :466-469, :516 ; MinosMcpTools.java:288-291 ; CliCommandSupport.java:82-83 ; docs/user/docker-runtime.md:431 (« dimensionnée pour 2 JVM simultanées ») ; tests : M29DockerQueryImageContractTest.java:289-319 (assertTrue(bytes >= minimum) :313, assertTrue(jvms * heap + bytes <= memoryLimit) :315) ; PostgresCodeKnowledgeSnapshotStoreScratchSpaceTest.java:47-63 (refus avant rapatriement), :67-81 (zone remplie pendant la copie : même refus, fichier partiel supprimé, réservation libérée) ; MinosMcpSnapshotMemoryRefusalTest.java:46-47 ; docker/scripts/mcp-lifecycle.ps1 et prod-mcp.ps1 reportent la variable (grep).",
+      "reserve": "DATA-0085 est Proposed. La ligne MINOS_MCP_SCRATCH_SIZE manque dans docker/.env.example (seuls MEM_LIMIT, PIDS_LIMIT et CPUS y figurent, l.12-14), reste annoncé par le suivi. La mesure 3.1 n'est pas faite (non reproduit). Le calcul « 2 tas + zone ≤ 3 Gio » ignore la mémoire hors tas des JVM (métaspace, piles, tampons directs). Une 3e JVM est un risque déclaré, qui aboutit à un refus explicite.",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-07",
@@ -586,7 +1496,39 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #772, changement OpenSpec reduire-les-lectures-de-la-voie-wsl (archivé 2026-11-18)",
+    "verification": {
+      "verdict": "La voie WSL ne capture plus l'empreinte à chaque cible : elle reprend l'empreinte du projet enregistré que porte la requête (référence d'AUD-PERF-04 ou scope racine déjà capturé), sinon une seule capture par couple run/racine. L'intégrité n'est pas affaiblie : l'empreinte n'a jamais été un contrôle des sources lues par la distribution (jeton de provenance recopié dans le manifeste, ADR SEC-0079 l. 62 toujours vrai), et un arbre modifié pendant le run est rattrapé par la comparaison avant/après de ProjectIndexingUseCase, qui ne promeut pas la base d'empreintes ; le fil WslWorkerRequest et le manifeste v3 sont inchangés.",
+      "preuve": "minos-runtime-local/src/main/java/com/minos/runtime/local/wsl/WslIndexerExecutor.java:92 provenanceFingerprint(request), :118-131 (empreinte portée, sinon mémo RunFingerprint par runId+racine sous verrou) ; minos-engine/src/main/java/com/minos/orchestration/IndexingTargetExecution.java:80, :100-106 (référence, sinon scope racine déjà capturé, jamais de capture ici) ; IndexingRuntimePorts.java:250, :283-288 (Optional, SHA-256 minuscule exigé) ; ProjectFingerprintService.java:60-61 (capture = captureScope(racine, \"\")) ; WslArtifactProvenance.java:36 (empreinte comparée au manifeste) ; minos-application/.../ProjectIndexingUseCase.java:273-279 (« workspace changed during indexing », base non promue) ; tests : WslIndexerExecutorTest.java:82 (0 capture avec empreinte portée), :99 (1 capture pour 2 cibles), :104 (nouveau run = nouvelle capture), :108-120 (manifeste d'une autre empreinte refusé, paquet supprimé) ; IndexingRunExecutorCheckpointTest.java:159-160, :175-176, :191-192 (référence, scope racine, aucun jeton pour des scopes imbriqués seuls).",
+      "reserve": "« Au plus une fois par indexation » ne tient pas dans un cas limite : sans empreinte de référence réutilisable (service différent, ReferenceFingerprint.java:21-23), une cible WSL imbriquée planifiée avant une cible racine d'un autre provider (ordre sélection puis scope, IndexingLifecyclePlanSupport.java:35-39) fait hacher l'arbre entier deux fois (repli de la voie, puis capture du scope racine). Le chemin de production (ProjectIndexingUseCase.java:318) fournit normalement la référence. Fenêtre entre empreinte et exécution plus longue qu'avant (empreinte capturée avant la découverte), sans effet de sécurité pour la raison ci-dessus. Tests non exécutés ici (pas de build Java).",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-08",
@@ -605,7 +1547,39 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #772, changement OpenSpec reduire-les-lectures-de-la-voie-wsl (archivé 2026-11-18)",
+    "verification": {
+      "verdict": "Entre l'acceptation du paquet et son retour, l'artefact est lu deux fois sur le chemin nominal : une lecture du paquet qui extrait et hache en même temps (SHA de l'artefact sur les octets écrits et SHA du paquet), puis une lecture de l'entrée de cache qui copie sous runs/ en hachant. Les relectures :191, :206 et :152 de l'audit ont disparu. Toutes les comparaisons au manifeste sont conservées (taille comptée et taille sur disque, SHA de l'extraction, SHA de la copie, revérification d'une entrée de cache réutilisée). L'écriture en fichier privé à création exclusive garantit que ce qui a été haché est ce qui est stocké.",
+      "preuve": "minos-runtime-local/src/main/java/com/minos/runtime/local/distributed/DistributedArtifactBundleStore.java:291-330 (extract : DigestInputStream sur le paquet et sur l'entrée, reste du fichier haché, contrôle de taille :325), :202 verifyAgainstManifest, :215 validCached, :567-587 (revérification d'une entrée identique conservée) ; :156 (côté distribution, empreinte calculée pendant l'écriture du paquet) ; WslIndexerExecutor.java:177-200 (copie hachée en flux, taille comptée + Files.size + SHA comparés après fermeture, suppression sinon) ; tests : WslIndexerExecutorTest.java:132-141 (« at most two reads of the artifact », 1 lecture du paquet, 0 de l'extraction, 1 de l'entrée, 0 de la copie), :146-160 (entrée de cache altérée avant la copie : refus, copie supprimée).",
+      "reserve": "Trois lectures quand une entrée de cache identique existe (revérification gardée volontairement, DistributedArtifactBundleStore.java:567-587) ; la lecture du manifeste avant accept (readManifest, :545-565) reste hors du décompte, ce que le design déclare. Aucune durée mesurée sur un gros artefact. Le compteur passe par la couture readOpener/ArtifactOpener : une ouverture directe future par ConfinedFileOpener ne serait pas comptée. Tests non exécutés ici.",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-PERF-11",
@@ -624,7 +1598,39 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #768, changement OpenSpec normaliser-les-noms-de-tests-lies-sans-recompilation (archivé 2026-11-18)",
+    "verification": {
+      "verdict": "Le replaceAll par symbole est remplacé par un Pattern statique appliqué après toLowerCase(Locale.ROOT), ordre inchangé. Le test de caractérisation existe et est actif : le nom de production contient réellement U+212A (octets E2 84 AA vérifiés), et un second test fixe l'indépendance à la locale par défaut (tr-TR).",
+      "preuve": "minos-engine/src/main/java/com/minos/query/RelatedTestDerivationService.java:64 `Pattern.compile(\"[^a-z0-9]\")`, :453-458 normalizedName ; minos-engine/src/test/java/com/minos/query/RelatedTestDerivationServiceTest.java:210-219 keepsANonAsciiCharacterWhoseRootLowerCaseIsAsciiLetter (assertion :219), :223-234 normalisesNamesIndependentlyOfTheHostDefaultLocale (assertion :234), :206 cas Order_Service ; `od -c` sur :215-217 -> 342 204 252 (U+212A) ; aucune annotation @Disabled ni @Tag dans le fichier.",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-06",
@@ -643,7 +1649,40 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #771, changement OpenSpec prouver-les-tests-temporises-par-un-signal (archivé 2026-11-18)",
+    "verification": {
+      "verdict": "Les sites cités sont corrigés : le superviseur de quota expose un compteur d'échantillons et les tests attendent deux échantillons bornés avant d'affirmer l'absence de dépassement, ce qui est garanti par un test qui échoue quand le superviseur n'échantillonne jamais. La mesure de tas attend deux lectures égales au lieu d'un délai fixe. Les tests de cadence gardent l'horloge réelle mais jugent sur la durée mesurée et exigent au moins une énumération (signal positif). Restent quatre tests qui ne relèvent pas de la preuve d'origine : trois affirment une absence après un délai fixe et un mesure le tas après des pauses fixes.",
+      "preuve": "minos-runtime-local/src/main/java/com/minos/runtime/local/workspace/ProviderWriteQuotaSupervisor.java:60, :142-143, :164 (sampleCount) ; ProviderWriteQuotaSupervisorTest.java:67-68 et :82 (awaitTwoSamples puis assertion), :149-158 (échec borné), :108-109 (superviseur bloqué -> « missing samples ... sampleCount=0 ») ; minos-storage/src/test/.../QueryViewWeightTest.java:128-142 (settledHeap borné, sans sleep), :57 et :68 (tests de settledHeap) ; ProcessOwnershipTrackerCadenceTest.java:39-53, :77-89 (min 1, max 15/s sur la durée nanoTime) ; MinosProcessSupervisorCadenceTest.java:42-62, :86 (même règle) ; rg Thread.sleep/System.gc/await(...) sur src/test -> les autres occurrences sont des attentes bornées d'une condition positive (awaitDead, awaitFile, awaitParkedIn).",
+      "reserve": "Restent des affirmations d'absence après 200 ms fixes : minos-application/src/test/java/com/minos/application/remote/RemoteIndexLeaseTest.java:29, minos-storage/src/test/java/com/minos/storage/local/store/SnapshotProjectLeaseTest.java:44, minos-storage/src/test/java/com/minos/storage/postgresql/project/ProjectMutationIndexStateStoreTest.java:219-220 (`assertFalse(x.await(200, MILLISECONDS))`, déjà présentes à 89be3fb4 ; le motif ParkedThreads.awaitParkedIn du dépôt n'y est pas appliqué). minos-bootstrap/src/test/java/com/minos/bootstrap/semantic/HybridCorpusWeightTest.java:121-127 garde `System.gc(); Thread.sleep(150L)` x4 dans la suite normale, alors que le site jumeau QueryViewWeightTest a été corrigé. L'horloge factice suggérée par l'action n'est pas adoptée pour la cadence ; c'est une limite que le suivi déclare.",
+      "date": "2026-11-19",
+      "head": "acd79cb8",
+      "desaccord_suivi": "Le suivi déclare « Fait » sans mentionner les trois tests de verrou à absence après 200 ms ni HybridCorpusWeightTest (System.gc + sleep 150 ms), qui relèvent de la même règle « signal positif »."
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-03",
@@ -662,7 +1701,39 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #773, changement OpenSpec relever-les-planchers-de-la-frontiere-des-providers (archivé 2026-11-18) ; D2 option A (code propre à chaque système séparé, commit 072c0b234)",
+    "verification": {
+      "verdict": "Les quatre planchers de classe sont relevés et tous à 0,50 de branches ou plus : ProviderProcessEnvironment 0,95/0,95 (avant 0,70/0,20), StrongProcessOwnershipIndexerExecutor 0,88/0,95 (avant 0,35/0,18), ScipJavaProcessPlanFactory 0,72/0,62, ManagedPolyglotScipRuntimeManager 0,73/0,61. Une table TRUST_BOUNDARY_MINIMUMS (0,80 pour le filtre d'environnement, 0,50 pour les trois autres) est contrôlée par l'auto-test sur la vraie table. ProviderProcessEnvironment, y compris la logique de refus ajoutée par #763, a des règles par système paramétrées par un booléen et testées sur chaque système (5 classes de test).",
+      "preuve": "scripts/quality/check-jacoco.py:206, :208 (m24), :253-254 (provider-execution-trust-boundary), :441-446 TRUST_BOUNDARY_MINIMUMS, :449-466 ; scripts/quality/jacoco_gate_self_test.py:217-229 ; `python3 -I scripts/quality/check-jacoco.py --self-test` -> « SELF-TEST SUCCESS (24 scenarios) », rc=0 ; copie /tmp mutée (ProviderProcessEnvironment ramené à 0,70/0,20) -> rc=1, « branch floor 0.20 is below the minimum 0.80 » ; ProviderProcessEnvironment.java:236 isSafeInheritedKey(candidate, windows) ; tests ProviderProcessEnvironment{,Allowlist,DeclaredSecrets,InheritedSecrets,PlatformRules}Test.java.",
+      "reserve": "Les planchers 0,95 de ProviderProcessEnvironment et de StrongProcessOwnershipIndexerExecutor reposent sur un rapport Windows local du module, pas sur le rapport agrégé de la CI ; la mesure Linux citée date d'avant les tests (23/40 branches), et un écart ferait échouer la CI sans affaiblir la garde (non rejouable ici). « 0,50 non garanti sur les deux systèmes » : le code de frontière déplacé dans LinuxCgroupOwnershipBoundary (167 l.) et WindowsJobObjectOwnershipBoundary (39 l.) n'a pas de plancher de classe ; ces classes ne sont jugées que par le plancher agrégé de leur scope de plateforme, 0,35 de branches (check-jacoco.py:262-276, :280-294), et peuvent s'éroder à l'abri de CgroupJobOwnership ou WindowsJobObjectProcessOwnership.",
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-08",
@@ -681,7 +1752,40 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #774 et commit 629bc46dd, changement OpenSpec tester-la-logique-d-interface-du-plugin (archivé 2026-11-18) ; D1 option A (pas de fixture de plateforme), décision du propriétaire",
+    "verification": {
+      "verdict": "La logique non-Swing du panneau est extraite dans MinosResultPresentation (emplacements, ligne de connexion, résumés d'architecture et de module) et testée. L'analyse de la saisie des réglages est extraite dans MinosSettingsRules et testée. Le plancher du plugin passe de 0,33 à 0,37 en lignes et 0,38 en branches (paquet protocol/ à 0,47/0,40), sur une mesure Linux à f0119bf6, qui inclut déjà les nouveaux tests (cfe1952f8). Les huit classes du constat n'ont toujours aucune référence dans les tests ; elles sont nommées comme non couvertes par construction, conformément à la décision D1.",
+      "preuve": "minos-intellij/build.gradle.kts:140-155 (mesure run 44107036156, 0,391/0,404 -> 0,37/0,38) ; ui/MinosToolWindowPanel.java:70, :110, :121, :134 (délégation à MinosResultPresentation) ; settings/MinosSettingsConfigurable.java:59-66 (MinosSettingsRules.parsedOr/timeoutSeconds/maxGraphNodes) ; tests ui/MinosResultPresentationTest.java (5 @Test), settings/MinosSettingsRulesTest.java (6 @Test), PlatformFreeLogicTest.java:25-26 ; décompte des références dans src/test -> 0 pour MinosToolWindowPanel (308 l.), MinosAdvancedAnalysisActions (227, inchangée), MinosSettingsConfigurable (110), MinosProjectService (108), MinosUiController (77), MinosNavigation (43), MinosRegistryNotice (24), MinosToolWindowFactory (21) ; docs/user/intellij-plugin.md:335 les nomme ; SUIVI.md:187 (D1 « pas de fixture »).",
+      "reserve": "Huit classes, soit environ 920 lignes, restent sans test, par décision. MinosAdvancedAnalysisActions n'a pas été touchée, alors que l'action demandait d'en extraire la logique. Le plancher est relevé de 4 à 5 points, pas « avec la couverture » au sens d'un objectif. jacocoTestCoverageVerification n'a pas été rejoué ici (pas de Gradle).",
+      "date": "2026-11-19",
+      "head": "acd79cb8",
+      "desaccord_suivi": "Le suivi écrit « quatre classes restent sans test » et « seule l'analyse de la chaîne saisie reste à extraire ». Or huit classes n'ont aucune référence de test (docs/user/intellij-plugin.md:335 en nomme huit, plus MinosSettingsState), et l'analyse de la saisie est déjà extraite (MinosSettingsConfigurable.java:59-66 -> MinosSettingsRules)."
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-10",
@@ -700,7 +1804,37 @@
     "sprint": 6,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #776, changement OpenSpec actualiser-le-document-de-mutation (archivé 2026-11-18)",
+    "verification": {
+      "verdict": "Tient : code-audit.yml et quality docs : seules les lignes setup-java changent ; non mesuré : état PIT/doc détaillé non relu.",
+      "preuve": "Tient : code-audit.yml et quality docs : seules les lignes setup-java changent ; non mesuré : état PIT/doc détaillé non relu.",
+      "reserve": "Réserve du 20/11 non levée ; pas de mutation rouge rejouée.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-02",
@@ -722,7 +1856,37 @@
       "AUD-ARC-04",
       "AUD-ARC-07"
     ],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #816, sprint 10, ARCH-0087 Accepted (archivé 2026-11-24)",
+    "verification": {
+      "verdict": "Compilé avec javac 21 (domain+engine+application, Jackson du cache Gradle, rc=0) puis javap -public aux deux commits : MinosApplication passe de 41 à 25 méthodes publiques d'instance ; compositionRoot() et les 15 accesseurs typés moteur (+ invalidationService, incrementalIndexingPlanner, indexerRegistry) sont package-private ou supprimés (MinosApplication.java:272-293, :295 private) ; plus aucun type de retour de minos-engine ni MinosApplicationComposer.",
+      "preuve": "Compilé avec javac 21 (domain+engine+application, Jackson du cache Gradle, rc=0) puis javap -public aux deux commits : MinosApplication passe de 41 à 25 méthodes publiques d'instance ; compositionRoot() et les 15 accesseurs typés moteur (+ invalidationService, incrementalIndexingPlanner, indexerRegistry) sont package-private ou supprimés (MinosApplication.java:272-293, :295 private) ; plus aucun type de retour de minos-engine ni MinosApplicationComposer. Aucun appel de production hors package : rg des 16 noms sur */src/main -> seuls ProviderPlatformService.java:37 (même package) et MinosApplication.java:414 (this::indexerRegistry) ; ProjectIndexingUseCase/RemoteIndexingUseCase ne lisent plus que dependencies.xxx() (:183-197, :83). Test-jar : minos-application/pom.xml:44-63 (includes = MinosApplicationTestAccess.class seul), 7 modules le déclarent en <scope>test</scope> (lecture XML de tous les pom), minos-app/pom.xml:26 (test), :79 (propriétés des 3 jars pour l'IT) ; ApplicationTestAccessPackagingIT.java:28-48 affirme la classe présente dans le test-jar, absente du jar du module et du fat jar. Garde A11/A2 (rouge avant vert, copies /tmp/facade-verif) : copie saine rc=0 (« A11 … 0 public accessor(s) »), accesseur re-publié public ProjectRegistry projectRegistry() -> rc=1, compositionRoot() public -> rc=1, test-jar de minos-cli en portée compile -> rc=1 (check-module-boundaries.py:148-162), classe de minos-cli appelant compositionRoot() -> rc=1 ; sortie du garde identique à audit4 sauf la ligne A11 (15 -> 0). ARCH-0087 : Statut Accepted (:10), README index :92 = Accepted, arc42/09-decisions.md:60 = Accepted ; sections 2.2 et 2.3, Do/Don't, Compliance cohérentes avec le code (noms de tests et de fonctions du garde tous trouvés). Rupture annoncée : unreleased.md:28-37 et java-api.md:350-374 (16 méthodes listées = 16 retirées).",
+      "reserve": "(1) Signature publique encore ouverte au moteur : MinosApplication.java:359 projectIndexing(UnaryOperator<IndexerExecutor>) (IndexerExecutor est dans minos-engine) ; A11 ne lit que les types de retour (module_boundary_ratchets.py:166-199), voir nouveau constat 1. (2) Le report du 2026-11-19 reste dans la prose : SUIVI.md:7 (« … et le groupe 4 d'injecter-…, reporté »), .claude/agent-memory/archgate-developer/project_audit_2026_11_15_clos.md:20-21 (« ARCH-0087 reste Proposed »), Javadoc MinosApplication.java:66 « composition root » ; la ligne README :92 omet le 3e changement OpenSpec (voir nouveau constat 3). (3) Non mesuré : build Maven, tests Java, IT d'empaquetage, contenu réel du fat jar. (4) Décompte du suivi : 217 appels dans 56 fichiers mesurés vs « 216 / 54 » (SUIVI.md:157), écart mineur.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Partiel"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Partiel"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-01",
@@ -744,7 +1908,37 @@
       "AUD-ARC-04",
       "AUD-ARC-07"
     ],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #785, changement OpenSpec cabler-les-adaptateurs-embarques-par-la-racine-de-composition (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Non-régression : la sortie du garde est identique ligne à ligne entre audit4 (535a5017) et audit5 (75e10c68) sauf la ligne A11 (15 -> 0) : « A19 embedded adapters: 10 file(s) … 17 class(es) listed in EMBEDDED_ADAPTER_CLASSES », A20, A13, A15, A16 inchangées ; module-boundaries.json et module_boundary_adapters.py ne figurent pas dans diff-names.",
+      "preuve": "Non-régression : la sortie du garde est identique ligne à ligne entre audit4 (535a5017) et audit5 (75e10c68) sauf la ligne A11 (15 -> 0) : « A19 embedded adapters: 10 file(s) … 17 class(es) listed in EMBEDDED_ADAPTER_CLASSES », A20, A13, A15, A16 inchangées ; module-boundaries.json et module_boundary_adapters.py ne figurent pas dans diff-names. Les 77 auto-tests de test_check_module_boundaries_ratchets.py et les 86 de test_check_module_boundaries_adapters.py (dont EmbeddedAdapterRuleTest) passent sur la copie saine.",
+      "reserve": "Réserve inchangée : les 17 classes restent physiquement dans minos-application (cible conditionnelle ARCH-0087 § 1.4). L'ancienne réserve « ARCH-0087 Proposed » est levée (Accepted, ARCH-0087…md:10).",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-03",
@@ -763,7 +1957,38 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #782, changement OpenSpec porter-l-historique-d-import-derriere-un-port (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Tient : docs/developer/indexing-and-storage.md ne change qu'une phrase du § budget mémoire (l.319) ; l.224-228 (cli-index-history, historique sur fichier quel que soit le backend) est inchangée, et `rg cli-index-history` hors tests/docs -> uniquement minos-storage/.../FileIndexImportHistoryStore.java:22, :28, fichier non modifié (absent de diff-names.txt).",
+      "preuve": "Tient : docs/developer/indexing-and-storage.md ne change qu'une phrase du § budget mémoire (l.319) ; l.224-228 (cli-index-history, historique sur fichier quel que soit le backend) est inchangée, et `rg cli-index-history` hors tests/docs -> uniquement minos-storage/.../FileIndexImportHistoryStore.java:22, :28, fichier non modifié (absent de diff-names.txt). LocalProjectOperations et ProjectInspectionService ne sont pas dans les 47 fichiers.",
+      "reserve": "",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-ARC-05",
@@ -782,7 +2007,38 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #788, changement OpenSpec centraliser-la-politique-de-lancement-de-l-explorateur (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Non-régression : HostedMode.java et ExplorerLaunchPolicy.java identiques octet pour octet à audit4 (cmp), une seule définition de TEAM_MODE_REFUSED (ExplorerLaunchPolicy.java:21), garde « A20 assembly classes: 8 production class(es) of minos-app » inchangé ; aucun fichier de production de minos-app dans diff-names.",
+      "preuve": "Non-régression : HostedMode.java et ExplorerLaunchPolicy.java identiques octet pour octet à audit4 (cmp), une seule définition de TEAM_MODE_REFUSED (ExplorerLaunchPolicy.java:21), garde « A20 assembly classes: 8 production class(es) of minos-app » inchangé ; aucun fichier de production de minos-app dans diff-names.",
+      "reserve": "Réserve inchangée (McpBackendConfiguration non renommé, DockerMcpTransport dans minos-app).",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-06",
@@ -801,7 +2057,38 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #779, changement OpenSpec unifier-le-contrat-des-codes-de-sortie (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Non-régression : rg 'FindSymbolCommand\\.[A-Z_]+' sur */src/main -> 5 résultats, tous MAX_LIMIT/NAME (FindUsagesCommand.java:23,:69 ; RelationshipCommand.java:48,:95 ; MinosCli.java:202), aucun code de sortie ; ExitCodeContractParityTest.java identique à audit4.",
+      "preuve": "Non-régression : rg 'FindSymbolCommand\\.[A-Z_]+' sur */src/main -> 5 résultats, tous MAX_LIMIT/NAME (FindUsagesCommand.java:23,:69 ; RelationshipCommand.java:48,:95 ; MinosCli.java:202), aucun code de sortie ; ExitCodeContractParityTest.java identique à audit4.",
+      "reserve": "",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ]
   },
   {
     "id": "AUD-QUA-04",
@@ -820,7 +2107,38 @@
     "sprint": 7,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #780, changement OpenSpec supprimer-les-vues-miroirs-de-la-cli (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Non-régression : seul AutonomousIndexOperations.java:93 déclare encore un record IndexPlanView (ArtifactEvidence et RemoteMaterializationView absents de */src/main) ; CliViewParityTest.java identique à audit4.",
+      "preuve": "Non-régression : seul AutonomousIndexOperations.java:93 déclare encore un record IndexPlanView (ArtifactEvidence et RemoteMaterializationView absents de */src/main) ; CliViewParityTest.java identique à audit4.",
+      "reserve": "",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-08",
@@ -841,7 +2159,37 @@
     "bloque": [
       "AUD-ARC-07"
     ],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #783, changement OpenSpec reclasser-minos-nexus-en-module-de-contrat (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Mutation rejouée : famille de minos-nexus remise à `surface` -> rc=1 « A2 … minos-cli -> minos-nexus [compile] (a surface never depends on another surface …) » ; sain rc=0 avec « A2 module families … contract modules=1 ».",
+      "preuve": "Mutation rejouée : famille de minos-nexus remise à `surface` -> rc=1 « A2 … minos-cli -> minos-nexus [compile] (a surface never depends on another surface …) » ; sain rc=0 avec « A2 module families … contract modules=1 ». minos-nexus ne change que par pom.xml et deux tests (diff-names).",
+      "reserve": "",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-04",
@@ -863,7 +2211,37 @@
       "AUD-ARC-02"
     ],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé",
+    "changement": "PR #791, changement OpenSpec donner-une-source-unique-aux-tables-du-garde-de-frontieres (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Non-régression rejouée sur copie : ModuleArchitectureTest.java:48,63 lit toujours POLICY ; remplacer ADAPTERS par Set.of(\"minos-storage\",\"minos-runtime-local\") -> rc=1 « A17 … declares the policy table ADAPTERS again » ; retirer l'arête minos-cli -> minos-nexus de allowedDependencies -> rc=1 « minos-cli: forbidden MINOS dependencies: minos-nexus ».",
+      "preuve": "Non-régression rejouée sur copie : ModuleArchitectureTest.java:48,63 lit toujours POLICY ; remplacer ADAPTERS par Set.of(\"minos-storage\",\"minos-runtime-local\") -> rc=1 « A17 … declares the policy table ADAPTERS again » ; retirer l'arête minos-cli -> minos-nexus de allowedDependencies -> rc=1 « minos-cli: forbidden MINOS dependencies: minos-nexus ». ModuleArchitectureTest.java et module-boundaries.json absents de diff-names.",
+      "reserve": "",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-09",
@@ -882,7 +2260,38 @@
     "sprint": 8,
     "depends_on": [],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #784 (codec) et PR #786 (exécuteur), changement OpenSpec decouper-l-executeur-d-indexation-et-le-codec-de-snapshot (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Non-régression : IndexingRunExecutor.java 184 lignes, SnapshotBinaryCodecSupport.java 426 lignes (inchangés depuis le 19/11) ; aucun des deux n'est dans diff-names.",
+      "preuve": "Non-régression : IndexingRunExecutor.java 184 lignes, SnapshotBinaryCodecSupport.java 426 lignes (inchangés depuis le 19/11) ; aucun des deux n'est dans diff-names.",
+      "reserve": "Réserve inchangée : FileSemanticVectorStore.java 1 102 lignes (stable depuis le 19/11), aucun gate de taille ; tests Java non rejoués.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-QUA-03",
@@ -903,7 +2312,38 @@
       "AUD-TST-02"
     ],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #781, changement OpenSpec trancher-la-langue-du-contrat-de-l-explorateur (archivé 2026-11-19), ADR ARCH-0086",
+    "verification": {
+      "verdict": "Tient.",
+      "preuve": "Tient. Les valeurs françaises figées de v1 sont à leurs places : `enum Divergence { IDENTIQUE, DIFFERENTE, SOURCE_INTROUVABLE, NON_COMPARABLE }` minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java:450 (était :456 au 19/11) ; app.js, map.js, labels.test.mjs et ExplorerErrorCode sont identiques à acd79cb8 (non listés dans diff-names.txt ; cmp app.js). Le diff du service ne touche ni l'enum ni les messages d'usage.",
+      "reserve": "Mêmes réserves qu'au 19/11 : contrat v1 bilingue jusqu'à une v2 (ARCH-0086), notes de version de la release à écrire ; tests de contrat Java non rejoués.",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-ARC-07",
@@ -926,7 +2366,37 @@
       "AUD-ARC-08"
     ],
     "bloque": [],
-    "statut": "Ouvert"
+    "statut": "Fermé avec réserve",
+    "changement": "PR #792, changement OpenSpec aligner-la-prose-d-architecture-sur-le-code (archivé 2026-11-19)",
+    "verification": {
+      "verdict": "Mutation rejouée : racine `com/minos/io/` retirée de la ligne Sources de minos-engine (arc42/05-vue-blocs.md:63) -> rc=1 « its 'Sources' line omits the package root(s) io » ; copie restaurée -> rc=0 (diff -r avec la source vide hors __pycache__).",
+      "preuve": "Mutation rejouée : racine `com/minos/io/` retirée de la ligne Sources de minos-engine (arc42/05-vue-blocs.md:63) -> rc=1 « its 'Sources' line omits the package root(s) io » ; copie restaurée -> rc=0 (diff -r avec la source vide hors __pycache__). A9 inchangée, le garde reste vert avec la prose modifiée par le sprint 10.",
+      "reserve": "Réserve du 20/11 inchangée (route explorateur de minos-app en prose non gardée).",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ]
   },
   {
     "id": "AUD-ARC-10",
@@ -945,7 +2415,38 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #779-#788, #791 (sprints 7-8) ; rejeu des gardes",
+    "verification": {
+      "verdict": "Tient au 535a5017 : garde rc=0 (14 modules, 678 sources, A3 73 packages, A8 0 cycle connu), 308 auto-tests OK sur 5 fichiers (66+86+44+38+74), contre 304 au 19/11 ; gate de la copie saine identique octet pour octet à celui d'acd79cb8.",
+      "preuve": "Tient au 535a5017 : garde rc=0 (14 modules, 678 sources, A3 73 packages, A8 0 cycle connu), 308 auto-tests OK sur 5 fichiers (66+86+44+38+74), contre 304 au 19/11 ; gate de la copie saine identique octet pour octet à celui d'acd79cb8. Mutations : import de com.minos.runtime.local.wsl.WslCheck dans minos-provider-scip -> rc=1 (A13) ; import de com.minos.application.MinosApplication dans minos-domain -> rc=1 (A8, cycle hors KNOWN_PACKAGE_CYCLES). minos-explorer/pom.xml n'a pas changé (hors liste diff-names).",
+      "reserve": "Précision, non-régression : élargir allowedDependencies du JSON (minos-explorer -> minos-mcp) avec ou sans import correspondant reste vert côté Python tant que le POM ne déclare pas l'arête (identique à acd79cb8) ; le garde borne les POM par le plafond, il ne contrôle pas le plafond ; la règle de famille A2 échoue dès que le POM porte l'arête. ArchUnit/Maven non exécutés. La nature du constat Info tient, mais le câblage de main() est moins gardé qu'annoncé : voir le nouveau constat « main() du garde de frontières ». Les 308 tests sont le total de 5 fichiers (ratio non comparable à 252/304 d'un seul fichier).",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-DEP-07",
@@ -964,7 +2465,37 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #795 (fetch-verified.sh, repli Apache dans Dockerfile.mcp.release), Dependabot #752-#756",
+    "verification": {
+      "verdict": "Toutes les lignes uses: de .github/workflows/*.yml sont épinglées par SHA de 40 caractères (grep des non-conformes : seuls 4 appels 'uses: ./.github/workflows/*.yml' de workflows réutilisables locaux, hors périmètre) ; check-workflow-pins.py rc=0 (external uses=106).",
+      "preuve": "Toutes les lignes uses: de .github/workflows/*.yml sont épinglées par SHA de 40 caractères (grep des non-conformes : seuls 4 appels 'uses: ./.github/workflows/*.yml' de workflows réutilisables locaux, hors périmètre) ; check-workflow-pins.py rc=0 (external uses=106). Les 13 workflows diffèrent uniquement par setup-java 77dd5b2c... (v6.2.0) -> d1374f8ac74474200d16ef8ecee22c7ae7a51880 (v6.3.0) ; pr-ci.yml ajoute en plus upload-artifact/download-artifact (déjà utilisés, mêmes SHA cf430e03 v7.0.2 / 9000827c v8.2.0) et sonarqube-scan-action 70bad232...",
+      "reserve": "Correspondance SHA <-> version annoncée en commentaire non vérifiable sans réseau (setup-java v6.3.0, scan-action v8.5.1). Nuance : « sommes SHA-256 des wrappers » tient par présence des lignes (maven-wrapper.properties:4, gradle-wrapper.properties:3), mais aucun gate ne l'exige (voir nouveau constat). Correspondance SHA <-> tag des actions et digests d'images non vérifiable hors ligne. DOCKERHUB_USERNAME reste lu au niveau du job verify (pr-ci.yml:352), identifiant seul, autorisé par le gate.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info"
+      }
+    ]
   },
   {
     "id": "AUD-PERF-12",
@@ -983,7 +2514,38 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #781 (libellés français dans app.js)",
+    "verification": {
+      "verdict": "Tient : bornes de pages et de voisins minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java:41-42 (200), balayage filtré :48 (2 000), borne stableKey :44 ; le diff du service ne les touche pas.",
+      "preuve": "Tient : bornes de pages et de voisins minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java:41-42 (200), balayage filtré :48 (2 000), borne stableKey :44 ; le diff du service ne les touche pas. Front inchangé : app.js 21 886, map.js 17 285, index.html 4 346, app.css 4 930 octets (wc -c, 48 447 au total), identique à acd79cb8. ExplorerServer.java identique (cmp), FileSemanticVectorStore et PostgresSemanticReadQueries hors diff.",
+      "reserve": "Le temps d'une page avant/après n'est pas mesuré (tâche 1.4 de l'archive liberer-la-table-de-symboles-avec-sa-vue restée [ ] ; le suivi le dit).",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-QUA-07",
@@ -1002,7 +2564,38 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #784 (codec découpé), #786, rejeu des comptages",
+    "verification": {
+      "verdict": "Recomptage au 535a5017 : TODO|FIXME|XXX|HACK en production -> 0 ; printStackTrace -> 0 ; @SuppressWarnings en production -> 4 (tous deprecation) ; NOSONAR -> 6 lignes (ProjectGitQuery.java:19 javadoc, :24, :26 ; ScipSymbolSnapshotImporter.java:169 ; DistributedArtifactBundleStore.java:207 ; SemanticCorpusQueryService.java:441 déplacée depuis :453) ; catch vides -> 38, non commentés 0 (même regex qu'au 19/11) ; les 8 nouveaux scripts Python de scripts/architecture n'ont ni `except:` nu, ni `except Exception: pass`, ni shell=True.",
+      "preuve": "Recomptage au 535a5017 : TODO|FIXME|XXX|HACK en production -> 0 ; printStackTrace -> 0 ; @SuppressWarnings en production -> 4 (tous deprecation) ; NOSONAR -> 6 lignes (ProjectGitQuery.java:19 javadoc, :24, :26 ; ScipSymbolSnapshotImporter.java:169 ; DistributedArtifactBundleStore.java:207 ; SemanticCorpusQueryService.java:441 déplacée depuis :453) ; catch vides -> 38, non commentés 0 (même regex qu'au 19/11) ; les 8 nouveaux scripts Python de scripts/architecture n'ont ni `except:` nu, ni `except Exception: pass`, ni shell=True. RemoteCloneBudget.java n'ajoute ni catch vide ni NOSONAR.",
+      "reserve": "Duplication et méthodes de plus de 80 lignes non recomptées (aucun outil de mesure ici). Non recomptés : catch vides (41), méthodes de plus de 80 lignes, duplication. Les 2 fichiers Java de production modifiés (SemanticCorpusQueryService, RemoteCloneBudget) ne sont pas mesurés pour la longueur de méthode (essai de script abandonné). Le chiffre « 4 NOSONAR nominatifs » est à lire comme 5 marqueurs + 1 javadoc.",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-06",
@@ -1021,7 +2614,39 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #781 (codes d'erreur fermés, libellés français), #788",
+    "verification": {
+      "verdict": "Tient : ListeningPolicy, RequestGuard, SessionToken, WebResources, JsonObjectReader inchangés depuis 182ae1df ; CSP identique ; ExplorerServer ne change que le type des codes d'erreur (enum ExplorerErrorCode) ; app.js n'affiche plus que des libellés choisis par code, sans puits HTML ; refus du mode équipe conservé dans la session.",
+      "preuve": "diff -q des 5 classes -> identiques ; ExplorerServer.java:57-59 (CSP) ; diff ExplorerServer.java : seulement \"CODE\" -> ExplorerErrorCode.CODE (l.289-363) ; grep innerHTML|outerHTML|insertAdjacentHTML|eval(|document.write web/*.js -> 0 ; ExplorerSession.java:71-73 (teamControlPlane -> TEAM_MODE_REFUSED) ; check-explorer-front.py OK dans run_gates",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-07",
@@ -1040,7 +2665,39 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #777 (taille du scratch PostgreSQL paramétrable), Dependabot pgvector",
+    "verification": {
+      "verdict": "Tient : écoute conteneur, réseaux et publication 127.0.0.1 inchangés ; seules évolutions du compose : taille du tmpfs scratch (MINOS_MCP_SCRATCH_SIZE, validée par mcp-lifecycle.ps1) et digest pgvector.",
+      "preuve": "docker/compose-mcp.connected.yaml:138 MINOS_EXPLORER_CONTAINER_LISTEN: enabled, :154 networks [minos-runtime, minos-explorer-ingress], :158 `127.0.0.1:${MINOS_EXPLORER_PORT:-8765}:...`, :561 réseau ingress ; docs/user/docker-runtime.md:404,407 (limites documentées) ; diff compose 182ae1df..HEAD -> l.96-99, 163, 359, 524-536 uniquement",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-08",
@@ -1059,7 +2716,39 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #772 (AUD-PERF-07 : empreinte de provenance réutilisée, copie hachée au vol)",
+    "verification": {
+      "verdict": "Tient : seul WslIndexerExecutor change dans le package wsl. La provenance reste vérifiée (WslArtifactProvenance.verify) après acceptation par le magasin vérifié ; la copie est désormais hachée pendant l'écriture dans un fichier créé exclusivement sous un dossier privé, taille et SHA-256 recontrôlés. L'empreinte de provenance peut venir de l'empreinte de référence du run (validée [0-9a-f]{64}). La réserve d'origine (java du PATH de la distribution, SEC-0079) demeure.",
+      "preuve": "diff -q minos-runtime-local/.../wsl/*.java -> seul WslIndexerExecutor.java change ; WslIndexerExecutor.java:92,99-102 (accept, manifeste, provenance), :118-133 (provenanceFingerprint), :195-197 (taille + SHA-256) ; IndexingRuntimePorts.java:283-288 (empreinte exigée en SHA-256 minuscule) ; WslIndexWorker.java:161-162 (DENY exigé) ; ProcessWslCommandRunner.java:27,46-47 (sortie ≤ 1 Mio) ; WslCommandEnvironment.java:40-41",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-09",
@@ -1078,7 +2767,39 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #769 (AUD-PERF-05 : relecture conditionnée au snapshot réservé)",
+    "verification": {
+      "verdict": "Tient : la seule requête modifiée ajoute des conditions liées par paramètres ; une seule createStatement, celle du migrateur (identifiants via enquoteIdentifier).",
+      "preuve": "PostgresCodeKnowledgeSnapshotStore.java:419-420 (ACTIVE_SNAPSHOT_FROM constant), :450-454 (`AND s.snapshot_id=? AND s.sha256=?`, setObject/setString) ; grep createStatement()|execute(\"...\"+ */src/main -> seulement PostgresSchemaMigrator.java:21",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-SEC-10",
@@ -1097,7 +2818,39 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #777 (mcp-lifecycle.ps1 : validation de MINOS_MCP_SCRATCH_SIZE)",
+    "verification": {
+      "verdict": "Tient : bloc minos_inspect inchangé (REVOKE puis GRANT SELECT sur liste fermée, colonnes de projects sans root_value), pgAdmin publié sur 127.0.0.1 ; le diff du script ne touche que la validation des plafonds.",
+      "preuve": "docker/scripts/mcp-lifecycle.ps1:826 (NOSUPERUSER ... CONNECTION LIMIT 8), :828-831 (REVOKE ALL), :837 (GRANT SELECT liste fermée), :839 (colonnes de projects) ; docker/compose-mcp.connected.yaml:533 `127.0.0.1:${MINOS_PGADMIN_PORT:-5050}:8080` ; diff mcp-lifecycle.ps1 -> l.524-554 seulement",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-11",
@@ -1116,7 +2869,39 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "PR #772 (WslIndexerExecutorTest ajouté)",
+    "verification": {
+      "verdict": "Tient : le nouveau test WSL injecte des collaborateurs factices (FingerprintCapture, ArtifactOpener) ; aucune distribution réelle en CI, décision toujours écrite.",
+      "preuve": "docs/developer/java-indexing-via-wsl.md:119-120 ; minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/ -> 13 fichiers, WslIndexerExecutorTest.java sans ProcessBuilder ni wsl.exe ; WslIndexerExecutor.java:62-66 (couture package-private de test)",
+      "reserve": null,
+      "date": "2026-11-19",
+      "head": "acd79cb8"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info",
+        "recontrole": false
+      }
+    ]
   },
   {
     "id": "AUD-TST-12",
@@ -1135,6 +2920,676 @@
     "sprint": null,
     "depends_on": [],
     "bloque": [],
-    "statut": "Info"
+    "statut": "Info",
+    "changement": "rejeu complet au HEAD acd79cb8",
+    "verification": {
+      "verdict": "0 @Disabled hors @DisabledOn*/DisabledIf au 75e10c68 (grep).",
+      "preuve": "0 @Disabled hors @DisabledOn*/DisabledIf au 75e10c68 (grep). Autres mesures du 20/11 (Mockito, nombre de tests) non recomptées.",
+      "reserve": "Comptage partiel.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Info"
+      }
+    ]
+  },
+  {
+    "id": "AUD-DEP-08",
+    "titre": "Portée calculée de la qualification Docker (PR #751) : un renommage d'un fichier de production vers src/test/ ou docs/ déclare la PR « non concernée », et le check exigé passe sans qualification",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "preuve": "scripts/ci/plugin-gate.py:58 `git diff --name-only <base>...<head>` (rename detection active par défaut : seul le nouveau chemin est listé), réutilisé par scripts/ci/docker-gate.py:105 ; docker-gate.py:42-51 exclut `^[^/]+/src/test/` et `docs/` ; reproduction dans /tmp/rn/repo : `git mv minos-engine/src/main/java/com/minos/store/Cache.java minos-engine/src/test/java/com/minos/store/Cache.java` -> `git diff --name-only` liste seulement le chemin src/test, et `docker-gate.scope('pull_request', B, H, root=/tmp/rn/repo)` -> False ; scripts/ci/test_docker_gate.py : aucun cas de renommage (grep renam -> 0), 26 tests OK",
+    "impact": "Une PR qui retire une classe de l'image en la déplaçant sous src/test/ ou docs/ saute la qualification Docker A -> B, et le check exigé « Docker upgrade evidence gate » passe (« non concerné »). Cela contredit la règle annoncée (« tout doute répond concerné »). Les builds Verify tournent quand même.",
+    "effort": "S",
+    "action": "Lire le diff avec `--name-status --no-renames` (ou `--no-renames` sur `--name-only`) pour que l'ancien chemin d'un renommage ou d'une suppression compte dans la portée ; ajouter le cas « renommage src/main -> src/test » et « src/main -> docs/ » à test_docker_gate.py.",
+    "confiance": "confirmé",
+    "axes": [
+      "Dépendances",
+      "Sécurité"
+    ],
+    "connu": "introduit par la correction d'AUD-DEP-03 (PR #751)",
+    "source": "mise à jour du 17/11 (deux vérificateurs indépendants)",
+    "sprint": 5,
+    "depends_on": [],
+    "statut": "Fermé",
+    "bloque": [],
+    "verification": {
+      "verdict": "Tient : scripts/ci/plugin-gate.py et docker-gate.py identiques (cmp) ; test_docker_gate.py et test_plugin_gate.py OK ; --no-renames inchangé.",
+      "preuve": "Tient : scripts/ci/plugin-gate.py et docker-gate.py identiques (cmp) ; test_docker_gate.py et test_plugin_gate.py OK ; --no-renames inchangé.",
+      "reserve": "Pas de mutation rejouée (gate identique à la version du 20/11). Aucun test ne fixe la suppression pure d'un fichier de production (inchangé, indépendant du drapeau).",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "historique_statut": [
+      {
+        "date": "2026-11-17",
+        "head": "182ae1df",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ],
+    "changement": "PR #767, compter-l-ancien-chemin-d-un-renommage-dans-la-portee (archivé)"
+  },
+  {
+    "id": "AUD-ARC-11",
+    "titre": "Règle A19 : retirer une entrée encore valide de la liste des adaptateurs embarqués lève leur protection sans que le garde le voie",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "preuve": "scripts/architecture/check-module-boundaries.py:1176-1210 : A19 vérifie que chaque fichier qui nomme une API d'infrastructure figure dans INFRASTRUCTURE_API_USERS et qu'aucune source hors EMBEDDED_ADAPTER_CLASSES ne nomme une classe de cette liste, mais ne vérifie pas qu'une classe de INFRASTRUCTURE_API_USERS figure dans EMBEDDED_ADAPTER_CLASSES ; une entrée d'adaptateur n'est refusée comme périmée que si la classe n'existe plus (:1203). Mutation sur copie /tmp : suppression de `OllamaEmbeddingProvider` de embeddedAdapterClasses dans module-boundaries.json -> garde rc=0 (« 16 class(es) listed ») ; même mutation plus une référence `com.minos.application.semantic.OllamaEmbeddingProvider.class` ajoutée à MinosApplicationRuntimeConfiguration.java -> garde rc=0, alors que la même référence sans la suppression donne rc=1 (« A19 embedded adapters … names »). L'auto-test EmbeddedAdapterRuleTest (test_check_module_boundaries.py:1519-1587) n'a pas ce cas.",
+    "impact": "La liste EMBEDDED_ADAPTER_CLASSES est une protection, pas une tolérance : sa réduction, présentée par ARCH-0087 comme le sens normal du cliquet (« les deux listes ne font que rétrécir »), suffit à autoriser la couche application à instancier de nouveau l'adaptateur HTTP ou l'analyseur javac. La garantie qui ferme AUD-ARC-01 repose alors sur la revue seule.",
+    "effort": "S",
+    "action": "Dans A19, exiger que chaque classe de INFRASTRUCTURE_API_USERS (nom simple) figure dans EMBEDDED_ADAPTER_CLASSES, ou refuser le retrait d'une entrée dont la classe existe encore et nomme une API d'infrastructure ; ajouter le cas rouge correspondant à EmbeddedAdapterRuleTest.",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture",
+      "Tests"
+    ],
+    "sprint": 9,
+    "connu": "garde de la fermeture de AUD-ARC-01 (PR #785, règle A19)",
+    "source": "mise à jour du 19/11 (vérificateur indépendant)",
+    "depends_on": [],
+    "statut": "Fermé avec réserve",
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ],
+    "verification": {
+      "verdict": "Mutation rejouée sur copie /tmp/facade-verif (retrait de chacune des 17 entrées de embeddedAdapterClasses, une à une, module-boundaries.json restauré puis garde re-vérifié rc=0) : 16 retraits donnent rc=1, un seul reste silencieux (rc=0) : FileProgramGraphProvider.",
+      "preuve": "Mutation rejouée sur copie /tmp/facade-verif (retrait de chacune des 17 entrées de embeddedAdapterClasses, une à une, module-boundaries.json restauré puis garde re-vérifié rc=0) : 16 retraits donnent rc=1, un seul reste silencieux (rc=0) : FileProgramGraphProvider. Résultat identique à celui du 20/11 pour les trois classes à API JDK (OllamaEmbeddingProvider, JavaAstSupport, JavaProgramModel : rc=1).",
+      "reserve": "Le résidu FileProgramGraphProvider est maintenant consigné dans un ADR Accepted (ARCH-0087 « Compliance and Enforcement », dernière puce ; SUIVI.md:220 décision 9), ce qui lève la réserve (1) du 20/11. La réserve (2) subsiste : la protection des autres entrées sans API tient à l'état courant des liens entre sources.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "changement": "PR #796, changement OpenSpec proteger-les-adaptateurs-embarques-contre-le-retrait-de-leur-entree (archivé 2026-11-20)"
+  },
+  {
+    "id": "AUD-PERF-14",
+    "titre": "La table de symboles de l'explorateur survit à l'éviction de sa vue jusqu'au prochain accès à la WeakHashMap, qui n'a lieu qu'après le chargement de la vue suivante : les symboles de l'ancien snapshot restent retenus hors de tout compte",
+    "severite": "Faible",
+    "axe": "Performance",
+    "preuve": "minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java:79 (`Map<SnapshotReadView, SymbolLookup> lookups = new WeakHashMap<>()`), :405-424 (lookup : snapshots.loadActiveReadView(...) :411 est appelé AVANT le premier accès à lookups :417, seul site qui touche la map avec le put :422), :708-739 (SymbolLookup.of garde dans deux HashMap les objets Symbol du snapshot de la vue) ; une WeakHashMap tient ses valeurs par des références fortes et ne purge une entrée dont la clé est collectée qu'au prochain appel de l'une de ses méthodes ; sonde indépendante /tmp/wh/WeakLookupProbe.java (JDK 21.0.12, même forme : clé = vue qui tient les symboles, valeur = table des mêmes symboles) -> « view collected=true symbols still reachable before any map access=true », puis « symbols still reachable after a map access=false » ; le test SemanticCorpusQueryServiceTest.java:691-701 ne vérifie que la collecte de la vue, pas celle des symboles ; DATA-0085 point 19 affirme « elle ne survit pas à une vue évincée ».",
+    "impact": "Le budget évince les vues en cache justement quand une nouvelle vue a besoin de place (QueryViewMemoryBudget.reserve -> evictCachedViews). Dans la JVM de l'explorateur, la requête suivante charge et décode la nouvelle vue (réservation, puis jusqu'à 34 % du tas de marge de décodage) pendant que les symboles de la vue évincée sont encore retenus par l'entrée périmée. Ce tas n'est compté ni par le budget, ni par une part de HeapShare, ni par la marge déclarée. Les symboles et leurs chaînes sont une part importante d'une vue. C'est le dépassement que DATA-0081/0085 veulent rendre impossible (OutOfMemoryError plutôt que refus explicite), pour une JVM proche de son budget. L'ampleur est calculée, pas mesurée.",
+    "effort": "S",
+    "action": "Purger les entrées périmées avant de charger la vue (par exemple `synchronized (cacheLock) { lookups.size(); }` en tête de lookup, ou vider la map quand la vue rendue n'est plus celle de la table), ou ne garder qu'une table par projet, remplacée dès que la vue diffère. Étendre SemanticCorpusQueryServiceTest.anEvictedViewIsNoLongerReachableFromTheService : une WeakReference vers un Symbol de la vue évincée doit être collectée sans nouvel appel au service. Corriger la phrase de DATA-0085 point 19.",
+    "confiance": "confirmé (sémantique de WeakHashMap observée par une sonde ; ordre des appels lu au HEAD ; tas retenu non mesuré sur MINOS)",
+    "axes": [
+      "Performance"
+    ],
+    "sprint": 9,
+    "connu": "résidu de AUD-PERF-04 (caches comptés par le tas, PR #777)",
+    "source": "mise à jour du 19/11 (vérificateur indépendant)",
+    "depends_on": [],
+    "statut": "Fermé avec réserve",
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-19",
+        "head": "acd79cb8",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      }
+    ],
+    "verification": {
+      "verdict": "Rétention corrigée au 535a5017 : minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java n'a plus ni `lookups` ni WeakHashMap ni import WeakHashMap (diff avec acd79cb8 : suppression du champ, de SymbolLookup.of(snapshot) et de describes()) ; lookup() (:398-413 avec sa javadoc) ne garde rien, SymbolLookup (:695-750) ne tient que le CodeKnowledgeReader de la vue pour la durée de la requête (DocumentWalk :125-200 est local à la requête) ; le seul état partagé restant, `fingerprints` (:70-71, :358-371), tient (metadata, empreinte String) et n'a aucun symbole.",
+      "preuve": "Rétention corrigée au 535a5017 : minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java n'a plus ni `lookups` ni WeakHashMap ni import WeakHashMap (diff avec acd79cb8 : suppression du champ, de SymbolLookup.of(snapshot) et de describes()) ; lookup() (:398-413 avec sa javadoc) ne garde rien, SymbolLookup (:695-750) ne tient que le CodeKnowledgeReader de la vue pour la durée de la requête (DocumentWalk :125-200 est local à la requête) ; le seul état partagé restant, `fingerprints` (:70-71, :358-371), tient (metadata, empreinte String) et n'a aucun symbole. SnapshotReadView.java:41-47 `indexed` ; FileSymbolSnapshotStore.java:353 et PostgresCodeKnowledgeSnapshotStore.java:232 construisent leurs vues par `indexed` ; minos-engine et minos-storage sont identiques (diff -rq) à acd79cb8. Lectures équivalentes : findSymbolById (InMemoryCodeKnowledgeStore.java:177-181) remplace byId ; fileSymbol() (:741-750) filtre sur le fichier localisé et prend la plus petite symbolKey, ce que faisait firstByFile ; l'index byFileId (InMemoryCodeKnowledgeStore.java:672-677) liste aussi un symbole sous le fichier de sa location, d'où le filtre. Sonde différentielle compilée avec javac sur le code domain+engine du 535a5017 : 6 300 comparaisons (symboles par id, fichier par fichier, 300 fichiers, symboles sans location, location d'un autre fichier, clés aléatoires) -> 0 écart. Bornes inchangées (MAX_PAGE_SIZE 200 :41, MAX_SCANNED_DOCUMENTS 2 000 :48, aucun autre hunk). Preuve de libération : minos-application/src/test/java/com/minos/application/semantic/SemanticCorpusQueryServiceTest.java:612-627 pose une WeakReference sur la vue ET sur un Symbol, appelle FixedSnapshotStore.evictAndForgetSymbols (SemanticCorpusTestDoubles.java:144-155, qui remplace le snapshot par des objets Symbol neufs égaux) puis assertNull(servedSymbol.get()) :626 : avec l'ancienne WeakHashMap, la valeur tenait ces symboles et l'assertion échouait (raisonnement, non rejoué : pas de Maven). Tests de forme :598-610, :629-661, :683-693.",
+      "reserve": "NON MESURÉ : le temps d'une page (SUIVI Sprint 9, tâche 1.4 [ ] dans openspec/changes/archive/2026-11-20-liberer-la-table-de-symboles-avec-sa-vue/tasks.md:14, qui n'a pas de mesure avant/après). C'est une réserve de performance, pas de correction : la table (O(1) par document après un premier calcul) est remplacée par des lectures de la vue ; findFileSymbols trie TOUS les symboles du fichier à chaque appel (InMemoryCodeKnowledgeStore.java:225-239) et fileSymbol() (:741-750) le parcourt en entier, pour chaque document FILE ou CHUNK (le symbole résolu court-circuite via Optional.or, :722-733, mais un CHUNK n'a pas de symbole). Sonde javac, mémoire seule, une machine, non reproduite en CI : 200 documents de fichiers à 20 symboles = 2,7 ms/page (ancienne table : 8 ms de construction une fois, puis 0,04 ms) ; 40 documents de fichiers à 500 symboles = 36 ms ; 10 documents à 5 000 symboles = 33 ms, soit environ 1 à 3 ms par document de gros fichier ; jusqu'à 2 000 documents balayés par page filtrée (:48) on peut donc attendre de l'ordre de la seconde, sous le délai de 30 s, mais l'ordre de grandeur n'est pas mesuré sur un snapshot réel ni sur le backend PostgreSQL. NON MESURÉ : tas retenu sur un vrai snapshot (nommé par la tâche 1.4) ; aucun test Java ni Maven exécuté ici (SemanticCorpusQueryServiceTest, check JaCoCo 'explorer-surface' non rejoués). La preuve de libération passe par un double (FixedSnapshotStore) qui bâtit la vue par SnapshotReadView.indexed ; elle ne passe pas par BudgetedViewCache des deux stores réels, dont l'éviction n'a pas changé (FileSymbolSnapshotStoreViewBudgetTest et PostgresCodeKnowledgeSnapshotStoreViewBudgetTest, non rejoués). Écart d'équivalence théorique : l'index byFileId est bâti sur symbolsByScopedId.values() (dédoublonné par id) alors que l'ancienne table parcourait snapshot.symbols() ; sans effet tant qu'un snapshot n'a pas deux symboles de même id.",
+      "date": "2026-11-20",
+      "head": "535a5017"
+    },
+    "changement": "PR #797, changement OpenSpec liberer-la-table-de-symboles-avec-sa-vue (archivé 2026-11-20)"
+  },
+  {
+    "id": "AUD-ARC-12",
+    "titre": "La prose d'architecture cite encore l'ancien garde de frontières (lignes 59-85, copie dans ModuleArchitectureTest, « liste MODULES du script ») et ne décrit nulle part son découpage en huit modules",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "effort": "S",
+    "preuve": "docs/architecture/diagrams/capacites/frontieres-de-modules.md:71-72 cite `check-module-boundaries.py:59-85` et « une copie identique » dans ModuleArchitectureTest ; au 535a5017 le script fait 414 lignes, la table est dans scripts/architecture/module-boundaries.json (module_boundary_policy.py) et A17 refuse toute copie ; docs/architecture/adr/ARCH-0068-modules-dependances-et-propriete-des-packages.md (section Compliance and Enforcement) décrit encore « la liste MODULES du script » et une table « lue dans le script » alors que ARCH-0068…rules.ts:3-9 lit module-boundaries.json et module_boundary_ratchets.py ; ARCH-0058…md:17,:55 et ARCH-0068…md:64 désignent encore check-module-boundaries.py comme lieu des tables ; rg 'module_boundary_|gate_runner' docs openspec/specs -> aucun document ne décrit les huit modules du garde.",
+    "impact": "Un lecteur cherche la table à une ligne qui n'existe plus et croit à une double copie que la PR #791 a supprimée ; le découpage du garde (PR #802 à #804) n'est écrit nulle part. Sans effet sur les gates (check-current-docs passe).",
+    "action": "Corriger frontieres-de-modules.md:71 (source unique module-boundaries.json) et les deux puces d'ARCH-0068 (module-boundaries.json pour A7, module_boundary_ratchets.py pour A14) ; lister les huit modules du garde et gate_runner.py au chapitre « Gardes d'architecture » de docs/developer/quality-gates.md ; compléter ARCH-0058 et ARCH-0068 par une note de mise en œuvre, sans réécrire la décision.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture"
+    ],
+    "statut": "Fermé avec réserve",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ],
+    "verification": {
+      "verdict": "Commandes de la spécification (openspec/changes/archive/2026-11-24-decrire-le-garde-de-frontieres-decoupe/specs/*/spec.md:8 et :21) rejouées sans git (rg équivalent, mêmes exclusions) : la recherche des motifs `check-module-boundaries.py:[0-9]|liste .MODULES.",
+      "preuve": "Commandes de la spécification (openspec/changes/archive/2026-11-24-decrire-le-garde-de-frontieres-decoupe/specs/*/spec.md:8 et :21) rejouées sans git (rg équivalent, mêmes exclusions) : la recherche des motifs `check-module-boundaries.py:[0-9]|liste .MODULES. du script|lue dans le script|ALLOWED. égale` ne rend aucune ligne (rc=1) ; la boucle grep -c rend 1 pour module_boundary_{adapters,documents,packages,policy,ratchets,sources}.py et gate_runner.py, 6 pour module-boundaries.json (docs/developer/quality-gates.md:59-72). rg 'check-module-boundaries.py:[0-9]' docs openspec/specs .claude : seules occurrences = documents figés ou historiques (docs/project/audits/**, ADR archivés) et le scénario négatif de openspec/specs/frontieres-de-modules/spec.md:1447 ; aucun renvoi de ligne périmé dans la documentation courante. Affirmations relues : table « fichier -> règles » de quality-gates.md:65-72 conforme aux fonctions réellement définies (adapters : A2 sources, R1/R2, A10, A19, A20, stockage ; ratchets : A11 à A14, A16, A18, code concret du moteur, PACKAGE_ROOTS_BY_MODULE :102 ; packages : A3, A7, A8, A15, mise en page ; documents : A9, A17, document généré) ; 14 modules (module-boundaries.json) ; ARCH-0058 (en-tête files:, puces :55-:58 : ModuleBoundaryPolicy.java existe, la règle Archgate lit bien POLICY/TEST/READER) ; ARCH-0068 + rules.ts:3-9 (PACKAGE_ROOTS_BY_MODULE dans module_boundary_ratchets.py, section modules du JSON, A9 portées/Sources/Interfaces conformes à module_boundary_documents.py:22-29) ; ARCH-0087:37 (sections infrastructureApiUsers et embeddedAdapterClasses présentes, A19) et :84 (public_composition_root_methods, check_application_test_jar_scope, MinosApplicationAccessorRatchetTest, ApplicationTestJarScopeRuleTest, MinosApplicationTestAccessTest, ApplicationTestAccessPackagingIT existent, table d'accesseurs à 0 au garde) ; SKILL.md:30 ; E4 du dossier (3, 4, 1, 0 = sortie A11 du garde) ; flèches du diagramme conformes à allowedDependencies.",
+      "reserve": "Des affirmations du dossier frontieres-de-modules.md restent fausses ou périmées, sans que la commande de la spécification (qui ne cherche que des numéros de ligne) les voie : voir le constat nouveau « Dossier frontieres-de-modules : libellés périmés après PR #810 » (:47 « 12 autres » alors que minos-app en dépend de 13, :86 règles A2 à A18 sans A19 et A20 et A17 décrite comme comparaison de tables, :209 E3 « le test en affirme cinq » alors que le test affirme 6, :219 « A2 à A18 »). Les deux exigences ajoutées n'ont aucun gate (décision D2 du design) : la récidive est tenue par la revue. Aucun archgate lancé ici.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 10,
+    "changement": "PR #810, sprint 10 (archivé 2026-11-24)"
+  },
+  {
+    "id": "AUD-TST-13",
+    "titre": "Le garde de frontières n'est pas vérifié sur le câblage de main() pour A2, A8, A9, A16 et A19, alors que la docstring de l'auto-test annonce « every rule »",
+    "severite": "Faible",
+    "axe": "Tests",
+    "effort": "S",
+    "preuve": "scripts/architecture/test_check_module_boundaries.py:3-7 (« main() is checked to run every rule (failing spies) ») et :415-484 (MainWiringTest : spies sur 13 fonctions seulement) ; appelées par main() sans spy : check_service_loader_class_loaders (check-module-boundaries.py:308), check_embedded_adapters (:305), check_package_cycles, check_architecture_documentation, check_pom_rules (check_hexagonal_boundaries, check_dependency_policy), check_java_layout, check_source_boundaries, check_assembly_classes. Rouge manquant mesuré sur copie : la ligne 308 remplacée par `service_loaders = 0` -> gate rc=0 et les cinq auto-tests OK ; la ligne 305 remplacée par `api_users, embedded_adapters = 0, 0` -> gate rc=0 et auto-tests rc=0. Le trou existait au 19/11 ; la PR a rendu la docstring et l'étape pr-ci.yml:164 « main wiring » plus affirmatives que les tests.",
+    "impact": "Retirer ou perdre par refactor l'appel d'une règle de main() la rend muette sans qu'aucun contrôle rougisse ; cela touche A19, la règle que le sprint 9 vient de durcir (AUD-ARC-11). EveryRuleHasATest exige seulement que chaque check_* soit référencé par un test, pas que main() l'appelle.",
+    "action": "Étendre run_main_with et MainWiringTest aux huit fonctions manquantes (boucle de sous-tests) ou faire dériver la liste des spies des appels de main() ; corriger la docstring tant que ce n'est pas fait.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Tests"
+    ],
+    "statut": "Fermé",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé"
+      }
+    ],
+    "verification": {
+      "verdict": "Copie saine /tmp/g5/clean de 75e10c68 : le garde rend 0 en 6,8 s ; auto-tests : 69 + 86 + 44 + 38 + 77 + 3 (test_gate_runner.py) = 317 tests OK, contre 308 au 535a5017 (66+86+44+38+74, mesuré sur audit4 : +3 MainWiringTest, +3 ratchets, +3 gate_runner).",
+      "preuve": "Copie saine /tmp/g5/clean de 75e10c68 : le garde rend 0 en 6,8 s ; auto-tests : 69 + 86 + 44 + 38 + 77 + 3 (test_gate_runner.py) = 317 tests OK, contre 308 au 535a5017 (66+86+44+38+74, mesuré sur audit4 : +3 MainWiringTest, +3 ratchets, +3 gate_runner). Les appels de règles sont désormais dans run_rules (check-module-boundaries.py:308-333), non dans main() (:426-427). Mutation de CHAQUE appel (23 instructions de run_rules, sans retenir de valeur neutre inventée : le résultat réel de la règle est recopié en littéral, ou `pass`) + les 4 sous-règles de check_pom_rules (:292-296) = 27 mutants : pour les 27 le garde rend rc=0 (le retrait est silencieux) et test_check_module_boundaries.py rend rc=1 (MainWiringTest, sous-test nommé d'après la règle retirée + test_the_real_run_passes_and_calls_every_rule) ; aucun mutant ne reste vert, y compris check_service_loader_class_loaders (:325), check_embedded_adapters (:322), check_package_cycles, check_architecture_documentation, check_pom_rules et ses quatre sous-règles, check_java_layout, check_source_boundaries, check_assembly_classes. Liste d'espions : rule_functions() (test_check_module_boundaries.py:465-469) dérive les check_* par dir() des six modules, RULES_NOT_RUN_BY_MAIN est vide (:462) ; sondes : une check_* ajoutée dans module_boundary_ratchets.py et appelée par personne -> rouge (3 échecs) ; erreur avalée par try/except autour de check_source_boundaries -> rouge ; appel détourné par import local (contourne le nom global espionné) -> rouge. gate_runner.py : 5 mutants (BaseException, return 0 sur échec, rapport d'échec sur stdout, rapport de succès sur stderr, code de succès 1) -> test_gate_runner.py rc=1 pour les 5 ; il est branché dans pr-ci.yml:179-180. Durée : test_check_module_boundaries.py 19,5 s au 535a5017 -> 5,5 s au 75e10c68 (poste au repos) ; les totaux 51 s -> 21 s du suivi n'ont pas été reproduits à la seconde près.",
+      "reserve": "Reste un trou de même nature, nouveau et Faible (voir « Liste de modules de rule_functions tenue à la main ») : un nouveau module de règles absent du tuple de test_check_module_boundaries.py:467 échappe au contrôle de câblage. Les fonctions de main() qui ne s'appellent pas check_* dépendent de ENTRY_POINT_FUNCTIONS (:455-458, une seule entrée : runtime_service_edges). Les fonctions print_*_report ne sont pas contrôlées (seul « SUCCESS » est affirmé). Python 3 sous Linux uniquement, pas de job CI rejoué.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 10,
+    "changement": "PR #814, sprint 10 (archivé 2026-11-24)"
+  },
+  {
+    "id": "AUD-SEC-11",
+    "titre": "RemoteCloneBudget tolère maintenant la disparition de la racine du clone pendant la marche et rend 0 octet au lieu d'échouer",
+    "severite": "Faible",
+    "axe": "Sécurité",
+    "effort": "S",
+    "preuve": "minos-integration-git/src/main/java/com/minos/integration/git/RemoteCloneBudget.java:77-83 (visitFileFailed compte l'entrée puis appelle tolerateVanishedEntry, :120-122, qui ne rejette que ce qui n'est pas une NoSuchFileException) ; la racine passe par le même visiteur ; sonde javac sur la classe du 535a5017 : racine supprimée -> TreeMetrics[bytes=0, files=0, directories=0, traversalEntries=1] sans exception (avant la PR #800, la même situation lançait) ; la justification écrite (:116-119, « un fichier de verrou ») ne couvre que les entrées ; RemoteCloneBudgetTest.java:21-64 appelle les méthodes du visiteur avec des exceptions fabriquées, aucun test n'exerce Files.walkFileTree ni la racine absente. Appelants : JGitRemoteGitClient.java:87 et :167, JGitRemoteRepositoryMaterializer.java:235, :279, :341.",
+    "impact": "Aucun contournement atteignable constaté : une entrée disparue est comptée avant d'être tolérée, les contrôles décisifs (JGitRemoteGitClient.java:87 après Git.close() et checkout, JGitRemoteRepositoryMaterializer.java:235) mesurent un arbre stable, et une racine absente fait échouer validateCheckout ou readProperties juste après. La règle de sécurité 1 (fail-closed) est pourtant affaiblie sur un cas que la PR n'avait pas à couvrir.",
+    "action": "Ne tolérer la NoSuchFileException que si le chemin n'est pas la racine (`!file.equals(destination)`) ; ajouter à RemoteCloneBudgetTest un cas racine absente (attendu : IOException) et un cas réel (répertoire dont un frère est supprimé pendant la marche).",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Sécurité"
+    ],
+    "statut": "Fermé avec réserve",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ],
+    "verification": {
+      "verdict": "Relu au 75e10c68 : RemoteCloneBudget.java:78-83 (visitFileFailed) et :87-88 (postVisitDirectory) appellent tolerateVanishedEntry (:123-126), qui relance toute erreur qui n'est pas une NoSuchFileException (:124) et, pour une NoSuchFileException portée par destination.equals(entry) (:125), lève IOException(VANISHED_ROOT_MESSAGE = « remote repository clone root disappeared while it was measured », :17) avec l'exception d'origine en cause ; le comptage de l'entrée précède la tolérance (:79-82).",
+      "preuve": "Relu au 75e10c68 : RemoteCloneBudget.java:78-83 (visitFileFailed) et :87-88 (postVisitDirectory) appellent tolerateVanishedEntry (:123-126), qui relance toute erreur qui n'est pas une NoSuchFileException (:124) et, pour une NoSuchFileException portée par destination.equals(entry) (:125), lève IOException(VANISHED_ROOT_MESSAGE = « remote repository clone root disappeared while it was measured », :17) avec l'exception d'origine en cause ; le comptage de l'entrée précède la tolérance (:79-82). Sonde javac (classe + RemoteRepositoryCachePolicy compilées seules, /tmp/probe5, JDK Linux) : parcours réel Files.walkFileTree d'une racine absente -> IOException au message sans chemin ; postVisitDirectory(racine, NSFE) et visitFileFailed(racine, NSFE) -> idem ; frère supprimé -> CONTINUE et TreeMetrics[0,0,0,1] ; AccessDenied, IOException générique, FileSystemLoop -> relancées telles quelles ; racine renommée pendant la marche -> aucun échec (les descripteurs ouverts suivent) ; mutation de la copie (ligne :125 supprimée) : les trois cas de racine redeviennent « OK » sans exception, donc les tests (a) et (b) du changement rougissent bien. Test existant : RemoteCloneBudgetTest.java:108-116 (aMeasuredRootThatIsMissingWhenItIsWalkedFailsTheMeasure) fait un vrai Files.walkFileTree avec le compteur du budget, et :131-150 (aDirectoryThatVanishesDuringARealWalkIsCountedAsAnEntryOnly) un vrai parcours où un visiteur supprime le frère ; en revanche :119-127 (postVisitDirectory de la racine) et les cas :29-90 restent des appels directs avec des exceptions fabriquées. Explication du « test par checkpoint() reste vert » : checkpoint() rend TreeMetrics(0,0,0,0) dès que !Files.exists(destination) (:39), avant tout parcours ; un test de racine absente appelé par checkpoint() n'atteint donc jamais le visiteur et passe avant comme après la correction (sonde 1 : racine absente par checkpoint() -> mesure vide sans exception). Le scope JaCoCo m25 contient bien le préfixe com/minos/integration/git/RemoteCloneBudget (scripts/quality/check-jacoco.py:211, :224).",
+      "reserve": "(1) checkpoint() sur racine absente ou lien pendant reste une mesure vide (RemoteCloneBudget.java:39, décision D5 du design) : les appelants JGitRemoteGitClient.java:87 et JGitRemoteRepositoryMaterializer.java:235/:279/:341 échouent ensuite sur validateCheckout ou readProperties, pas sur le budget. (2) Racine remplacée par un lien symbolique vers un répertoire -> TreeMetrics[0,1 fichier,0,1], par un fichier ordinaire -> 1 fichier de la taille du fichier, sans erreur (sondes 6 et 7) : écart 5 du design, nommé comme question ouverte, hors périmètre. (3) Le message est propre mais la cause (NoSuchFileException) porte le chemin absolu : la règle de sécurité 7 n'est tenue que si aucune surface n'imprime la chaîne des causes, non relu ici (JGitRemoteGitClient.java:90-92 relance l'exception du moniteur telle quelle). (4) Tâche 1.4 (revue de sécurité manuelle) non faite, nommée par le suivi. (5) Ni Maven ni JUnit lancés : les tests ont été lus, la classe a été exercée par sonde, sous Linux seulement (Windows non mesuré).",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 10,
+    "changement": "PR #811, sprint 10 (archivé 2026-11-24)"
+  },
+  {
+    "id": "AUD-PERF-15",
+    "titre": "L'explorateur trie tous les symboles du fichier à chaque document décrit, et le temps d'une page n'est pas mesuré depuis le correctif d'AUD-PERF-14",
+    "severite": "Faible",
+    "axe": "Performance",
+    "effort": "S",
+    "preuve": "SemanticCorpusQueryService.java:722-750 (summarize puis fileSymbol : reader.findFileSymbols(projectId, fileId, Integer.MAX_VALUE) puis boucle complète) ; InMemoryCodeKnowledgeStore.java:225-239 (copie triée de tous les symboles du fichier à chaque appel) ; tâche 1.4 non faite : openspec/changes/archive/2026-11-20-liberer-la-table-de-symboles-avec-sa-vue/tasks.md:14 ; sonde javac mémoire seule : 1 à 3 ms par document de gros fichier (500 à 5 000 symboles).",
+    "impact": "Coût CPU par page proportionnel à la taille des fichiers pour les documents FILE et CHUNK, jusqu'à 2 000 documents balayés par page filtrée ; borné et sous le délai de 30 s mais choisi sans mesure ; sur PostgreSQL le lecteur est le même (vue indexée), même ordre de grandeur attendu, non mesuré.",
+    "action": "Faire la mesure 1.4 (avant/après sur une fixture à gros fichiers) ; si elle gêne, mémoïser la description par fileId pour la durée d'une requête (Map locale à DocumentWalk, libérée avec elle), sans table partagée.",
+    "connu": "AUD-PERF-14 (corrigé le 20/11, mesure non faite)",
+    "confiance": "confirmé",
+    "axes": [
+      "Performance"
+    ],
+    "statut": "Fermé avec réserve",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-20",
+        "head": "535a5017",
+        "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      }
+    ],
+    "verification": {
+      "verdict": "SemanticCorpusPageMeasurementTest.java (300 lignes) est opt-in (@EnabledIfSystemProperty minos.explorer.page.measure, :46-53), n'affirme aucune durée et écrit target/explorer-page-measurements.md ; fixtures 2 000 x 20, 400 x 500, 40 x 5 000 et Zipf 0,8 de 60 472 symboles et 1 488 fichiers (:55-60, :70-80), page de 50 sur module absent (donc 2 000 documents balayés), 3 échauffements, 15 mesures, p95 de 15 = maximum ; un double SeekingVectorStore évite le tri de page du double par défaut.",
+      "preuve": "SemanticCorpusPageMeasurementTest.java (300 lignes) est opt-in (@EnabledIfSystemProperty minos.explorer.page.measure, :46-53), n'affirme aucune durée et écrit target/explorer-page-measurements.md ; fixtures 2 000 x 20, 400 x 500, 40 x 5 000 et Zipf 0,8 de 60 472 symboles et 1 488 fichiers (:55-60, :70-80), page de 50 sur module absent (donc 2 000 documents balayés), 3 échauffements, 15 mesures, p95 de 15 = maximum ; un double SeekingVectorStore évite le tri de page du double par défaut. La commande est consignée dans docs/developer/semantic-explorer.md (:208-213) et le relevé dans design.md:139-148 (trois exécutions, Windows 10, JDK 21.0.13, JaCoCo actif) : médiane maximale 44,0 ms (400 x 500) ; les gros fichiers ont donc bien été mesurés (500 et 5 000 symboles par fichier). Les caractérisations SemanticCorpusQueryServiceTest.java:684-712 (un findFileSymbols par document FILE, aucun pour SYMBOL/CHUNK résolu) et :714+ sont lues, non exécutées. Sonde personnelle (domain+engine compilés sous Linux, InMemoryCodeKnowledgeStore réel, findFileSymbols de tous les fichiers une fois, JVM à chaud 1 itération, indicatif) : 400 x 500 -> 43 à 79 ms (cohérent avec 40-44 ms), 1000 x 500 (500 000 symboles) -> 97 à 104 ms p50, 2000 x 200 -> 77 à 153 ms, 2000 x 500 (1 000 000 symboles) -> 189 à 340 ms p50, maxima 440 à 530 ms.",
+      "reserve": "(1) La page la plus lente mesurée ne lit au plus que 200 000 symboles (colonne « Symboles rendus par page » : 200 000 pour 400 x 500 et 40 x 5 000, 40 000 pour 2 000 x 20) : la combinaison que l'audit décrivait (2 000 documents FILE balayés par page, chacun de 500 à 5 000 symboles) n'est dans aucune fixture ; ma sonde la place à l'ordre de grandeur du seuil (p50 189-340 ms, au-dessus de 250 ms sur 1 mesure sur 3) dès 1 M de symboles dans la région file:. « Aucune correction » est soutenu pour les index jusqu'à ~500 000 symboles, non au-delà ; le design n'écrit pas ce domaine de validité. (2) Seuil de 250 ms (design.md:191-193) : justifié par le seul argument « même ordre de grandeur que les autres routes » (liste 11 ms, détail 47 ms), soit 5 fois la plus lente ; recommandation écrite avant mesure mais confirmée par le propriétaire le même jour sur le relevé, pas dérivée d'un budget d'interaction. (3) Mesure du service seul en mémoire, sans HTTP ni chargement de la vue ; snapshot réel, Linux et PostgreSQL non mesurés (tâches 4.1 et 4.3, nommées) ; répartition Zipf supposée. (4) Test non exécuté en CI par construction (propriété requise) : rien ne signale une régression de ce coût. (5) Ni Maven ni JUnit lancés ici ; ma sonde n'est pas le banc du dépôt.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 10,
+    "changement": "PR #813, sprint 10 (archivé 2026-11-24)"
+  },
+  {
+    "id": "AUD-ARC-13",
+    "titre": "A11 ne voit que les types de retour : une signature publique de MinosApplication nomme encore un type du moteur en paramètre, et une méthode publique à paramètre moteur passe le garde",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "effort": "S",
+    "preuve": "MinosApplication.java:359 `public ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> executorDecorator)` ; javap : `UnaryOperator<com.minos.orchestration.IndexingRuntimePorts$IndexerExecutor>` (minos-engine). Appelants de production : MinosApplication.java:385 seulement ; appelants hors package : trois tests (minos-cli RemoteIndexingUseCases.java:21, minos-app IncrementalIndexingRealFixtureTest.java:67, minos-application UseCaseFacadeTest.java:66). module_boundary_ratchets.py:166-199 (minos_application_accessors ne lit que `returned`). Mutation sur copie : ajout de `public void leakParam(com.minos.registry.ProjectRegistry r) {}` -> garde rc=0. Les Builder.xxx(…) publics (MinosApplication.java:446 s.) prennent aussi des types du moteur par conception. Même constat en profondeur : ProjectInspectionService.view(RegisteredProject) et ProjectIndexingUseCase.execute(…, IndexingResumePolicy) restent publics avec des types moteur.",
+    "impact": "La formulation d'ARCH-0087 § 2.2 (« rend ») est respectée à la lettre, mais « façade sans port du moteur » (ARCH-0057:66, java-api.md) est plus forte que ce que le garde prouve : un paramètre ou une signature de service peut rouvrir l'accès au moteur sans que A11 rougisse.",
+    "action": "Soit écrire dans ARCH-0087 que le contrat porte sur les types de retour de MinosApplication (et justifier projectIndexing(decorator)), soit étendre A11 aux types de paramètres, soit rendre projectIndexing(UnaryOperator) package-private et l'ajouter à MinosApplicationTestAccess (3 appelants de test seulement).",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-ARC-14",
+    "titre": "Quatre classes publiques du package com.minos.application reçoivent encore l'application entière et y puisent leurs ports",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "effort": "M",
+    "preuve": "LocalProjectOperations.java:50-59 (value.projectRegistry(), snapshotStore(), indexStateStore(), scipArtifactImporter(), retentionService(), indexImportHistoryStore()) ; ProviderPlatformService.java:35-37 (providerCatalog(), providerRuntimeManager()) ; constructeurs publics LocalProjectGitQuery.java:16 et LocalProjectSymbolQuery.java:29 prennent MinosApplication. Le garde ne les voit pas : ports package-private, A11 n'inspecte que les surfaces.",
+    "impact": "Le motif « localisateur de services » de AUD-ARC-02 survit dans le package pour les opérations locales ; les cas d'usage d'indexation, eux, reçoivent leurs Dependencies. Pas d'effet sur les surfaces, mais ces classes dépendent d'une application complète en test (cf. 217 appels de test à TestAccess).",
+    "action": "Hors périmètre du constat clos ; à noter comme dette si l'on veut un ratchet « aucun accesseur package-private de plus » ou injecter des Dependencies comme pour ProjectIndexingUseCase.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-ARC-15",
+    "titre": "Prose résiduelle sur le report du 2026-11-19 et sur ARCH-0087 après le sprint 10",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "effort": "S",
+    "preuve": "docs/project/audits/2026-11-15/SUIVI.md:7 (« … et le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, reporté ») contredit SUIVI.md:157 et :227 ; .claude/agent-memory/archgate-developer/project_audit_2026_11_15_clos.md:20-21 (« reporté par le propriétaire ; ARCH-0087 reste `Proposed` »), alors que :41 du même fichier dit `Accepted` ; docs/architecture/adr/README.md:92 : colonne Origine = « Sprint 7 … (changements cabler-… et injecter-…) », sans `retirer-la-racine-de-composition-de-la-facade` que ARCH-0087…md:12 cite ; MinosApplication.java:66 Javadoc « Long-lived composition root » alors que la façade ne rend plus la racine ; ARCH-0042:333 écrit encore « via MinosApplication.compositionRoot() » sans mention du retrait.",
+    "impact": "Le prochain lecteur (humain ou agent) lit que le groupe 4 est reporté et ARCH-0087 non accepté ; le suivi se contredit d'une ligne à l'autre.",
+    "action": "Corriger SUIVI.md:7, la mémoire d'agent (lignes 20-21), la ligne 92 du README des ADR et le Javadoc de classe ; une note de renvoi à ARCH-0087 dans ARCH-0042:333.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-ARC-16",
+    "titre": "Dossier frontieres-de-modules : libellés périmés après la PR #810",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "effort": "S",
+    "preuve": "docs/architecture/diagrams/capacites/frontieres-de-modules.md:47 « minos-app (assemblage, dépend des 12 autres) » : module-boundaries.json donne 14 modules et allowedDependencies['minos-app'] en liste 13, minos-app/pom.xml en déclare 13 (+ minos-application en test) ; :86 « A17 tables Java et Python différentes » alors qu'A17 (module_boundary_documents.py:192-226) refuse une table copiée dans ModuleArchitectureTest, et la liste des règles s'arrête à A18 alors que le garde porte A19 et A20 (check-module-boundaries.py:print_rule_report, pr-ci.yml « A18 to A20 ») ; :219 « son périmètre (A2 à A18) » ; :209 (E3) « le test en affirme cinq » alors que test_check_module_boundaries_adapters.py:228 affirme assertEqual(6, check_service_loader_class_loaders()) (déjà 6 au 535a5017) ; docs/developer/quality-gates.md ne nomme pas test_gate_runner.py (rg vide) alors que le job invariants le lance (pr-ci.yml:179-180).",
+    "impact": "Le lecteur compte 12 dépendances au lieu de 13, ne trouve pas A19 et A20 dans le dossier de capacité, et croit A17 comparatif ; les commandes de la spécification de la PR #810 ne cherchent que des numéros de ligne et ne les voient pas.",
+    "action": "Corriger :47 (13 autres, ou ne plus écrire de nombre), :86 (A17 sans copie ; ajouter A19 et A20), :209 (6) et :219 (A2 à A20) ; nommer test_gate_runner.py dans la phrase des auto-tests de quality-gates.md:75.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-DEP-09",
+    "titre": "Aucun gate n'exige la somme SHA-256 des distributions Maven et Gradle : supprimer `distributionSha256Sum` d'un wrapper laisse tous les contrôles verts et le wrapper exécute alors sans vérifier",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "effort": "S",
+    "preuve": ".mvn/wrapper/maven-wrapper.properties:4 et minos-intellij/gradle/wrapper/gradle-wrapper.properties:3 portent la somme, mais check-toolchain-baseline.py:71,76 ne lit le wrapper Gradle que pour distributionUrl, et `distributionSha256Sum` n'apparaît dans scripts/ que dans une fixture (test_check_toolchain_baseline.py:22). Mutation : copie sans les deux lignes -> check-toolchain-baseline, check-tools-manifest, check-workflow-pins, check-image-pins, check-current-docs rc=0. mvnw:226-247 ne vérifie que `if [ -n \"${distributionSha256Sum-}\" ]` : harnais local (zip factice servi en http) -> somme correcte rc=0, somme altérée rc=1 « Failed to validate Maven distribution SHA-256 », somme absente rc=0 et le faux Maven s'exécute (STUB-MAVEN-EXECUTED). Le commentaire intellij-plugin.yml:73 ne couvre que gradle-wrapper.jar (setup-gradle), pas la distribution.",
+    "impact": "Une montée Dependabot ou manuelle (deux montées de wrapper dans la période : Maven 3.10.1 -> 3.10.2, Gradle 9.9.1 -> 9.9.2) qui retire ou casse la ligne n'est détectée par aucune CI : la distribution est téléchargée et exécutée sans empreinte (fail-open). Le contrôle repose sur la relecture humaine.",
+    "action": "Ajouter à check-toolchain-baseline.py (ou check-tools-manifest.py) une règle : chaque wrapper doit porter exactement une ligne `distributionSha256Sum=<64 hex>` ; test rouge dans l'auto-test existant. Optionnel : vérifier que l'URL du wrapper Maven reste sous https://repo.maven.apache.org/maven2/.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Dépendances"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-DEP-10",
+    "titre": "Le contrôle d'empreinte de l'archive Maven de l'image n'est gardé que par des assertions textuelles faibles : `sha256sum -c - || true` passe tous les gates et l'archive altérée est décompressée",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "effort": "S",
+    "preuve": "docker/Dockerfile.mcp.release:174 `printf … \"${MAVEN_ZIP_SHA256}\" … | sha256sum -c -; \\` suivi de `unzip` (:175). M29DockerAdministrationContractTest.java:161-168 n'assertent que la présence de l'ARG, de `${MAVEN_ZIP_SHA256}` et de `sha256sum -c -` (satisfait aussi par :186,194,202,211,247) ; la reprise ajoute des assertions sur `curl --continue-at - --retry` (:164-167) mais aucune sur l'ordre ni sur l'absence de `|| true`. check-tools-manifest ne lit que les ARG (test_check_tools_manifest.py:151). Harnais (bloc RUN extrait, faux curl) : copie saine -> archive saine rc=0, 1er miroir en échec puis 2e rc=0, archive altérée rc=1 sans unzip, aucun miroir rc=1 (fail-closed, aucune variable d'environnement n'intervient) ; copie avec `|| true` -> archive altérée rc=0 et unzip exécuté ; gates Python rc=0 et assertions 161-168 émulées toutes vraies (le test Java lui-même n'a pas été exécuté).",
+    "impact": "Le fail-closed actuel est correct mais non protégé contre une régression d'un changement futur (surtout un réglage « pour tolérer un miroir lent » comme le #815). Une archive Maven non vérifiée est exécutée à l'indexation dans l'image admin (mvn).",
+    "action": "Remplacer l'assertion :168 par une expression régulière sur la ligne Maven (`\"${MAVEN_ZIP_SHA256}\" … | sha256sum -c -; \\\\` suivie de `unzip` dans le même RUN, sans `||` ni `true`), ou déléguer à scripts/ci/fetch-verified.sh déjà testé. Idem pour Node, Coursier, scip-clang, rust-analyzer.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Dépendances"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-DEP-11",
+    "titre": "Deux pièges récurrents des PR Dependabot ne sont écrits que dans la mémoire d'agent, ni dans le skill minos-dependency-update ni dans un gate : instantané apt au moins aussi récent que l'image, mvnw.cmd en LF dans l'index",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "effort": "S",
+    "preuve": ".claude/agent-memory/archgate-developer/project_audit_2026_11_15_clos.md:46-49 : « relever l'instantané apt UBUNTU_APT_SNAPSHOT … avec chaque image Temurin » et « remettre mvnw.cmd en LF quand Dependabot le réécrit en CRLF ». grep 'snapshot|instantané|mvnw.cmd' dans .claude/skills/minos-dependency-update/SKILL.md : 0 occurrence ; l'étape 5 ne parle que de gradlew.bat. Mutation : UBUNTU_APT_SNAPSHOT ramené à 20261003T000000Z (Dockerfile.mcp.release:79) -> check-image-pins, check-tools-manifest, check-current-docs rc=0 (seul M29…Test.java:151, qui fige la date exacte, divergerait, et il ne compare pas à la date de l'image) ; mvnw.cmd `i/crlf` dans l'index -> check-posix-script-eol rc=0 (il ne regarde que *.sh, mvnw et les shebangs, check-posix-script-eol.py, fonctions shebang_scripts et sélection des `.sh`). Les commits « avancer l'instantané apt au 2026-11-20 » et « garder mvnw.cmd en fins de ligne LF » montrent que les deux pièges se sont produits dans la période.",
+    "impact": "Chaque PR Dependabot Docker ou Maven-wrapper risque de ne casser que tard (installation apt de l'image, candidat Windows) ; le savoir tient à une mémoire locale non versionnée avec le code.",
+    "action": "Ajouter ces deux points au skill minos-dependency-update (étapes 4 et 5). Optionnel : gate comparant UBUNTU_APT_SNAPSHOT à la date de l'image (non mesurable hors ligne) et i/lf de mvnw.cmd dans check-posix-script-eol.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Dépendances"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-DEP-12",
+    "titre": "La documentation courante dit « wrapper Maven 3.10.0 » alors que le wrapper est en 3.10.2",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "effort": "S",
+    "preuve": ".mvn/wrapper/maven-wrapper.properties:3 `apache-maven-3.10.2` ; docs/project/governance/STATUS.md:303 et ROADMAP.md:131 « Maven 3.10.0 avec checksum », docs/developer/quality/code-audit.md:23 « wrapper du dépôt (3.10.0 … ) », docs/user/docker-runtime.md:166 « le Maven Wrapper, qui pointe sur Maven 3.10.0 », ADR GEN-0077:113 « le wrapper télécharge Maven 3.10.0 » avec la preuve `maven-wrapper.properties:3` ; code-audit-couverture.md:15. check-current-docs.py rc=0 : aucun gate ne lie ces mentions au wrapper (dérive déjà présente à 3.10.1 au 20/11, aggravée par la montée du 3.10.2).",
+    "impact": "Documentation inexacte sur la version réellement exécutée par `mvnw` ; la baseline `[3.9,4.0)` est, elle, inchangée et cohérente (pom.xml:208, AGENTS.md:15). Risque de confusion lors d'une analyse d'incident ou d'avis de sécurité.",
+    "action": "Écrire « wrapper Maven 3.10.x » (ou renvoyer à maven-wrapper.properties) dans STATUS, ROADMAP, code-audit.md, docker-runtime.md ; ne pas modifier l'ADR GEN-0077 (historique) sans note.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Dépendances"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-QUA-08",
+    "titre": "java-api.md promet un remplaçant de retentionService() que la façade n'offre pas à la demande",
+    "severite": "Faible",
+    "axe": "Qualité",
+    "effort": "S",
+    "preuve": "docs/user/java-api.md:359 (`retentionService()` -> « `new LocalProjectOperations(application)` (rétention des snapshots) ») ; LocalProjectOperations expose addProject, listProjects, inventory, inspectProject, inspection, statusInspection, importScip (lignes 63-100) : la rétention n'y est appelée qu'après un import (LocalProjectOperations.java:59, :142) ; aucune méthode publique ne compacte à la demande.",
+    "impact": "Un hôte qui appelait retentionService().xxx() directement n'a pas de remplaçant documenté fonctionnel ; la rupture est annoncée mais son remède est inexact pour ce cas.",
+    "action": "Écrire « aucun remplaçant à la demande ; la rétention suit l'indexation et l'import » ou exposer une opération de rétention dans la façade.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Qualité"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-SEC-12",
+    "titre": "Le contenu « une seule classe » du test-jar n'est contrôlé ni par le garde ni par l'IT d'empaquetage",
+    "severite": "Faible",
+    "axe": "Sécurité",
+    "effort": "S",
+    "preuve": "ARCH-0087 § 2.3 (« seule classe du test-jar ») et Don't (« y publier une autre classe ou une déclaration de service ») ; minos-application/pom.xml:58 seul `<include>com/minos/application/MinosApplicationTestAccess.class</include>` ; ApplicationTestAccessPackagingIT.java:28-41 vérifie la présence de la classe et l'absence de META-INF/services, pas l'absence d'autres classes ; check_application_test_jar_scope (check-module-boundaries.py:148-162) ne lit que <scope>. Mutation sur copie : includes élargi à `com/minos/application/**` -> garde rc=0 ; l'IT resterait vert (classe présente, aucun service).",
+    "impact": "Un élargissement des includes publierait dans un jar consommé par 7 modules des doubles de test ou classes internes sans qu'aucun contrôle ne rougisse ; les deux premières lignes de défense (portée test, absence du fat jar) ne couvrent pas ce cas.",
+    "action": "Dans l'IT, affirmer que la liste des entrées .class du test-jar est exactement [MinosApplicationTestAccess] ; ou faire lire par le garde la valeur de <includes> de minos-application/pom.xml.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Sécurité"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
+  },
+  {
+    "id": "AUD-TST-14",
+    "titre": "Liste de modules de rule_functions tenue à la main : un nouveau module de règles échappe au contrôle de câblage de main()",
+    "severite": "Faible",
+    "axe": "Tests",
+    "effort": "S",
+    "preuve": "scripts/architecture/test_check_module_boundaries.py:467 `modules = (_MODULE, BOUNDARY_POLICY, ADAPTERS, RATCHETS, PACKAGES, DOCUMENTS)` dérive les check_* de ces seuls modules ; la docstring (:3-7, :487-492) affirme « derives every check_* function of the gate and of its rule modules ». Rouge manquant mesuré sur copie : ajout de scripts/architecture/module_boundary_extra.py définissant check_extra_rule() (jamais appelé, hors du tuple) -> garde rc=0 et test_check_module_boundaries.py rc=0 (69 tests OK). À l'inverse une check_* ajoutée à un des six modules et non appelée fait rougir 3 tests. Aucun auto-test ne rapproche les fichiers module_boundary_*.py du tuple ; check-ci-wiring.py ne contrôle que l'exécution des test_*.py.",
+    "impact": "Un développeur qui ajoute un septième module de règles, l'importe et appelle sa règle dans run_rules, n'a aucun contrôle qui rougisse si l'appel disparaît plus tard : le trou AUD-TST-13 se rouvre pour ce module, sous une docstring qui affirme le contraire.",
+    "action": "Dériver le tuple de modules des fichiers scripts/architecture/module_boundary_*.py (importlib sur glob) ou ajouter un test qui exige que chaque module_boundary_*.py figure dans le tuple ; rouge : copie avec un module factice.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Tests"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-25",
+        "head": "75e10c68",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 25/11.",
+      "date": "2026-11-25",
+      "head": "75e10c68"
+    },
+    "sprint": 11
   }
 ]
