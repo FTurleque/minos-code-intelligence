@@ -2,13 +2,16 @@
 """Self-test of the documentation rules of check-module-boundaries.py: A9 (arc42 block view), A17 (ArchUnit policy
 reading) and the generated module dependency document with its execution edges by service.
 
-Each case builds a throw-away document or tree and runs one rule of the real script against it.
+Each case builds a throw-away document or tree and runs one rule of the real script against it. GuardDocumentationTest
+also reads the real repository: the rule labels carried by the guard sources are those the capability dossier and
+docs/developer/quality-gates.md list, and quality-gates.md names every file of the guard, found on disk.
 """
 
 from __future__ import annotations
 
 import contextlib
 import io
+import re
 import sys
 import tempfile
 import unittest
@@ -361,6 +364,125 @@ class DocumentedScopeSourcesAndInterfacesTest(unittest.TestCase):
         owners = DOCUMENTS.reactor_type_owners(BOUNDARY_POLICY.ROOT, MODULES)
         self.assertEqual({"minos-domain"}, owners["SemanticVectorStore"])
         self.assertIn("SemanticVectorStore", DOCUMENTS.public_interfaces(BOUNDARY_POLICY.ROOT, "minos-domain"))
+
+
+GUARD_DIRECTORY = Path(__file__).resolve().parent
+REPOSITORY = GUARD_DIRECTORY.parents[1]
+DOSSIER = REPOSITORY / "docs" / "architecture" / "diagrams" / "capacites" / "frontieres-de-modules.md"
+QUALITY_GATES = REPOSITORY / "docs" / "developer" / "quality-gates.md"
+RULE_LABEL = re.compile(r"\bA(\d{1,2})\b")
+DOSSIER_RULES = "Règles du garde"
+NO_RULE_SENTENCE = "Aucune règle ne porte"
+QUALITY_GATE_RULES = "applique, sans compilation"
+BULLET = re.compile(r"^\s*- (.*)$", re.MULTILINE)
+BOLD = re.compile(r"\*\*([^*]+)\*\*")
+
+
+def guard_rule_labels(directory: Path = GUARD_DIRECTORY) -> set[str]:
+    """The A<n> labels carried by the guard sources (its entry point and every module_boundary_*.py found on disk)."""
+    sources = [directory / "check-module-boundaries.py"] + sorted(directory.glob("module_boundary_*.py"))
+    labels = {f"A{number}" for source in sources if source.is_file()
+              for number in RULE_LABEL.findall(source.read_text(encoding="utf-8"))}
+    if not labels:
+        raise AssertionError(f"no rule label in the guard sources of {directory.name}")
+    return labels
+
+
+def dossier_rule_labels(text: str) -> set[str]:
+    """The labels of the paragraph that lists the rules of the guard in the capability dossier, without the sentence
+    naming the labels no rule carries."""
+    start = text.find(DOSSIER_RULES)
+    if start < 0:
+        raise AssertionError(f"the dossier has no paragraph starting with '{DOSSIER_RULES}'")
+    paragraph = re.split(r"\r?\n\s*\r?\n", text[start:], maxsplit=1)[0]
+    paragraph = paragraph.split(NO_RULE_SENTENCE, 1)[0]
+    labels = {f"A{number}" for number in RULE_LABEL.findall(paragraph)}
+    if not labels:
+        raise AssertionError(f"the '{DOSSIER_RULES}' paragraph of the dossier names no rule")
+    return labels
+
+
+def quality_gate_rule_labels(text: str) -> set[str]:
+    """The labels written in bold in the bullets of the list of what the guard applies in quality-gates.md."""
+    start = text.find(QUALITY_GATE_RULES)
+    if start < 0:
+        raise AssertionError(f"quality-gates.md has no list introduced by '{QUALITY_GATE_RULES}'")
+    end = text.find("\n## ", start)
+    section = text[start:end if end >= 0 else len(text)]
+    labels = {f"A{number}" for bullet in BULLET.findall(section) for bold in BOLD.findall(bullet)
+              for number in RULE_LABEL.findall(bold)}
+    if not labels:
+        raise AssertionError("the list of what the guard applies in quality-gates.md names no rule")
+    return labels
+
+
+def guard_files(directory: Path = GUARD_DIRECTORY) -> list[str]:
+    """Every file of the module boundary guard, found on disk rather than copied."""
+    names = ["check-module-boundaries.py", "module-boundaries.json", "gate_runner.py", "test_gate_runner.py",
+             "module_boundaries_testing.py"]
+    names += [path.name for pattern in ("module_boundary_*.py", "test_check_module_boundaries*.py")
+              for path in sorted(directory.glob(pattern))]
+    missing = [name for name in names if not (directory / name).is_file()]
+    if missing:
+        raise AssertionError(f"guard files missing from {directory.name}: {missing}")
+    return names
+
+
+def numbered(labels: set[str]) -> list[str]:
+    return sorted(labels, key=lambda label: int(label[1:]))
+
+
+class GuardDocumentationTest(unittest.TestCase):
+    """AUD-ARC-16: the documentation names every rule label and every file of the guard (structural identifiers, not
+    phrases, ADR 0043); a missing paragraph, list or label set fails."""
+
+    def test_the_dossier_lists_exactly_the_rules_of_the_guard(self):
+        documented = dossier_rule_labels(DOSSIER.read_text(encoding="utf-8"))
+        guard = guard_rule_labels()
+        self.assertEqual(numbered(guard), numbered(documented),
+                         f"rules missing from the dossier: {numbered(guard - documented)}; "
+                         f"labels the guard does not carry: {numbered(documented - guard)}")
+
+    def test_quality_gates_has_a_bullet_for_every_rule_of_the_guard(self):
+        documented = quality_gate_rule_labels(QUALITY_GATES.read_text(encoding="utf-8"))
+        guard = guard_rule_labels()
+        self.assertEqual([], numbered(guard - documented), "rules without a bullet in quality-gates.md")
+        self.assertEqual([], numbered(documented - guard), "bullets naming a label the guard does not carry")
+
+    def test_quality_gates_names_every_file_of_the_guard(self):
+        text = QUALITY_GATES.read_text(encoding="utf-8")
+        self.assertEqual([], [name for name in guard_files() if f"`{name}`" not in text])
+
+    def test_a_missing_paragraph_list_or_label_set_fails(self):
+        dossier = DOSSIER.read_text(encoding="utf-8")
+        gates = QUALITY_GATES.read_text(encoding="utf-8")
+        with self.assertRaisesRegex(AssertionError, DOSSIER_RULES):
+            dossier_rule_labels(dossier.replace(DOSSIER_RULES, "Rules"))
+        with self.assertRaisesRegex(AssertionError, "names no rule"):
+            dossier_rule_labels(f"{DOSSIER_RULES} : aucune.\n\nA2")
+        with self.assertRaisesRegex(AssertionError, QUALITY_GATE_RULES):
+            quality_gate_rule_labels(gates.replace(QUALITY_GATE_RULES, "runs"))
+        with tempfile.TemporaryDirectory() as empty:
+            with self.assertRaisesRegex(AssertionError, "no rule label"):
+                guard_rule_labels(Path(empty))
+            with self.assertRaisesRegex(AssertionError, "guard files missing"):
+                guard_files(Path(empty))
+
+    def test_a_label_removed_from_the_documentation_is_seen(self):
+        dossier = DOSSIER.read_text(encoding="utf-8")
+        self.assertNotIn("A20", dossier_rule_labels(re.sub(r"\bA20\b", "A-twenty", dossier)))
+        gates = QUALITY_GATES.read_text(encoding="utf-8")
+        self.assertNotIn("A20", quality_gate_rule_labels(re.sub(r"(- \*\*)A20\b", r"\1Assembly", gates)))
+
+    def test_a_new_rule_module_or_label_is_seen(self):
+        with tempfile.TemporaryDirectory() as copy:
+            directory = Path(copy)
+            for path in GUARD_DIRECTORY.glob("*"):
+                if path.is_file() and (path.suffix in (".py", ".json")):
+                    (directory / path.name).write_bytes(path.read_bytes())
+            (directory / "module_boundary_x.py").write_text('"""A21 new rule."""\n', encoding="utf-8")
+            self.assertIn("A21", guard_rule_labels(directory))
+            self.assertIn("module_boundary_x.py", guard_files(directory))
 
 
 if __name__ == "__main__":

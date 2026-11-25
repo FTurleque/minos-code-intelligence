@@ -8,7 +8,7 @@ paths:
 Conventions relevées dans les gates, les ADR et les revues du dépôt. La convention du **module touché** fait foi quand elle est plus précise.
 
 ## Architecture
-- Respecter la direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0068). Aucune dépendance Maven nouvelle sans relire `scripts/architecture/check-module-boundaries.py` (règles A2, A3, A7 à A16).
+- Respecter la direction `domain → engine → runtime/storage → adapters → application → surfaces` (ADR 0068). Aucune dépendance Maven nouvelle sans relire `scripts/architecture/check-module-boundaries.py` (règles A2, A3, A7 à A20, détaillées dans `docs/developer/quality-gates.md`).
 - Un package appartient à **un seul module** (ADR 0068). Déplacer une classe plutôt que renommer ; un déplacement fait entrer la classe en « code neuf » pour SonarCloud : ses tests vivent dans son module.
 - `application` ne nomme aucune classe d'adaptateur ; les surfaces non plus (ADR 0042, 0058). Le câblage est dans `minos-bootstrap`.
 - Hors de `minos-runtime-local`, ne nommer que les types de ses packages `process`, `sandbox` et `workspace` listés dans `RUNTIME_LOCAL_EXPORTED_TYPES` (règle A10) ; allonger cette liste est une décision relue, pas un correctif de compilation.

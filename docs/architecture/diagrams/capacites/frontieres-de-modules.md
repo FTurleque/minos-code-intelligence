@@ -1,7 +1,7 @@
 # Capacité `frontieres-de-modules` — dossier durable
 
 Spec de référence : [openspec/specs/frontieres-de-modules/spec.md](../../../../openspec/specs/frontieres-de-modules/spec.md)
-· Relevé au commit `64d131e4` (2026-11-04).
+· Relevé au commit `4fee1ed4` (2026-11-25).
 
 ## Objet et périmètre
 
@@ -44,7 +44,7 @@ flowchart BT
   subgraph contrat["Module de contrat"]
     nex["minos-nexus"]
   end
-  asm["minos-app (assemblage, dépend des 12 autres)"]
+  asm["minos-app (assemblage, dépend de tous les autres modules)"]
   ij["minos-intellij (hors reactor, protocole CLI)"]
   eng --> dom
   rt --> eng
@@ -83,8 +83,10 @@ entre deux modules ; A7 liste des modules différente du reactor ; A8 nouveau cy
 des dépendances différente des POM ; A10 type non exporté du runtime local nommé ailleurs ; A11 type du moteur
 nommé par une surface ou un module de contrat hors liste ; A12 lancement de processus dans les couches internes ; A13 couplage entre
 adaptateurs hors liste ; A14 nouvelle racine de packages ; A15 classe publique sans appelant ; A16
-`ServiceLoader` sans chargeur explicite ; A17 tables Java et Python différentes ; A18 index mémoire ou port
-d'écriture hors du cœur. Aucune règle ne porte les étiquettes A4 à A6.
+`ServiceLoader` sans chargeur explicite ; A17 table de politique recopiée dans `ModuleArchitectureTest` ; A18 index
+mémoire ou port d'écriture hors du cœur ; A19 classe d'adaptateur embarquée nommée hors de sa famille, API
+d'infrastructure du JDK nommée par un fichier non listé de `minos-application` ; A20 classe de production de
+`minos-app` hors liste. Aucune règle ne porte les étiquettes A1 et A4 à A6.
 
 ### Que rend la façade `MinosApplication`, et à qui ?
 
@@ -206,7 +208,7 @@ Le garde et ses auto-tests tournent dans le job `invariants` de `pr-ci.yml` ; le
 |---|---|---|---|
 | E1 | La spec se contredit : une exigence veut une table des cycles connus à quatre cycles (15 packages) et un affichage « 4 cycles connus », une autre une table vide et « 0 known cycles over 0 packages » ; le code suit la seconde | `openspec/specs/frontieres-de-modules/spec.md:58`, `openspec/specs/frontieres-de-modules/spec.md:114`, `scripts/architecture/module_boundary_packages.py` (`KNOWN_PACKAGE_CYCLES`) | [Proposition] Mettre la première exigence à l'état final (table vide) par un changement |
 | E2 | La spec écrit « 14 modules » dans trois exigences et « 13 modules » dans le scénario du stockage réuni ; le reactor et `MODULES` comptent 14 modules, seul le « 13 » est faux | `pom.xml`, `scripts/architecture/module-boundaries.json` (section `modules`) | Le scénario modifié par `aligner-la-prose-d-architecture-sur-le-code` n'écrit plus de nombre : il se lit dans la liste des modules |
-| E3 | Une exigence parle de quatre découvertes de service de production ; le test en affirme cinq | `scripts/architecture/test_check_module_boundaries.py` (`test_the_real_tree_passes_a_loader_at_every_site`) | [Proposition] Corriger le compte ou ne plus l'écrire dans la spec |
+| E3 | Une exigence comptait les découvertes de service de production | `scripts/architecture/test_check_module_boundaries_adapters.py` (`test_the_real_tree_passes_a_loader_at_every_site`) | Clos : l'exigence « Aucune découverte de service de production n'omet le chargeur » ne compte plus les sites (changement `actualiser-le-dossier-des-frontieres-de-modules`) |
 | E4 | Le scénario « Décomptes du cliquet » attend `minos-api=14, minos-cli=15, minos-mcp=4, minos-nexus=6` ; le garde en est à 3, 4, 1 et 0, avec un autre format d'affichage : le scénario échouerait tel qu'écrit | `openspec/specs/frontieres-de-modules/spec.md:524`, `scripts/architecture/module-boundaries.json` (section `engineTypesNamedBySurface`) | [Proposition] Décrire le cliquet sans compte figé (il ne fait que baisser) |
 | E5 | L'exemple de type du moteur « déjà listé » pour la CLI (`io.PrivateLocalStorage`) est sorti de la liste ; le test s'appuie sur un autre type | `openspec/specs/frontieres-de-modules/spec.md:361` | [Proposition] Mettre l'exemple à jour |
 | E6 | Un gate cité par une exigence (`check-polyglot-provider-consistency.py`) n'apparaît dans aucun workflow | `scripts/quality/check-polyglot-provider-consistency.py` | [Question] Gate orphelin à câbler ou à retirer ? |
@@ -216,5 +218,4 @@ Le garde et ses auto-tests tournent dans le job `invariants` de `pr-ci.yml` ; le
 
 ## Questions ouvertes
 
-- Le libellé de l'étape CI du garde (« A3 packages, A7 reactor ») ne reflète plus son périmètre (A2 à A18) : à
-  corriger avec le prochain changement des workflows.
+Aucune.
