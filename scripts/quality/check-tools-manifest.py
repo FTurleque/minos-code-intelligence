@@ -14,6 +14,14 @@ embeds it. Three consumers read it and one gate checks all of them:
 * the Windows distribution build (``scripts/release/build-embedded-tools.py``, called by
   ``build-windows-distribution.ps1``; neither may carry a list or a hash of its own).
 
+Every SHA-256 ``ARG`` the catalogue gives the image (key ``sha256`` of ``dockerArgs``) is checked before its archive
+is used: exactly one ``RUN`` instruction consumes it; that instruction starts with ``set -e`` (``-eux`` and the like)
+and holds no ``|| true``, ``|| :``, ``set +e`` nor ``trap``; it holds once the line
+``printf '%s  %s\\n' "${ARG}" <file> | sha256sum -c -``, with no ``||`` after it; and no command before that line names
+``<file>``, except ``curl`` that writes it and ``rm -f`` that removes it. The list of ``ARG`` comes from the catalogue,
+so a tool added to it is covered. What this does not prove: that the checked file is the one used on disk, nor that
+the image builds (the Docker qualification does).
+
 ``ScipIndexerCatalog`` keeps the provider versions the product advertises: the catalogue must say the same.
 
 With ``--distribution <dir>`` the gate also checks a built distribution: ``tools/TOOLS-MANIFEST.json``
@@ -341,6 +349,124 @@ def dockerfile_instructions(lines: list[str]) -> list[list[tuple[int, str]]]:
     return instructions
 
 
+SET_ERREXIT = re.compile(r"^\s*RUN\s+set\s+-(?P<options>[A-Za-z]+)\b")
+DISARMING = (
+    (re.compile(r"\|\|\s*(?:true|:)(?=[\s;]|$)"), "|| true"),
+    (re.compile(r"\bset\s+\+[A-Za-z]*e"), "set +e"),
+    (re.compile(r"\btrap\b"), "trap"),
+)
+COMMAND_START = re.compile(r"^(?:if\s+)?(?P<command>curl\b|rm\s+-f\b)")
+OPENING_KEYWORDS = ("do", "then", "else")
+
+
+def archive_check(name: str) -> re.Pattern[str]:
+    """The only accepted check of the archive pinned by ``name``; the last command of a chain may end without ``\\``."""
+    return re.compile(r"^\s*printf '%s  %s\\n' \"\$\{" + re.escape(name)
+                      + r"\}\" (?P<file>\"[^\"]+\"|\S+) \| sha256sum -c -;?\s*\\?\s*$")
+
+
+def shell_commands(lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """(first line, text) of each shell command of a RUN instruction: ``;`` ends one, ``\\`` alone continues it."""
+    commands: list[tuple[int, str]] = []
+    continued = False
+    for number, line in lines:
+        body = line.rstrip()
+        body = body[:-1] if body.endswith("\\") else body
+        if body.lstrip().startswith("#"):
+            continue
+        pieces = body.split(";")
+        for index, piece in enumerate(pieces):
+            text = piece.strip()
+            if index == 0 and continued and commands:
+                commands[-1] = (commands[-1][0], f"{commands[-1][1]} {text}".strip())
+            elif text:
+                commands.append((number, text))
+        tail = pieces[-1].strip()
+        continued = bool(tail) and tail.split()[-1] not in OPENING_KEYWORDS
+    return commands
+
+
+def names(text: str, token: str) -> bool:
+    """Whether ``text`` names the file ``token`` (a path or a shell variable), not a longer name that starts like it."""
+    return re.search(re.escape(token) + r"(?![A-Za-z0-9_])", text) is not None
+
+
+def check_archive_checks(root: Path, catalog: dict, failures: list[str]) -> int:
+    """Every SHA-256 ARG of the catalogue is checked, fail-closed, before its archive is used; returns how many are."""
+    path = root / DOCKERFILE
+    if not path.is_file():
+        return 0  # check_dockerfile reports the missing file
+    try:
+        expected = expected_docker_args(catalog)
+    except ValueError:
+        return 0  # check_dockerfile reports the inconsistent mapping
+    hash_args = sorted(name for name, (value, _origin) in expected.items() if SHA256.fullmatch(value))
+    lines = path.read_text(encoding="utf-8").splitlines()
+    declared = {match.group("name"): number for number, match in
+                ((number, ARG_LINE.match(line)) for number, line in enumerate(lines, start=1)) if match}
+    runs = [instruction for instruction in dockerfile_instructions(lines)
+            if instruction[0][1].lstrip().upper().startswith("RUN ")]
+    verified = 0
+    for name in hash_args:
+        reference = re.compile(r"\$\{?" + re.escape(name) + r"(?![A-Za-z0-9_])")
+        consumers = [run for run in runs if any(reference.search(line) for _number, line in run)]
+        if not consumers:
+            failures.append(f"{DOCKERFILE.as_posix()}:{declared.get(name, 0)}: ARG {name} is consumed by no RUN instruction: the archive it pins "
+                            "is never verified")
+            continue
+        if len(consumers) > 1:
+            lines = ", ".join(str(run[0][0]) for run in consumers)
+            failures.append(f"{DOCKERFILE.as_posix()}:{consumers[1][0][0]}: ARG {name} is consumed by {len(consumers)} "
+                            f"RUN instructions (lines {lines}); verify it in exactly one")
+            continue
+        if archive_check_failures(name, consumers[0], failures):
+            verified += 1
+    return verified
+
+
+def archive_check_failures(name: str, run: list[tuple[int, str]], failures: list[str]) -> bool:
+    """Whether the RUN instruction that consumes ``name`` checks its archive fail-closed before any use."""
+    before = len(failures)
+    first = run[0][0]
+    options = SET_ERREXIT.match(run[0][1])
+    if not options or "e" not in options.group("options"):
+        failures.append(f"{DOCKERFILE.as_posix()}:{first}: the RUN instruction that verifies ARG {name} does not start with "
+                        "`set -e`: a failed check would not stop it")
+    code = [(number, line) for number, line in run if not line.lstrip().startswith("#")]
+    neutralised = False
+    for number, line in code:
+        disarmed = [label for pattern, label in DISARMING if pattern.search(line)]
+        for label in disarmed:
+            failures.append(f"{DOCKERFILE.as_posix()}:{number}: the RUN instruction that verifies ARG {name} disarms "
+                            f"its check (`{label}`)")
+        if "sha256sum" in line and f"${{{name}}}" in line and "||" in line:
+            neutralised = True
+            if not disarmed:
+                failures.append(f"{DOCKERFILE.as_posix()}:{number}: the check of ARG {name} is followed by `||`: a "
+                                "mismatch would not fail")
+    if neutralised:
+        return False
+    pattern = archive_check(name)
+    checks = [(number, pattern.match(line).group("file")) for number, line in code if pattern.match(line)]
+    if len(checks) != 1:
+        failures.append(f"{DOCKERFILE.as_posix()}:{first}: ARG {name} is checked {len(checks)} times in the form "
+                        f"`printf '%s  %s\\n' \"${{{name}}}\" <file> | sha256sum -c -`; expected exactly once")
+        return False
+    check_line, file = checks[0]
+    token = file.strip('"')
+    for number, command in shell_commands([(n, line) for n, line in code if n < check_line]):
+        if names(command, token) and not COMMAND_START.match(command):
+            failures.append(f"{DOCKERFILE.as_posix()}:{number}: {token} is used before the check of ARG {name} "
+                            "(only curl may write it and rm -f remove it)")
+    return len(failures) == before
+
+
+def verified_archives(root: Path) -> int:
+    """How many catalogued archives the release Dockerfile verifies fail-closed (shown by the success line)."""
+    catalog = load_catalog(root, [])
+    return check_archive_checks(root, catalog, []) if catalog is not None else 0
+
+
 def check_provider_inventory(root: Path, failures: list[str]) -> None:
     """The provider inventory written into the image is provenance evidence: the version of a toolchain copied
     from a base image (``sdk``, ``toolchain``, ``runtime``) is read from the installed binary into a shell
@@ -506,6 +632,7 @@ def check(root: Path, distribution: Path | None = None, variant: str = "full") -
     check_classpath_locks(root, catalog, failures)
     check_provider_versions(root, catalog, failures)
     check_dockerfile(root, catalog, failures)
+    check_archive_checks(root, catalog, failures)
     check_provider_inventory(root, failures)
     check_java_sources(root, failures)
     check_consumers(root, failures)
@@ -528,7 +655,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"TOOLS MANIFEST FAILURE: {failure}", file=sys.stderr)
         return 1
     scope = "distribution checked" if args.distribution else "sources only"
-    print(f"TOOLS MANIFEST GATE SUCCESS (components={components}, {scope})")
+    print(f"TOOLS MANIFEST GATE SUCCESS (components={components}, verified archives={verified_archives(args.root.resolve())}, "
+          f"{scope})")
     return 0
 
 
