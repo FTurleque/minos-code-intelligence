@@ -2,9 +2,9 @@
 
 Suivi de la correction des constats de [`findings.md`](findings.md), dans l'ordre de [`sprints.md`](sprints.md). Une ligne par constat ; la preuve d'une fermeture est une commande ou une assertion de test, pas « la CI est verte ».
 
-## État au 2026-11-24
+## État au 2026-11-25
 
-Les dix sprints sont fusionnés et archivés ; le sprint 10 reprend les quatre constats de la vérification du 20/11 et les deux partiels AUD-DEP-05 et AUD-ARC-02 (PR #809 à #816, archivés le 2026-11-24). Aucun changement OpenSpec de cet audit n'est actif. Les tâches non faites sont des mesures et des preuves manuelles, nommées dans la colonne « Statut » de chaque sprint et dans « Tâches manuelles », et le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, reporté.
+Les sprints 1 à 10 sont fusionnés et archivés ; le sprint 10 reprend les quatre constats de la vérification du 20/11 et les deux partiels AUD-DEP-05 et AUD-ARC-02 (PR #809 à #816, archivés le 2026-11-24), dont le groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage` (retrait de la façade, ARCH-0087 `Accepted`). La vérification du 25/11 ([`ETAT-2026-11-25.md`](ETAT-2026-11-25.md)) ouvre onze constats Faibles, rangés au sprint 11 : **spécifié** le 2026-11-25 en huit changements OpenSpec actifs, aucun implémenté. Les tâches non faites des sprints 1 à 10 sont des mesures et des preuves manuelles, nommées dans la colonne « Statut » de chaque sprint et dans « Tâches manuelles ».
 
 ## État au 2026-11-15
 
@@ -158,6 +158,30 @@ Les quatre constats du sprint 10 ne figurent pas dans les versions suivies de `f
 
 Fusionnés dans l'ordre #810, #814, #816, #811, #812, #813, puis archivés. La PR #815 rend la construction de l'image d'administration plus tolérante aux 429 de Maven Central (préchargement de scip-java réessayé, distribution Maven reprise sur un miroir lent) ; un 429 qui dure plus de cinq minutes la fait encore échouer.
 
+## Sprint 11 — Reprises de la vérification du 25/11 (spécifié le 2026-11-25)
+
+Onze constats Faibles de la vérification du 25/11, au commit `75e10c68`. Chaque preuve a été relue au HEAD et les mutations rejouées sur des copies, sans build Maven ni Docker : les rouges des tests Java et de l'IT d'empaquetage sont déduits, non observés. `openspec validate --all --strict` : 30 éléments sur 30 ; `check-capability-dossiers.py` : 22 dossiers ; `run_gates.py --fast` : 30 sur 30.
+
+| Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
+|---|---|---|---|
+| AUD-ARC-13 | `tenir-le-contrat-de-la-facade-par-le-garde` | Spécifié ; confirmé | L'option « méthode package-private relayée par l'accès de test » seule ne ferme pas le trou et casse `MinosApplicationTestAccessTest` si le relais garde le nom : relais `decoratedProjectIndexing`, puis A11 étendu aux paramètres en cliquet à zéro. `ProjectInspectionService.view` s'appelle `statusView` au HEAD. `java-api.md:358` présente la méthode comme remplaçant public. Méthode absente de v1.3.0 : aucune rupture publiée. |
+| AUD-SEC-12 | idem | Spécifié ; confirmé | Élargir, compléter ou supprimer `<includes>` laisse le garde vert. Les deux contrôles sont retenus, non l'un ou l'autre : le garde lit `<includes>` et refuse une seconde exécution `test-jar` ; l'IT affirme que le jar ne contient, hors `META-INF/`, que la classe d'accès. |
+| AUD-ARC-14 | `injecter-les-ports-des-operations-locales` | Spécifié ; partiel (3 classes sur 4) | `LocalProjectSymbolQuery` ne lit qu'un accesseur public. `LocalProjectOperations` lit aussi `projectInspectionService()`. Les constructeurs sont des remplaçants documentés (`java-api.md`, notes de version) : conservés, ils délèguent. Un cliquet sur le nombre d'accesseurs figerait à tort la façade ; le design propose une règle ArchUnit sur les lecteurs. 5 accesseurs sans lecteur, dont `hostedControlPlaneService()` sans aucun appelant. |
+| AUD-ARC-15 | `aligner-la-prose-de-la-facade-apres-le-sprint-10` | Spécifié ; confirmé ; `SUIVI.md:7` corrigé par cette section | Deux sites de plus : `ARCH-0042:401` (« ARCH-0087 (Proposed) ») et `docs/developer/public-surfaces.md:12` (stéréotype `composition root`). La mémoire d'agent est en tâche sans exigence (fichier traité comme figé par la spécification courante). |
+| AUD-QUA-08 | idem | Spécifié ; confirmé | La rétention ne suit que l'import publié (`LocalProjectOperations.java:140-142`). |
+| AUD-ARC-16 | `actualiser-le-dossier-des-frontieres-de-modules` | Spécifié ; confirmé, plus large | E3 cite le mauvais fichier et la spécification exige encore « quatre » ; `quality-gates.md` n'a de puce ni pour A19 ni pour A20 et ne dit rien de `MainWiringTest` ; « A4 à A6 » oublie A1 ; `.claude/rules/java-production.md:11` s'arrête à A16. La question ouverte du dossier sur les étapes CI est périmée. Hors périmètre, pour `/minos:docs-sync` : « 154 cas » de `STATUS.md:19` et `ROADMAP.md:23`. |
+| AUD-TST-14 | `deriver-les-modules-de-regles-du-garde` | Spécifié ; confirmé, plus étroit | Avec `from module_boundary_extra import check_extra_rule`, forme d'import du garde, l'auto-test rougit déjà ; le trou vaut pour un module non importé ou importé par `import`. Dérivation par glob de `module_boundary_*.py`, fail-closed sur un glob vide. |
+| AUD-DEP-09 | `exiger-l-empreinte-des-distributions-des-wrappers` | Spécifié ; confirmé | `mvnw.cmd:137-150` a le même fail-open que `mvnw`. L'URL `https` et `distributionType=only-script` ne sont pas gardés non plus. La fixture `distributionSha256Sum=00` de l'auto-test cassera avec la règle. |
+| AUD-DEP-10 | `verrouiller-l-empreinte-de-maven-dans-l-image` | Spécifié ; confirmé, plus large | `set -ux` et un contrôle déplacé après `unzip` passent aussi. Six `ARG` d'empreinte dans `Dockerfile.mcp.release`, dont le paquet NuGet de scip-dotnet que l'audit omet. `fetch-verified.sh` écarté (contexte de construction, reprise de la PR #815). |
+| AUD-DEP-11 | `consigner-les-pieges-des-montees-de-version` | Spécifié ; confirmé | `.gitattributes:36` épingle déjà `*.cmd eol=crlf` en copie de travail ; rien ne garde l'index. Règle générale : tout fichier à `eol=` épinglé est `i/lf`. L'instantané apt reste au skill (date de l'image non lisible hors ligne). |
+| AUD-DEP-12 | idem | Spécifié ; confirmé | `code-audit-couverture.md` est un relevé daté, exact à sa date : non modifié. Aucune table de faits ne lit la version du wrapper : règle de `check-toolchain-baseline.py` sur une liste fermée de documents courants. |
+
+**Ordre d'implémentation conseillé.** Façade et garde : `aligner-la-prose-…`, `deriver-les-modules-…`, `tenir-le-contrat-…`, `injecter-les-ports-…`, puis `actualiser-le-dossier-…` (il décrit le garde final). Chaîne d'approvisionnement, indépendante de la première : `exiger-l-empreinte-…`, `verrouiller-l-empreinte-…`, puis `consigner-les-pieges-…`.
+
+**Recouvrements.** `MinosApplication.java` et `docs/user/java-api.md` : `aligner-la-prose-…`, `tenir-le-contrat-…`, `injecter-les-ports-…`. Garde de frontières, `test_check_module_boundaries.py` et dossier `frontieres-de-modules.md` : `deriver-…`, `tenir-…`, `injecter-…`, `actualiser-…`. `check-toolchain-baseline.py`, skill `minos-dependency-update`, GEN-0077 et dossier `socle-d-execution` : `exiger-…` et `consigner-…`. Aucune exigence `MODIFIED` n'est modifiée par deux changements.
+
+**ADR.** Aucun créé. Planifiés en tâche : compléter « Mise en œuvre » et « Compliance » d'ARCH-0087 (`tenir-…`, `injecter-…`) et de GEN-0077 (`exiger-…`, `consigner-…`) ; deux parenthèses de mise en œuvre d'ARCH-0042 (`aligner-…`).
+
 ## Recouvrements entre changements
 
 - **Exigences `MODIFIED`** (six, chacune modifiée par un seul changement) :
@@ -225,6 +249,15 @@ Chaque design donne les options et une recommandation. Au 2026-11-24, toutes son
 | 10 | AUD-PERF-15 : mesurer d'abord ou corriger d'emblée | Mesurer d'abord, corriger au-delà de 250 ms en médiane par un index par fichier déjà trié dans la vue (décision du propriétaire du 2026-11-24) |
 | 10 | AUD-DEP-05 : job d'analyse séparé, `workflow_run` ou exception écrite | Job séparé sans code de la PR, scanner autonome épinglé (décision du propriétaire du 2026-11-24) |
 | 10 | AUD-ARC-02 : retrait en une version, dépréciation ou report écrit | Retrait en une version, accès de test par un `test-jar`, ARCH-0087 `Accepted` (décision du propriétaire du 2026-11-24) |
+| 11 | AUD-ARC-13 : contrat sur les seuls retours, A11 étendu aux paramètres, ou méthode package-private | Méthode package-private relayée (`decoratedProjectIndexing`), puis A11 sur les paramètres en cliquet à zéro ; `Builder` et services hors règle (en attente) |
+| 11 | AUD-SEC-12 : contrôle par le garde ou par l'IT | Les deux (en attente) |
+| 11 | AUD-ARC-14 : injection, cliquet de nombre ou dette écrite ; lecture d'ARCH-0087 § 2.2 | `Dependencies` injectées, constructeurs publics conservés, règle ArchUnit sur les lecteurs des ports, 5 accesseurs sans lecteur retirés ; ligne de mise en œuvre dans ARCH-0087 plutôt qu'un ADR consolidé (en attente) |
+| 11 | AUD-QUA-08 : documenter l'absence de remplaçant ou exposer une rétention à la demande | Documenter (en attente) |
+| 11 | AUD-ARC-16 : statu quo, auto-test léger sur le dépôt réel, ou plus aucune liste | Auto-test léger dans `test_check_module_boundaries_documents.py`, sans gate ni étape CI (en attente) |
+| 11 | AUD-TST-14 : dériver les modules ou contrôler une liste | Dériver par glob, fail-closed sur un glob vide (en attente) |
+| 11 | AUD-DEP-09 : gate hôte ; somme du `gradle-wrapper.jar` | `check-toolchain-baseline.py`, `only-script` exigé, pas de somme pour le jar (validé par `setup-gradle`) ; ligne de mise en œuvre dans GEN-0077 (en attente) |
+| 11 | AUD-DEP-10 : test Java ou gate Python ; `fetch-verified.sh` | Règle de `check-tools-manifest.py` sur les `ARG` d'empreinte du catalogue ; `fetch-verified.sh` écarté (en attente) |
+| 11 | AUD-DEP-11 et AUD-DEP-12 : gate `i/lf` ; versions de Maven écrites | Règle générale `eol=` → `i/lf` dans `check-posix-script-eol.py` ; plus de numéro de correctif dans les documents, règle sur une liste fermée ; instantané apt par le skill seul (en attente) |
 
 ## Tâches manuelles
 
