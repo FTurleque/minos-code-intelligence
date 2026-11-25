@@ -63,7 +63,10 @@ import java.util.function.UnaryOperator;
 
 import static com.minos.domain.Preconditions.requireText;
 
-/** Long-lived composition root for one MINOS home and one selected storage backend. */
+/**
+ * Facade of one MINOS home and one selected storage backend: it hands out the application services and use
+ * cases, and keeps its ports and composition root package-private (ADR 0087).
+ */
 public final class MinosApplication implements AutoCloseable {
 
     public static final String SEMANTIC_PROVIDER_ENV = "MINOS_SEMANTIC_PROVIDER";
