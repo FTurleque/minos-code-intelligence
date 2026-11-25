@@ -358,8 +358,12 @@ public final class MinosApplication implements AutoCloseable {
         return projectIndexing;
     }
 
-    /** The local indexing with every provider executor wrapped by {@code executorDecorator}; built for each call. */
-    public ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> executorDecorator) {
+    /**
+     * The local indexing with every provider executor wrapped by {@code executorDecorator}; built for each call.
+     * Package-private: its parameter names an engine type, so it is read by the remote indexing of this class and by
+     * tests through {@code MinosApplicationTestAccess}.
+     */
+    ProjectIndexingUseCase decoratedProjectIndexing(UnaryOperator<IndexerExecutor> executorDecorator) {
         return new ProjectIndexingUseCase(indexingDependencies(providerRuntimeManager()), executorDecorator);
     }
 
@@ -385,7 +389,7 @@ public final class MinosApplication implements AutoCloseable {
             RemoteRepositoryMaterializer materializer = compositionRoot.remoteRepositoryMaterializer(home);
             remoteIndexing = new RemoteIndexingUseCase(new RemoteIndexingUseCase.Dependencies(home,
                     stores.projectRegistry(), materializer, compositionRoot.remoteIndexingRuntime(home),
-                    indexerDescriptors, (projectId, providerOverride, decorator) -> projectIndexing(decorator)
+                    indexerDescriptors, (projectId, providerOverride, decorator) -> decoratedProjectIndexing(decorator)
                             .executeSummary(projectId, providerOverride, true, IndexingResumeChoice.RESUME)));
         }
         return remoteIndexing;

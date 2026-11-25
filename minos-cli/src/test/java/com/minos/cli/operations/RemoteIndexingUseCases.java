@@ -18,7 +18,8 @@ final class RemoteIndexingUseCases {
         return new RemoteIndexingUseCase(new RemoteIndexingUseCase.Dependencies(application.home(),
                 MinosApplicationTestAccess.projectRegistry(application), materializer, runtime,
                         MinosApplicationTestAccess.indexerDescriptors(application),
-                (projectId, providerOverride, decorator) -> application.projectIndexing(decorator)
+                (projectId, providerOverride, decorator) ->
+                        MinosApplicationTestAccess.decoratedProjectIndexing(application, decorator)
                         .executeSummary(projectId, providerOverride, true, IndexingResumeChoice.RESUME)));
     }
 }
