@@ -382,10 +382,9 @@ public final class MinosApplication implements AutoCloseable {
     }
 
     /** The local indexing a remote indexing runs on its materialised clone: complete, resuming an interrupted run. */
-    IndexExecutionSummary localIndexing(String projectId, String providerOverride,
-                                        UnaryOperator<IndexerExecutor> executorDecorator) throws IOException {
-        return decoratedProjectIndexing(executorDecorator)
-                .executeSummary(projectId, providerOverride, true, IndexingResumeChoice.RESUME);
+    IndexExecutionSummary localIndexing(String id, String override, UnaryOperator<IndexerExecutor> decorator)
+            throws IOException {
+        return decoratedProjectIndexing(decorator).executeSummary(id, override, true, IndexingResumeChoice.RESUME);
     }
 
     /**
