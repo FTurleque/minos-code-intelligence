@@ -112,6 +112,7 @@ Maven 3.9.x est retenu pour sa stabilité, son support des projets Java et de la
 Relevé le 2026-10-23 (audit des ADR), non tranché par le propriétaire.
 
 - La décision retient Apache Maven 3.9.x par le wrapper, comme la politique de toolchain ; le wrapper télécharge Maven 3.10.0, que l'enforcer `[3.9,4.0)` accepte, et `AGENTS.md` écrit « Maven 3.9+ » — preuve : `.mvn/wrapper/maven-wrapper.properties:3`, `pom.xml:215`, `docs/developer/TOOLCHAIN_POLICY.md:11`, `AGENTS.md:15`.
+- Note du 2026-11-25 : le wrapper télécharge Maven 3.10.2 ; la documentation courante renvoie à `.mvn/wrapper/maven-wrapper.properties` sans recopier sa version, et la règle 14 de `scripts/quality/check-toolchain-baseline.py` refuse dans ses documents une version de Maven qui n'est ni celle du wrapper ni celle de l'image. L'écart avec la décision (Maven 3.9.x) reste à trancher par le propriétaire.
 
 ## References
 

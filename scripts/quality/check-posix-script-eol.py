@@ -14,6 +14,13 @@ by the POSIX ``mvnw``, is checked by name when it is tracked. For each file, two
 recorded content must have no carriage return (``i/lf``).
 Git resolves ``eol=lf`` alone as ``text eol=lf``; ``-text eol=lf`` disables the conversion and is refused.
 
+The same index fact holds for every tracked file whose resolved attribute pins its checkout line endings (``eol=lf``
+or ``eol=crlf``): batch wrappers (``mvnw.cmd``, ``minos.cmd``, ``gradlew.bat``), PowerShell scripts and references
+compared byte for byte. Such a file recorded with carriage returns (``i/crlf`` or ``i/mixed``) is refused: a checkout
+shows it modified, and the Windows candidate refuses to build from a modified tree. A dependency pull request rewrote
+``mvnw.cmd`` this way. The gate keeps its name and label (the CI and the capability dossier cite them) although it
+covers more than POSIX scripts.
+
 Fail-closed: ``git`` missing, a root that is not the top level of a Git repository, or zero POSIX script found is a
 failure, never a success on zero files. Messages name repository-relative paths only.
 
@@ -120,17 +127,23 @@ def rule_for(path: str) -> str:
     return "*.sh text eol=lf" if path.endswith(".sh") else f"{path} text eol=lf"
 
 
-def check(root: Path) -> tuple[list[str], int]:
-    """(failures, number of files checked)."""
+def pinned_eol_files(entries: dict[str, tuple[str, str]]) -> list[str]:
+    """Tracked paths whose resolved attribute pins the checkout line endings (``eol=lf`` or ``eol=crlf``)."""
+    return sorted(path for path, (_index, attributes) in entries.items()
+                  if {"eol=lf", "eol=crlf"} & set(attributes.split()))
+
+
+def check_counts(root: Path) -> tuple[list[str], int, int]:
+    """(failures, number of POSIX scripts checked, number of files with pinned line endings checked)."""
     try:
         require_repository_root(root)
         entries = eol_entries(root)
         scripts = {path for path in entries if path.endswith(".sh")} | shebang_scripts(root)
     except GateError as error:
-        return [str(error)], 0
+        return [str(error)], 0, 0
     scripts = {path for path in scripts if path in entries and not is_fixture(path)}
     if not scripts:
-        return ["no POSIX shell script is tracked; the gate refuses to succeed on zero files"], 0
+        return ["no POSIX shell script is tracked; the gate refuses to succeed on zero files"], 0, 0
     checked = sorted(scripts | ({WRAPPER_PROPERTIES} & entries.keys()))
     failures: list[str] = []
     for path in checked:
@@ -139,14 +152,26 @@ def check(root: Path) -> tuple[list[str], int]:
             failures.append(f"{path}: no 'eol=lf' attribute ({attributes}); add '{rule_for(path)}' to .gitattributes")
         if index != "i/lf":
             failures.append(f"{path}: recorded as {index}, expected i/lf; run 'git add --renormalize -- {path}'")
-    return failures, len(checked)
+    pinned = pinned_eol_files(entries)
+    already = set(checked)
+    for path in pinned:
+        index = entries[path][0]
+        if path not in already and index in ("i/crlf", "i/mixed"):
+            failures.append(f"{path}: recorded as {index}, expected i/lf; run 'git add --renormalize -- {path}'")
+    return failures, len(checked), len(pinned)
+
+
+def check(root: Path) -> tuple[list[str], int]:
+    """(failures, number of POSIX scripts checked)."""
+    failures, scripts, _pinned = check_counts(root)
+    return failures, scripts
 
 
 def run(root: Path) -> int:
-    failures, count = check(root)
+    failures, count, pinned = check_counts(root)
     if gate_cli.report_failures(LABEL, failures):
         return 1
-    print(f"{LABEL} SUCCESS (POSIX scripts checked={count})")
+    print(f"{LABEL} SUCCESS (POSIX scripts checked={count}, files with pinned line endings checked={pinned})")
     return 0
 
 
@@ -201,6 +226,7 @@ def self_test_cases() -> list[tuple]:
     crlf_script = lf_script.replace(b"\n", b"\r\n")
     rules = "*.sh text eol=lf\noutil text eol=lf\n"
     fish_script = b"#!/usr/bin/fish\necho ok\n"
+    crlf_batch = b"@echo off\r\necho ok\r\n"
     return [
         ("script without attribute", {"build.sh": lf_script}, None, False, 1, "add '*.sh text eol=lf'", None),
         ("shebang script without extension", {"outil": lf_script, "a.sh": lf_script}, "*.sh text eol=lf\n", False, 1,
@@ -218,6 +244,13 @@ def self_test_cases() -> list[tuple]:
          "*.sh text eol=lf\n", False, 0, None, 1),
         ("eol=lf without text, resolved by Git as text eol=lf", {"a.sh": lf_script}, "*.sh eol=lf\n", False, 0, None,
          1),
+        ("wrapper batch recorded with CRLF", {"a.sh": lf_script, "mvnw.cmd": crlf_batch},
+         "*.sh text eol=lf\n*.cmd text eol=crlf\n", True, 1,
+         "mvnw.cmd: recorded as i/crlf, expected i/lf; run 'git add --renormalize -- mvnw.cmd'", None),
+        ("PowerShell launcher recorded with CRLF", {"a.sh": lf_script, "x.ps1": crlf_batch},
+         "*.sh text eol=lf\n*.ps1 text eol=crlf\n", True, 1, "x.ps1: recorded as i/crlf", None),
+        ("CRLF file without eol attribute", {"a.sh": lf_script, "notes.txt": crlf_batch}, "*.sh text eol=lf\n", True,
+         0, None, 1),
         ("compliant repository", {"a.sh": lf_script, "outil": lf_script, "bin/run": b"#!/bin/sh\nexit 0\n",
                                   "bin/env-s": b"#!/usr/bin/env -S bash -e\nexit 0\n",
                                   "tool.py": b"#!/usr/bin/env python3\n"},

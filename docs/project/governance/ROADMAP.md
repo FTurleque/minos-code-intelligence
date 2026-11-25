@@ -128,7 +128,7 @@ Le blocage historique `docker compose` interactif de #246 est ainsi couvert par 
 
 ## Supply-chain et toolchains
 
-- cœur : Java 21 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven 3.10.0 avec checksum ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
+- cœur : Java 21 / Maven 3.9.x (plage `[3.9,4.0)`), wrapper Maven avec checksum (version dans `.mvn/wrapper/maven-wrapper.properties`) ; l'image Docker et les outils embarqués restent en Maven 3.9.16 ;
 - IntelliJ : Java 21 / Gradle 9.9.2 / IntelliJ Platform 2026.1 ;
 - Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
 - workflows GitHub : actions épinglées par SHA ;
