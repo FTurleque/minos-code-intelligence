@@ -2,6 +2,7 @@ package com.minos.application;
 
 import com.minos.application.dynamic.RuntimeIntelligenceService;
 import com.minos.application.export.KnowledgeExportUseCase;
+import com.minos.application.indexing.IndexExecutionSummary;
 import com.minos.application.indexing.IndexingResumeChoice;
 import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.application.remote.RemoteIndexingUseCase;
@@ -380,6 +381,13 @@ public final class MinosApplication implements AutoCloseable {
                 UnaryOperator.identity()));
     }
 
+    /** The local indexing a remote indexing runs on its materialised clone: complete, resuming an interrupted run. */
+    IndexExecutionSummary localIndexing(String projectId, String providerOverride,
+                                        UnaryOperator<IndexerExecutor> executorDecorator) throws IOException {
+        return decoratedProjectIndexing(executorDecorator)
+                .executeSummary(projectId, providerOverride, true, IndexingResumeChoice.RESUME);
+    }
+
     /**
      * The remote indexing: the materializer then the runtime of this home, created in this order by the composition
      * root on the first request; a failure is propagated and the next request tries again.
@@ -389,8 +397,7 @@ public final class MinosApplication implements AutoCloseable {
             RemoteRepositoryMaterializer materializer = compositionRoot.remoteRepositoryMaterializer(home);
             remoteIndexing = new RemoteIndexingUseCase(new RemoteIndexingUseCase.Dependencies(home,
                     stores.projectRegistry(), materializer, compositionRoot.remoteIndexingRuntime(home),
-                    indexerDescriptors, (projectId, providerOverride, decorator) -> decoratedProjectIndexing(decorator)
-                            .executeSummary(projectId, providerOverride, true, IndexingResumeChoice.RESUME)));
+                    indexerDescriptors, this::localIndexing));
         }
         return remoteIndexing;
     }
