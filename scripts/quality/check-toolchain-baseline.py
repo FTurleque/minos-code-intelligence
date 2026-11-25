@@ -56,6 +56,21 @@ What these rules do not prove: that the lock matches what Gradle resolves (the s
 on a dependency outside the lock), that the sums cover what each system resolves (the plugin jobs fail on a missing
 or wrong sum), nor that a locked version is free of known vulnerabilities (osv-scan reads it).
 
+The build wrappers download a distribution and run it. `mvnw`, `mvnw.cmd` and the Gradle wrapper check its SHA-256
+only when `distributionSha256Sum` is present: a raise that drops or breaks the line would run the archive unverified.
+Rule:
+
+13. `.mvn/wrapper/maven-wrapper.properties` and `minos-intellij/gradle/wrapper/gradle-wrapper.properties` each hold
+    exactly one `distributionSha256Sum` of 64 lowercase hexadecimal characters and exactly one `distributionUrl` served
+    over https under the expected host (`https://repo.maven.apache.org/maven2/`, `https://services.gradle.org/
+    distributions/`; the `\\:` escape of the properties format is read as `:`). The Maven wrapper keeps
+    `distributionType=only-script`: no `maven-wrapper.jar` is downloaded, so no `wrapperSha256Sum` is needed. A
+    missing file fails.
+
+What this rule does not prove: that the sum is the one of the published archive (a wrong but well-formed sum fails
+the first download, in the first `Verify` or plugin job), nor anything about `gradle-wrapper.jar` (setup-gradle
+validates it in the plugin jobs) or about `MVNW_REPOURL`, which changes the URL at run time but not the sum checked.
+
 Self-test: scripts/quality/test_check_toolchain_baseline.py.
 """
 from __future__ import annotations
@@ -360,13 +375,77 @@ def check_plugin_locks(root: Path) -> tuple[list[str], int]:
     return failures, agreeing
 
 
+MAVEN_WRAPPER = ".mvn/wrapper/maven-wrapper.properties"
+# (properties file, https prefix its distribution must be served under) of each build wrapper.
+WRAPPER_HOSTS = (
+    (MAVEN_WRAPPER, "https://repo.maven.apache.org/maven2/"),
+    (WRAPPER, "https://services.gradle.org/distributions/"),
+)
+PROPERTY = re.compile(r"^\s*(?P<key>[A-Za-z0-9_.-]+)\s*[=:]\s*(?P<value>.*?)\s*$")
+SHA256_SUM = re.compile(r"^[0-9a-f]{64}$")
+MAVEN_DISTRIBUTION_TYPE = "only-script"
+
+
+def properties_of(text: str) -> dict[str, list[tuple[int, str]]]:
+    """Key -> [(line, value)] of a `.properties` file; comments skipped, `\\r` and the `\\:` escape tolerated."""
+    entries: dict[str, list[tuple[int, str]]] = {}
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.lstrip().startswith(("#", "!")):
+            continue
+        match = PROPERTY.match(line)
+        if match:
+            entries.setdefault(match.group("key"), []).append((number, match.group("value").replace("\\:", ":")))
+    return entries
+
+
+def wrapper_failures(relative: str, text: str, prefix: str) -> list[str]:
+    """Rule 13 for one wrapper: one well-formed sum, one https URL under the expected host."""
+    failures: list[str] = []
+    entries = properties_of(text)
+    sums = entries.get("distributionSha256Sum", [])
+    if len(sums) != 1:
+        failures.append(f"{relative} must hold exactly one distributionSha256Sum, found {len(sums)}: "
+                        "the distribution would run unverified")
+    elif not SHA256_SUM.match(sums[0][1]):
+        failures.append(f"{relative}:{sums[0][0]} distributionSha256Sum must be 64 lowercase hexadecimal characters, "
+                        f"found '{sums[0][1]}'")
+    urls = entries.get("distributionUrl", [])
+    if len(urls) != 1:
+        failures.append(f"{relative} must hold exactly one distributionUrl, found {len(urls)}")
+    elif not urls[0][1].startswith(prefix):
+        failures.append(f"{relative}:{urls[0][0]} distributionUrl {urls[0][1]} is not served over https under {prefix}")
+    if relative == MAVEN_WRAPPER:
+        types = [value for _number, value in entries.get("distributionType", [])]
+        if types != [MAVEN_DISTRIBUTION_TYPE]:
+            found = ", ".join(types) if types else "none"
+            failures.append(f"{relative} must hold distributionType={MAVEN_DISTRIBUTION_TYPE} (no maven-wrapper.jar is "
+                            f"downloaded), found '{found}'")
+    return failures
+
+
+def check_wrapper_sums(root: Path) -> tuple[list[str], int]:
+    """(failures, number of wrappers that pin their distribution): rule 13, fail-closed on a missing file."""
+    failures: list[str] = []
+    pinned = 0
+    for relative, prefix in WRAPPER_HOSTS:
+        text = read(root, relative)
+        if text is None:
+            failures.append(f"{relative} is missing: the distribution of the build has no pinned sum")
+            continue
+        found = wrapper_failures(relative, text, prefix)
+        failures.extend(found)
+        pinned += not found
+    return failures, pinned
+
+
 def check(root: Path) -> tuple[list[str], str, int]:
     """(failures, both baselines, number of places compared with their reference)."""
     gradle_failures, gradle, gradle_compared = check_gradle(root)
     java_failures, java, java_compared = check_java(root)
     lock_failures, locked = check_plugin_locks(root)
-    return (gradle_failures + java_failures + lock_failures, f"gradle={gradle}, java={java}",
-            gradle_compared + java_compared + locked)
+    sum_failures, pinned = check_wrapper_sums(root)
+    return (gradle_failures + java_failures + lock_failures + sum_failures, f"gradle={gradle}, java={java}",
+            gradle_compared + java_compared + locked + pinned)
 
 
 def main() -> int:

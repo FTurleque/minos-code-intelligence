@@ -17,10 +17,21 @@ _SPEC.loader.exec_module(gate)
 REPOSITORY = Path(__file__).resolve().parents[2]
 
 
+GRADLE_SUM = "971fcd7150ca4ba04852c0b2ca0d2d0ab9468e14b03473eab19528809914c76b"
+MAVEN_SUM = "7d69999d218e025cf1c14691ba748a09706e47999bd505009403cef9d757c2df"
+
+
 def wrapper(version: str) -> str:
     return ("distributionBase=GRADLE_USER_HOME\n"
-            "distributionSha256Sum=00\n"
+            f"distributionSha256Sum={GRADLE_SUM}\n"
             f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{version}-bin.zip\n")
+
+
+MAVEN_WRAPPER = ("wrapperVersion=3.3.4\n"
+                 "distributionType=only-script\n"
+                 "distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.2/"
+                 "apache-maven-3.10.2-bin.zip\n"
+                 f"distributionSha256Sum={MAVEN_SUM}\n")
 
 
 # A release job that builds the plugin as the pull-request CI does: setup-gradle for its cache only, then the wrapper.
@@ -157,6 +168,99 @@ class ToolchainBaselineTest(unittest.TestCase):
         self.assertEqual(1, len(failures))
         self.assertRegex(failures[0], r"^\.github/workflows/intellij-plugin-release\.yml:\d+ installs Gradle 9\.8\.1 "
                                       r"through `gradle-version:`")
+
+
+class WrapperDistributionSumTest(unittest.TestCase):
+    """Rule 13: each build wrapper pins the SHA-256 of its distribution, served over https from the expected host."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER)
+        self.write(gate.WRAPPER, wrapper("9.9.2"))
+
+    def write(self, relative: str, content: str) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content.encode("utf-8"))
+
+    def failures(self) -> list[str]:
+        return gate.check_wrapper_sums(self.root)[0]
+
+    def test_both_wrappers_with_their_sums_are_accepted(self):
+        self.assertEqual(([], 2), gate.check_wrapper_sums(self.root))
+
+    def test_crlf_line_endings_are_tolerated(self):
+        self.write(gate.WRAPPER, wrapper("9.9.2").replace("\n", "\r\n"))
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace("\n", "\r\n"))
+        self.assertEqual(([], 2), gate.check_wrapper_sums(self.root))
+
+    def test_a_missing_sum_is_refused_for_each_wrapper(self):
+        for relative, text, line in ((gate.MAVEN_WRAPPER, MAVEN_WRAPPER, f"distributionSha256Sum={MAVEN_SUM}\n"),
+                                     (gate.WRAPPER, wrapper("9.9.2"), f"distributionSha256Sum={GRADLE_SUM}\n")):
+            with self.subTest(wrapper=relative):
+                self.setUp()
+                self.write(relative, text.replace(line, ""))
+                self.assertEqual([f"{relative} must hold exactly one distributionSha256Sum, found 0: "
+                                  "the distribution would run unverified"], self.failures())
+
+    def test_an_empty_short_or_uppercase_sum_is_refused(self):
+        for value in ("", "00", MAVEN_SUM.upper(), MAVEN_SUM + "0"):
+            with self.subTest(value=value):
+                self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace(MAVEN_SUM, value))
+                self.assertEqual([f"{gate.MAVEN_WRAPPER}:4 distributionSha256Sum must be 64 lowercase hexadecimal "
+                                  f"characters, found '{value}'"], self.failures())
+
+    def test_a_doubled_sum_is_refused(self):
+        self.write(gate.WRAPPER, wrapper("9.9.2") + f"distributionSha256Sum={GRADLE_SUM}\n")
+        self.assertEqual([f"{gate.WRAPPER} must hold exactly one distributionSha256Sum, found 2: "
+                          "the distribution would run unverified"], self.failures())
+
+    def test_a_distribution_over_http_is_refused(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace("https://repo.maven", "http://repo.maven"))
+        failures = self.failures()
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith(f"{gate.MAVEN_WRAPPER}:3 distributionUrl http://repo.maven.apache.org/"),
+                        failures[0])
+        self.assertIn("is not served over https under https://repo.maven.apache.org/maven2/", failures[0])
+
+    def test_a_distribution_outside_the_expected_host_is_refused(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace("repo.maven.apache.org/maven2/", "evil.example/maven2/"))
+        self.write(gate.WRAPPER, wrapper("9.9.2").replace("services.gradle.org", "services.gradle.org.evil.example"))
+        failures = self.failures()
+        self.assertEqual(2, len(failures))
+        self.assertTrue(failures[0].startswith(f"{gate.MAVEN_WRAPPER}:3 distributionUrl https://evil.example/"))
+        self.assertTrue(failures[1].startswith(f"{gate.WRAPPER}:3 distributionUrl "
+                                               "https://services.gradle.org.evil.example/"))
+        self.assertIn("under https://services.gradle.org/distributions/", failures[1])
+
+    def test_a_missing_url_is_refused(self):
+        self.write(gate.MAVEN_WRAPPER, "distributionType=only-script\n" f"distributionSha256Sum={MAVEN_SUM}\n")
+        self.assertEqual([f"{gate.MAVEN_WRAPPER} must hold exactly one distributionUrl, found 0"], self.failures())
+
+    def test_a_maven_wrapper_that_would_download_a_jar_is_refused(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace("distributionType=only-script", "distributionType=bin"))
+        self.assertEqual([f"{gate.MAVEN_WRAPPER} must hold distributionType=only-script (no maven-wrapper.jar is "
+                          "downloaded), found 'bin'"], self.failures())
+
+    def test_a_missing_wrapper_file_is_refused(self):
+        (self.root / gate.MAVEN_WRAPPER).unlink()
+        self.assertEqual(([f"{gate.MAVEN_WRAPPER} is missing: the distribution of the build has no pinned sum"], 1),
+                         gate.check_wrapper_sums(self.root))
+
+    def test_the_repository_pins_both_distributions(self):
+        self.assertEqual(([], 2), gate.check_wrapper_sums(REPOSITORY))
+
+    def test_a_copy_of_the_repository_without_its_sums_is_refused(self):
+        for relative in (gate.MAVEN_WRAPPER, gate.WRAPPER):
+            text = (REPOSITORY / relative).read_text(encoding="utf-8")
+            self.write(relative, "".join(line for line in text.splitlines(keepends=True)
+                                         if not line.startswith("distributionSha256Sum")))
+        failures = self.failures()
+        self.assertEqual(2, len(failures))
+        self.assertTrue(failures[0].startswith(f"{gate.MAVEN_WRAPPER} must hold exactly one distributionSha256Sum"))
+        self.assertTrue(failures[1].startswith(f"{gate.WRAPPER} must hold exactly one distributionSha256Sum"))
 
 
 def pom(release: str, enforced: str) -> str:
