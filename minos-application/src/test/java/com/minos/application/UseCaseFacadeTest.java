@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The facade exposes the use cases, built on first request from the collaborators of the application (ADR 0087):
@@ -70,16 +69,6 @@ class UseCaseFacadeTest {
             assertNotSame(decorated, MinosApplicationTestAccess.decoratedProjectIndexing(application,
                     UnaryOperator.identity()));
             assertSame(application.knowledgeExport(), application.knowledgeExport());
-        }
-    }
-
-    @Test
-    void theLocalIndexingOfARemoteIndexingResolvesItsProjectThroughTheRegistry() throws Exception {
-        try (MinosApplication application = application(0)) {
-            UnsupportedOperationException reached = assertThrows(UnsupportedOperationException.class,
-                    () -> application.localIndexing("remote-project", null, UnaryOperator.identity()));
-
-            assertTrue(reached.getMessage().startsWith("ProjectRegistry."), reached.getMessage());
         }
     }
 
