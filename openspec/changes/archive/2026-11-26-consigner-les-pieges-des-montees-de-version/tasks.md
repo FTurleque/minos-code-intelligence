@@ -27,6 +27,6 @@ Mutations : sur des copies ou des clones dans le scratchpad, jamais sur le dép�
 ## 4. Clôture
 
 - [x] 4.1 AUD-DEP-11, AUD-DEP-12 — Mettre à jour la matrice de traçabilité du design (preuves exécutées et manquantes).
-- [ ] 4.2 AUD-DEP-11, AUD-DEP-12 — Après archivage, ajouter les exigences aux dossiers `docs/architecture/diagrams/capacites/controles-de-fusion.md` (près des lignes `:80-81`) et `socle-d-execution.md`. Vérifier : `python scripts/docs/check-capability-dossiers.py` vert.
+- [x] 4.2 AUD-DEP-11, AUD-DEP-12 — Après archivage, ajouter les exigences aux dossiers `docs/architecture/diagrams/capacites/controles-de-fusion.md` (près des lignes `:80-81`) et `socle-d-execution.md`. Vérifier : `python scripts/docs/check-capability-dossiers.py` vert.
 - [x] 4.3 AUD-DEP-11, AUD-DEP-12 — Valider : `openspec validate --all --strict` vert.
 - [x] 4.4 AUD-DEP-11, AUD-DEP-12 — Documents à mettre à jour avant archivage : skill (3.1), STATUS, ROADMAP, `code-audit.md`, `docker-runtime.md`, `TOOLCHAIN_POLICY.md` (2.3), ADR GEN-0077 (3.2), dossiers de capacité (4.2), lignes AUD-DEP-11 et AUD-DEP-12 du suivi de l'audit `docs/project/audits/2026-11-15/` (après fusion, par le coordinateur). Vérifier : chacun est fait ou nommé comme reste dans la PR.

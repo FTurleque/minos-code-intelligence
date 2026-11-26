@@ -2,4 +2,4 @@
 - [review-context sans texte d'ADR](reference_review_context_sans_texte.md) — Archgate 0.18 : lire Decision/Do's des ADR soi-même pour la revue
 - [Clôture finale de l'audit, 2026-11-05](project_cloture_finale_audit_2026_11_05.md) — PR #662-664 fusionnées ; restent findings.json/ETAT (auditeur), R-30 à confirmer
 - [PR empilées sans CI](project_pr_empilees_sans_ci.md) — base ≠ main = aucun check ; re-cibler + fermer/rouvrir ; Gitleaks toutes branches ; 429 curl transitoire
-- [Audit 2026-11-15, 2026-11-24](project_audit_2026_11_15_clos.md) — 10 sprints archivés (sprint 10 : #809-#818) ; 429 Maven Central ; accord de fusion par PR ; pièges Dependabot
+- [Audit 2026-11-15, 2026-11-26](project_audit_2026_11_15_clos.md) — 11 sprints archivés (sprint 11 : #821-#828) ; >500 car. vu après archivage ; 429 Maven Central ; accord de fusion par PR ; pièges Dependabot

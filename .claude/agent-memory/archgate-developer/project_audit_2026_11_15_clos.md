@@ -1,13 +1,13 @@
 ---
 name: audit-2026-11-15-clos
-description: Audit 2026-11-15 : 10 sprints fusionnés et archivés au 2026-11-24 (sprint 10 : #809-#818, partiels DEP-05 et ARC-02 repris) ; restes manuels ; pièges CI, Dependabot et fusion en série
+description: Audit 2026-11-15 : 11 sprints fusionnés et archivés au 2026-11-26 (sprint 11 : #821-#828) ; restes manuels ; pièges CI, Dependabot et fusion en série
 metadata:
   type: project
 ---
 
-Les dix sprints de l'audit 2026-11-15 sont fusionnés et archivés au 2026-11-24 ; aucun changement OpenSpec de cet
+Les onze sprints de l'audit 2026-11-15 sont fusionnés et archivés au 2026-11-26 ; aucun changement OpenSpec de cet
 audit n'est actif. Les restes vivent dans `docs/project/audits/2026-11-15/SUIVI.md` (colonne « Statut », « Tâches
-manuelles ») et dans les tâches non cochées des archives `openspec/changes/archive/2026-11-{19,20,24}-*`.
+manuelles ») et dans les tâches non cochées des archives `openspec/changes/archive/2026-11-{19,20,24,26}-*`.
 
 **Why:** des changements fusionnés sont restés actifs des jours faute d'archivage (sprints 2, 3, 4, 7) : l'utilisateur
 attend qu'une PR fusionnée soit suivie de l'archivage OpenSpec et de la mise à jour du SUIVI sans qu'il le demande.
@@ -42,6 +42,13 @@ racine de composition, `test-jar` en portée test, ARCH-0087 `Accepted`). Maven 
 pendant plus de cinq minutes certains jours : les réessais de l'image Docker (#815) ne suffisent pas toujours ; un
 miroir est une décision de chaîne d'approvisionnement laissée au propriétaire. Une PR fusionnée avant les autres ne
 coûte rien si sa CI a tourné sur un `main` à jour : en tenir compte pour ordonner la série.
+
+Sprint 11 (2026-11-26, #821-#828) : restes ARCH-0087 (mise à jour à proposer au propriétaire, décision D5) et skill
+`minos-dependency-update` à appliquer à la prochaine PR Dependabot Temurin ou wrapper. `openspec validate` d'un
+changement actif ne signale pas une exigence `MODIFIED` de plus de 500 caractères : elle n'apparaît qu'à la validation
+de la spécification après `openspec archive`. Compter les caractères avant d'archiver ; sinon annuler l'archivage,
+corriger le delta et réarchiver. Un job non exigé rouge laisse la PR `UNSTABLE` : un script de fusion qui attend
+`CLEAN` s'arrête tant que le job n'est pas relancé et vert.
 
 PR Dependabot : relever l'instantané apt `UBUNTU_APT_SNAPSHOT` de `docker/Dockerfile.mcp.release` avec chaque image
 Temurin (un instantané plus ancien que l'image casse l'installation des paquets) ; remettre `mvnw.cmd` en LF quand
