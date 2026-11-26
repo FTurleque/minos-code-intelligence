@@ -161,6 +161,46 @@ def check_application_test_jar_scope(module: str, root: ET.Element, group_id: st
                  "access to the ports of MinosApplication and is allowed in test scope only (ADR 0087)")
 
 
+APPLICATION_TEST_ACCESS = "MinosApplicationTestAccess"
+
+
+def check_application_test_jar_content(module: str, root: ET.Element, group_id: str | None = None) -> None:
+    """A2 / AUD-SEC-12, ADR 0087 section 2 — the POM of minos-application declares one execution of the test-jar goal
+    of maven-jar-plugin (build, plugin management and profiles read), whose <includes> holds exactly the class file of
+    MinosApplicationTestAccess, with no <excludes>: the test-jar read by the tests of the other modules publishes that
+    class alone. The packaging IT ApplicationTestAccessPackagingIT checks the jar actually built."""
+    if module != APPLICATION_MODULE:
+        return
+    group_id = group_id or repository_group_id()
+    expected = "/".join(group_id.split(".")) + f"/application/{APPLICATION_TEST_ACCESS}.class"
+    pom = f"{APPLICATION_MODULE}/pom.xml"
+    executions = []
+    for plugin in root.findall(".//m:plugin", NS):
+        if plugin.findtext("m:artifactId", default="", namespaces=NS).strip() != "maven-jar-plugin":
+            continue
+        for execution in plugin.findall("m:executions/m:execution", NS):
+            goals = [goal.text.strip() for goal in execution.findall("m:goals/m:goal", NS) if goal.text]
+            if "test-jar" in goals:
+                executions.append((plugin, execution))
+    if len(executions) != 1:
+        fail(f"{pom}: {len(executions)} executions of the test-jar goal of maven-jar-plugin; exactly one is allowed, "
+             f"including {expected} only (ADR 0087)")
+    plugin, execution = executions[0]
+    includes_element = execution.find("m:configuration/m:includes", NS)
+    if includes_element is None:
+        includes_element = plugin.find("m:configuration/m:includes", NS)
+    includes = ([(include.text or "").strip() for include in includes_element.findall("m:include", NS)]
+                if includes_element is not None else [])
+    if includes != [expected]:
+        found = ", ".join(includes) if includes_element is not None else "no <includes>"
+        fail(f"{pom}: the test-jar includes {found or 'an empty <includes>'}; it publishes {expected} only (ADR 0087)")
+    excludes = [(exclude.text or "").strip() for configuration in (execution, plugin)
+                for exclude in configuration.findall("m:configuration/m:excludes/m:exclude", NS)]
+    if excludes:
+        fail(f"{pom}: the test-jar declares <excludes> ({', '.join(excludes)}); it includes {expected} only "
+             "(ADR 0087)")
+
+
 def test_only_dependency_violations(module: str, dependencies: dict[str, str]) -> list[str]:
     """The TEST_ONLY_DEPENDENCIES of one module declared in a scope other than test."""
     return [f"{module} -> {dependency} [{dependencies[dependency]}] (TEST_ONLY_DEPENDENCIES: this dependency is "
@@ -292,6 +332,7 @@ def check_pom_rules(root: Path = ROOT) -> dict[str, dict[str, str]]:
         check_pom_layout(module, pom)
         check_no_hidden_internal_dependencies(module, pom, group_id)
         check_application_test_jar_scope(module, pom, group_id)
+        check_application_test_jar_content(module, pom, group_id)
     scoped = {module: minos_dependencies(module, pom, group_id) for module, pom in poms.items()}
     check_dependency_policy(scoped)
     return scoped

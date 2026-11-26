@@ -63,7 +63,11 @@ class UseCaseFacadeTest {
 
             assertSame(indexing, application.projectIndexing());
             assertEquals(1, markers.get());
-            assertNotSame(indexing, application.projectIndexing(UnaryOperator.identity()));
+            ProjectIndexingUseCase decorated = MinosApplicationTestAccess.decoratedProjectIndexing(application,
+                    UnaryOperator.identity());
+            assertNotSame(indexing, decorated);
+            assertNotSame(decorated, MinosApplicationTestAccess.decoratedProjectIndexing(application,
+                    UnaryOperator.identity()));
             assertSame(application.knowledgeExport(), application.knowledgeExport());
         }
     }

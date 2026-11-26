@@ -358,9 +358,17 @@ public final class MinosApplication implements AutoCloseable {
         return projectIndexing;
     }
 
-    /** The local indexing with every provider executor wrapped by {@code executorDecorator}; built for each call. */
-    public ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> executorDecorator) {
+    /**
+     * The local indexing with every provider executor wrapped by {@code executorDecorator}; built for each call.
+     * Package-private: its parameter names an engine type; the remote indexing of this class reads it.
+     */
+    ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> executorDecorator) {
         return new ProjectIndexingUseCase(indexingDependencies(providerRuntimeManager()), executorDecorator);
+    }
+
+    /** {@link #projectIndexing(UnaryOperator)} under the name tests read it by, through the test access. */
+    ProjectIndexingUseCase decoratedProjectIndexing(UnaryOperator<IndexerExecutor> executorDecorator) {
+        return projectIndexing(executorDecorator);
     }
 
     /**

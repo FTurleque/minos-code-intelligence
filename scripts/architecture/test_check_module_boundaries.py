@@ -288,6 +288,65 @@ class ApplicationTestJarScopeRuleTest(unittest.TestCase):
                                  "minos-mcp", "minos-nexus"]), sorted(consumers))
 
 
+class ApplicationTestJarContentRuleTest(unittest.TestCase):
+    """AUD-SEC-12 — the test-jar of minos-application publishes MinosApplicationTestAccess alone."""
+
+    INCLUDE = "<include>com/minos/application/MinosApplicationTestAccess.class</include>"
+
+    @classmethod
+    def pom(cls, includes=None, extra_execution="", artifact="minos-application", excludes=""):
+        includes = f"<includes>{cls.INCLUDE}</includes>" if includes is None else includes
+        return element(
+            f'<project xmlns="{POM_NAMESPACE}"><artifactId>{artifact}</artifactId><build><plugins><plugin>'
+            "<groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><executions>"
+            f"<execution><goals><goal>test-jar</goal></goals><configuration>{includes}{excludes}</configuration>"
+            f"</execution>{extra_execution}</executions></plugin></plugins></build></project>")
+
+    def check(self, pom, module="minos-application"):
+        _MODULE.check_application_test_jar_content(module, pom, "com.minos")
+
+    def refused(self, pom, *fragments):
+        with self.assertRaises(RuntimeError) as raised:
+            self.check(pom)
+        for fragment in ("minos-application/pom.xml",) + fragments:
+            self.assertIn(fragment, str(raised.exception))
+
+    def test_the_single_access_class_is_accepted(self):
+        self.check(self.pom())
+
+    def test_a_widened_completed_or_missing_include_is_refused_with_the_value_found(self):
+        self.refused(self.pom("<includes><include>com/minos/application/**</include></includes>"),
+                     "com/minos/application/**")
+        self.refused(self.pom(f"<includes>{self.INCLUDE}<include>**/*.class</include></includes>"), "**/*.class")
+        self.refused(self.pom(""), "no <includes>")
+        self.refused(self.pom("<includes></includes>"), "empty <includes>")
+
+    def test_excludes_are_refused(self):
+        self.refused(self.pom(excludes="<excludes><exclude>**/*Test.class</exclude></excludes>"), "**/*Test.class")
+
+    def test_a_second_or_a_missing_test_jar_execution_is_refused(self):
+        self.refused(self.pom(extra_execution="<execution><id>more</id><goals><goal>test-jar</goal></goals>"
+                                              "</execution>"), "2 executions")
+        self.refused(element(f'<project xmlns="{POM_NAMESPACE}"><artifactId>minos-application</artifactId></project>'),
+                     "0 executions")
+
+    def test_a_test_jar_execution_in_a_profile_is_counted(self):
+        pom = self.pom()
+        profile = element(
+            f'<profiles xmlns="{POM_NAMESPACE}"><profile><id>wide</id><build><plugins><plugin>'
+            "<artifactId>maven-jar-plugin</artifactId><executions><execution><goals><goal>test-jar</goal></goals>"
+            "</execution></executions></plugin></plugins></build></profile></profiles>")
+        pom.append(profile)
+        self.refused(pom, "2 executions")
+
+    def test_other_modules_are_not_concerned(self):
+        self.check(self.pom("<includes><include>**</include></includes>", artifact="minos-cli"), module="minos-cli")
+
+    def test_the_real_pom_publishes_the_access_class_only(self):
+        _MODULE.check_application_test_jar_content("minos-application", _MODULE.parse_pom("minos-application"),
+                                                   BOUNDARY_POLICY.repository_group_id())
+
+
 class HiddenDependencyRuleTest(unittest.TestCase):
 
     def refused(self, text, *fragments):
