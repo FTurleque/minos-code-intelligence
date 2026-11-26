@@ -9,7 +9,7 @@ Les facts mécaniquement calculables — version, catalogue MCP, commandes CLI, 
 ```mermaid
 classDiagram
     class MinosApplication {
-      <<composition root long-lived>>
+      <<application facade>>
       projectQueryService()
       architectureQuery()
       impactQuery()

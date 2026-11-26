@@ -19,7 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>{@code MinosApplicationTestAccess} lives in the test-jar of minos-application only: neither the jar of the module
  * nor the shaded distribution contains it, and the test-jar declares no service, so that a module using it never finds
- * a second implementation of a port.</p>
+ * a second implementation of a port. Outside META-INF/, the test-jar carries that class alone (AUD-SEC-12): an include
+ * widened in the POM, an inherited configuration or another plugin adding entries fails here, on the jar actually
+ * built.</p>
  */
 class ApplicationTestAccessPackagingIT {
 
@@ -34,6 +36,19 @@ class ApplicationTestAccessPackagingIT {
                     .filter(name -> name.startsWith("META-INF/services/") && !name.endsWith("/"))
                     .toList();
             assertEquals(List.of(), services, "the test-jar must declare no service");
+        }
+    }
+
+    @Test
+    void theTestJarOfTheApplicationCarriesNothingButTheTestAccessOutsideMetaInf() throws IOException {
+        try (JarFile jar = new JarFile(jar("minos.application.tests.jar").toFile())) {
+            List<String> entries = jar.stream()
+                    .filter(entry -> !entry.isDirectory())
+                    .map(JarEntry::getName)
+                    .filter(name -> !name.startsWith("META-INF/"))
+                    .sorted()
+                    .toList();
+            assertEquals(List.of(TEST_ACCESS), entries, "the test-jar must publish the test access alone");
         }
     }
 

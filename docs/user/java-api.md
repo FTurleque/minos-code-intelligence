@@ -355,8 +355,8 @@ Aucune signature de `com.minos.api` ne change, ni aucune sortie de la CLI, du se
 |---|---|
 | `compositionRoot()` | aucun : l'application demande elle-même ses adaptateurs à la racine de composition ; ouvrir l'application par `MinosApplication.open(home)` ou `MinosApplication.builder(home)` |
 | `projectRegistry()`, `snapshotStore()` | les services de requête de la façade (`projectQueryService()`, `projectInspectionService()`, `architectureQuery()`…), `knowledgeExport()` ; `new LocalProjectOperations(application)` pour enregistrer et importer |
-| `indexStateStore()`, `fingerprintStore()`, `discoveryService()`, `fingerprintService()`, `snapshotStager()`, `snapshotPromoter()`, `incrementalIndexingPlanner()`, `invalidationService()`, `indexerRegistry(String)` | `projectIndexing()`, `projectIndexing(executorDecorator)`, `projectIndexingViaWsl(distribution)`, `remoteIndexing()` ; l'état de reprise par `projectInspectionService().resumableRun(...)` |
-| `retentionService()` | `new LocalProjectOperations(application)` (rétention des snapshots) ; la rétention suit aussi chaque indexation |
+| `indexStateStore()`, `fingerprintStore()`, `discoveryService()`, `fingerprintService()`, `snapshotStager()`, `snapshotPromoter()`, `incrementalIndexingPlanner()`, `invalidationService()`, `indexerRegistry(String)` | `projectIndexing()`, `projectIndexingViaWsl(distribution)`, `remoteIndexing()` ; l'état de reprise par `projectInspectionService().resumableRun(...)` |
+| `retentionService()` | aucun remplaçant à la demande : la rétention s'applique après chaque indexation et chaque import qui publie un snapshot (`LocalProjectOperations.importScip`, voir [autonomous-indexing.md](autonomous-indexing.md)) |
 | `runtimeObservationStore()` | `runtimeIntelligenceService()` |
 | `providerRuntimeManager()`, `indexerDescriptors()` | `ProviderPlatformService.defaults(application)` (`listProviders()`, `runtimes()`, `installRuntime(...)`) |
 

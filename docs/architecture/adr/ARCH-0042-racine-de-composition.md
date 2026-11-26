@@ -330,7 +330,8 @@ Arbitrage : aucune exception, même temporaire, n'est inscrite dans le script de
 trois classes concernées sont donc passées par la composition avant l'engagement du script.
 
 - `RunDirectoryResumableRunMarkers` (L1) déménage dans `minos-bootstrap` ; l'application l'obtient par
-  `MinosApplicationComposer.resumableRunMarkers(home)` (via `MinosApplication.compositionRoot()`).
+  `MinosApplicationComposer.resumableRunMarkers(home)` (lu par `MinosApplication` dans son package ; la racine
+  n'est pas publique, [ARCH-0087](ARCH-0087-adaptateurs-embarques-et-facade-reduite.md) § 2).
 - `DoctorCommand` (L2) sonde l'hôte par deux ports de `minos-engine`, `WorkerSandboxProbe` et
   `HostCommandLocator`, implémentés dans `minos-bootstrap` ; en production il sonde toujours l'hôte
   réel, seuls ses tests injectent un double (seam package-private), et un test prouve le câblage réel.
@@ -398,7 +399,7 @@ noté au § « Consequences » est fermé aux deux sites qui le portaient :
 ## 10. Mise en œuvre : adaptateurs embarqués par l'application (AUD-ARC-01, 2026-11-18)
 
 Changement OpenSpec `cabler-les-adaptateurs-embarques-par-la-racine-de-composition`, décision
-[ARCH-0087](ARCH-0087-adaptateurs-embarques-et-facade-reduite.md) (Proposed). Le client d'embeddings appris et les
+[ARCH-0087](ARCH-0087-adaptateurs-embarques-et-facade-reduite.md). Le client d'embeddings appris et les
 fournisseurs du graphe de programme restent dans `minos-application` mais sont instanciés par
 `DefaultMinosApplicationComposer` seul (`embeddingProvider`, `programGraphProviders`,
 `completeProgramGraphProviders`) ; la règle **A19** de `check-module-boundaries.py` tient les deux listes fermées.

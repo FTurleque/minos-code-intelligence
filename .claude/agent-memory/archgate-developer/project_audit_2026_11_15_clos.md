@@ -16,9 +16,9 @@ attend qu'une PR fusionnée soit suivie de l'archivage OpenSpec et de la mise à
 - Après la fusion du dernier changement d'un sprint, archiver tout de suite : `openspec archive -y <change>` dans
   l'ordre de fusion, puis une ligne de traçabilité par exigence ajoutée dans `docs/architecture/diagrams/capacites/`
   (`check-capability-dossiers.py` refuse la ligne avant l'archivage, l'exige après).
-- Une exigence dont le code n'est pas livré ne s'archive pas : la retirer du delta avant `openspec archive` (cas du
-  groupe 4 d'`injecter-les-collaborateurs-des-cas-d-usage`, retrait de `compositionRoot()` et des 15 accesseurs,
-  reporté par le propriétaire ; ARCH-0087 reste `Proposed`).
+- Une exigence dont le code n'est pas livré ne s'archive pas : la retirer du delta avant `openspec archive` (cas d'une
+  exigence d'`injecter-les-collaborateurs-des-cas-d-usage` retirée du delta, livrée ensuite par
+  `retirer-la-racine-de-composition-de-la-facade`).
 - Restes connus : mesures sur la machine de référence, journaux de jobs CI à relire, JaCoCo agrégés, rotation Docker,
   parcours de la carte dans un navigateur, échec réel du worker WSL, `code-audit.yml` (mutation), SEC-0083 `Proposed`,
   `SnapshotScalabilityBenchmark` non rejoué.

@@ -368,6 +368,50 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
         self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.projectRegistry",
                      "registry.ProjectRegistry")
 
+    def application_with(self, members, imports=("com.minos.registry.ProjectRegistry",)):
+        self.write("minos-engine", "com.minos.registry", "ProjectRegistry", "public interface ProjectRegistry { }")
+        self.write("minos-application", "com.minos.application", "MinosApplication",
+                   "public final class MinosApplication {\n" + members + "\n}", list(imports))
+
+    def test_a_public_signature_taking_an_engine_type_is_refused(self):
+        # AUD-ARC-13: the facade neither returns nor takes an engine type.
+        variants = (
+            ("    public void leak(ProjectRegistry registry) { }", "MinosApplication.leak", "registry",
+             "registry.ProjectRegistry", ("com.minos.registry.ProjectRegistry",)),
+            ("    public static MinosApplication of(com.minos.registry.ProjectRegistry registry) { return null; }",
+             "MinosApplication.of", "registry", "registry.ProjectRegistry", ()),
+            ("    public ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> decorator) { return null; }",
+             "MinosApplication.projectIndexing", "decorator", "orchestration.IndexingRuntimePorts",
+             ("com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor", "java.util.function.UnaryOperator")),
+            ("    public MinosApplication(String home, @Deprecated final ProjectRegistry registry) { }",
+             "MinosApplication.MinosApplication", "registry", "registry.ProjectRegistry",
+             ("com.minos.registry.ProjectRegistry",)),
+            ("    public void wire(MinosApplicationComposer root) { }", "MinosApplication.wire", "root",
+             "MinosApplicationComposer", ()),
+        )
+        for members, method, parameter, engine_type, imports in variants:
+            with self.subTest(method=method):
+                self.application_with(members, imports)
+                self.refused(lambda: self.check_accessors({}), "A11", method, parameter, engine_type,
+                             "package-private")
+
+    def test_a_package_private_signature_or_a_non_engine_parameter_is_accepted(self):
+        self.application_with("    void leak(ProjectRegistry registry) { }\n"
+                              "    public void name(String value, java.util.List<String> more) { }\n"
+                              "    // public void quiet(ProjectRegistry registry) { }")
+        self.assertEqual(0, self.check_accessors({}))
+
+    def test_the_builder_keeps_its_engine_parameters(self):
+        self.application_with("    public static Builder builder() { return new Builder(); }\n"
+                              "    public static final class Builder {\n"
+                              "        public Builder projectRegistry(ProjectRegistry value) { return this; }\n"
+                              "    }")
+        self.assertEqual(0, self.check_accessors({}))
+        self.assertEqual([], RATCHETS.minos_application_engine_parameters(self.root, "com.minos"))
+
+    def test_the_real_application_takes_no_engine_type(self):
+        self.assertEqual([], RATCHETS.minos_application_engine_parameters())
+
     def test_an_entry_added_to_the_empty_table_is_refused(self):
         self.write("minos-engine", "com.minos.registry", "ProjectRegistry", "public interface ProjectRegistry { }")
         self.write("minos-application", "com.minos.application", "MinosApplication",
