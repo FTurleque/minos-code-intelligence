@@ -2,14 +2,14 @@
 """Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts.
 
 The governed module list is checked against the root reactor (A7), and every Java package belongs to
-exactly one module (A3 / ADR 0068). Architecture debt is held by ratchets (A8, A10 to A15, A18); the generated
-dependency document also shows the execution edges created by META-INF/services files.
+exactly one module (A3 / ADR 0068). Architecture debt is held by ratchets (A8, A10 to A15, A18 to A20); the
+generated dependency document also shows the execution edges created by META-INF/services files.
 
 This script holds the POM rules (A2 dependency policy, hexagonal families, hidden internal dependencies) and runs
 every rule. The other rules live next to it: module_boundary_policy (module-boundaries.json), module_boundary_sources
-(Java source reading), module_boundary_adapters (adapter, storage and assembly isolation), module_boundary_ratchets
-(A11 to A14, A16, A18), module_boundary_packages (A3, A7, A8, A15) and module_boundary_documents (A9, A17 and the
-generated dependency document).
+(Java source reading), module_boundary_adapters (A2 sources, A10, A19, A20 and storage isolation),
+module_boundary_ratchets (A11 to A14, A16, A18), module_boundary_packages (A3, A7, A8, A15) and
+module_boundary_documents (A9, A17 and the generated dependency document).
 Self-test: scripts/architecture/test_check_module_boundaries*.py.
 """
 
