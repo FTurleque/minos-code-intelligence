@@ -66,10 +66,27 @@ def inventory(sdk: str = "${dotnet_sdk_version}", toolchain: str = "${go_toolcha
             "      '}' > /opt/minos/provider-evidence/provider-inventory.json\n")
 
 
+# The RUN instruction that verifies the archive pinned by MAVEN_ZIP_SHA256, shaped like the one of the release Dockerfile:
+# two mirrors, a partial file removed between them, the check, then the use of the archive.
+MAVEN_CHECK = "    printf '%s  %s\\n' \"${MAVEN_ZIP_SHA256}\" \"/tmp/${maven_archive}\" | sha256sum -c -; \\\n"
+MAVEN_UNZIP = '    unzip -q "/tmp/${maven_archive}" -d /opt; \\\n'
+MAVEN_RUN = ('RUN set -eux; \\\n'
+             '    maven_archive="apache-maven-${MAVEN_VERSION}-bin.zip"; \\\n'
+             '    for maven_url in "https://one.example/${maven_archive}" "https://two.example/${maven_archive}"; do \\\n'
+             '      if curl --continue-at - -fsSLo "/tmp/${maven_archive}" \\\n'
+             '        "${maven_url}"; then \\\n'
+             '        break; \\\n'
+             '      fi; \\\n'
+             '      rm -f "/tmp/${maven_archive}"; \\\n'
+             '    done; \\\n'
+             + MAVEN_CHECK + MAVEN_UNZIP +
+             '    rm -f "/tmp/${maven_archive}"\n')
+
+
 def dockerfile(sha: str = TOOL_SHA, maven: str = "3.9.16", java: str = "1.0.0", extra: str = "",
-               inventory_block: str | None = None) -> str:
+               inventory_block: str | None = None, maven_run: str = MAVEN_RUN) -> str:
     return (f"FROM eclipse-temurin:24@sha256:{'a' * 64}\nARG MAVEN_VERSION={maven}\nARG MAVEN_ZIP_SHA256={sha}\n"
-            f"ARG SCIP_JAVA_VERSION={java}\nARG SCIP_GO_VERSION=2.0.0\n{extra}"
+            f"ARG SCIP_JAVA_VERSION={java}\nARG SCIP_GO_VERSION=2.0.0\n{maven_run}{extra}"
             f"{inventory() if inventory_block is None else inventory_block}")
 
 
@@ -385,11 +402,107 @@ class CheckToolsManifestTest(unittest.TestCase):
         self.assertTrue(any("missing from the distribution" in failure for failure in failures), failures)
 
 
+class ArchiveCheckTest(unittest.TestCase):
+    """Every SHA-256 ARG of the catalogue is checked by `sha256sum -c -`, fail-closed, before its archive is used."""
+
+    def failures(self, maven_run: str, extra: str = "") -> list[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / gate.DOCKERFILE
+            path.parent.mkdir(parents=True)
+            path.write_bytes(dockerfile(maven_run=maven_run, extra=extra).encode("utf-8"))
+            failures: list[str] = []
+            verified = gate.check_archive_checks(Path(directory), catalog(), failures)
+        self.assertEqual(0 if failures else 1, verified)
+        return failures
+
+    def assert_refused(self, maven_run: str, expected: str, extra: str = "") -> None:
+        failures = self.failures(maven_run, extra)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("MAVEN_ZIP_SHA256", failures[0])
+        self.assertRegex(failures[0], r"^docker/Dockerfile\.mcp\.release:\d+: ")
+        self.assertIn(expected, failures[0])
+
+    def test_a_fail_closed_check_before_any_use_is_accepted(self):
+        self.assertEqual([], self.failures(MAVEN_RUN))
+
+    def test_crlf_line_endings_are_tolerated(self):
+        self.assertEqual([], self.failures(MAVEN_RUN.replace("\n", "\r\n")))
+
+    def test_a_check_followed_by_or_true_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace("sha256sum -c -;", "sha256sum -c - || true;"),
+                            "disarms its check (`|| true`)")
+
+    def test_a_check_followed_by_or_colon_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace("sha256sum -c -;", "sha256sum -c - || :;"),
+                            "disarms its check (`|| true`)")
+
+    def test_a_check_followed_by_another_or_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace("sha256sum -c -;", "sha256sum -c - || echo mismatch;"),
+                            "is followed by `||`")
+
+    def test_an_instruction_without_errexit_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace("RUN set -eux;", "RUN set -ux;"), "does not start with `set -e`")
+
+    def test_errexit_turned_off_in_the_instruction_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace(MAVEN_CHECK, "    set +e; \\\n" + MAVEN_CHECK),
+                            "disarms its check (`set +e`)")
+
+    def test_a_trap_in_the_instruction_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace(MAVEN_CHECK, "    trap 'exit 0' ERR; \\\n" + MAVEN_CHECK),
+                            "disarms its check (`trap`)")
+
+    def test_an_archive_unzipped_before_its_check_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace(MAVEN_CHECK + MAVEN_UNZIP, MAVEN_UNZIP + MAVEN_CHECK),
+                            "/tmp/${maven_archive} is used before the check of ARG MAVEN_ZIP_SHA256")
+
+    def test_a_missing_check_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace(MAVEN_CHECK, '    echo "${MAVEN_ZIP_SHA256}"; \\\n'),
+                            "is checked 0 times")
+
+    def test_a_doubled_check_is_refused(self):
+        self.assert_refused(MAVEN_RUN.replace(MAVEN_CHECK, MAVEN_CHECK + MAVEN_CHECK), "is checked 2 times")
+
+    def test_an_arg_consumed_by_no_run_is_refused(self):
+        self.assert_refused("", "docker/Dockerfile.mcp.release:3: ARG MAVEN_ZIP_SHA256 is consumed by no RUN")
+
+    def test_an_arg_consumed_by_two_runs_is_refused(self):
+        self.assert_refused(MAVEN_RUN, "is consumed by 2 RUN instructions", extra=MAVEN_RUN)
+
+    def test_a_partial_file_removed_then_downloaded_again_before_the_check_is_accepted(self):
+        mutated = MAVEN_RUN.replace(MAVEN_CHECK, '    rm -f "/tmp/${maven_archive}"; \\\n'
+                                                 '    curl -fsSLo "/tmp/${maven_archive}" "https://one.example/x"; \\\n'
+                                    + MAVEN_CHECK)
+        self.assertEqual([], self.failures(mutated))
+
+
 class ShippedTreeTest(unittest.TestCase):
     def test_the_repository_itself_passes(self):
         failures, components = gate.check(gate.DEFAULT_ROOT)
         self.assertEqual([], failures)
         self.assertGreater(components, 0)
+
+    def test_the_shipped_dockerfile_verifies_every_catalogued_archive(self):
+        shipped = json.loads((gate.DEFAULT_ROOT / gate.CATALOG).read_text(encoding="utf-8"))
+        hash_args = [name for name, (value, _origin) in gate.expected_docker_args(shipped).items()
+                     if gate.SHA256.fullmatch(value)]
+        self.assertGreaterEqual(len(hash_args), 6)
+        self.assertEqual(len(hash_args), gate.verified_archives(gate.DEFAULT_ROOT))
+
+    def test_the_shipped_dockerfile_with_a_disarmed_maven_check_is_refused(self):
+        shipped = (gate.DEFAULT_ROOT / gate.DOCKERFILE).read_text(encoding="utf-8")
+        mutated, count = re.subn(r'("\$\{MAVEN_ZIP_SHA256\}" \S+ \| sha256sum -c -);', r"\g<1> || true;", shipped,
+                                 count=1)
+        self.assertEqual(1, count, "the shipped Dockerfile no longer checks the Maven archive")
+        shipped_catalog = json.loads((gate.DEFAULT_ROOT / gate.CATALOG).read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / gate.DOCKERFILE
+            path.parent.mkdir(parents=True)
+            path.write_text(mutated, encoding="utf-8")
+            failures: list[str] = []
+            gate.check_archive_checks(Path(directory), shipped_catalog, failures)
+        self.assertEqual(1, len(failures), failures)
+        self.assertRegex(failures[0], r"^docker/Dockerfile\.mcp\.release:\d+: the RUN instruction that verifies "
+                                      r"ARG MAVEN_ZIP_SHA256 disarms its check")
 
     def test_the_shipped_catalogue_with_an_older_node_major_on_linux_is_refused(self):
         shipped = json.loads((gate.DEFAULT_ROOT / gate.CATALOG).read_text(encoding="utf-8"))
