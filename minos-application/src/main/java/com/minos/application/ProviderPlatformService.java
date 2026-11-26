@@ -31,10 +31,12 @@ public final class ProviderPlatformService {
         this.runtimes = Objects.requireNonNull(runtimes, "runtimes");
     }
 
-    /** Default provider platform bound to one already-composed application. */
+    /**
+     * Default provider platform bound to one already-composed application: the application assembles it, reading its
+     * provider catalog at each call.
+     */
     public static ProviderPlatformService defaults(MinosApplication application) {
-        MinosApplication app = Objects.requireNonNull(application, "application");
-        return new ProviderPlatformService(app.providerCatalog().providers(), app.providerRuntimeManager());
+        return Objects.requireNonNull(application, "application").providerPlatformService();
     }
 
     public List<ProviderView> listProviders() {

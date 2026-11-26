@@ -8,6 +8,11 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.domain.JavaModifier;
+import com.minos.application.MinosApplication;
+import com.minos.application.MinosApplicationComposer;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -315,6 +320,49 @@ class ModuleArchitectureTest {
         }
         System.out.println("undeclared module uses (module -> used module = dependencies): " + undeclared);
         assertTrue(undeclared.isEmpty(), "undeclared module uses " + undeclared + "\n" + String.join("\n", details));
+    }
+
+    /**
+     * AUD-ARC-14, ADR 0087: only the facade reads its ports. No production class other than MinosApplication (and its
+     * nested classes) calls a non-public method of MinosApplication whose return type involves a class of the engine
+     * module or MinosApplicationComposer; the collaborators of the local operations are assembled by the facade. The
+     * engine module is read from the policy: the core module that depends on another core module.
+     */
+    @Test
+    void onlyTheFacadeReadsItsPorts() {
+        Set<String> core = POLICY.family("core");
+        List<String> engineModules = core.stream()
+                .filter(module -> ALLOWED.get(module).stream().anyMatch(core::contains))
+                .toList();
+        assertEquals(1, engineModules.size(), "one core module must depend on another core module: " + engineModules);
+        String engine = engineModules.get(0);
+        String facade = MinosApplication.class.getName();
+        String compositionRoot = MinosApplicationComposer.class.getName();
+        Set<String> violations = new TreeSet<>();
+        for (JavaClass javaClass : all) {
+            String caller = javaClass.getName();
+            if (caller.equals(facade) || caller.startsWith(facade + "$")) {
+                continue;
+            }
+            for (JavaMethodCall call : javaClass.getMethodCallsFromSelf()) {
+                if (!call.getTargetOwner().getName().equals(facade)) {
+                    continue;
+                }
+                for (JavaMethod method : call.getTarget().resolveMember().stream().toList()) {
+                    if (method.getModifiers().contains(JavaModifier.PUBLIC)) {
+                        continue;
+                    }
+                    boolean port = method.getReturnType().getAllInvolvedRawTypes().stream()
+                            .map(JavaClass::getName)
+                            .anyMatch(type -> engine.equals(MODULE_BY_CLASS.get(type)) || type.equals(compositionRoot));
+                    if (port) {
+                        violations.add(caller + " calls MinosApplication." + method.getName() + "()");
+                    }
+                }
+            }
+        }
+        assertTrue(violations.isEmpty(), "only MinosApplication reads its ports; assemble the collaborators in the "
+                + "facade (ADR 0087): " + String.join("; ", violations));
     }
 
     /**

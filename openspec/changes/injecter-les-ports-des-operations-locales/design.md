@@ -48,7 +48,7 @@ Relu au commit `75e10c68` (= `origin/main`, PR #819), le 2026-11-25.
 ## Écarts
 
 | Écart | Source A | Source B | Suite proposée |
-|---|---|---|---|
+|---|---|---|---|---|
 | E1 — `LocalProjectSymbolQuery` est citée comme puisant ses ports, alors qu'elle n'appelle que le service public `projectQueryService()`, et qu'elle a déjà un constructeur public à deux ports | `findings.json`, AUD-ARC-14, preuve | `LocalProjectSymbolQuery.java:25-32` | Aucun changement de comportement. Son constructeur `(MinosApplication)` délègue au constructeur privé (`this(application.projectQueryService())`), pour un seul chemin d'initialisation. Signatures conservées (D2) |
 | E2 — L'audit liste six appels pour `LocalProjectOperations` ; il en oublie un septième, au service public `projectInspectionService()` | preuve de l'audit | `LocalProjectOperations.java:57` | Le service entre dans les `Dependencies` (D1), pour que la classe se construise sans application |
 | E3 — L'action de l'audit est une alternative ouverte : dette écrite, cliquet ou injection | `findings.json`, action | — | D1 (injection) et D3 (cliquet sans table) recommandés ensemble, D4 en complément |
@@ -235,11 +235,11 @@ Recommandation : **(a)** si le propriétaire lit D3 comme une mise en œuvre de 
 
 ## Traçabilité
 
-| Exigence | Décision | Tâches | Preuve attendue |
-|---|---|---|---|
-| Les opérations locales reçoivent leurs collaborateurs et seule la façade lit ses ports | D1, D3 | 1.1-1.3, 2.1-2.3 | `LocalProjectOperationsDependenciesTest` (nom à confirmer), `LocalProjectGitQueryTest`, `ProviderPlatformServiceRuntimesTest`, `ModuleArchitectureTest#onlyTheFacadeReadsItsPorts` (nom à confirmer) |
-| Les points d'entrée publics des opérations locales sont conservés | D2 | 1.4 | `javap -public` des quatre classes ; goldens de caractérisation inchangés ; test de délégation de `defaults` dans `minos-application` |
-| Les ports sans lecteur sont retirés de la façade | D4 | 2.2 | `javap -p` de `MinosApplication` ; compilation du reactor |
+| Exigence | Décision | Tâches | Preuve exécutée | Preuve manquante |
+|---|---|---|---|---|
+| Les opérations locales reçoivent leurs collaborateurs et seule la façade lit ses ports | D1, D3 | 1.1-1.3, 2.1-2.3 | 2026-11-25 : `LocalProjectOperationsRetentionTest` rouge à la compilation sans `Dependencies`, puis vert (6 tests, dont le refus de chaque collaborateur nul) ; `LocalOperationsAssemblyTest` (catalogue relu à chaque appel, port Git, requête de symboles, importeur SCIP nul refusé) ; JaCoCo local : méthodes d'assemblage et `Dependencies` couvertes ; `ModuleArchitectureTest#onlyTheFacadeReadsItsPorts` rouge sur le code d'avant 1.2 (nomme `LocalProjectGitQuery`, `LocalProjectOperations`, `ProviderPlatformService`), vert après. Le rouge d'avant 1.2 tient lieu de mutation 2.3 (`gitIntelligence()` appelé par `LocalProjectGitQuery`) | couverture SonarCloud du nouveau code ; jobs `Verify` en CI |
+| Les points d'entrée publics des opérations locales sont conservés | D2 | 1.4 | `javap -public` des quatre classes : cinq points d'entrée inchangés, aucun `Dependencies` public ; `-pl minos-app -am verify` complet vert sur le poste Windows, goldens de caractérisation inchangés | `Verify (ubuntu-24.04)` en CI |
+| Les ports sans lecteur sont retirés de la façade | D4 | 2.2 | `javap -p` de `MinosApplication` sans les cinq méthodes ; reactor compilé par le `verify` complet | aucune |
 
 ## Questions ouvertes
 

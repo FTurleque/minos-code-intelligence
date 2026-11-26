@@ -13,8 +13,9 @@ public final class LocalProjectGitQuery implements ProjectGitQuery {
 
     private final GitIntelligence git;
 
+    /** The query over the Git port of {@code application}, which assembles it (the port is never read here). */
     public LocalProjectGitQuery(MinosApplication application) {
-        this(Objects.requireNonNull(application, "application").gitIntelligence());
+        this(Objects.requireNonNull(application, "application").gitQuery().git);
     }
 
     LocalProjectGitQuery(GitIntelligence git) {
