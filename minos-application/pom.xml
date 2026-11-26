@@ -46,7 +46,9 @@
                   AUD-ARC-02 / ADR 0087 section 2: MinosApplicationTestAccess, the test access to the package-private ports
                   of MinosApplication, is published as a test-jar for the tests of the other modules, declared in test scope
                   only (check-module-boundaries.py). The test-jar carries that class alone: no other test class and no
-                  service declaration (src/test/platform-access-control stays out of it).
+                  service declaration (src/test/platform-access-control stays out of it). The guard requires this single
+                  test-jar execution and this exact include (check_application_test_jar_content); the packaging IT
+                  ApplicationTestAccessPackagingIT checks the entries of the jar actually built.
                 -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>

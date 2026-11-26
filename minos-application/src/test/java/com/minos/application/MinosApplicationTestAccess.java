@@ -1,11 +1,13 @@
 package com.minos.application;
 
+import com.minos.application.indexing.ProjectIndexingUseCase;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
+import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.registry.ProjectRegistry;
@@ -14,6 +16,7 @@ import com.minos.storage.StorageRetentionService;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /**
  * Test access to the ports of an open {@link MinosApplication} (AUD-ARC-02, ADR 0087 section 2).
@@ -79,5 +82,10 @@ public final class MinosApplicationTestAccess {
 
     public static SnapshotPromoter snapshotPromoter(MinosApplication application) {
         return application.snapshotPromoter();
+    }
+
+    public static ProjectIndexingUseCase decoratedProjectIndexing(MinosApplication application,
+                                                                  UnaryOperator<IndexerExecutor> executorDecorator) {
+        return application.decoratedProjectIndexing(executorDecorator);
     }
 }
