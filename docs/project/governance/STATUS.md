@@ -300,7 +300,7 @@ La **gate JaCoCo ciblée** de `PR Validation` (`scripts/quality/check-jacoco.py`
 
 ## Supply-chain et toolchains
 
-- Maven Wrapper : Maven 3.10.0 avec checksum SHA-256 (`.mvn/wrapper/maven-wrapper.properties`), accepté par la plage `[3.9,4.0)` de l'enforcer ; l'image Docker et les outils embarqués (`embedded-tools.json`) restent en Maven 3.9.16 ;
+- Maven Wrapper : version de Maven (acceptée par la plage `[3.9,4.0)` de l'enforcer) et somme SHA-256 de sa distribution dans `.mvn/wrapper/maven-wrapper.properties` ; l'image Docker et les outils embarqués (`embedded-tools.json`) restent en Maven 3.9.16 ;
 - cœur MINOS : Java 21 / Maven 3.9.x ;
 - plugin IntelliJ : Java 21 / Gradle 9.9.2 / IntelliJ Platform 2026.1 ;
 - Dependabot couvre Maven, GitHub Actions **et le build Gradle `minos-intellij`** ;

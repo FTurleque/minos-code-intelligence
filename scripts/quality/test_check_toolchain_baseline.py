@@ -263,6 +263,76 @@ class WrapperDistributionSumTest(unittest.TestCase):
         self.assertTrue(failures[1].startswith(f"{gate.WRAPPER} must hold exactly one distributionSha256Sum"))
 
 
+class MavenMentionTest(unittest.TestCase):
+    """Rule 14: a Maven version written in a current document is the wrapper's or the image's."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER)
+        self.write(gate.RELEASE_DOCKERFILE, "FROM eclipse-temurin:21@sha256:" + "a" * 64 + "\nARG MAVEN_VERSION=3.9.16\n")
+        for relative in gate.MAVEN_DOCUMENTS:
+            self.write(relative, "# Page\n\nThe wrapper Maven, version of `.mvn/wrapper/maven-wrapper.properties`.\n")
+
+    def write(self, relative: str, content: str) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    def failures(self) -> list[str]:
+        return gate.check_maven_mentions(self.root)[0]
+
+    def test_documents_that_refer_to_the_wrapper_are_accepted(self):
+        self.assertEqual(([], 0), gate.check_maven_mentions(self.root))
+
+    def test_a_stale_wrapper_version_is_refused_with_both_references(self):
+        self.write(gate.STATUS, "# Status\n\n- Maven Wrapper : Maven 3.10.0 avec checksum SHA-256 ;\n")
+        self.assertEqual([f"{gate.STATUS}:3 states Maven 3.10.0; the wrapper downloads 3.10.2 and the image ships "
+                          f"3.9.16: refer to {gate.MAVEN_WRAPPER} instead of copying a version"], self.failures())
+
+    def test_the_version_of_the_image_is_accepted(self):
+        self.write(gate.DOCKER_RUNTIME, "Toolchains: JDK 21, **Apache Maven 3.9.16**, Coursier.\n")
+        self.assertEqual(([], 1), gate.check_maven_mentions(self.root))
+
+    def test_the_version_of_the_wrapper_is_accepted(self):
+        self.write(gate.ROADMAP, "- core: wrapper Maven 3.10.2 with checksum;\n")
+        self.assertEqual(([], 1), gate.check_maven_mentions(self.root))
+
+    def test_a_stale_archive_name_is_refused(self):
+        self.write(gate.SUPPLY_CHAIN, "The image unpacks apache-maven-3.10.1-bin.zip.\n")
+        failures = self.failures()
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith(f"{gate.SUPPLY_CHAIN}:1 states Maven 3.10.1;"), failures[0])
+
+    def test_a_version_after_the_word_wrapper_is_refused(self):
+        self.write(gate.CODE_AUDIT, "| Maven | wrapper du dépôt (3.10.0, plage Enforcer `[3.9,4.0)`) | exécuté |\n")
+        failures = self.failures()
+        self.assertEqual(1, len(failures))
+        self.assertTrue(failures[0].startswith(f"{gate.CODE_AUDIT}:1 states Maven 3.10.0;"), failures[0])
+
+    def test_versions_outside_a_maven_context_are_ignored(self):
+        self.write(gate.POLICY, "- Gradle: **9.9.2**; Python 3.13.7; dependency-check-maven:13.0.0; plugin Maven "
+                                "4.10.4.1; Maven 3.9.x, enforced as `[3.9,4.0)`.\n")
+        self.assertEqual(([], 0), gate.check_maven_mentions(self.root))
+
+    def test_a_missing_document_is_refused(self):
+        (self.root / gate.CODE_AUDIT).unlink()
+        self.assertEqual([f"{gate.CODE_AUDIT} is missing: the Maven versions it states cannot be checked"],
+                         self.failures())
+
+    def test_missing_references_are_refused(self):
+        (self.root / gate.RELEASE_DOCKERFILE).unlink()
+        self.write(gate.MAVEN_WRAPPER, "distributionType=only-script\n")
+        self.assertEqual([f"{gate.MAVEN_WRAPPER} names no Maven distribution version",
+                          f"{gate.RELEASE_DOCKERFILE} declares no ARG MAVEN_VERSION"], self.failures())
+
+    def test_the_repository_writes_no_stale_maven_version(self):
+        failures, compared = gate.check_maven_mentions(REPOSITORY)
+        self.assertEqual([], failures)
+        self.assertGreaterEqual(compared, 1, "docker-runtime.md names the Maven of the image")
+
+
 def pom(release: str, enforced: str) -> str:
     return ("<project>\n  <properties>\n"
             f"    <maven.compiler.release>{release}</maven.compiler.release>\n"

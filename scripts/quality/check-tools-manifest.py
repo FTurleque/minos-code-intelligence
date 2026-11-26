@@ -408,20 +408,27 @@ def check_archive_checks(root: Path, catalog: dict, failures: list[str]) -> int:
             if instruction[0][1].lstrip().upper().startswith("RUN ")]
     verified = 0
     for name in hash_args:
-        reference = re.compile(r"\$\{?" + re.escape(name) + r"(?![A-Za-z0-9_])")
-        consumers = [run for run in runs if any(reference.search(line) for _number, line in run)]
-        if not consumers:
-            failures.append(f"{DOCKERFILE.as_posix()}:{declared.get(name, 0)}: ARG {name} is consumed by no RUN instruction: the archive it pins "
-                            "is never verified")
-            continue
-        if len(consumers) > 1:
-            lines = ", ".join(str(run[0][0]) for run in consumers)
-            failures.append(f"{DOCKERFILE.as_posix()}:{consumers[1][0][0]}: ARG {name} is consumed by {len(consumers)} "
-                            f"RUN instructions (lines {lines}); verify it in exactly one")
-            continue
-        if archive_check_failures(name, consumers[0], failures):
+        consumer = single_consumer(name, runs, declared.get(name, 0), failures)
+        if consumer is not None and archive_check_failures(name, consumer, failures):
             verified += 1
     return verified
+
+
+def single_consumer(name: str, runs: list[list[tuple[int, str]]], declared_at: int,
+                    failures: list[str]) -> list[tuple[int, str]] | None:
+    """The one RUN instruction that consumes ARG ``name``; none (with a failure) when no or several RUN consume it."""
+    reference = re.compile(r"\$\{?" + re.escape(name) + r"(?![A-Za-z0-9_])")
+    consumers = [run for run in runs if any(reference.search(line) for _number, line in run)]
+    if not consumers:
+        failures.append(f"{DOCKERFILE.as_posix()}:{declared_at}: ARG {name} is consumed by no RUN instruction: the "
+                        "archive it pins is never verified")
+        return None
+    if len(consumers) > 1:
+        numbers = ", ".join(str(run[0][0]) for run in consumers)
+        failures.append(f"{DOCKERFILE.as_posix()}:{consumers[1][0][0]}: ARG {name} is consumed by {len(consumers)} "
+                        f"RUN instructions (lines {numbers}); verify it in exactly one")
+        return None
+    return consumers[0]
 
 
 def archive_check_failures(name: str, run: list[tuple[int, str]], failures: list[str]) -> bool:
@@ -433,18 +440,7 @@ def archive_check_failures(name: str, run: list[tuple[int, str]], failures: list
         failures.append(f"{DOCKERFILE.as_posix()}:{first}: the RUN instruction that verifies ARG {name} does not start with "
                         "`set -e`: a failed check would not stop it")
     code = [(number, line) for number, line in run if not line.lstrip().startswith("#")]
-    neutralised = False
-    for number, line in code:
-        disarmed = [label for pattern, label in DISARMING if pattern.search(line)]
-        for label in disarmed:
-            failures.append(f"{DOCKERFILE.as_posix()}:{number}: the RUN instruction that verifies ARG {name} disarms "
-                            f"its check (`{label}`)")
-        if "sha256sum" in line and f"${{{name}}}" in line and "||" in line:
-            neutralised = True
-            if not disarmed:
-                failures.append(f"{DOCKERFILE.as_posix()}:{number}: the check of ARG {name} is followed by `||`: a "
-                                "mismatch would not fail")
-    if neutralised:
+    if disarming_failures(name, code, failures):
         return False
     pattern = archive_check(name)
     checks = [(number, pattern.match(line).group("file")) for number, line in code if pattern.match(line)]
@@ -452,13 +448,35 @@ def archive_check_failures(name: str, run: list[tuple[int, str]], failures: list
         failures.append(f"{DOCKERFILE.as_posix()}:{first}: ARG {name} is checked {len(checks)} times in the form "
                         f"`printf '%s  %s\\n' \"${{{name}}}\" <file> | sha256sum -c -`; expected exactly once")
         return False
-    check_line, file = checks[0]
+    use_before_check_failures(name, code, checks[0], failures)
+    return len(failures) == before
+
+
+def disarming_failures(name: str, code: list[tuple[int, str]], failures: list[str]) -> bool:
+    """Reports what disarms the check of ``name``; returns whether its ``sha256sum`` line is followed by ``||``."""
+    neutralised = False
+    for number, line in code:
+        disarmed = [label for pattern, label in DISARMING if pattern.search(line)]
+        for label in disarmed:
+            failures.append(f"{DOCKERFILE.as_posix()}:{number}: the RUN instruction that verifies ARG {name} disarms "
+                            f"its check (`{label}`)")
+        followed = "sha256sum" in line and f"${{{name}}}" in line and "||" in line
+        if followed and not disarmed:
+            failures.append(f"{DOCKERFILE.as_posix()}:{number}: the check of ARG {name} is followed by `||`: a "
+                            "mismatch would not fail")
+        neutralised = neutralised or followed
+    return neutralised
+
+
+def use_before_check_failures(name: str, code: list[tuple[int, str]], check: tuple[int, str],
+                              failures: list[str]) -> None:
+    """Reports each command before the check of ``name`` that uses its file, other than curl and rm -f."""
+    check_line, file = check
     token = file.strip('"')
     for number, command in shell_commands([(n, line) for n, line in code if n < check_line]):
         if names(command, token) and not COMMAND_START.match(command):
             failures.append(f"{DOCKERFILE.as_posix()}:{number}: {token} is used before the check of ARG {name} "
                             "(only curl may write it and rm -f remove it)")
-    return len(failures) == before
 
 
 def verified_archives(root: Path) -> int:

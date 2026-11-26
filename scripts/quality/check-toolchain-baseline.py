@@ -71,6 +71,18 @@ What this rule does not prove: that the sum is the one of the published archive 
 the first download, in the first `Verify` or plugin job), nor anything about `gradle-wrapper.jar` (setup-gradle
 validates it in the plugin jobs) or about `MVNW_REPOURL`, which changes the URL at run time but not the sum checked.
 
+The wrapper and the image each name one Maven version; a current document that copies a Maven version falls behind
+at the next raise unless it names one of these two. Rule:
+
+14. In the closed list MAVEN_DOCUMENTS (status, roadmap, toolchain policy, code audit method, Docker runtime page,
+    supply chain page), every Maven version written (`Maven X.Y.Z`, `apache-maven-X.Y.Z`, or `X.Y.Z` after `wrapper`
+    on the same line) is the version of `.mvn/wrapper/maven-wrapper.properties` or the `ARG MAVEN_VERSION` of
+    `docker/Dockerfile.mcp.release`. A missing document or reference fails. The documents refer to the properties
+    file rather than copy the wrapper's version, so a raise of the wrapper breaks nothing until a stale copy returns.
+
+What this rule does not prove: that prose outside the list, or a version written in another form, is current. Dated
+records (audits, history, archived ADRs) are deliberately outside the list.
+
 Self-test: scripts/quality/test_check_toolchain_baseline.py.
 """
 from __future__ import annotations
@@ -438,14 +450,65 @@ def check_wrapper_sums(root: Path) -> tuple[list[str], int]:
     return failures, pinned
 
 
+STATUS = "docs/project/governance/STATUS.md"
+ROADMAP = "docs/project/governance/ROADMAP.md"
+CODE_AUDIT = "docs/developer/quality/code-audit.md"
+DOCKER_RUNTIME = "docs/user/docker-runtime.md"
+SUPPLY_CHAIN = "docs/developer/supply-chain.md"
+RELEASE_DOCKERFILE = "docker/Dockerfile.mcp.release"
+# The current documents that describe the build toolchain: a closed list, dated records stay out of it.
+MAVEN_DOCUMENTS = (STATUS, ROADMAP, POLICY, CODE_AUDIT, DOCKER_RUNTIME, SUPPLY_CHAIN)
+WRAPPER_MAVEN = re.compile(r"/apache-maven-(?P<version>\d+\.\d+\.\d+)-bin\.zip\s*$", re.MULTILINE)
+IMAGE_MAVEN = re.compile(r"^\s*ARG\s+MAVEN_VERSION=(?P<version>\d+\.\d+\.\d+)\s*$", re.MULTILINE)
+# A Maven version as a document writes it: `Maven X.Y.Z`, `apache-maven-X.Y.Z`, or `X.Y.Z` after `wrapper` on the line.
+MAVEN_MENTIONS = (
+    re.compile(r"\bMaven\s+\**(?P<version>[34]\.\d+\.\d+)(?![.\d])"),
+    re.compile(r"\bapache-maven-(?P<version>\d+\.\d+\.\d+)(?![.\d])"),
+    re.compile(r"\b[Ww]rapper\b.*?(?<![\w.])(?P<version>[34]\.\d+\.\d+)(?![.\d])"),
+)
+
+
+def check_maven_mentions(root: Path) -> tuple[list[str], int]:
+    """(failures, number of Maven versions found in agreement): rule 14."""
+    failures: list[str] = []
+    wrapper_text = read(root, MAVEN_WRAPPER) or ""
+    image_text = read(root, RELEASE_DOCKERFILE) or ""
+    wrapper = WRAPPER_MAVEN.search(wrapper_text)
+    image = IMAGE_MAVEN.search(image_text)
+    if wrapper is None:
+        failures.append(f"{MAVEN_WRAPPER} names no Maven distribution version")
+    if image is None:
+        failures.append(f"{RELEASE_DOCKERFILE} declares no ARG MAVEN_VERSION")
+    if failures:
+        return failures, 0
+    references = {wrapper.group("version"), image.group("version")}
+    agreeing = 0
+    for relative in MAVEN_DOCUMENTS:
+        text = read(root, relative)
+        if text is None:
+            failures.append(f"{relative} is missing: the Maven versions it states cannot be checked")
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            stated = {match.group("version") for pattern in MAVEN_MENTIONS for match in pattern.finditer(line)}
+            for version in sorted(stated):
+                if version in references:
+                    agreeing += 1
+                    continue
+                failures.append(f"{relative}:{number} states Maven {version}; the wrapper downloads "
+                                f"{wrapper.group('version')} and the image ships {image.group('version')}: refer to "
+                                f"{MAVEN_WRAPPER} instead of copying a version")
+    return failures, agreeing
+
+
 def check(root: Path) -> tuple[list[str], str, int]:
     """(failures, both baselines, number of places compared with their reference)."""
     gradle_failures, gradle, gradle_compared = check_gradle(root)
     java_failures, java, java_compared = check_java(root)
     lock_failures, locked = check_plugin_locks(root)
     sum_failures, pinned = check_wrapper_sums(root)
-    return (gradle_failures + java_failures + lock_failures + sum_failures, f"gradle={gradle}, java={java}",
-            gradle_compared + java_compared + locked + pinned)
+    mention_failures, mentions = check_maven_mentions(root)
+    return (gradle_failures + java_failures + lock_failures + sum_failures + mention_failures,
+            f"gradle={gradle}, java={java}", gradle_compared + java_compared + locked + pinned + mentions)
 
 
 def main() -> int:
