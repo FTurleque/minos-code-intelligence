@@ -337,7 +337,7 @@ Deux fournisseurs de stockage de l'identifiant demandé, comparé sans casse ave
 - **THEN** aucune autorisation n'est rendue et le lancement d'un provider local est refusé
 
 ### Requirement: Aucune découverte de service de production n'omet le chargeur
-Tout appel `ServiceLoader.load` des sources de production du reactor SHALL passer un chargeur de classes explicite. Le garde de frontières SHALL échouer sur un appel à un seul argument, en nommant le fichier et la ligne.
+Tout appel `ServiceLoader.load` des sources de production du reactor SHALL passer un chargeur de classes explicite. Le garde de frontières SHALL échouer sur un appel à un seul argument, en nommant le fichier et la ligne. Ni la spécification ni le dossier de la capacité n'écrivent le nombre de découvertes : il se lit dans la sortie du garde.
 
 #### Scenario: Appel sans chargeur
 - **GIVEN** une copie du dépôt où une classe de production appelle `ServiceLoader.load(X.class)`
@@ -347,7 +347,8 @@ Tout appel `ServiceLoader.load` des sources de production du reactor SHALL passe
 #### Scenario: Dépôt réel
 - **GIVEN** le dépôt après le changement
 - **WHEN** le garde est exécuté
-- **THEN** il réussit et les quatre découvertes de production passent un chargeur
+- **THEN** il réussit et sa ligne `A16 service discovery` annonce que chaque appel `ServiceLoader.load` de production passe un chargeur explicite
+- **AND** le compte de cette ligne est celui qu'affirme `test_the_real_tree_passes_a_loader_at_every_site` dans `scripts/architecture/test_check_module_boundaries_adapters.py`
 
 ### Requirement: Les types du moteur nommés par une surface le sont par liste fermée
 Le garde de frontières SHALL tenir, pour chaque surface (`minos-cli`, `minos-api`, `minos-mcp`) et chaque module de contrat (`minos-nexus`), les types de `minos-engine` qu'elle utilise, chacun avec le nombre de fichiers de production qui l'utilisent. Un type hors liste SHALL faire échouer le garde, ainsi qu'un compteur différent du nombre de fichiers observé, une entrée inutilisée ou une entrée désignant un type inexistant.
@@ -1449,20 +1450,31 @@ Hors des documents figés (`docs/project/history/`, `docs/project/audits/`, `doc
 - **THEN** elle rend cette ligne et se termine avec le code 0, ce que la revue refuse
 
 ### Requirement: La documentation des gates nomme chaque fichier du garde de frontières
-Le chapitre « Gardes d'architecture » de `docs/developer/quality-gates.md` SHALL nommer `check-module-boundaries.py`, chaque fichier `scripts/architecture/module_boundary_*.py` avec les règles qu'il porte, `gate_runner.py`, et `scripts/architecture/module-boundaries.json` comme source unique de la politique.
+Le chapitre « Gardes d'architecture » de `docs/developer/quality-gates.md` SHALL nommer `check-module-boundaries.py`, chaque `module_boundary_*.py` avec ses règles, `gate_runner.py`, `module_boundaries_testing.py`, chaque auto-test `test_check_module_boundaries*.py`, `test_gate_runner.py`, et `module-boundaries.json` comme source unique de la politique, et décrire chaque règle `A<n>` du garde. Un auto-test sur le dépôt réel SHALL échouer sur un fichier ou une règle non nommés.
 
 #### Scenario: Chaque fichier du garde est nommé
 - **GIVEN** le dépôt après correction
-- **WHEN** pour chaque fichier `f` de `scripts/architecture/module_boundary_*.py`, `gate_runner.py` et `module-boundaries.json`, `grep -c "$(basename f)" docs/developer/quality-gates.md` est exécuté
+- **WHEN** pour chaque fichier `f` de `scripts/architecture/module_boundary_*.py`, `scripts/architecture/test_check_module_boundaries*.py`, `test_gate_runner.py`, `gate_runner.py`, `module_boundaries_testing.py` et `module-boundaries.json`, `grep -c "$(basename f)" docs/developer/quality-gates.md` est exécuté
 - **THEN** chaque compte est au moins 1
+- **AND** `python scripts/architecture/test_check_module_boundaries_documents.py` se termine avec le code 0
 
 #### Scenario: Module de règles ajouté sans documentation
-- **GIVEN** une copie de travail où un fichier `scripts/architecture/module_boundary_x.py` est ajouté sans modifier `docs/developer/quality-gates.md`
-- **WHEN** la même boucle est exécutée
-- **THEN** le compte de `module_boundary_x.py` vaut 0, ce que la revue refuse
+- **GIVEN** une copie du dépôt où un fichier `scripts/architecture/module_boundary_x.py` est ajouté sans modifier `docs/developer/quality-gates.md`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `module_boundary_x.py`
+
+#### Scenario: Auto-test non nommé
+- **GIVEN** une copie du dépôt où la mention de `test_gate_runner.py` est retirée de `docs/developer/quality-gates.md`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `test_gate_runner.py`
+
+#### Scenario: Règle du garde sans description
+- **GIVEN** une copie du dépôt où la puce de `docs/developer/quality-gates.md` qui décrit A20 est retirée
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `A20`
 
 ### Requirement: Le point d'entrée du garde exécute chacune de ses règles
-L'auto-test du câblage SHALL dériver la liste des règles de toutes les fonctions `check_*` du garde et de ses modules de règles, sans liste recopiée, et prouver pour chacune qu'un espion qui lève une exception rend `main()` rouge : code 1, message de l'espion sur stderr. Une fonction `check_*` que `main()` n'exécute pas, ou dont l'erreur n'atteint pas `main()`, SHALL faire échouer l'auto-test en la nommant, sauf entrée d'une liste d'exemptions fermée et justifiée, vide à la livraison.
+L'auto-test du câblage SHALL dériver la liste des règles de toutes les fonctions `check_*` du garde et de chaque fichier `scripts/architecture/module_boundary_*.py` du disque, sans liste recopiée, et échouer sur un glob vide. Il SHALL prouver pour chaque règle qu'un espion qui lève une exception rend `main()` rouge (code 1, message sur stderr). Une `check_*` que `main()` n'exécute pas SHALL faire échouer l'auto-test en la nommant, sauf exemption fermée et justifiée, vide à la livraison.
 
 #### Scenario: Appel d'une règle retiré du point d'entrée
 - **GIVEN** une copie de `scripts/architecture/` dans un répertoire temporaire, où la ligne `service_loaders = check_service_loader_class_loaders()` de `run_rules` est remplacée par `service_loaders = 0`
@@ -1479,6 +1491,16 @@ L'auto-test du câblage SHALL dériver la liste des règles de toutes les foncti
 - **GIVEN** une copie de `scripts/architecture/` où un module de règles définit une fonction `check_demo` que `run_rules` n'appelle pas, référencée par un test
 - **WHEN** `python test_check_module_boundaries.py MainWiringTest` est exécuté dans la copie
 - **THEN** l'auto-test se termine avec le code 1 et nomme `check_demo`
+
+#### Scenario: Module de règles nouveau non câblé
+- **GIVEN** une copie du dépôt où `scripts/architecture/module_boundary_extra.py` définit `check_extra_rule`, que le garde n'importe pas, ou qu'il atteint seulement par `import module_boundary_extra` sans l'appeler
+- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `check_extra_rule`, dans les deux variantes
+
+#### Scenario: Modules de règles introuvables
+- **GIVEN** une copie du dépôt où le glob des modules de règles ne trouve aucun fichier `module_boundary_*.py`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 au lieu de ne contrôler que le script d'entrée
 
 #### Scenario: Erreur d'une règle avalée
 - **GIVEN** une copie de `scripts/architecture/` où `run_rules` entoure l'appel de `check_package_cycles` d'un `try` / `except Exception` qui rend `0, 0`
@@ -1507,12 +1529,12 @@ L'auto-test du câblage SHALL dériver la liste des règles de toutes les foncti
 - **THEN** le gate se termine avec le code 1 et nomme `scripts/architecture/test_gate_runner.py`
 
 ### Requirement: La façade ne rend ni type du moteur ni racine de composition
-`MinosApplication` SHALL NOT déclarer de méthode publique d'instance dont le type de retour nomme un type de `minos-engine` ou `MinosApplicationComposer`. Ses ports et sa racine de composition SHALL rester lisibles par les seules classes du package `com.minos.application`. Le garde de frontières SHALL faire échouer la règle A11 dès qu'une telle méthode publique apparaît, en la nommant avec le type rendu.
+`MinosApplication` SHALL NOT déclarer, au niveau de son corps, de méthode publique ni de constructeur public dont le type de retour ou un paramètre nomme un type de `minos-engine` ou `MinosApplicationComposer` ; son `Builder` imbriqué est hors de cette règle. Ses ports et sa racine de composition SHALL rester lisibles par les seules classes du package `com.minos.application`. Le garde SHALL faire échouer A11 dès qu'une telle signature apparaît, en nommant la méthode et le type.
 
 #### Scenario: Façade réduite au HEAD
 - **GIVEN** le dépôt après le changement, `minos-application` compilé
 - **WHEN** `javap -public -cp minos-application/target/classes com.minos.application.MinosApplication` est exécuté
-- **THEN** la sortie ne contient ni `compositionRoot`, ni `projectRegistry`, ni `snapshotStore`, ni `providerRuntimeManager`, ni aucune méthode publique dont le type de retour appartient à `com.minos.orchestration`
+- **THEN** la sortie ne contient ni `compositionRoot`, ni `projectRegistry`, ni `snapshotStore`, ni `providerRuntimeManager`, ni aucune méthode publique dont le type de retour ou un paramètre appartient à `com.minos.orchestration`
 
 #### Scenario: Racine de composition réintroduite refusée
 - **GIVEN** un arbre de test où `MinosApplication` déclare `public MinosApplicationComposer compositionRoot()`
@@ -1524,8 +1546,23 @@ L'auto-test du câblage SHALL dériver la liste des règles de toutes les foncti
 - **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en A11 en nommant `projectRegistry` et `registry.ProjectRegistry`
 
+#### Scenario: Paramètre typé moteur refusé
+- **GIVEN** un arbre de test où `MinosApplication` déclare `public void leak(ProjectRegistry registry)`, puis `public static MinosApplication of(com.minos.registry.ProjectRegistry registry)`, puis `public ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> decorator)`
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que, pour chaque variante, le garde échoue en A11 en nommant la méthode et le type du moteur
+
+#### Scenario: Le Builder garde ses paramètres du moteur
+- **GIVEN** un arbre de test où seul le `Builder` imbriqué de `MinosApplication` déclare `public Builder projectRegistry(ProjectRegistry value)`
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas de test vérifie que la règle des paramètres réussit
+
+#### Scenario: Aucune signature typée moteur au HEAD
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0
+
 ### Requirement: Les tests lisent un port de l'application par un accès de test
-Un test d'un autre module qui lit un port d'une application ouverte SHALL passer par une classe d'accès des sources de test de `minos-application`, dans le package `com.minos.application`, publiée par le `test-jar` de ce module. Ce `test-jar` SHALL être déclaré en portée `test` seulement, et le garde SHALL refuser toute autre portée. Aucun jar livré SHALL contenir la classe d'accès.
+Un test d'un autre module qui lit un port d'une application ouverte, ou qui construit l'indexation avec un décorateur d'exécuteur, SHALL passer par une classe d'accès des sources de test de `minos-application`, dans le package `com.minos.application`, publiée par le `test-jar` de ce module. Ce `test-jar` SHALL être déclaré en portée `test` seulement, et le garde SHALL refuser toute autre portée. Aucun jar livré SHALL contenir la classe d'accès.
 
 #### Scenario: Jar livré sans accès de test
 - **GIVEN** le reactor construit par `./mvnw -B -ntp verify`
@@ -1542,6 +1579,11 @@ Un test d'un autre module qui lit un port d'une application ouverte SHALL passer
 - **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en nommant le module, `minos-application`, le type `test-jar` et la portée
 
+#### Scenario: Indexation décorée lue par l'accès de test
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test "-Dtest=MinosApplicationTestAccessTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit : `decoratedProjectIndexing` est un relais de `MinosApplicationTestAccess` et n'est pas une méthode publique de `MinosApplication`
+
 ### Requirement: Le retrait des accesseurs de la façade ne change aucune sortie publique
 Le retrait du public de `compositionRoot()` et des accesseurs typés moteur de `MinosApplication` SHALL laisser identiques à l'octet les sorties caractérisées de la CLI, de l'API Java et du MCP. Aucune signature de `com.minos.api` SHALL changer, et le refus de l'indexation distante SHALL intervenir avant tout effet.
 
@@ -1554,6 +1596,138 @@ Le retrait du public de `compositionRoot()` et des accesseurs typés moteur de `
 - **GIVEN** le dépôt après le changement
 - **WHEN** `./mvnw -B -ntp -pl minos-cli -am test "-Dtest=LocalRemoteIndexOperationsRefusalTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
 - **THEN** le test réussit : le refus intervient avant toute matérialisation, bail, enregistrement ou épingle
+
+### Requirement: La documentation courante de la façade décrit son état en vigueur
+Hors des relevés figés (`docs/project/history/`, `docs/project/audits/`, archives), `docs/` et les sources de production de `minos-application` SHALL ne présenter `MinosApplication` ni comme une racine de composition, ni comme un accès public à `compositionRoot()`, et SHALL ne recopier le statut d'aucun ADR à côté d'un lien vers lui. La ligne d'ARCH-0087 de l'index des ADR SHALL citer les trois changements que l'ADR nomme.
+
+#### Scenario: Prose en vigueur
+- **GIVEN** le dépôt après correction
+- **WHEN** `git grep -nE 'Long-lived composition root|composition root long-lived|via .MinosApplication\.compositionRoot\(\).|ARCH-0087\]\([^)]*\) \(Proposed\)' -- docs minos-application/src/main ':!docs/project/history' ':!docs/project/audits' ':!**/archive/**'` est exécuté
+- **THEN** la commande ne rend aucune ligne et se termine avec le code 1
+
+#### Scenario: Ancienne description réintroduite
+- **GIVEN** une copie de travail où le Javadoc de classe de `MinosApplication` redevient « Long-lived composition root for one MINOS home »
+- **WHEN** la même commande est exécutée
+- **THEN** elle rend cette ligne et se termine avec le code 0, ce que la revue refuse
+
+#### Scenario: Index des ADR complet pour ARCH-0087
+- **GIVEN** le dépôt après correction
+- **WHEN** `git grep -n 'retirer-la-racine-de-composition-de-la-facade' -- docs/architecture/adr/README.md` est exécuté
+- **THEN** la commande rend la ligne d'ARCH-0087 et se termine avec le code 0
+
+### Requirement: La table de rupture de la façade ne promet aucun remplaçant absent
+Dans `docs/user/java-api.md`, chaque remplaçant d'un accesseur retiré de `MinosApplication` SHALL être une méthode publique qui rend ce service. `retentionService()` SHALL être documenté sans remplaçant à la demande, la rétention suivant chaque indexation et chaque import qui publie un snapshot.
+
+#### Scenario: Rétention sans remplaçant promis
+- **GIVEN** le dépôt après correction
+- **WHEN** `git grep -nE 'retentionService\(\)` \| `new LocalProjectOperations' -- docs/user/java-api.md` est exécuté
+- **THEN** la commande ne rend aucune ligne et se termine avec le code 1
+
+#### Scenario: Promesse réintroduite
+- **GIVEN** une copie de travail où la ligne `retentionService()` de la table redonne `new LocalProjectOperations(application)` comme remplaçant
+- **WHEN** la même commande est exécutée
+- **THEN** elle rend cette ligne et se termine avec le code 0, ce que la revue refuse
+
+### Requirement: Le test-jar de l'application ne publie que la classe d'accès
+`minos-application/pom.xml` SHALL déclarer une seule exécution du but `test-jar`, dont `<includes>` contient exactement `com/minos/application/MinosApplicationTestAccess.class`. Le garde SHALL refuser un `<includes>` absent, élargi ou complété, et une seconde exécution, en nommant le POM et la valeur. Le `test-jar` construit SHALL n'avoir, hors de `META-INF/`, que cette entrée.
+
+#### Scenario: Inclusion élargie refusée par le garde
+- **GIVEN** un arbre de test où `minos-application/pom.xml` remplace l'inclusion par `com/minos/application/**`, puis ajoute une seconde inclusion, puis supprime `<includes>`
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **THEN** le cas de test vérifie que, pour chaque variante, le garde échoue en nommant `minos-application/pom.xml` et la valeur trouvée
+
+#### Scenario: Seconde exécution test-jar refusée
+- **GIVEN** un arbre de test où `minos-application/pom.xml` déclare une seconde exécution du but `test-jar` sans `<includes>`
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **THEN** le cas de test vérifie que le garde échoue en nommant `minos-application/pom.xml`
+
+#### Scenario: Contenu du test-jar construit
+- **GIVEN** le reactor construit
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify "-Dit.test=ApplicationTestAccessPackagingIT"` est exécuté
+- **THEN** l'IT réussit : les entrées fichiers du `test-jar` hors de `META-INF/` valent exactement `com/minos/application/MinosApplicationTestAccess.class`, et aucune déclaration de service n'y figure
+
+#### Scenario: Configuration du test-jar au HEAD
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0
+
+### Requirement: Les opérations locales reçoivent leurs collaborateurs et seule la façade lit ses ports
+`LocalProjectOperations`, `ProviderPlatformService` et `LocalProjectGitQuery` SHALL être construits à partir de leurs collaborateurs, assemblés par `MinosApplication`. Aucune classe de production autre que `MinosApplication` SHALL appeler une méthode non publique de `MinosApplication` qui rend un type de `minos-engine` ou `MinosApplicationComposer`. `ModuleArchitectureTest` SHALL échouer en nommant la classe appelante et la méthode.
+
+#### Scenario: Port relu par une classe du package
+- **GIVEN** une copie du dépôt où `LocalProjectGitQuery(MinosApplication)` appelle de nouveau `application.gitIntelligence()`, accesseur rétabli dans `MinosApplication`
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am test "-Dtest=ModuleArchitectureTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté sur cette copie
+- **THEN** le test échoue en nommant `LocalProjectGitQuery` et `MinosApplication.gitIntelligence()`
+
+#### Scenario: Seule la façade lit ses ports au HEAD
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am test "-Dtest=ModuleArchitectureTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le test réussit
+
+#### Scenario: Import exercé sans application
+- **GIVEN** un test de `minos-application` qui fournit des doubles des sept collaborateurs de `LocalProjectOperations`
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test "-Dtest=LocalProjectOperations*Test" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** l'import publié applique la rétention dans l'ordre publication, état, rétention, sans qu'aucune `MinosApplication` soit ouverte
+
+#### Scenario: Collaborateur manquant refusé
+- **GIVEN** des `Dependencies` de `LocalProjectOperations` dont un collaborateur est `null`
+- **WHEN** les opérations sont construites dans un test de `minos-application`
+- **THEN** la construction échoue par `NullPointerException` qui nomme le collaborateur, avant toute lecture du registre
+
+### Requirement: Les points d'entrée publics des opérations locales sont conservés
+`LocalProjectOperations(Path)`, `LocalProjectOperations(MinosApplication)`, `ProviderPlatformService.defaults(MinosApplication)`, `LocalProjectGitQuery(MinosApplication)` et `LocalProjectSymbolQuery(MinosApplication)` SHALL garder leur signature publique et leur comportement. `defaults` SHALL lire le catalogue des fournisseurs à chaque appel. Les sorties caractérisées de la CLI, de l'API Java et du MCP SHALL rester identiques à l'octet.
+
+#### Scenario: Signatures publiques inchangées
+- **GIVEN** le dépôt après le changement, `minos-application` compilé
+- **WHEN** `javap -public -cp minos-application/target/classes com.minos.application.LocalProjectOperations com.minos.application.ProviderPlatformService com.minos.application.LocalProjectGitQuery com.minos.application.LocalProjectSymbolQuery` est exécuté
+- **THEN** la sortie contient les cinq points d'entrée qui prennent `Path` ou `MinosApplication`, et aucun type `Dependencies` public
+
+#### Scenario: Catalogue lu à chaque appel
+- **GIVEN** un test de `minos-application` dont l'application a un catalogue qui change de fournisseurs entre deux appels
+- **WHEN** `ProviderPlatformService.defaults(application).listStaticProfiles()` est appelé deux fois
+- **THEN** le second appel rend les fournisseurs du catalogue modifié
+
+#### Scenario: Goldens inchangés
+- **GIVEN** le dépôt après le changement
+- **WHEN** `./mvnw -B -ntp -pl minos-app -am verify` puis `git diff --exit-code minos-app/src/test/resources/characterization/` sont exécutés
+- **THEN** la commande `git diff` se termine avec le code 0
+
+### Requirement: Les ports sans lecteur sont retirés de la façade
+`MinosApplication` SHALL NOT déclarer `gitIntelligence()`, `providerCatalog()`, `scipArtifactImporter()`, `indexImportHistoryStore()` ni `hostedControlPlaneService()`. Leurs collaborateurs SHALL rester requis non nuls par la construction de l'application.
+
+#### Scenario: Façade sans les ports retirés
+- **GIVEN** le dépôt après le changement, `minos-application` compilé
+- **WHEN** `javap -p -cp minos-application/target/classes com.minos.application.MinosApplication` est exécuté
+- **THEN** la sortie ne contient ni `gitIntelligence()`, ni `providerCatalog()`, ni `scipArtifactImporter()`, ni `indexImportHistoryStore()`, ni `hostedControlPlaneService()`
+
+#### Scenario: Collaborateur de la composition toujours exigé
+- **GIVEN** un test de `minos-application` qui construit une application par le `Builder` avec un importeur SCIP nul et une racine de composition qui n'en fournit pas
+- **WHEN** l'application est construite
+- **THEN** la construction échoue par `NullPointerException` qui nomme `scipArtifactImporter`
+
+### Requirement: Le dossier de la capacité nomme chaque règle du garde
+Le paragraphe « Règles du garde » de `docs/architecture/diagrams/capacites/frontieres-de-modules.md` SHALL citer exactement les étiquettes `A<n>` portées par les sources du garde (`check-module-boundaries.py`, `module_boundary_*.py`), chacune par ce qu'elle refuse. Le dossier SHALL n'écrire aucun nombre dérivé de la politique (modules, dépendances, découvertes). Un auto-test sur le dépôt réel SHALL échouer, en la nommant, sur une étiquette manquante ou en trop, et sur un paragraphe introuvable.
+
+#### Scenario: Dossier aligné sur le garde
+- **GIVEN** le dépôt après correction
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté
+- **THEN** l'auto-test se termine avec le code 0
+- **AND** `grep -nE "12 autres|A2 à A18|tables Java et Python|en affirme cinq" docs/architecture/diagrams/capacites/frontieres-de-modules.md` ne rend aucune ligne et se termine avec le code 1
+
+#### Scenario: Règle retirée du dossier
+- **GIVEN** une copie du dépôt où `A19` est retirée du paragraphe « Règles du garde » du dossier
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `A19`
+
+#### Scenario: Règle nouvelle du garde non documentée
+- **GIVEN** une copie du dépôt où un message d'un module de règles porte l'étiquette `A21`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme `A21`
+
+#### Scenario: Paragraphe introuvable
+- **GIVEN** une copie du dépôt où l'amorce « Règles du garde » du paragraphe est réécrite
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 au lieu de réussir sur un ensemble vide
 
 ## Documentation liée
 

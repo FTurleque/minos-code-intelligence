@@ -118,6 +118,83 @@ Aucun workflow SHALL NOT installer une version de Java autre que celle du POM ra
 - **WHEN** `scripts/ci/qualify-docker-upgrade.ps1` résout le JDK de ce candidat
 - **THEN** la qualification échoue avant tout build en nommant la version requise, sans construire le candidat avec un autre JDK
 
+### Requirement: Chaque wrapper de build exige l'empreinte de sa distribution
+`.mvn/wrapper/maven-wrapper.properties` et `minos-intellij/gradle/wrapper/gradle-wrapper.properties` SHALL porter chacun exactement une ligne `distributionSha256Sum=` de 64 caractères hexadécimaux minuscules et une `distributionUrl` en `https` sous l'hôte attendu. Le wrapper Maven SHALL rester en `distributionType=only-script`. `check-toolchain-baseline.py` SHALL échouer en nommant le fichier dans tout autre cas, fichier absent compris.
+
+#### Scenario: Somme retirée par une montée de wrapper
+- **GIVEN** une copie du dépôt où la ligne `distributionSha256Sum` de `.mvn/wrapper/maven-wrapper.properties` est supprimée
+- **WHEN** `python scripts/quality/check-toolchain-baseline.py --root <copie>` est exécuté
+- **THEN** le gate se termine avec le code 1 et nomme `.mvn/wrapper/maven-wrapper.properties`
+- **AND** la même suppression dans `minos-intellij/gradle/wrapper/gradle-wrapper.properties` échoue de même
+
+#### Scenario: Somme mal formée ou doublée
+- **GIVEN** l'auto-test du gate, avec un wrapper dont la somme vaut `00`, puis un wrapper qui porte deux lignes `distributionSha256Sum`
+- **WHEN** `python scripts/quality/test_check_toolchain_baseline.py` est exécuté
+- **THEN** chaque cas constate le refus et le message qui nomme le fichier
+
+#### Scenario: Distribution servie hors de l'hôte attendu
+- **GIVEN** une copie du dépôt où la `distributionUrl` du wrapper Maven commence par `http://`
+- **WHEN** `python scripts/quality/check-toolchain-baseline.py --root <copie>` est exécuté
+- **THEN** le gate se termine avec le code 1 et nomme l'URL refusée
+
+#### Scenario: Wrapper Maven qui téléchargerait un jar
+- **GIVEN** une copie du dépôt où `distributionType=only-script` est remplacé par `distributionType=bin`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** le gate se termine avec le code 1
+
+#### Scenario: Dépôt au HEAD
+- **WHEN** `python scripts/quality/check-toolchain-baseline.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0 et compte les deux wrappers parmi les sites comparés
+
+### Requirement: Chaque archive épinglée de l'image est vérifiée avant usage
+Pour chaque `ARG` d'empreinte que `embedded-tools.json` attribue à `docker/Dockerfile.mcp.release`, une seule instruction `RUN` SHALL le consommer. Elle SHALL commencer par `set -e`, contenir une fois `sha256sum -c -` sur cet `ARG`, sans `||`, `set +e` ni `trap`, et n'utiliser le fichier avant ce contrôle que pour le télécharger ou l'effacer. `check-tools-manifest.py` SHALL échouer sinon, en nommant l'`ARG` et la ligne.
+
+#### Scenario: Contrôle neutralisé par un OU logique
+- **GIVEN** une copie du dépôt où la ligne de contrôle de `MAVEN_ZIP_SHA256` finit par `sha256sum -c - || true; \`
+- **WHEN** `python scripts/quality/check-tools-manifest.py --root <copie>` est exécuté
+- **THEN** le gate se termine avec le code 1 et nomme `MAVEN_ZIP_SHA256` et la ligne
+
+#### Scenario: Instruction sans arrêt sur erreur
+- **GIVEN** une copie du dépôt où l'instruction qui vérifie `NODE_LINUX_SHA256` commence par `set -ux`
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 et nomme `NODE_LINUX_SHA256`
+
+#### Scenario: Archive utilisée avant son contrôle
+- **GIVEN** l'auto-test du gate, avec un Dockerfile où `unzip` de l'archive Maven précède la ligne de contrôle
+- **WHEN** `python scripts/quality/test_check_tools_manifest.py` est exécuté
+- **THEN** le cas constate le refus et le message qui nomme l'`ARG`
+
+#### Scenario: Contrôle supprimé pour un outil du catalogue
+- **GIVEN** une copie du dépôt où la ligne de contrôle de `SCIP_DOTNET_NUPKG_SHA256` est supprimée
+- **WHEN** le gate est exécuté sur cette copie
+- **THEN** il se termine avec le code 1 et nomme `SCIP_DOTNET_NUPKG_SHA256`
+
+#### Scenario: Dockerfile au HEAD
+- **WHEN** `python scripts/quality/check-tools-manifest.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0 et les six `ARG` d'empreinte du catalogue sont reconnus vérifiés
+
+### Requirement: Les versions de Maven écrites dans la documentation courante sont celles du wrapper ou de l'image
+Dans la liste fermée des documents courants qui décrivent la toolchain (`STATUS.md`, `ROADMAP.md`, `TOOLCHAIN_POLICY.md`, `code-audit.md`, `docker-runtime.md`, `supply-chain.md`), toute version de Maven écrite SHALL être celle de `.mvn/wrapper/maven-wrapper.properties` ou le `MAVEN_VERSION` de `docker/Dockerfile.mcp.release`. `check-toolchain-baseline.py` SHALL échouer sinon, en nommant le fichier, la ligne et les deux références.
+
+#### Scenario: Version de wrapper périmée dans l'état du produit
+- **GIVEN** une copie du dépôt où `docs/project/governance/STATUS.md` écrit « Maven Wrapper : Maven 3.10.0 » alors que le wrapper télécharge 3.10.2
+- **WHEN** `python scripts/quality/check-toolchain-baseline.py --root <copie>` est exécuté
+- **THEN** le gate se termine avec le code 1 et nomme `STATUS.md`, la ligne, 3.10.2 et la version de l'image
+
+#### Scenario: Version de l'image citée par la page utilisateur
+- **GIVEN** le dépôt où `docs/user/docker-runtime.md` écrit « Apache Maven 3.9.16 », égal au `MAVEN_VERSION` du Dockerfile
+- **WHEN** le gate est exécuté
+- **THEN** cette mention est acceptée
+
+#### Scenario: Document de la liste absent
+- **GIVEN** l'auto-test du gate, avec un arbre où un document de la liste fermée manque
+- **WHEN** `python scripts/quality/test_check_toolchain_baseline.py` est exécuté
+- **THEN** le cas constate le refus, qui nomme le document manquant
+
+#### Scenario: Dépôt après réécriture des documents
+- **WHEN** `python scripts/quality/check-toolchain-baseline.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [socle-d-execution](../../../docs/architecture/diagrams/capacites/socle-d-execution.md)

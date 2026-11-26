@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Le point d'entrée du garde exécute chacune de ses règles
-L'auto-test du câblage SHALL dériver la liste des règles de toutes les fonctions `check_*` du garde et de chaque fichier `scripts/architecture/module_boundary_*.py` trouvé sur le disque, sans liste recopiée, et échouer sur un glob vide. Il SHALL prouver pour chaque règle qu'un espion qui lève une exception rend `main()` rouge (code 1, message sur stderr). Une `check_*` que `main()` n'exécute pas SHALL faire échouer l'auto-test en la nommant, sauf exemption fermée et justifiée, vide à la livraison.
+L'auto-test du câblage SHALL dériver la liste des règles de toutes les fonctions `check_*` du garde et de chaque fichier `scripts/architecture/module_boundary_*.py` du disque, sans liste recopiée, et échouer sur un glob vide. Il SHALL prouver pour chaque règle qu'un espion qui lève une exception rend `main()` rouge (code 1, message sur stderr). Une `check_*` que `main()` n'exécute pas SHALL faire échouer l'auto-test en la nommant, sauf exemption fermée et justifiée, vide à la livraison.
 
 #### Scenario: Appel d'une règle retiré du point d'entrée
 - **GIVEN** une copie de `scripts/architecture/` dans un répertoire temporaire, où la ligne `service_loaders = check_service_loader_class_loaders()` de `run_rules` est remplacée par `service_loaders = 0`

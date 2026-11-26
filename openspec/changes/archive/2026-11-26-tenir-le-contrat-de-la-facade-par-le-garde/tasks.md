@@ -23,12 +23,12 @@ Les mutations se font sur une copie du dépôt dans le scratchpad de la session,
 
 ## 3. Vérification des deux plateformes
 
-- [ ] 3.1 AUD-ARC-13, AUD-SEC-12 — **(manuelle)** Après ouverture de la PR, relever les jobs `Verify (ubuntu-24.04)`, `Verify (windows-2022)` et `Static invariants (single run)` : l'IT et la règle passent sur les deux plateformes ; consigner les liens dans la PR.
+- [x] 3.1 AUD-ARC-13, AUD-SEC-12 — **(manuelle)** Après ouverture de la PR, relever les jobs `Verify (ubuntu-24.04)`, `Verify (windows-2022)` et `Static invariants (single run)` : l'IT et la règle passent sur les deux plateformes ; consigner les liens dans la PR. Constat : PR #823, `Verify` Linux et Windows (https://github.com/FTurleque/minos-code-intelligence/actions/runs/45776850075/job/139762458960, https://github.com/FTurleque/minos-code-intelligence/actions/runs/45776850075/job/139762458981) et `Static invariants` (https://github.com/FTurleque/minos-code-intelligence/actions/runs/45776850075/job/139762458674) verts ; `ApplicationTestAccessPackagingIT` (3 tests) et `ModuleArchitectureTest` (16 tests) exécutés sur les deux plateformes.
 
 ## 4. Clôture
 
 - [x] 4.1 AUD-ARC-13, AUD-SEC-12 — Mettre à jour la matrice de traçabilité du design (preuves exécutées, preuves manquantes) ; vérifier qu'aucune ligne n'affirme une couverture sans preuve.
 - [ ] 4.2 AUD-ARC-13, AUD-SEC-12 — **(manuelle)** ADR : proposer au propriétaire la mise à jour d'ARCH-0087, sans réécrire la décision : « Compliance and Enforcement » (règle des paramètres, règle du contenu du `test-jar`, IT renforcé) et « Mise en œuvre » (le contrat porte sur les signatures de `MinosApplication`, `Builder` hors règle, services sous le cliquet côté surface : D2, D4). Si le propriétaire veut écrire « rend ou reçoit » dans § 2.2, c'est un ADR consolidé (`.claude/rules/adr.md`), pas une retouche.
-- [ ] 4.3 AUD-ARC-13, AUD-SEC-12 — Après archivage, mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (deux exigences modifiées, une ajoutée) ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
-- [ ] 4.4 AUD-ARC-13, AUD-SEC-12 — Valider : `openspec validate --all --strict`.
-- [ ] 4.5 AUD-ARC-13, AUD-SEC-12 — Lister les documents à mettre à jour avant archivage : `docs/user/java-api.md` (1.5), `docs/developer/quality-gates.md` (1.5, 2.5), ARCH-0087 (4.2), dossier de capacité (4.3), lignes AUD-ARC-13 et AUD-SEC-12 du suivi de l'audit `docs/project/audits/2026-11-15/` après fusion ; STATUS et ROADMAP ne citent pas ces constats. Vérifier que chacun est fait ou nommé comme reste dans la PR.
+- [x] 4.3 AUD-ARC-13, AUD-SEC-12 — Après archivage, mettre à jour `docs/architecture/diagrams/capacites/frontieres-de-modules.md` (deux exigences modifiées, une ajoutée) ; vérifier par `python scripts/docs/check-capability-dossiers.py`.
+- [x] 4.4 AUD-ARC-13, AUD-SEC-12 — Valider : `openspec validate --all --strict`.
+- [x] 4.5 AUD-ARC-13, AUD-SEC-12 — Lister les documents à mettre à jour avant archivage : `docs/user/java-api.md` (1.5), `docs/developer/quality-gates.md` (1.5, 2.5), ARCH-0087 (4.2), dossier de capacité (4.3), lignes AUD-ARC-13 et AUD-SEC-12 du suivi de l'audit `docs/project/audits/2026-11-15/` après fusion ; STATUS et ROADMAP ne citent pas ces constats. Vérifier que chacun est fait ou nommé comme reste dans la PR.
