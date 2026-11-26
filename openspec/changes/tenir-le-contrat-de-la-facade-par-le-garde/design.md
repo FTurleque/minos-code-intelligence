@@ -99,7 +99,7 @@ Options de l'audit :
 
 Recommandation : (c) puis (b). La méthode n'a aucun appelant de production hors du package et n'existait pas en 1.3.0 : la retirer du public avant la prochaine version n'est une rupture pour aucune version publiée. Un hôte externe ne peut de toute façon pas fournir un `UnaryOperator<IndexerExecutor>` sans nommer le moteur. Une fois (c) fait, (b) est un cliquet à zéro sans table : la prochaine méthode publique à paramètre moteur rougit.
 
-Nom : l'accesseur privé au package s'appelle `decoratedProjectIndexing(UnaryOperator<IndexerExecutor>)`, et le relais `MinosApplicationTestAccess.decoratedProjectIndexing(MinosApplication, UnaryOperator<IndexerExecutor>)`. Garder `projectIndexing` comme nom casserait la règle « un relais porte le nom d'un accesseur non public » de `MinosApplicationTestAccessTest`, puisque `projectIndexing()` reste publique.
+Nom : l'accesseur privé au package s'appelle `decoratedProjectIndexing(UnaryOperator<IndexerExecutor>)`, et le relais `MinosApplicationTestAccess.decoratedProjectIndexing(MinosApplication, UnaryOperator<IndexerExecutor>)`. Garder `projectIndexing` comme nom casserait la règle « un relais porte le nom d'un accesseur non public » de `MinosApplicationTestAccessTest`, puisque `projectIndexing()` reste publique. La construction reste dans une méthode privée au package `projectIndexing(UnaryOperator<IndexerExecutor>)`, que l'indexation distante de la classe appelle ; `decoratedProjectIndexing` la délègue.
 
 Option (a) écartée : elle réduirait le contrat sous ce qu'ARCH-0057:66 et `java-api.md` annoncent, et toucherait le texte d'une décision acceptée (ARCH-0087 § 2.2).
 
