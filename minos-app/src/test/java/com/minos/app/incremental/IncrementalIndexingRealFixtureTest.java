@@ -64,7 +64,8 @@ class IncrementalIndexingRealFixtureTest {
             self.set(application);
             RegisteredProject registered = MinosApplicationTestAccess.projectRegistry(application).registerProject(project,
                     "typescript-modules");
-            ProjectIndexingUseCase indexing = application.projectIndexing(UnaryOperator.identity());
+            ProjectIndexingUseCase indexing = MinosApplicationTestAccess.decoratedProjectIndexing(application,
+                    UnaryOperator.identity());
             String id = registered.id().toString();
 
             var first = indexing.execute(id, null, false, IndexingResumePolicy.RESUME);

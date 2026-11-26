@@ -38,7 +38,8 @@ class MinosApplicationTestAccessTest {
 
     private static final Set<String> RELAYED = Set.of("compositionRoot", "projectRegistry", "snapshotStore",
             "indexStateStore", "fingerprintStore", "runtimeObservationStore", "retentionService", "discoveryService",
-            "fingerprintService", "providerRuntimeManager", "indexerDescriptors", "snapshotStager", "snapshotPromoter");
+            "fingerprintService", "providerRuntimeManager", "indexerDescriptors", "snapshotStager", "snapshotPromoter",
+            "decoratedProjectIndexing");
 
     @TempDir Path home;
 

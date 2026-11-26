@@ -1,9 +1,11 @@
 """Shared fixtures of the self-tests of check-module-boundaries.py (the test_check_module_boundaries*.py files).
 
-The gate is loaded once from its file (``_MODULE``); the modules that hold its rules are the very modules the gate
-imports. A test reads or patches a name where the code that uses it reads it: a rule of the gate script itself through
+The gate is loaded once from its file (``_MODULE``); the modules named here are the very modules the gate imports.
+A test reads or patches a name where the code that uses it reads it: a rule of the gate script itself through
 ``_MODULE`` (the A2 dependency policy reads ``_MODULE.ALLOWED_DEPENDENCIES``), any other table or helper through the
-module that defines it (``BOUNDARY_POLICY``, ``ADAPTERS``, ``RATCHETS``, ``PACKAGES``, ``DOCUMENTS``).
+module that defines it (``BOUNDARY_POLICY``, ``ADAPTERS``, ``RATCHETS``, ``PACKAGES``, ``DOCUMENTS``). These names are
+patch targets, not the set of rule modules: the wiring self-test finds the rule modules on disk
+(``rule_functions`` in test_check_module_boundaries.py).
 
 This module is not a test file and not a gate: it holds no test, and the test files that import it are run by the
 ``invariants`` job.

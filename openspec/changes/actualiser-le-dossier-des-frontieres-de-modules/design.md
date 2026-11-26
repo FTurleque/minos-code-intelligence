@@ -86,8 +86,8 @@ Changement documentaire et auto-test Python de la bibliothèque standard : chemi
 
 ## Traçabilité
 
-| Constat | Exigence | Décision | Tâches | Preuve attendue | Preuve manquante à ce stade |
+| Constat | Exigence | Décision | Tâches | Preuve exécutée | Preuve manquante |
 |---|---|---|---|---|---|
-| AUD-ARC-16 | frontieres-de-modules › Le dossier de la capacité nomme chaque règle du garde | D1, D2, D3 | 1.1-1.3, 2.1-2.3 | auto-test D1 vert ; rouge consigné au HEAD et sur les trois mutations | tout (non implémenté) |
-| AUD-ARC-16 | frontieres-de-modules › La documentation des gates nomme chaque fichier du garde de frontières | D1 | 1.1, 1.2, 2.1-2.3 | `test_gate_runner.py`, A19, A20 nommés ; boucle `grep -c` du scénario à ≥ 1 | tout |
-| AUD-ARC-16 | frontieres-de-modules › Aucune découverte de service de production n'omet le chargeur | D3 | 1.3 | garde vert ; `test_the_real_tree_passes_a_loader_at_every_site` vert ; spec sans nombre | tout |
+| AUD-ARC-16 | frontieres-de-modules › Le dossier de la capacité nomme chaque règle du garde | D1, D2, D3 | 1.1-1.3, 2.1-2.3 | 2026-11-25 : relevé rouge au HEAD (1.1) ; `GuardDocumentationTest` (`test_check_module_boundaries_documents.py`) rouge au HEAD en nommant `A19`, `A20` et `test_gate_runner.py`, vert après 1.2-1.3 ; six mutations sur copie `git archive` (A19 retirée du dossier, `module_boundary_x.py` ajouté, mention de `test_gate_runner.py` retirée, puce A20 retirée, `A21` dans un message, amorce réécrite) rendent chacune le code 1 en nommant l'élément ; garde, six auto-tests, `check-ci-wiring.py`, `check-comment-language.py`, `check-capability-dossiers.py` verts | `run_gates.py` complet en CI |
+| AUD-ARC-16 | frontieres-de-modules › La documentation des gates nomme chaque fichier du garde de frontières | D1 | 1.1, 1.2, 2.1-2.3 | `test_quality_gates_names_every_file_of_the_guard` et `test_quality_gates_has_a_bullet_for_every_rule_of_the_guard` verts ; boucle `grep -c` à ≥ 1 pour chaque fichier ; `check-current-docs.py` et `check-minos-01.py` verts | aucune |
+| AUD-ARC-16 | frontieres-de-modules › Aucune découverte de service de production n'omet le chargeur | D3 | 1.3 | garde vert ; `test_check_module_boundaries_adapters.py` vert (dont `test_the_real_tree_passes_a_loader_at_every_site`) ; E3 clos sans compte dans le dossier | spec courante sans nombre : à l'archivage |
