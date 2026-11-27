@@ -9,7 +9,9 @@ the test_check_module_boundaries*.py files.
 from __future__ import annotations
 
 import re
+from functools import partial
 from pathlib import Path
+from typing import NamedTuple
 
 from module_boundary_policy import (
     ADAPTER_MODULES, APPLICATION_MODULE, ENGINE_TYPE_RATCHETED_MODULES, MODULES, POLICY, ROOT, fail,
@@ -42,7 +44,9 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = POLICY.engine_types_n
 # MinosApplicationTestAccess (test-jar of minos-application, test scope only). An entry, or a public accessor returning
 # an engine type, fails. The parameters are held at zero without a table (minos_application_engine_parameters): no
 # public method or constructor of the class body takes an engine type; the nested Builder, which customises the
-# composition, is out of the rule. The services and use cases the facade hands out are held on the surface side.
+# composition, is out of the rule. The static returns (minos_application_static_engine_returns) and the wildcard imports
+# of an engine package (minos_application_engine_wildcard_imports) are held at zero without a table too. Generic
+# members are read, bounds included. The services and use cases the facade hands out are held on the surface side.
 MINOS_APPLICATION_ENGINE_ACCESSORS: dict[str, str] = {}
 
 # A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type), with their number
@@ -126,35 +130,73 @@ PACKAGE_ROOTS_BY_MODULE: dict[str, frozenset[str]] = {
 }
 
 
-PUBLIC_METHOD = re.compile(
-    r"\bpublic\s+((?:(?:static|final|synchronized|abstract|default)\s+)*)([A-Za-z_][\w.<>,?\[\] ]*?)\s+([a-z]\w*)\s*\(")
+# No space is required after a modifier: `public<T>` is legal Java.
+PUBLIC_MODIFIERS = re.compile(r"\bpublic\b\s*((?:(?:static|final|synchronized|abstract|default)\b\s*)*)")
+# Read right after the modifiers and the type parameter section, if any.
+METHOD_HEAD = re.compile(r"\s*([A-Za-z_][\w.<>,?\[\] ]*?)\s+([a-z]\w*)\s*\(")
 RETURN_TYPE_WORD = re.compile(r"\b[A-Z]\w*(?:\.[A-Z]\w*)*")
 ACCESSOR_USE = re.compile(r"(::|\.)\s*([A-Za-z_]\w*)\b(\s*\()?")
 
 
-def public_instance_methods(code: str):
-    """The public instance methods declared at the top level of the class body of code (comments and literals as
-    tokens): (match, return type text, name), static methods and nested types excluded."""
+class PublicMember(NamedTuple):
+    """A public method or constructor: its type parameter section ('' without one, bounds included), its return type
+    text (None for a constructor) and the index of the opening parenthesis of its parameters."""
+
+    static: bool
+    type_parameters: str
+    returned: str | None
+    name: str
+    open_parenthesis: int
+
+    def returned_types_text(self) -> str:
+        """The text naming the types the method hands out: a bound counts as returned."""
+        return f"{self.type_parameters} {self.returned}"
+
+
+def type_parameters_end(code: str, start: int) -> int:
+    """The index after the '>' closing the type parameter section that opens at start, nested bounds and annotation
+    arguments (in parentheses) included; an unbalanced section fails the guard."""
+    depth = 0
+    parentheses = 0
+    for index in range(start, len(code)):
+        character = code[index]
+        if character in "()":
+            parentheses += 1 if character == "(" else -1
+        elif parentheses:
+            continue
+        elif character == "<":
+            depth += 1
+        elif character == ">":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        elif character in "{};":
+            break
+    fail("A11 unbalanced MinosApplication type parameters")
+    return start
+
+
+def public_members(code: str, class_name: str):
+    """The public methods (instance and static) and public constructors declared at the top level of the class body of
+    code (comments and literals as tokens), generic or not. The members of nested types are excluded."""
+    constructor = re.compile(r"\s*" + re.escape(class_name) + r"\s*\(")
     depth = 0
     position = 0
-    for match in PUBLIC_METHOD.finditer(code):
+    for match in PUBLIC_MODIFIERS.finditer(code):
         depth += code.count("{", position, match.start()) - code.count("}", position, match.start())
         position = match.start()
-        modifiers, returned, name = match.groups()
-        if depth == 1 and not re.search(r"\bstatic\b", modifiers):
-            yield match, returned, name
-
-
-def public_signatures(code: str, class_name: str):
-    """The public methods (instance and static) and public constructors declared at the top level of the class body of
-    code (comments and literals as tokens): (name, index of the opening parenthesis of the parameters). The methods of
-    nested types are excluded."""
-    constructor = re.compile(r"\bpublic\s+" + re.escape(class_name) + r"\s*\(")
-    matches = sorted([(match.start(), match.group(3), match.end() - 1) for match in PUBLIC_METHOD.finditer(code)]
-                     + [(match.start(), class_name, match.end() - 1) for match in constructor.finditer(code)])
-    for start, name, open_parenthesis in matches:
-        if code.count("{", 0, start) - code.count("}", 0, start) == 1:
-            yield name, open_parenthesis
+        if depth != 1:
+            continue
+        start = match.end()
+        end = type_parameters_end(code, start) if code.startswith("<", start) else start
+        static = "static" in match.group(1).split()
+        built = constructor.match(code, end)
+        if built:
+            yield PublicMember(static, code[start:end], None, class_name, built.end() - 1)
+            continue
+        method = METHOD_HEAD.match(code, end)
+        if method:
+            yield PublicMember(static, code[start:end], method.group(1), method.group(2), method.end() - 1)
 
 
 def parameter_declarations(code: str, open_parenthesis: int) -> list[str]:
@@ -207,73 +249,119 @@ def minos_application_source(root: Path, group: str) -> Path:
 COMPOSITION_ROOT_TYPE = re.compile(r"\bMinosApplicationComposer\b")
 
 
+def minos_application_code(root: Path, group: str) -> str | None:
+    """The MinosApplication source of root, comments blanked and literals as tokens; None when it is missing."""
+    source = minos_application_source(root, group)
+    return literals_as_tokens(source.read_text(encoding="utf-8")) if source.is_file() else None
+
+
+def engine_type_reader(root: Path, group: str, code: str):
+    """engine_types_named bound to the single-type imports of code: type text -> the minos-engine types it names."""
+    imported = {name.rsplit(".", 1)[-1]: name for static, name, wildcard in SOURCE_IMPORT.findall(code)
+                if not static and not wildcard}
+    return partial(engine_types_named, imported=imported, engine=production_types(root, ENGINE_MODULE),
+                   qualified_name=qualified_name_pattern(group), group=group)
+
+
 def public_composition_root_methods(root: Path = ROOT, group_id: str | None = None) -> list[str]:
-    """A11 / AUD-ARC-02 — the public instance methods of MinosApplication whose return type names
-    MinosApplicationComposer, the composition root that hands out engine ports under an application type. Read from the
-    source; empty when the source is missing (minos_application_accessors fails closed on it)."""
-    source = minos_application_source(root, group_id or repository_group_id(root))
-    if not source.is_file():
+    """A11 / AUD-ARC-02 — the public methods (instance and static) of MinosApplication whose return type or type
+    parameter bounds name MinosApplicationComposer, the composition root that hands out engine ports under an
+    application type. Read from the source; empty when the source is missing (minos_application_accessors fails closed
+    on it)."""
+    code = minos_application_code(root, group_id or repository_group_id(root))
+    if code is None:
         return []
-    code = literals_as_tokens(source.read_text(encoding="utf-8"))
-    return sorted(name for _, returned, name in public_instance_methods(code) if COMPOSITION_ROOT_TYPE.search(returned))
+    return sorted(member.name for member in public_members(code, "MinosApplication")
+                  if member.returned is not None and COMPOSITION_ROOT_TYPE.search(member.returned_types_text()))
+
+
+def minos_application_static_engine_returns(root: Path = ROOT,
+                                            group_id: str | None = None) -> list[tuple[str, str]]:
+    """A11 — the public static methods of MinosApplication whose return type or type parameter bounds name a
+    minos-engine type: (method, type relative to the groupId). They are no accessor of the table, so none is allowed.
+    Read from the source; empty when the source is missing (minos_application_accessors fails closed on it)."""
+    group = group_id or repository_group_id(root)
+    code = minos_application_code(root, group)
+    if code is None:
+        return []
+    engine_types_in = engine_type_reader(root, group, code)
+    return [(member.name, engine_type) for member in public_members(code, "MinosApplication")
+            if member.static and member.returned is not None
+            for engine_type in engine_types_in(member.returned_types_text())]
+
+
+def minos_application_engine_wildcard_imports(root: Path = ROOT, group_id: str | None = None) -> list[str]:
+    """A11 — the minos-engine packages MinosApplication imports by wildcard: a simple name imported that way resolves
+    to no type, so the other A11 readings would not see it. Read from the source; empty when the source is missing
+    (minos_application_accessors fails closed on it)."""
+    code = minos_application_code(root, group_id or repository_group_id(root))
+    if code is None:
+        return []
+    packages = set(production_types(root, ENGINE_MODULE).values())
+    return sorted(name for static, name, wildcard in SOURCE_IMPORT.findall(code)
+                  if wildcard and not static and name in packages)
 
 
 def minos_application_accessors(root: Path = ROOT, group_id: str | None = None) -> dict[str, tuple[int, str]]:
-    """A11 — the public instance methods of MinosApplication whose return type names a minos-engine type: method name
-    -> (parameter count, engine type relative to the groupId). Read from the source, never written in this guard. A
-    type argument (Optional<T>, List<T>) counts; a nested type counts as its top-level type. The application source is
-    required as soon as minos-application has production sources (fail-closed)."""
+    """A11 — the public instance methods of MinosApplication, generic or not, whose return type or type parameter
+    bounds name a minos-engine type: method name -> (parameter count, engine type relative to the groupId). Read from
+    the source, never written in this guard. A type argument (Optional<T>, List<T>) counts; a nested type counts as its
+    top-level type. The application source is required as soon as minos-application has production sources
+    (fail-closed)."""
     group = group_id or repository_group_id(root)
     source_root = root / APPLICATION_MODULE / "src" / "main" / "java"
-    source = minos_application_source(root, group)
-    if not source.is_file():
+    code = minos_application_code(root, group)
+    if code is None:
         if source_root.is_dir():
+            source = minos_application_source(root, group)
             fail(f"A11 cannot read the accessors of MinosApplication: {source.relative_to(root).as_posix()} is "
                  "missing (the ratchet would stop counting the uses without a name)")
         return {}
-    code = literals_as_tokens(source.read_text(encoding="utf-8"))
-    imported = {name.rsplit(".", 1)[-1]: name for static, name, wildcard in SOURCE_IMPORT.findall(code)
-                if not static and not wildcard}
-    engine = production_types(root, ENGINE_MODULE)
-    qualified_name = qualified_name_pattern(group)
+    engine_types_in = engine_type_reader(root, group, code)
     accessors: dict[str, tuple[int, str]] = {}
-    for match, returned, name in public_instance_methods(code):
-        types = engine_types_named(returned, imported, engine, qualified_name, group)
+    for member in public_members(code, "MinosApplication"):
+        if member.static or member.returned is None:
+            continue
+        types = engine_types_in(member.returned_types_text())
         if len(types) > 1:
-            fail(f"A11 accessor MinosApplication.{name} returns several minos-engine types ({', '.join(types)}); "
-                 "the ratchet counts one type per accessor")
+            fail(f"A11 accessor MinosApplication.{member.name} returns several minos-engine types "
+                 f"({', '.join(types)}); the ratchet counts one type per accessor")
         if types:
-            accessors[name] = (call_argument_count(code, match.end() - 1, "A11 unbalanced MinosApplication method"),
-                               types[0])
+            accessors[member.name] = (
+                call_argument_count(code, member.open_parenthesis, "A11 unbalanced MinosApplication method"), types[0])
     return accessors
 
 
 def minos_application_engine_parameters(root: Path = ROOT, group_id: str | None = None) -> list[tuple[str, str, str]]:
-    """A11 / AUD-ARC-13 — the parameters of the public methods (instance and static) and public constructors declared
-    at the top level of the MinosApplication class body whose type names a minos-engine type or
-    MinosApplicationComposer: (method, parameter, type relative to the groupId). The nested Builder is out of the
-    rule. Read from the source; empty when the source is missing (minos_application_accessors fails closed on it)."""
+    """A11 / AUD-ARC-13 — the parameters of the public methods (instance and static) and public constructors, generic or
+    not, declared at the top level of the MinosApplication class body whose type names a minos-engine type or
+    MinosApplicationComposer: (method, parameter, type relative to the groupId). A type named in a type parameter bound
+    counts for every parameter; a generic constructor without parameter reports it as '<type parameters>'. The nested
+    Builder is out of the rule. Read from the source; empty when the source is missing (minos_application_accessors
+    fails closed on it)."""
     group = group_id or repository_group_id(root)
-    source = minos_application_source(root, group)
-    if not source.is_file():
+    code = minos_application_code(root, group)
+    if code is None:
         return []
-    code = literals_as_tokens(source.read_text(encoding="utf-8"))
-    imported = {name.rsplit(".", 1)[-1]: name for static, name, wildcard in SOURCE_IMPORT.findall(code)
-                if not static and not wildcard}
-    engine = production_types(root, ENGINE_MODULE)
-    qualified_name = qualified_name_pattern(group)
+    engine_types_in = engine_type_reader(root, group, code)
     found = []
-    for name, open_parenthesis in public_signatures(code, "MinosApplication"):
-        for declaration in parameter_declarations(code, open_parenthesis):
+    for member in public_members(code, "MinosApplication"):
+        typed_parameters = []
+        for declaration in parameter_declarations(code, member.open_parenthesis):
             words = IDENTIFIER.findall(ANNOTATION.sub(" ", declaration))
             if len(words) < 2:
                 continue
             parameter = words[-1]
-            type_text = ANNOTATION.sub(" ", declaration).rsplit(parameter, 1)[0]
-            types = engine_types_named(type_text, imported, engine, qualified_name, group)
+            typed_parameters.append((parameter, ANNOTATION.sub(" ", declaration).rsplit(parameter, 1)[0]))
+        # A constructor hands out nothing: without a parameter, only this entry reads its bounds.
+        if member.returned is None and member.type_parameters and not typed_parameters:
+            typed_parameters.append(("<type parameters>", ""))
+        for parameter, declared_type in typed_parameters:
+            type_text = f"{member.type_parameters} {declared_type}"
+            types = engine_types_in(type_text)
             if COMPOSITION_ROOT_TYPE.search(type_text):
                 types.append("application.MinosApplicationComposer")
-            found += [(name, parameter, engine_type) for engine_type in types]
+            found += [(member.name, parameter, engine_type) for engine_type in types]
     return found
 
 
@@ -389,10 +477,12 @@ COMPOSITION_ROOT_USE = re.compile(r"\bcompositionRoot\s*\(|::\s*compositionRoot\
 def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = None,
                                       listed: dict[str, str] | None = None) -> int:
     """A11 — the public MinosApplication accessors returning a minos-engine type are exactly those of
-    MINOS_APPLICATION_ENGINE_ACCESSORS, each with its listed type; the table only shrinks. No public instance method of
-    MinosApplication returns the composition root, and no surface production source reaches it, since its methods
-    return engine ports. No public method or constructor of the class body of MinosApplication takes a minos-engine
-    type or the composition root as a parameter (the nested Builder is out of the rule). Comments and literals are
+    MINOS_APPLICATION_ENGINE_ACCESSORS, each with its listed type; the table only shrinks. No public static method of
+    MinosApplication returns a minos-engine type, no public method returns the composition root, and no surface
+    production source reaches it, since its methods return engine ports. No public method or constructor of the class
+    body of MinosApplication takes a minos-engine type or the composition root as a parameter (the nested Builder is
+    out of the rule). Generic methods and constructors are read too, and a type named in a type parameter bound counts
+    as returned and taken. MinosApplication imports no minos-engine package by wildcard. Comments and literals are
     ignored."""
     listed = MINOS_APPLICATION_ENGINE_ACCESSORS if listed is None else listed
     accessors = minos_application_accessors(root, group_id)
@@ -405,6 +495,13 @@ def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = 
             problems.append(f"MinosApplication.{name} returns {engine_type}, listed as {listed[name]}")
     problems += [f"MINOS_APPLICATION_ENGINE_ACCESSORS entry {name} is no longer a public accessor returning an "
                  "engine type; remove it (the ratchet only shrinks)" for name in sorted(set(listed) - set(accessors))]
+    problems += [f"MinosApplication.{name} is a public static method returning {engine_type}; keep it package-private "
+                 "(tests reach it through MinosApplicationTestAccess)"
+                 for name, engine_type in minos_application_static_engine_returns(root, group_id)]
+    source = minos_application_source(root, group_id or repository_group_id(root))
+    problems += [f"{source.relative_to(root).as_posix()} imports {package}.*, a minos-engine package; import each type "
+                 "by name so that A11 reads it"
+                 for package in minos_application_engine_wildcard_imports(root, group_id)]
     problems += [f"MinosApplication.{name} is a public method returning MinosApplicationComposer, the composition root; "
                  "keep it package-private (tests read it through MinosApplicationTestAccess)"
                  for name in public_composition_root_methods(root, group_id)]
