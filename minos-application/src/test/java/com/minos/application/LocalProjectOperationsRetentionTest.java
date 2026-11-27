@@ -45,8 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * An explicit SCIP import applies the retention the indexing applies, once its snapshot is published, and a busy
  * retention leaves the import successful. The operations receive in-memory collaborators (LocalProjectOperations
- * .Dependencies), without any application; one case goes through the public constructor over an application built
- * from the same ports, without adapter or composition root.
+ * .Dependencies), without any application, except in the cases that go through the public constructor over an
+ * application built from the same ports, without adapter or composition root.
  */
 class LocalProjectOperationsRetentionTest {
 
@@ -63,6 +63,22 @@ class LocalProjectOperationsRetentionTest {
 
         assertEquals(ProjectOperations.IndexImportCommitStatus.COMMITTED, result.commitStatus());
         assertNull(result.diagnostic());
+        assertEquals(List.of("publish snapshot-1", "state snapshot-1", "retention snapshot-1"), fixture.events);
+    }
+
+    /** Through the public constructor, the import publishes, saves the state and applies the application retention. */
+    @Test
+    void aPublishedImportThroughTheApplicationAppliesItsRetention() throws Exception {
+        Fixture fixture = new Fixture(temp);
+        ProjectOperations.IndexImportResult result;
+
+        try (MinosApplication application = fixture.application();
+             LocalProjectOperations operations = new LocalProjectOperations(application)) {
+            result = operations.importScip(
+                    fixture.project.id().toString(), fixture.artifact, "scip-java", "1.0", null, "snapshot-1");
+        }
+
+        assertEquals(ProjectOperations.IndexImportCommitStatus.COMMITTED, result.commitStatus());
         assertEquals(List.of("publish snapshot-1", "state snapshot-1", "retention snapshot-1"), fixture.events);
     }
 
