@@ -64,7 +64,7 @@ Le garde est un script d'entrée et des modules de règles qu'il importe, tous d
 |---|---|
 | `check-module-boundaries.py` | point d'entrée (et `--write-doc`) ; règles des POM : A2 (politique de dépendances Maven), familles hexagonales, dépendances internes cachées ; lance toutes les règles |
 | `module_boundary_policy.py` | lecture stricte de `module-boundaries.json` : modules et familles, `ALLOWED_DEPENDENCIES` dérivé de `allowedDependencies`, `groupId` du POM racine |
-| `module_boundary_sources.py` | lecture des sources Java partagée par les règles : packages, imports (lus où qu'ils soient dans leur ligne), commentaires et littéraux |
+| `module_boundary_sources.py` | lecture des sources Java partagée par les règles : packages, imports (lus où qu'ils soient dans leur ligne), commentaires et littéraux, noms (lus en entier quand des blancs, des retours à la ligne ou des commentaires entourent leurs points, `.*` d'un joker compris) |
 | `module_boundary_adapters.py` | A2 sources, R1/R2 (isolation du backend PostgreSQL), A10, A19, A20, isolation des packages de stockage |
 | `module_boundary_ratchets.py` | A11 à A14, A16, A18 et la mesure du code concret du moteur ; `PACKAGE_ROOTS_BY_MODULE` |
 | `module_boundary_packages.py` | A3, A7, A8, A15 et la disposition des sources Java ; `KNOWN_PACKAGE_CYCLES` |

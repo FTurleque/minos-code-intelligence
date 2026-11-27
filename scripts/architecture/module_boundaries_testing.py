@@ -63,6 +63,13 @@ def second_on_its_line(imported: str) -> str:
     return f"java.util.List; import {imported}"
 
 
+def cut_around_dots(name: str) -> dict[str, str]:
+    """`name` written with what Java accepts around its dots: form -> text."""
+    return {form: name.replace(".", dot) for form, dot in (
+        ("spaces", " . "), ("newline after the dot", ".\n    "), ("newline before the dot", "\n    ."),
+        ("comment", "./* note */"))}
+
+
 class RatchetTreeTestCase(unittest.TestCase):
     """A temporary reactor tree (root pom.xml with groupId com.minos) for the A11-A14 ratchets."""
 

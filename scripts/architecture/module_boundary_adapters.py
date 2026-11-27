@@ -16,12 +16,13 @@ from module_boundary_policy import (
     repository_group_id)
 from module_boundary_sources import (
     production_sources,
-    COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, SOURCE_WORD, qualified_name_pattern, resolve_adapter_class)
+    COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, SOURCE_WORD, name_reading_code, qualified_name_pattern,
+    resolve_adapter_class)
 
 
 def forbidden_names(source: Path, prefixes: tuple[str, ...], qualified: re.Pattern[str]) -> set[str]:
     """The names below one of the prefixes that a source imports (single, static, wildcard) or writes qualified."""
-    code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+    code = name_reading_code(source.read_text(encoding="utf-8"))
     found: set[str] = set()
     for _static, name, wildcard in SOURCE_IMPORT.findall(code):
         if any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes):
@@ -63,7 +64,7 @@ def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> N
     violations: list[str] = []
     for module, source in production_sources(root, guarded):
         text = source.read_text(encoding="utf-8")
-        code = COMMENTS_AND_LITERALS.sub(" ", text)
+        code = name_reading_code(text)
         package_match = PACKAGE.search(text)
         package = package_match.group(1) if package_match else ""
         found: set[str] = set()
@@ -189,7 +190,7 @@ def check_runtime_local_exports(root: Path = ROOT, group_id: str | None = None,
             if not source_root.is_dir():
                 continue
             for source in sorted(source_root.rglob("*.java")):
-                code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+                code = name_reading_code(source.read_text(encoding="utf-8"))
                 found: set[str] = set()
                 uses_runtime_local = False
                 for _static, name, wildcard in SOURCE_IMPORT.findall(code):

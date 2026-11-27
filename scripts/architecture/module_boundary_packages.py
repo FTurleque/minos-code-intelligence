@@ -13,7 +13,7 @@ from pathlib import Path
 
 from module_boundary_policy import MODULES, NS, ROOT, fail, repository_group_id
 from module_boundary_sources import (
-    COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, declared_package, production_sources, qualified_name_pattern)
+    PACKAGE, SOURCE_IMPORT, declared_package, name_reading_code, production_sources, qualified_name_pattern)
 
 
 # A15 / AUD-QUA-02 — a public production type is used by production, or declared. Each entry names one top-level
@@ -83,7 +83,7 @@ def unreferenced_production_types(root: Path = ROOT) -> dict[str, str]:
             continue
         text = source.read_text(encoding="utf-8")
         match = PACKAGE.search(text)
-        parsed.append((module, source, match.group(1) if match else "", COMMENTS_AND_LITERALS.sub(" ", text)))
+        parsed.append((module, source, match.group(1) if match else "", name_reading_code(text)))
     declared: list[tuple[str, str, str, Path, str]] = []
     for module, source, package, code in parsed:
         type_match = TOP_LEVEL_PUBLIC_TYPE.search(code)
@@ -284,7 +284,7 @@ def declared_classes(root: Path, owners: tuple[str, ...]) -> tuple[dict[str, str
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
-            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+            code = name_reading_code(source.read_text(encoding="utf-8"))
             match = PACKAGE.search(code)
             package = match.group(1) if match else ""
             classes[".".join(source.relative_to(source_root).with_suffix("").parts)] = package

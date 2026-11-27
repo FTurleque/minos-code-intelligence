@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import PACKAGES, _MODULE, second_on_its_line, write_root_pom
+from module_boundaries_testing import PACKAGES, _MODULE, cut_around_dots, second_on_its_line, write_root_pom
 
 
 check_package_ownership = _MODULE.check_package_ownership
@@ -263,6 +263,19 @@ class PackageCycleRuleTest(unittest.TestCase):
         self.java("minos-b", "com.example.b", "B", ["com.example.a.A"])
         self.refused("A8", "com.example.a", "com.example.b")
 
+    def test_a_cycle_closed_by_a_name_cut_around_its_dots_is_refused(self):
+        # AUD-ARC-17: blanks, line breaks and comments may surround the dots of a name.
+        self.java("minos-b", "com.example.b", "B", ["com.example.a.A"])
+        source = self.root / "minos-a" / "src" / "main" / "java" / "com" / "example" / "a" / "A.java"
+        for use, name, text in (("import", "com.example.b.B", "import {};\nclass A {{}}"),
+                                ("wildcard", "com.example.b.*", "import {};\nclass A {{}}"),
+                                ("qualified name", "com.example.b.B", "class A {{ {} b; }}")):
+            for form, written in cut_around_dots(name).items():
+                with self.subTest(use=use, form=form):
+                    self.java("minos-a", "com.example.a", "A")
+                    source.write_text("package com.example.a;\n" + text.format(written) + "\n", encoding="utf-8")
+                    self.refused("A8", "com.example.a", "com.example.b")
+
     def test_imports_in_comments_and_test_sources_do_not_count(self):
         self.java("minos-a", "com.example.a", "A", ["com.example.b.B"])
         self.java("minos-b", "com.example.b", "B")
@@ -315,6 +328,15 @@ class UnreferencedProductionTypeRuleTest(unittest.TestCase):
         self.write("minos-application", "main", "com.minos.b", "Caller",
                    f"import {second_on_its_line('com.minos.a.*')};\n\nfinal class Caller {{ Used used; }}")
         self.assertEqual(0, self.check())
+
+    def test_a_name_cut_around_its_dots_references_the_type(self):
+        for use, name, body in (("import", "com.minos.a.Used", "import {};\n\nfinal class Caller {{ Used used; }}"),
+                                ("wildcard", "com.minos.a.*", "import {};\n\nfinal class Caller {{ Used used; }}"),
+                                ("qualified name", "com.minos.a.Used", "final class Caller {{ {} used; }}")):
+            for form, written in cut_around_dots(name).items():
+                with self.subTest(use=use, form=form):
+                    self.write("minos-application", "main", "com.minos.b", "Caller", body.format(written))
+                    self.assertEqual(0, self.check())
 
     def test_public_class_without_caller_is_refused(self):
         self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")

@@ -29,6 +29,16 @@ def qualified_name_pattern(group_id: str) -> re.Pattern[str]:
 SOURCE_WORD = re.compile(r"\b[A-Z]\w*\b")
 COMMENTS_AND_LITERALS = re.compile(
     r"//[^\n]*|/\*.*?\*/|\"\"\"(?:\\.|[^\\])*?\"\"\"|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.DOTALL)
+# Java accepts blanks, line breaks and comments around the dots of a name, the `.*` of a wildcard included. The three
+# dots of a variable arity parameter are never joined.
+QUALIFIER_GAP = re.compile(r"(?<=[\w$])\s*\.\s*(?=[\w$*])")
+
+
+def name_reading_code(text: str) -> str:
+    """The code a reader of names works on: comments and literals blanked, then the blanks around each dot between two
+    words dropped, which joins the parts of every name. Line numbers are lost: a rule that reports them reads
+    blank_comments_and_literals."""
+    return QUALIFIER_GAP.sub(".", COMMENTS_AND_LITERALS.sub(" ", text))
 
 
 def resolve_adapter_class(name: str, by_fqn: dict[str, str]) -> str | None:

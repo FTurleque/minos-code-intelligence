@@ -16,7 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import RATCHETS, RatchetTreeTestCase, _MODULE, second_on_its_line
+from module_boundaries_testing import (
+    RATCHETS, RatchetTreeTestCase, _MODULE, cut_around_dots, second_on_its_line)
 
 
 class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
@@ -113,6 +114,29 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.write("minos-cli", "com.minos.cli", "Wide", "final class Wide { HostedRole r; }",
                    [second_on_its_line("com.minos.hosted.*")])
         self.refused(self.check, "A11", "wildcard", "Wide.java -> com.minos.hosted.*")
+
+    def test_a_name_cut_around_its_dots_is_read_in_a_surface(self):
+        # AUD-ARC-17: blanks, line breaks and comments may surround the dots of a name.
+        role = "com.minos.hosted.HostedRole"
+        for form, written in cut_around_dots(role).items():
+            for use, body, imports in (("import", "final class Cut { HostedRole r; }", [written]),
+                                       ("qualified name", f"final class Cut {{ {written} r; }}", [])):
+                with self.subTest(form=form, use=use):
+                    self.write("minos-cli", "com.minos.cli", "Cut", body, imports)
+                    self.refused(self.check, "A11", "Cut.java", f"uses {role}, absent from")
+
+    def test_a_wildcard_import_cut_around_its_dots_is_refused(self):
+        for form, written in cut_around_dots("com.minos.hosted.*").items():
+            with self.subTest(form=form):
+                self.write("minos-cli", "com.minos.cli", "Cut", "final class Cut { HostedRole r; }", [written])
+                self.refused(self.check, "A11", "wildcard", "Cut.java -> com.minos.hosted.*")
+
+    def test_a_cut_name_in_a_comment_or_a_literal_is_ignored_and_before_an_ellipsis_is_read(self):
+        cut = "com . minos . hosted . HostedRole"
+        self.write("minos-cli", "com.minos.cli", "Quiet", f'final class Quiet {{ // {cut}\n String s = "{cut}"; }}')
+        self.assertEqual(1, self.check()["minos-cli"])
+        self.write("minos-cli", "com.minos.cli", "Quiet", f"final class Quiet {{ void f({cut} ... roles) {{ }} }}")
+        self.refused(self.check, "A11", "Quiet.java", "uses com.minos.hosted.HostedRole, absent from")
 
     def test_a_dead_entry_is_refused(self):
         listed = {"minos-cli": {"query.SymbolResult": 1, "hosted.HostedRole": 1}}
@@ -489,6 +513,12 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
                      "imports com.minos.registry.*")
         self.application_with("    public void name(String value) { }", ["java.util.*"])
         self.assertEqual(0, self.check_accessors({}))
+
+    def test_a_wildcard_import_of_the_facade_cut_around_its_dots_is_refused(self):
+        for form, written in cut_around_dots("com.minos.registry.*").items():
+            with self.subTest(form=form):
+                self.application_with("    public void e(ProjectRegistry r) { }", [written])
+                self.refused(lambda: self.check_accessors({}), "A11", "imports com.minos.registry.*")
 
     def application_source(self, header, members):
         """MinosApplication with a header written as is: package line and imports."""
@@ -871,6 +901,23 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
         self.write("minos-provider-scip", "com.minos.adapter.scip", "Wide", "final class Wide { }",
                    [second_on_its_line("com.minos.storage.local.store.*")])
         self.refused(self.check, "A13", "wildcard", "Wide.java -> com.minos.storage.local.store.*")
+
+    def test_a_name_of_another_adapter_cut_around_its_dots_is_read(self):
+        # AUD-ARC-17: blanks, line breaks and comments may surround the dots of a name.
+        service = "com.minos.storage.local.store.SnapshotIntegrityService"
+        for form, written in cut_around_dots(service).items():
+            for use, body, imports in (("import", "final class Cut { SnapshotIntegrityService s; }", [written]),
+                                       ("qualified name", f"final class Cut {{ {written} s; }}", [])):
+                with self.subTest(form=form, use=use):
+                    self.write("minos-provider-scip", "com.minos.adapter.scip", "Cut", body, imports)
+                    self.refused(self.check, "A13", "minos-provider-scip -> minos-storage", service)
+
+    def test_a_wildcard_import_of_another_adapter_cut_around_its_dots_is_refused(self):
+        package = "com.minos.storage.local.store"
+        for form, written in cut_around_dots(f"{package}.*").items():
+            with self.subTest(form=form):
+                self.write("minos-provider-scip", "com.minos.adapter.scip", "Cut", "final class Cut { }", [written])
+                self.refused(self.check, "A13", "wildcard", f"Cut.java -> {package}.*")
 
     def test_a_couple_absent_from_the_table_is_refused(self):
         self.write("minos-integration-git", "com.minos.integration.git", "Leak", "final class Leak { SnapshotCodec c; }",

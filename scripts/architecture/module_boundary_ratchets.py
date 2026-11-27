@@ -18,8 +18,9 @@ from module_boundary_policy import (
     repository_group_id)
 from module_boundary_sources import (
     production_sources,
-    COMMENTS_AND_LITERALS, SOURCE_IMPORT, blank_comments_and_literals, call_argument_count, declared_package,
-    literals_as_tokens, production_types, qualified_name_pattern, resolve_adapter_class)
+    COMMENTS_AND_LITERALS, QUALIFIER_GAP, SOURCE_IMPORT, blank_comments_and_literals, call_argument_count,
+    declared_package, literals_as_tokens, name_reading_code, production_types, qualified_name_pattern,
+    resolve_adapter_class)
 
 
 # A11 to A14 — debt held by ratchets (AUD-ARC-01, -05, -08, -12). Each table lists, from the production sources, what
@@ -143,7 +144,6 @@ MEMBER_NAME = re.compile(r"(?<![\w$])" + JAVA_IDENTIFIER + r"(?=\s*$)")
 RECORD_DECLARATION = re.compile(r"(?<![\w$.])record\s+(?=" + JAVA_IDENTIFIER + r")")
 ANNOTATION_NAME = re.compile(r"@(?!\s*interface\b)\s*[\w$]+(?:\s*\.\s*[\w$]+)*")
 ANNOTATION_ARGUMENTS = re.compile(r"\s*\(")
-QUALIFIER_GAP = re.compile(r"(?<=[\w$])\s*\.\s*(?=[\w$])")
 RETURN_TYPE_WORD = re.compile(r"\b[A-Z]\w*(?:\.[A-Z]\w*)*")
 ACCESSOR_USE = re.compile(r"(::|\.)\s*([A-Za-z_]\w*)\b(\s*\()?")
 
@@ -439,7 +439,7 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str], qual
         return named, wildcards
     for source in sorted(naming_root.rglob("*.java")):
         text = source.read_text(encoding="utf-8")
-        code = COMMENTS_AND_LITERALS.sub(" ", text)
+        code = name_reading_code(text)
         relative = source.relative_to(root).as_posix()
         names = []
         for static, name, wildcard in SOURCE_IMPORT.findall(code):
