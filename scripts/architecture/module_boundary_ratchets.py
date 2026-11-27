@@ -426,9 +426,10 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str], qual
                           naming_package: str = "") -> tuple[dict[str, set[str]], list[str]]:
     """Target types the production sources of one module use (type -> files): by single or static import, by fully
     qualified name and, when accessors are given, by a call of a MinosApplication accessor that returns the type. Also
-    every wildcard import of a target package ('file -> package.*'). Comments and string literals are ignored; a nested
-    type counts as its top-level type. A naming package (dotted, under the source root) restricts the naming files to
-    that package and its subpackages."""
+    every non-static wildcard import of a target package or type, nested types included ('file -> target.*'); one on a
+    type is a use of that type too. Comments and string literals are ignored; a nested type counts as its top-level
+    type. A naming package (dotted, under the source root) restricts the naming files to that package and its
+    subpackages."""
     named: dict[str, set[str]] = {}
     wildcards: list[str] = []
     packages = set(targets.values())
@@ -443,9 +444,12 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str], qual
         names = []
         for static, name, wildcard in SOURCE_IMPORT.findall(code):
             if wildcard and not static:
-                if name in packages:
+                # The simple names such an import brings in are written nowhere else: refused. On a type, they all
+                # belong to it (a nested type counts as its top-level type), so the file also uses that type.
+                if name in packages or resolve_adapter_class(name, targets):
                     wildcards.append(f"{relative} -> {name}.*")
-                continue
+                if name in packages:
+                    continue
             names.append(name)
         names += qualified_name.findall(SOURCE_IMPORT.sub(" ", code))
         if accessors:
@@ -473,7 +477,8 @@ def named_type_ratchet_problems(rule: str, label: str, table: str, root: Path, n
                  "use it" for name, count in sorted(listed.items())
                  if isinstance(count, bool) or not isinstance(count, int) or count < 1]
     named, wildcards = types_named_by_module(root, naming, targets, qualified_name, accessors, group, naming_package)
-    problems += [f"{label}: wildcard import of a {target} package {wildcard}" for wildcard in wildcards]
+    problems += [f"{label}: wildcard import of a {target} package or type {wildcard}; import each type by name"
+                 for wildcard in wildcards]
     for qualified in sorted(named):
         name = qualified.removeprefix(prefix)
         files = sorted(named[qualified])
@@ -494,7 +499,8 @@ def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None
                                          listed: dict[str, dict[str, int]] | None = None) -> dict[str, int]:
     """A11 — each surface and each contract module uses only the minos-engine types of its
     ENGINE_TYPES_NAMED_BY_SURFACE list, each from the listed number of files; a call of a MinosApplication accessor
-    counts as a use of the engine type it returns."""
+    counts as a use of the engine type it returns. A non-static wildcard import of a minos-engine package or type
+    fails."""
     listed = ENGINE_TYPES_NAMED_BY_SURFACE if listed is None else listed
     group = group_id or repository_group_id(root)
     qualified_name = qualified_name_pattern(group)
@@ -627,7 +633,8 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
                                           listed: dict[tuple[str, str], dict[str, int]] | None = None,
                                           reasons: dict[tuple[str, str], str] | None = None) -> int:
     """A13 — an adapter names the types of another adapter only through ADAPTER_TYPES_NAMED_BY_ADAPTER, each from the
-    listed number of files, and each couple carries its written reason in ADAPTER_COUPLING_REASONS."""
+    listed number of files, and each couple carries its written reason in ADAPTER_COUPLING_REASONS. A non-static
+    wildcard import of a package or type of another adapter fails."""
     listed = ADAPTER_TYPES_NAMED_BY_ADAPTER if listed is None else listed
     reasons = ADAPTER_COUPLING_REASONS if reasons is None else reasons
     group = group_id or repository_group_id(root)

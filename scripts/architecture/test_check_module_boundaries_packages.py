@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import PACKAGES, _MODULE, write_root_pom
+from module_boundaries_testing import PACKAGES, _MODULE, second_on_its_line, write_root_pom
 
 
 check_package_ownership = _MODULE.check_package_ownership
@@ -257,6 +257,12 @@ class PackageCycleRuleTest(unittest.TestCase):
         (directory / "B.java").write_text("package com.example.b;\nclass B { com.example.a.A a; }\n", encoding="utf-8")
         self.refused("com.example.a", "com.example.b")
 
+    def test_a_cycle_closed_by_a_wildcard_following_another_import_on_its_line_is_refused(self):
+        # AUD-ARC-17: Java does not tie an import to the start of a line.
+        self.java("minos-a", "com.example.a", "A", [second_on_its_line("com.example.b.*")])
+        self.java("minos-b", "com.example.b", "B", ["com.example.a.A"])
+        self.refused("A8", "com.example.a", "com.example.b")
+
     def test_imports_in_comments_and_test_sources_do_not_count(self):
         self.java("minos-a", "com.example.a", "A", ["com.example.b.B"])
         self.java("minos-b", "com.example.b", "B")
@@ -303,6 +309,11 @@ class UnreferencedProductionTypeRuleTest(unittest.TestCase):
         return _MODULE.check_unreferenced_production_types(self.root, {} if declared is None else declared)
 
     def test_clean_tree_is_accepted(self):
+        self.assertEqual(0, self.check())
+
+    def test_a_package_wildcard_following_another_import_on_its_line_references_the_type(self):
+        self.write("minos-application", "main", "com.minos.b", "Caller",
+                   f"import {second_on_its_line('com.minos.a.*')};\n\nfinal class Caller {{ Used used; }}")
         self.assertEqual(0, self.check())
 
     def test_public_class_without_caller_is_refused(self):

@@ -58,6 +58,11 @@ def element(text: str) -> ET.Element:
     return ET.fromstring(text)
 
 
+def second_on_its_line(imported: str) -> str:
+    """An entry of the `imports` of a fixture that writes `import <imported>;` after another import of the same line."""
+    return f"java.util.List; import {imported}"
+
+
 class RatchetTreeTestCase(unittest.TestCase):
     """A temporary reactor tree (root pom.xml with groupId com.minos) for the A11-A14 ratchets."""
 

@@ -16,7 +16,9 @@ from module_boundary_policy import fail
 PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
 
 
-SOURCE_IMPORT = re.compile(r"^\s*import\s+(static\s+)?([\w.]+?)(\.\*)?\s*;", re.MULTILINE)
+# Java does not tie an import to the start of a line. `import` is a reserved word and every reader blanks comments and
+# literals before applying this pattern, so the word alone opens a declaration.
+SOURCE_IMPORT = re.compile(r"(?<![\w$])import\s+(static\s+)?([\w.]+?)(\.\*)?\s*;")
 
 
 def qualified_name_pattern(group_id: str) -> re.Pattern[str]:
@@ -26,7 +28,7 @@ def qualified_name_pattern(group_id: str) -> re.Pattern[str]:
 
 SOURCE_WORD = re.compile(r"\b[A-Z]\w*\b")
 COMMENTS_AND_LITERALS = re.compile(
-    r"//[^\n]*|/\*.*?\*/|\"\"\".*?\"\"\"|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.DOTALL)
+    r"//[^\n]*|/\*.*?\*/|\"\"\"(?:\\.|[^\\])*?\"\"\"|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.DOTALL)
 
 
 def resolve_adapter_class(name: str, by_fqn: dict[str, str]) -> str | None:

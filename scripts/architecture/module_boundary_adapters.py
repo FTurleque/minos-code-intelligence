@@ -50,8 +50,9 @@ def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> N
     """A2 / ADR 0042 — the POM rules do not see sources.
 
     No production class outside the adapters and the composition root (minos-bootstrap) may name a
-    concrete adapter class: not by import (single, static, or wildcard of a package holding adapter
-    classes), not by fully qualified name, not by simple name from a package it shares with an adapter.
+    concrete adapter class: not by import (single, static, wildcard of a package holding adapter
+    classes or of the members of such a class), not by fully qualified name, not by simple name from a
+    package it shares with an adapter.
     minos-app keeps its POM dependencies (it assembles the shaded JAR) but, like the application and the
     surfaces, reaches adapters only through ports wired by minos-bootstrap. Comments and string literals
     are ignored.
@@ -66,11 +67,11 @@ def check_source_boundaries(root: Path = ROOT, group_id: str | None = None) -> N
         package_match = PACKAGE.search(text)
         package = package_match.group(1) if package_match else ""
         found: set[str] = set()
-        for static, name, wildcard in SOURCE_IMPORT.findall(code):
-            if wildcard and not static:
-                if name in by_package:
-                    found.add(name + ".*")
+        for _static, name, wildcard in SOURCE_IMPORT.findall(code):
+            if wildcard and name in by_package:
+                found.add(name + ".*")
                 continue
+            # A wildcard on a class brings in its members: the class is named like by a single import.
             resolved = resolve_adapter_class(name, by_fqn)
             if resolved:
                 found.add(resolved)

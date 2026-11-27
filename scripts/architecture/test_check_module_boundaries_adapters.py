@@ -16,7 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import ADAPTERS, MODULES, RATCHETS, RatchetTreeTestCase, _MODULE, write_root_pom
+from module_boundaries_testing import (
+    ADAPTERS, MODULES, RATCHETS, RatchetTreeTestCase, _MODULE, second_on_its_line, write_root_pom)
 
 
 class SourceBoundaryRuleTest(RatchetTreeTestCase):
@@ -46,6 +47,23 @@ class SourceBoundaryRuleTest(RatchetTreeTestCase):
 
     def test_a_wildcard_import_of_a_package_holding_adapter_classes_is_refused(self):
         self.write("minos-api", "com.minos.api", "Facade", "class Facade { }", ["com.minos.storage.local.store.*"])
+        self.refused("com.minos.storage.local.store.*")
+
+    def test_a_wildcard_import_on_the_members_of_an_adapter_class_is_refused(self):
+        # AUD-ARC-17: the member types brought in by the wildcard are written by their simple name only.
+        for target in (self.ADAPTER_CLASS, f"{self.ADAPTER_CLASS}.Entry"):
+            with self.subTest(target=target):
+                self.write("minos-cli", "com.minos.cli", "Cmd", "class Cmd { Entry e; }", [f"{target}.*"])
+                self.refused(f"minos-cli/src/main/java/com/minos/cli/Cmd.java -> {self.ADAPTER_CLASS} [minos-storage]")
+
+    def test_a_wildcard_import_on_the_members_of_a_domain_type_is_accepted(self):
+        self.write("minos-domain", "com.minos.domain", "Kind", "public final class Kind { public enum Level { LOW } }")
+        self.write("minos-cli", "com.minos.cli", "Cmd", "class Cmd { Level l; }", ["com.minos.domain.Kind.*"])
+        _MODULE.check_source_boundaries(self.root)
+
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        self.write("minos-api", "com.minos.api", "Facade", "class Facade { }",
+                   [second_on_its_line("com.minos.storage.local.store.*")])
         self.refused("com.minos.storage.local.store.*")
 
     def test_a_fully_qualified_name_is_refused(self):
@@ -131,6 +149,11 @@ class RuntimeLocalExportRuleTest(unittest.TestCase):
     def test_a_wildcard_import_of_a_guarded_package_is_refused(self):
         self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "class Leak { }", [f"{self.PREFIX}.sandbox.*"])
         self.refused(f"{self.PREFIX}.sandbox.*")
+
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "class Leak { }",
+                   [second_on_its_line(f"{self.PREFIX}.sandbox.*")])
+        self.refused("Leak.java", f"{self.PREFIX}.sandbox.*")
 
     def test_a_fully_qualified_name_of_a_type_that_is_not_exported_is_refused(self):
         self.write("minos-cli", "com.minos.cli", "Leak",
@@ -423,6 +446,11 @@ class StoragePackageIsolationRuleTest(RatchetTreeTestCase):
                    ["com.minos.storage.local.registry.*"])
         self.refused(self.check, "home -> backends", "com.minos.storage.local.registry.*")
 
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.home", "Mapping", "final class Mapping { }",
+                   [second_on_its_line("com.minos.storage.local.registry.*")])
+        self.refused(self.check, "home -> backends", "Mapping.java", "com.minos.storage.local.registry.*")
+
     def test_a_codec_test_naming_the_postgresql_backend_is_refused(self):
         self.write("minos-storage", "com.minos.storage.codec", "CodecTest",
                    "final class CodecTest { Object p = new com.minos.storage.postgresql.PostgresStorageBackend(); }",
@@ -641,6 +669,13 @@ class PostgresqlBackendIsolationRuleTest(RatchetTreeTestCase):
         self.write("minos-bootstrap", "com.minos.bootstrap", "Static", "final class Static { }", [f"static {self.BACKEND}.open"])
         self.write("minos-bootstrap", "com.minos.bootstrap", "Wild", "final class Wild { }", ["com.minos.storage.postgresql.*"])
         self.refused(self.check, "Static.java", "Wild.java", "com.minos.storage.postgresql.*")
+
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        for target in ("com.minos.storage.postgresql", "org.postgresql"):
+            with self.subTest(target=target):
+                self.write("minos-bootstrap", "com.minos.bootstrap", "Wild", "final class Wild { }",
+                           [second_on_its_line(f"{target}.*")])
+                self.refused(self.check, "R1", "Wild.java", f"{target}.*")
 
     def test_a_qualified_name_of_the_driver_in_the_scip_provider_is_refused(self):
         self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak",
