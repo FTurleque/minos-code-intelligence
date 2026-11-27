@@ -61,6 +61,10 @@ Non rejoué : le retrait du pin `eol=crlf` (exige un dépôt Git temporaire ; é
 - (b) Modifier `mvnw` pour tolérer ces formes : fichier du projet Maven Wrapper, réécrit à chaque montée.
 - (c) Même forme stricte pour Gradle : refuserait des formes que Gradle lit.
 
+### D1 bis — Dernière ligne sans saut de ligne final [Décision, propriétaire, 2026-11-27]
+
+La boucle `read` de `mvnw` saute une dernière ligne non terminée : une somme écrite là n'est pas vérifiée, alors que `mvnw.cmd` et un analyseur de propriétés la lisent. La règle 13 refuse, pour le wrapper Maven, une dernière ligne qui porte `distributionUrl` ou `distributionSha256Sum` sans saut de ligne. Une autre dernière ligne et le wrapper Gradle ne sont pas visés. Les fins de ligne réduites au retour chariot restent hors du gate (docstring).
+
 ### D2 — Archives de l'image : nom de base, `set +o errexit`, fichier du `curl` [Proposition, recommandation]
 
 - (a) **Recommandé.** Trois ajouts à la règle existante : (1) avant le contrôle, une commande qui nomme le nom de base du fichier contrôlé (dernier segment après `/`, variable shell comprise, par exemple `"${node_archive}"`) **sans `/` juste avant lui** compte comme un usage, `curl` et `rm -f` exceptés ; (2) `set +o errexit` est un désarmement ; (3) le fichier contrôlé doit être une cible `-o`/`-Lo`/`-fsSLo` d'un `curl` du même `RUN`, au même texte. La condition « sans `/` » écarte les URL : la boucle `for maven_url in "…/${maven_archive}" …` (`docker/Dockerfile.mcp.release:165-167`) nomme le nom de base de l'archive Maven avant le contrôle, et la contre-vérification a montré qu'une comparaison sans cette condition la signale, ce qui rendrait le Dockerfile du HEAD rouge. Les six contrôles du HEAD doivent rester verts (vérifié en tâche 2.1).
@@ -89,8 +93,12 @@ Les trois exigences complétées sont en vigueur : « Chaque wrapper de build ex
 
 ## Traçabilité
 
-| Constat | Exigence | Tâches | Preuve attendue |
+| Constat | Exigence | Tâches | Preuve exécutée |
 |---|---|---|---|
-| AUD-DEP-16 | socle-d-execution › La somme du wrapper Maven est écrite sous la forme que lit `mvnw` | 1.1 à 1.4 | trois mutations rouges ; auto-test vert ; gate vert au HEAD |
-| AUD-DEP-17 | socle-d-execution › Le contrôle d'une archive de l'image porte sur le fichier téléchargé avant tout usage | 2.1 à 2.4 | mutations rouges ; six contrôles reconnus au HEAD |
-| AUD-DEP-18 | controles-de-fusion › Les fichiers batch suivis ont leur fin de ligne épinglée | 3.1 à 3.4 | `--self-test` rouge puis vert ; gate vert au HEAD |
+| AUD-DEP-16 | socle-d-execution › La somme du wrapper Maven est écrite sous la forme que lit `mvnw` | 1.1 à 1.5 | trois mutations rc=0 avant, rc=1 après avec la ligne 4 nommée ; somme sans saut de ligne final : rc=0 avant, rc=1 après ; `test_check_toolchain_baseline.py` : 7 échecs et 1 erreur avant la forme des clés, 3 échecs avant le saut de ligne final, 79 tests verts après ; gate vert sur le dépôt |
+| AUD-DEP-17 | socle-d-execution › Le contrôle d'une archive de l'image porte sur le fichier téléchargé avant tout usage | 2.1 à 2.4 | trois mutations rc=0 avant, rc=1 après avec l'`ARG` et la ligne ; `test_check_tools_manifest.py` : 10 échecs avant la règle, 5 sur les cas de nom plus long et de cible partiellement citée, 74 tests verts après ; gate vert, six archives vérifiées |
+| AUD-DEP-18 | controles-de-fusion › Les fichiers batch suivis ont leur fin de ligne épinglée | 3.1 à 3.4 | `--self-test` : 5 cas en échec avant, 23 cas verts après ; gate vert, trois fichiers batch contrôlés (`i/lf`, `attr/text eol=crlf`) |
+
+Cibles des `curl` des six `RUN` vérifiés, toutes par `-fsSLo` : `"/tmp/${maven_archive}"` (ligne de continuation), `"/tmp/${node_archive}"`, `/tmp/cs.gz`, `/tmp/scip-clang`, `/tmp/rust-analyzer.gz`, `"$nuget_package"`.
+
+Non rejoués : `mvnw`, `mvnw.cmd`, construction de l'image Docker, `M29DockerAdministrationContractTest` (Dockerfile inchangé). La boucle d'analyse de `mvnw`, recopiée, a été exécutée seule : elle ne définit pas la somme sur les trois formes du constat, sur une dernière ligne sans saut de ligne final (refusée, D1 bis), ni sur des lignes à retour chariot seul (hors du gate, docstring).
