@@ -46,8 +46,10 @@ ENGINE_TYPES_NAMED_BY_SURFACE: dict[str, dict[str, int]] = POLICY.engine_types_n
 # public method or constructor of the class body takes an engine type; the nested Builder, which customises the
 # composition, is out of the rule. The static returns (minos_application_static_engine_returns) and the wildcard imports
 # reaching the engine (minos_application_engine_wildcard_imports) are held at zero without a table too. Generic
-# members are read, bounds included, and neither annotations, the case of a name nor line breaks hide a member. The
-# services and use cases the facade hands out are held on the surface side.
+# members are read, bounds included, and neither annotations, the case of a name nor line breaks hide a member. No
+# public field is typed with an engine type or the composition root (minos_application_engine_fields), and the nested
+# Builder is the only public nested type (minos_application_public_nested_types). The services and use cases the facade
+# hands out are held on the surface side.
 MINOS_APPLICATION_ENGINE_ACCESSORS: dict[str, str] = {}
 
 # A12 / AUD-ARC-05, ADR 0068 — classes of the inner layers that launch a process (module/name.Type), with their number
@@ -135,12 +137,16 @@ PACKAGE_ROOTS_BY_MODULE: dict[str, frozenset[str]] = {
 PUBLIC_MODIFIERS = re.compile(r"\bpublic\b\s*((?:(?:static|final|synchronized|abstract|default)\b\s*)*)")
 JAVA_IDENTIFIER = r"(?:[^\W\d]|\$)[\w$]*"
 # A member header runs from the modifiers (and the type parameter section, if any) to its first such character: '(' for
-# a method or a constructor, anything else for a field or a nested type. The header itself is not matched against a
-# list of the characters a type may hold.
+# a method or a constructor, ';' or '=' for a field. The header itself is not matched against a list of the characters
+# a type may hold.
 HEADER_END = re.compile(r"[(;={}]")
 MEMBER_NAME = re.compile(r"(?<![\w$])" + JAVA_IDENTIFIER + r"(?=\s*$)")
-# `record` cannot name a type, so `record Name` in a header declares a nested record, not a method.
-RECORD_DECLARATION = re.compile(r"(?<![\w$.])record\s+(?=" + JAVA_IDENTIFIER + r")")
+FIELD_NAME = re.compile(r"(?<![\w$])" + JAVA_IDENTIFIER + r"(?=(?:\s*\[\s*\])*\s*$)")
+# `class`, `interface`, `enum` are keywords and `record` cannot name a type, so one of them followed by a name declares
+# a nested type, whatever ends the header.
+TYPE_DECLARATION = re.compile(r"(?<![\w$.])(?:class|interface|enum|record)\s+(" + JAVA_IDENTIFIER + r")")
+# The public nested types MinosApplication may declare: the Builder customises the composition (A11).
+FACADE_PUBLIC_NESTED_TYPES = frozenset({"Builder"})
 ANNOTATION_NAME = re.compile(r"@(?!\s*interface\b)\s*[\w$]+(?:\s*\.\s*[\w$]+)*")
 ANNOTATION_ARGUMENTS = re.compile(r"\s*\(")
 QUALIFIER_GAP = re.compile(r"(?<=[\w$])\s*\.\s*(?=[\w$])")
@@ -181,10 +187,19 @@ def type_parameters_end(code: str, start: int) -> int:
     return start
 
 
-def public_members(code: str, class_name: str):
-    """The public methods (instance and static) and public constructors declared at the top level of the class body of
-    code (as minos_application_code reads it), generic or not. The members of nested types are excluded. A header
-    followed by '(' whose name cannot be read fails the guard."""
+class PublicDeclaration(NamedTuple):
+    """A `public` declaration: its modifiers, type parameter section ('' without one), header text and the index of the
+    character that ends the header."""
+
+    static: bool
+    type_parameters: str
+    header: str
+    end: int
+
+
+def public_declarations(code: str):
+    """The public declarations at the top level of the class body of code (as minos_application_code reads it): methods,
+    constructors, fields and nested types. What nested types declare is excluded."""
     depth = 0
     position = 0
     for match in PUBLIC_MODIFIERS.finditer(code):
@@ -196,19 +211,52 @@ def public_members(code: str, class_name: str):
         end = type_parameters_end(code, start) if code.startswith("<", start) else start
         static = "static" in match.group(1).split()
         stopper = HEADER_END.search(code, end)
-        if stopper is None or stopper.group() != "(":
+        if stopper is not None:
+            yield PublicDeclaration(static, code[start:end], code[end:stopper.start()], stopper.start())
+
+
+def unreadable_member(header: str) -> None:
+    fail(f"A11 unreadable MinosApplication member: {' '.join(header.split())!r}")
+
+
+def public_members(code: str, class_name: str):
+    """The public methods (instance and static) and public constructors among public_declarations, generic or not. A
+    header followed by '(' whose name cannot be read fails the guard."""
+    for declared in public_declarations(code):
+        if code[declared.end] != "(" or TYPE_DECLARATION.search(declared.header):
             continue
-        header = code[end:stopper.start()]
-        if RECORD_DECLARATION.search(header):
-            continue
-        name = MEMBER_NAME.search(header)
-        returned = header[:name.start()].strip() if name else ""
+        name = MEMBER_NAME.search(declared.header)
+        returned = declared.header[:name.start()].strip() if name else ""
         if returned:
-            yield PublicMember(static, code[start:end], returned, name.group(), stopper.start())
+            yield PublicMember(declared.static, declared.type_parameters, returned, name.group(), declared.end)
         elif name and name.group() == class_name:
-            yield PublicMember(static, code[start:end], None, class_name, stopper.start())
+            yield PublicMember(declared.static, declared.type_parameters, None, class_name, declared.end)
         else:
-            fail(f"A11 unreadable MinosApplication member: {' '.join(header.split())!r}")
+            unreadable_member(declared.header)
+
+
+def first_declarator(header: str) -> str:
+    """header up to its first comma outside type arguments: `Type name` of a field declaring several names."""
+    depth = 0
+    for index, character in enumerate(header):
+        depth += {"<": 1, ">": -1}.get(character, 0)
+        if character == "," and depth == 0:
+            return header[:index]
+    return header
+
+
+def public_fields(code: str):
+    """The public fields among public_declarations, as (first declared name, type text). A header that is neither a
+    method, a nested type nor a readable field fails the guard."""
+    for declared in public_declarations(code):
+        if code[declared.end] == "(" or TYPE_DECLARATION.search(declared.header):
+            continue
+        declarator = first_declarator(declared.header)
+        name = FIELD_NAME.search(declarator)
+        type_text = declarator[:name.start()].strip() if name else ""
+        if code[declared.end] not in ";=" or not type_text:
+            unreadable_member(declared.header)
+        yield name.group(), type_text
 
 
 def parameter_declarations(code: str, open_parenthesis: int) -> list[str]:
@@ -328,6 +376,35 @@ def minos_application_static_engine_returns(root: Path = ROOT,
     return [(member.name, engine_type) for member in public_members(code, "MinosApplication")
             if member.static and member.returned is not None
             for engine_type in engine_types_in(member.returned_types_text())]
+
+
+def minos_application_engine_fields(root: Path = ROOT, group_id: str | None = None) -> list[tuple[str, str]]:
+    """A11 — the public fields of MinosApplication, static or not, whose declared type names a minos-engine type or
+    MinosApplicationComposer: (field, type relative to the groupId). The initialiser is not read. Read from the source;
+    empty when the source is missing (minos_application_accessors fails closed on it)."""
+    group = group_id or repository_group_id(root)
+    code = minos_application_code(root, group)
+    if code is None:
+        return []
+    engine_types_in = engine_type_reader(root, group, code)
+    found = []
+    for name, type_text in public_fields(code):
+        types = engine_types_in(type_text)
+        if COMPOSITION_ROOT_TYPE.search(type_text):
+            types.append("application.MinosApplicationComposer")
+        found += [(name, field_type) for field_type in types]
+    return found
+
+
+def minos_application_public_nested_types(root: Path = ROOT, group_id: str | None = None) -> list[str]:
+    """A11 — the public nested types of MinosApplication outside FACADE_PUBLIC_NESTED_TYPES, whatever they name: their
+    members may be public without saying so. Read from the source; empty when the source is missing
+    (minos_application_accessors fails closed on it)."""
+    code = minos_application_code(root, group_id or repository_group_id(root))
+    if code is None:
+        return []
+    nested = (TYPE_DECLARATION.search(declared.header) for declared in public_declarations(code))
+    return sorted({found.group(1) for found in nested if found} - FACADE_PUBLIC_NESTED_TYPES)
 
 
 def minos_application_engine_wildcard_imports(root: Path = ROOT, group_id: str | None = None) -> list[str]:
@@ -526,7 +603,8 @@ def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = 
     out of the rule). Generic methods and constructors are read too, and a type named in a type parameter bound counts
     as returned and taken; a member is read whatever its annotations, the case of its name and its line breaks, and an
     unreadable header fails. A type brought in by a static import counts like an imported one. MinosApplication has no
-    wildcard import, static or not, of a minos-engine package or type. Comments and literals are ignored."""
+    wildcard import, static or not, of a minos-engine package or type. No public field is typed with a minos-engine type
+    or the composition root, and no nested type other than the Builder is public. Comments and literals are ignored."""
     listed = MINOS_APPLICATION_ENGINE_ACCESSORS if listed is None else listed
     accessors = minos_application_accessors(root, group_id)
     problems = []
@@ -551,6 +629,12 @@ def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = 
     problems += [f"MinosApplication.{name} is public and takes parameter {parameter} of type {engine_type}; keep it "
                  "package-private (tests reach it through MinosApplicationTestAccess)"
                  for name, parameter, engine_type in minos_application_engine_parameters(root, group_id)]
+    problems += [f"MinosApplication.{name} is a public field of type {field_type}; keep it package-private (tests reach "
+                 "it through MinosApplicationTestAccess)"
+                 for name, field_type in minos_application_engine_fields(root, group_id)]
+    problems += [f"MinosApplication.{name} is a public nested type; only {', '.join(sorted(FACADE_PUBLIC_NESTED_TYPES))}"
+                 " may be one, keep it package-private or declare it in its own file"
+                 for name in minos_application_public_nested_types(root, group_id)]
     # The composition root hands out engine ports under an application type: a surface or a contract module would
     # bypass the table.
     for surface in sorted(ENGINE_TYPE_RATCHETED_MODULES):

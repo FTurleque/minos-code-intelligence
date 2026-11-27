@@ -12,8 +12,6 @@ La règle A11 tient la façade `MinosApplication` à zéro type de `minos-engine
 
 La façade déclare au commit `a2988f693` douze champs publics, tous des `String`, et un seul type imbriqué public, `Builder` : la règle reste verte sur le dépôt. Aucun code Java ni aucune sortie publique ne change.
 
-Ce changement est une **spécification** : le garde n'est pas modifié (tâches ouvertes).
-
 ## Capabilities
 
 ### New Capabilities
@@ -38,7 +36,7 @@ Aucune.
 | Champs et types imbriqués publics passent le garde | [Existant vérifié] | sonde sur arbres temporaires, design « État vérifié » |
 | La façade a douze champs publics `String` et un type imbriqué public, `Builder` | [Existant vérifié] | `MinosApplication.java:72-83`, `:461` |
 | La règle couvre champs et types imbriqués publics | [Décision] | propriétaire, 2026-11-27 |
-| Liste fermée des types imbriqués publics plutôt que lecture de leurs membres | [Proposition] | design, D2 |
+| Liste fermée des types imbriqués publics plutôt que lecture de leurs membres | [Décision] | propriétaire, 2026-11-27 ; design, D2 |
 
 ## Impact
 
@@ -52,4 +50,4 @@ Aucune.
 
 ## Questions ouvertes
 
-Aucune bloquante. D2 attend la confirmation du propriétaire, avec une recommandation.
+Aucune.
