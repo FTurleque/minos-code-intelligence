@@ -296,7 +296,36 @@
       "Faible": 11
     },
     "statuts": {
-      "Ouvert": 11
+      "Fermé avec réserve": 9,
+      "Fermé": 2
+    },
+    "fermes": 11
+  },
+  {
+    "numero": 12,
+    "titre": "Reprises de la vérification du 27/11",
+    "pourquoi": "Huit défauts courts révélés par le sprint 11 : des gardes qui laissent passer des formes voisines de ce qu'ils interdisent (méthodes génériques pour A11, clés de somme que mvnw ignore, contrôle d'empreinte déplacé, pin de fins de ligne non gardé) et des chiffres ou renvois restés derrière le code (java-api.md, STATUS, ROADMAP, SUIVI, dossier des frontières). Indépendants entre eux et de gravité Faible.",
+    "sortie": "Chaque garde nouvellement posé rougit sur ses variantes voisines, prouvé par une mutation rouge ; les documents courants citent des chiffres, des noms et des remplaçants exacts au HEAD ; la preuve d'injection des opérations locales exerce le chemin heureux.",
+    "constats": [
+      "AUD-QUA-09",
+      "AUD-ARC-17",
+      "AUD-TST-15",
+      "AUD-ARC-18",
+      "AUD-QUA-10",
+      "AUD-DEP-16",
+      "AUD-DEP-17",
+      "AUD-DEP-18"
+    ],
+    "ordre_interne": [],
+    "charge_jours": [
+      2.0,
+      8
+    ],
+    "composition": {
+      "Faible": 8
+    },
+    "statuts": {
+      "Ouvert": 8
     },
     "fermes": 0
   }

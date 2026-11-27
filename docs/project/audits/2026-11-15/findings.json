@@ -45,6 +45,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -98,6 +104,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -156,6 +168,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -205,6 +223,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -254,6 +278,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé",
         "recontrole": false
       }
@@ -307,6 +337,12 @@
         "head": "75e10c68",
         "statut": "Fermé",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -356,6 +392,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -379,11 +421,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #737, build/epingler-fins-de-ligne-posix (OpenSpec epingler-les-fins-de-ligne-des-scripts-posix, archivé)",
     "verification": {
-      "verdict": "Tient : gitattributes, check-posix-script-eol.py, cmp identiques ; --self-test SUCCESS (13 cas).",
-      "preuve": "Tient : gitattributes, check-posix-script-eol.py, cmp identiques ; --self-test SUCCESS (13 cas). Le script sans dépôt Git échoue rc=1 (copie sans .git) : non rejoué avec git. maven-wrapper.properties change (Maven 3.10.1 -> 3.10.2, URL + distributionSha256Sum renseignés) : empreinte épinglée conservée mais non vérifiée hors réseau.",
-      "reserve": "Pas de mutation rejouée (gate identique à la version du 20/11). Remise à niveau du clone principal et des worktrees du mainteneur : non vérifiable ici (inchangé). État `i/lf` de mvnw.cmd dans l'index du dépôt réel non vérifié (src n'est pas un dépôt git). Voir le nouveau constat : aucun gate ne garde mvnw.cmd en LF dans l'index (copie avec mvnw.cmd `i/crlf` -> check-posix-script-eol rc=0).",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Tient : .gitattributes identique, check-posix-script-eol.py étendu sans retirer de règle, --self-test 16 cas SUCCESS, copie git saine rc=0 (17 scripts).",
+      "preuve": "Tient : .gitattributes identique, check-posix-script-eol.py étendu sans retirer de règle, --self-test 16 cas SUCCESS, copie git saine rc=0 (17 scripts). La réserve « aucun gate ne garde mvnw.cmd en LF dans l'index » est levée par la règle générale d'AUD-DEP-11 (mvnw.cmd i/crlf -> rc=1 rejoué).",
+      "reserve": "Remise à niveau du clone et des worktrees du mainteneur, et i/lf de mvnw.cmd dans le dépôt réel : non vérifiables (src n'est pas un dépôt git) ; seul le dépôt de test reconstruit a été mesuré.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -404,6 +446,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -457,6 +504,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -506,6 +559,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé",
         "recontrole": false
       }
@@ -560,6 +619,12 @@
         "head": "75e10c68",
         "statut": "Fermé",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -583,11 +648,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #812, sprint 10 (archivé 2026-11-24)",
     "verification": {
-      "verdict": "Au 75e10c68 le job sonar (.github/workflows/pr-ci.yml:593-) n'exécute plus aucun code du dépôt : plus de setup-java, ni mvnw, ni script, ni action locale ; SONAR_TOKEN n'est donné qu'à deux étapes (vérification bash inline :630, scanner :714) ; l'analyse est faite par SonarSource/sonarqube-scan-action épinglée par SHA de 40 caractères (:712, v8.5.1, vérification GPG du scanner par défaut) avec host/organisation/projectKey littéraux (:724-726).",
-      "preuve": "Au 75e10c68 le job sonar (.github/workflows/pr-ci.yml:593-) n'exécute plus aucun code du dépôt : plus de setup-java, ni mvnw, ni script, ni action locale ; SONAR_TOKEN n'est donné qu'à deux étapes (vérification bash inline :630, scanner :714) ; l'analyse est faite par SonarSource/sonarqube-scan-action épinglée par SHA de 40 caractères (:712, v8.5.1, vérification GPG du scanner par défaut) avec host/organisation/projectKey littéraux (:724-726). Le checkout PR (:601, persist-credentials false) est lu comme donnée ; une étape refuse tout sonar-project.properties de l'arbre avant l'analyse (:640-650). Trigger pull_request/push/workflow_dispatch seulement (:3-8), aucun pull_request_target ni workflow_run, permissions workflow contents: read (:10-11), pas de GITHUB_ENV/GITHUB_PATH dans pr-ci.yml, pas de cache (setup-java retiré) ; fork PR : pas de secret, l'étape :630 échoue. Gate rejoué : check-workflow-pins.py rc=0 (106 uses, 30 runners) ; 6 mutations sur copie /tmp rouges (rc=1) : SONAR_TOKEN ajouté à un step du job verify, scanner @v8 non épinglé, ./mvnw ajouté au job sonar, action locale ./ ajoutée au job sonar, contrôle sonar-project.properties retiré, host par expression, SONAR_TOKEN dans env: du job ; test_check_workflow_pins.py 108 tests OK (100 au 20/11). La règle est par job, sans liste d'exceptions (SECRET_WITH_REPOSITORY_CODE_KEPT supprimée).",
-      "reserve": "Non mesuré : exécution réelle du job sur GitHub (variable SONAR_CI_ANALYSIS_ENABLED, secret, import des 28 rapports, nombre de rapports/binaires : le contrôle d'import 'Importing N report(s)' a été retiré, remplacé par un décompte de fichiers placés avant scan) ; le SHA 70bad232... = v8.5.1 non vérifiable hors réseau. Résiduel faible : les class files et rapports JaCoCo viennent du job verify qui exécute le code de la PR (artefacts filtrés *.class / jacoco.xml, analysés par le scanner comme données ; un fichier forgé ne porte pas de code exécuté par le job mais cible un parseur ASM/XML) ; la liste d'artefacts n'est pas vérifiée par empreinte ; sonar.java.libraries absent (analyse sans classpath, limite déclarée). Le gate ne refuse que le nom exact sonar-project.properties (cohérent avec ce que lit le scanner). Les 13 workflows 'uses: ./' restants sont des workflows réutilisables sans secret.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Inchangé : .github/workflows/pr-ci.yml identique (job sonar sans exécution de code du dépôt) ; check-workflow-pins rc=0.",
+      "preuve": "Inchangé : .github/workflows/pr-ci.yml identique (job sonar sans exécution de code du dépôt) ; check-workflow-pins rc=0.",
+      "reserve": "Réserves du 25/11 inchangées.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -608,6 +673,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -632,11 +702,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #751, borner-la-qualification-docker-aux-pr-concernees (archivé le 2026-11-19) ; PR #767 (AUD-DEP-08)",
     "verification": {
-      "verdict": "Inchangé : la règle secret/code de PR est devenue plus stricte (par job, sans exception : scripts/quality/check-workflow-pins.py find_secret_violations, remplace SECRET_WITH_REPOSITORY_CODE_KEPT).",
-      "preuve": "Inchangé : la règle secret/code de PR est devenue plus stricte (par job, sans exception : scripts/quality/check-workflow-pins.py find_secret_violations, remplace SECRET_WITH_REPOSITORY_CODE_KEPT). .claude/rules/workflows-ci.md:17 est mis à jour de façon cohérente avec le code (règle par job, SONAR_TOKEN, sonar-project.properties). Les workflows modifiés ne changent ni permissions ni triggers (diff : uniquement setup-java) ; aucun pull_request_target.",
-      "reserve": "Les tâches 3.1/3.2/1.1 notées non faites au 20/11 ne sont pas réexaminées ici (secrets Dependabot : le message de l'étape :634 le rappelle toujours). Inchangées : DOCKER_LOGIN_KEPT non réévalué (tâche 3.1), pas de secrets Dependabot Docker Hub (3.2), durées non relevées (1.1). Le SUIVI.md (sprint 10) ne les reprend pas.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Inchangé : .github/ est identique entre les deux commits (diff -r vide) ; check-workflow-pins.py rc=0 (external uses=106) et ses 108 tests OK ; aucun pull_request_target.",
+      "preuve": "Inchangé : .github/ est identique entre les deux commits (diff -r vide) ; check-workflow-pins.py rc=0 (external uses=106) et ses 108 tests OK ; aucun pull_request_target.",
+      "reserve": "Réserves du 25/11 (secrets Dependabot, DOCKER_LOGIN_KEPT) inchangées.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -658,6 +728,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -682,11 +757,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #748, solder-les-restes-de-java-25-et-de-develop (archivé)",
     "verification": {
-      "verdict": "Aucune ligne `java-version` hors '21' dans .github/workflows (grep -vc = 0) ; pom.xml:207 `[21,22)` ; check-toolchain-baseline SUCCESS (gradle=9.9.2, java=21) et ses 47 tests OK.",
-      "preuve": "Aucune ligne `java-version` hors '21' dans .github/workflows (grep -vc = 0) ; pom.xml:207 `[21,22)` ; check-toolchain-baseline SUCCESS (gradle=9.9.2, java=21) et ses 47 tests OK. Les montées Temurin passent de 21.0.13_9 à 21.0.13.1_2 : même majeure 21, `FROM eclipse-temurin:21…` garde la règle 6 du gate ; dependabot.yml:65-67 ignore toujours la majeure d'eclipse-temurin.",
-      "reserve": "STATUS.md:47 écrit toujours « Reste à faire : le retrait de l'installation de Java 24 dans les deux workflows de qualification A → B » alors qu'aucun workflow n'installe d'autre Java que 21 (phrase fausse, inchangée). Journal d'une qualification A -> B sans JDK 25 (1.4) non rejouable ici.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Baseline inchangée : pom.xml:44 release 21, :207-208 `[21,22)` et `[3.9,4.0)`, Gradle 9.9.2 (gradle-wrapper.properties:4, AGENTS.md:16), IntelliJ 2026.1 (TOOLCHAIN_POLICY.md:22) ; toutes les lignes java-version des workflows sont '21' ; check-toolchain-baseline rc=0 (gradle=9.9.2, java=21).",
+      "preuve": "Baseline inchangée : pom.xml:44 release 21, :207-208 `[21,22)` et `[3.9,4.0)`, Gradle 9.9.2 (gradle-wrapper.properties:4, AGENTS.md:16), IntelliJ 2026.1 (TOOLCHAIN_POLICY.md:22) ; toutes les lignes java-version des workflows sont '21' ; check-toolchain-baseline rc=0 (gradle=9.9.2, java=21).",
+      "reserve": "NON corrigé : STATUS.md:47 écrit encore « Reste à faire : le retrait de l'installation de Java 24 dans les deux workflows de qualification A → B » alors qu'aucun workflow n'installe Java 24 (grep java-version : 13 workflows, tous '21'). Phrase fausse, inchangée depuis le 25/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -708,6 +783,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -732,11 +812,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #748, solder-les-restes-de-java-25-et-de-develop (archivé)",
     "verification": {
-      "verdict": "Tous les workflows ne déclarent que `branches: [main]` (grep `branches:` hors [main] = 0), dependabot.yml : 5 × target-branch main (identique), required-checks.json inchangé.",
-      "preuve": "Tous les workflows ne déclarent que `branches: [main]` (grep `branches:` hors [main] = 0), dependabot.yml : 5 × target-branch main (identique), required-checks.json inchangé. STATUS.md:15 écrit désormais « ruleset « Protect main » » (plus « main & develop ») ; R-25 est Clos (risks/register.md:42) ; check-current-docs.py SUCCESS. Les mentions restantes de `develop` dans STATUS/ROADMAP sont historiques (sprints fusionnés « dans develop »).",
-      "reserve": "docs/project/roadmap/storage-hexagonal-2026-10/README.md:7 « Partir de la tête à jour de develop, pas de main » et :113 identiques (cmp) au 20/11. `verify-ruleset.py` contre GitHub et la suppression de la branche distante non vérifiables ici (SUIVI affirme rc=0 le 2026-11-19).",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Aucun workflow ni dependabot.yml ne change (.github identique) ; mêmes `branches: [main]`.",
+      "preuve": "Aucun workflow ni dependabot.yml ne change (.github identique) ; mêmes `branches: [main]`.",
+      "reserve": "NON corrigé : docs/project/roadmap/storage-hexagonal-2026-10/README.md:7 (« Partir de la tête à jour de `develop`, pas de main ») et :113 (« PR vers develop ») sont inchangés ; :123 écrit en outre « Java 24/Maven 3.9 selon politique courante » alors que la baseline est Java 21. Le document est une roadmap de chantier, hors liste des gates documentaires.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -757,6 +837,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -781,11 +866,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #750, aligner-les-compose-sur-l-absence-de-provider-en-docker (archivé)",
     "verification": {
-      "verdict": "Inchangé sur le fond au 75e10c68 : docker/compose-mcp.prod.yaml et compose-mcp.connected.yaml identiques (cmp) à 535a5017, commentaires « indexing is refused here (SEC-0074), no provider runs » (prod.yaml:71, connected.yaml:177), `grep 'launch the providers' docker/` -> 0 ; scip-java-classpath.lock.json identique (cmp).",
-      "preuve": "Inchangé sur le fond au 75e10c68 : docker/compose-mcp.prod.yaml et compose-mcp.connected.yaml identiques (cmp) à 535a5017, commentaires « indexing is refused here (SEC-0074), no provider runs » (prod.yaml:71, connected.yaml:177), `grep 'launch the providers' docker/` -> 0 ; scip-java-classpath.lock.json identique (cmp). L'image admin garde toolchains et scip-java avec la raison écrite (Dockerfile.mcp.release:272-275, R-13) ; le diff n'y ajoute que le préchargement `until cs fetch` borné à 5 essais, exit 1 au dernier (:282-290), et ARG SCIP_JAVA_VERSION=0.13.2 est inchangé (:89). Les trois FROM temurin jdk/jre portent tag 21.0.13.1_2 + digest identiques entre Dockerfile.mcp et Dockerfile.mcp.release (:26, :37, :73) ; check-image-pins rc=0.",
-      "reserve": "Le préchargement `cs fetch` ne vérifie aucune empreinte : le graphe transitif de scip-java reste hors verrou (R-13, assumé et écrit). Messages d'assertion de M29DockerAdministrationContractTest.java:52,55,64 toujours « ephemeral indexing » / « admin/indexing » (messages seulement). Plan d'administration non relu dans un journal de qualification (1.3, non rejouable ici). Aucun build Docker possible ici (pas de démon) : le comportement de la boucle `cs fetch` n'est pas mesuré.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Inchangé : docker/ est identique entre 75e10c68 et 4f4cac81 (diff -r --strip-trailing-cr vide), donc compose-mcp.prod.yaml, compose-mcp.connected.yaml, Dockerfile.mcp.release et les verrous ne bougent pas ; check-compose-limits.py rc=0, check-image-pins.py rc=0 (4 fichiers), sync-tools-manifest.py rc=0.",
+      "preuve": "Inchangé : docker/ est identique entre 75e10c68 et 4f4cac81 (diff -r --strip-trailing-cr vide), donc compose-mcp.prod.yaml, compose-mcp.connected.yaml, Dockerfile.mcp.release et les verrous ne bougent pas ; check-compose-limits.py rc=0, check-image-pins.py rc=0 (4 fichiers), sync-tools-manifest.py rc=0.",
+      "reserve": "Réserves du 25/11 inchangées.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -807,6 +892,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -831,11 +921,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #757 (OpenSpec tracer-les-echecs-internes-des-surfaces) ; PR #762 (explorateur) ; ADR SEC-0084 (Accepted)",
     "verification": {
-      "verdict": "check-private-io.py modifié par #804 : seul changement fonctionnel, la fin de main() passe par gate_runner.run_gate(label, run_checks) (check-private-io.py:540-556, gate_runner.py:17-28) ; diff avec acd79cb8 limité à cette extraction.",
-      "preuve": "check-private-io.py modifié par #804 : seul changement fonctionnel, la fin de main() passe par gate_runner.run_gate(label, run_checks) (check-private-io.py:540-556, gate_runner.py:17-28) ; diff avec acd79cb8 limité à cette extraction. Copie saine : rc=0 « SUCCESS (sources=708, allowlisted-occurrences=54, forbidden=21, primitives=4) », identique à la sortie du 19/11 ; `--inventory` produit le même md5 qu'avant ; argument inconnu -> rc=1 ; test_check_private_io.py 62 OK dont test_main_reports_failure_and_success (:670-676, rc 1 puis 0). Mutations dans minos-application : Files.writeString -> rc=1 « not in the allowlist » ; exception construite avec p.toAbsolutePath() -> rc=1 « message(Path) » ; FileChannel.open/lock -> rc=1.",
-      "reserve": "Réserve du 19/11 inchangée (journal opt-in, non supporté en Docker ni dans la distribution WSL, ADR SEC-0084:82-84 ; CLI limitée au cadre commun ; tâche 5.4 sur distribution WSL non faite). gate_runner.py n'a pas d'auto-test propre : il n'est exercé qu'au travers de main() des deux gardes. Tests Java non exécutés.",
-      "date": "2026-11-20",
-      "head": "535a5017"
+      "verdict": "check-private-io.py, gate_runner.py et leurs tests non modifiés entre 75e10c68 et 4f4cac81 (absents de diff-names ; gate_runner.py identique, check-private-io.py identique hors fins de ligne CRLF/LF) ; copie saine : check-private-io.py rc=0 « SUCCESS (sources=708, allowlisted-occurrences=54, forbidden=21, primitives=4) » identique au 20/11 ; test_check_private_io.py 62 OK ; test_gate_runner.py 3 OK (rc=0).",
+      "preuve": "check-private-io.py, gate_runner.py et leurs tests non modifiés entre 75e10c68 et 4f4cac81 (absents de diff-names ; gate_runner.py identique, check-private-io.py identique hors fins de ligne CRLF/LF) ; copie saine : check-private-io.py rc=0 « SUCCESS (sources=708, allowlisted-occurrences=54, forbidden=21, primitives=4) » identique au 20/11 ; test_check_private_io.py 62 OK ; test_gate_runner.py 3 OK (rc=0).",
+      "reserve": "Réserve du 20/11 inchangée (journal opt-in, non supporté en Docker ni en distribution WSL ; tâche 5.4 non faite). gate_runner.py a maintenant son auto-test (pr-ci.yml:179-180). Tests Java non exécutés.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -858,6 +948,11 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ]
   },
@@ -910,6 +1005,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -933,11 +1034,11 @@
     "statut": "Fermé",
     "changement": "PR #762 (OpenSpec fiabiliser-la-surface-de-l-explorateur, archivé)",
     "verification": {
-      "verdict": "Tient : ExplorerServer, docker/compose-mcp.connected.yaml identiques ; check-compose-limits.py rc=0.",
-      "preuve": "Tient : ExplorerServer, docker/compose-mcp.connected.yaml identiques ; check-compose-limits.py rc=0.",
+      "verdict": "Tient : ExplorerServer.java et docker/compose-mcp.connected.yaml identiques ; check-compose-limits.py rc=0 (2 fichiers).",
+      "preuve": "Tient : ExplorerServer.java et docker/compose-mcp.connected.yaml identiques ; check-compose-limits.py rc=0 (2 fichiers).",
       "reserve": "Pas de mutation rejouée.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -958,6 +1059,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé"
       }
     ]
@@ -1010,6 +1116,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1058,6 +1170,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé",
         "recontrole": false
       }
@@ -1113,6 +1231,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1166,6 +1290,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1216,6 +1346,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve",
         "recontrole": false
       }
@@ -1272,6 +1408,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1320,6 +1462,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve",
         "recontrole": false
       }
@@ -1371,6 +1519,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve",
         "recontrole": false
       }
@@ -1425,6 +1579,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1474,6 +1634,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve",
         "recontrole": false
       }
@@ -1527,6 +1693,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1578,6 +1750,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1627,6 +1805,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé",
         "recontrole": false
       }
@@ -1681,6 +1865,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1730,6 +1920,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve",
         "recontrole": false
       }
@@ -1784,6 +1980,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1833,6 +2035,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -1859,11 +2067,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #816, sprint 10, ARCH-0087 Accepted (archivé 2026-11-24)",
     "verification": {
-      "verdict": "Compilé avec javac 21 (domain+engine+application, Jackson du cache Gradle, rc=0) puis javap -public aux deux commits : MinosApplication passe de 41 à 25 méthodes publiques d'instance ; compositionRoot() et les 15 accesseurs typés moteur (+ invalidationService, incrementalIndexingPlanner, indexerRegistry) sont package-private ou supprimés (MinosApplication.java:272-293, :295 private) ; plus aucun type de retour de minos-engine ni MinosApplicationComposer.",
-      "preuve": "Compilé avec javac 21 (domain+engine+application, Jackson du cache Gradle, rc=0) puis javap -public aux deux commits : MinosApplication passe de 41 à 25 méthodes publiques d'instance ; compositionRoot() et les 15 accesseurs typés moteur (+ invalidationService, incrementalIndexingPlanner, indexerRegistry) sont package-private ou supprimés (MinosApplication.java:272-293, :295 private) ; plus aucun type de retour de minos-engine ni MinosApplicationComposer. Aucun appel de production hors package : rg des 16 noms sur */src/main -> seuls ProviderPlatformService.java:37 (même package) et MinosApplication.java:414 (this::indexerRegistry) ; ProjectIndexingUseCase/RemoteIndexingUseCase ne lisent plus que dependencies.xxx() (:183-197, :83). Test-jar : minos-application/pom.xml:44-63 (includes = MinosApplicationTestAccess.class seul), 7 modules le déclarent en <scope>test</scope> (lecture XML de tous les pom), minos-app/pom.xml:26 (test), :79 (propriétés des 3 jars pour l'IT) ; ApplicationTestAccessPackagingIT.java:28-48 affirme la classe présente dans le test-jar, absente du jar du module et du fat jar. Garde A11/A2 (rouge avant vert, copies /tmp/facade-verif) : copie saine rc=0 (« A11 … 0 public accessor(s) »), accesseur re-publié public ProjectRegistry projectRegistry() -> rc=1, compositionRoot() public -> rc=1, test-jar de minos-cli en portée compile -> rc=1 (check-module-boundaries.py:148-162), classe de minos-cli appelant compositionRoot() -> rc=1 ; sortie du garde identique à audit4 sauf la ligne A11 (15 -> 0). ARCH-0087 : Statut Accepted (:10), README index :92 = Accepted, arc42/09-decisions.md:60 = Accepted ; sections 2.2 et 2.3, Do/Don't, Compliance cohérentes avec le code (noms de tests et de fonctions du garde tous trouvés). Rupture annoncée : unreleased.md:28-37 et java-api.md:350-374 (16 méthodes listées = 16 retirées).",
-      "reserve": "(1) Signature publique encore ouverte au moteur : MinosApplication.java:359 projectIndexing(UnaryOperator<IndexerExecutor>) (IndexerExecutor est dans minos-engine) ; A11 ne lit que les types de retour (module_boundary_ratchets.py:166-199), voir nouveau constat 1. (2) Le report du 2026-11-19 reste dans la prose : SUIVI.md:7 (« … et le groupe 4 d'injecter-…, reporté »), .claude/agent-memory/archgate-developer/project_audit_2026_11_15_clos.md:20-21 (« ARCH-0087 reste Proposed »), Javadoc MinosApplication.java:66 « composition root » ; la ligne README :92 omet le 3e changement OpenSpec (voir nouveau constat 3). (3) Non mesuré : build Maven, tests Java, IT d'empaquetage, contenu réel du fat jar. (4) Décompte du suivi : 217 appels dans 56 fichiers mesurés vs « 216 / 54 » (SUIVI.md:157), écart mineur.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Non-régression : javap -public des deux commits, méthodes publiques d'instance de MinosApplication hors constructeur : 25 au 75e10c68, 24 au 4f4cac81 (la différence est projectIndexing(UnaryOperator), devenu package-private).",
+      "preuve": "Non-régression : javap -public des deux commits, méthodes publiques d'instance de MinosApplication hors constructeur : 25 au 75e10c68, 24 au 4f4cac81 (la différence est projectIndexing(UnaryOperator), devenu package-private). compositionRoot() reste package-private (MinosApplication.java:273) ; aucun type de com.minos.orchestration ni moteur en retour public ; l'accesseur public restant semanticVectorStore() est un type de com.minos.semantic comme avant. Gate rc=0 sur 4f4cac81, sortie identique ligne à ligne à celle de 75e10c68 (diff vide), « A11 ... 0 public accessor(s) ». Test-jar toujours en portée test (check_application_test_jar_scope inchangé).",
+      "reserve": "Réserve du 25/11 inchangée en nature ; voir ARC-13 pour la couverture de A11 (génériques, Builder, services).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -1884,6 +2092,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -1911,11 +2124,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #785, changement OpenSpec cabler-les-adaptateurs-embarques-par-la-racine-de-composition (archivé 2026-11-19)",
     "verification": {
-      "verdict": "Non-régression : la sortie du garde est identique ligne à ligne entre audit4 (535a5017) et audit5 (75e10c68) sauf la ligne A11 (15 -> 0) : « A19 embedded adapters: 10 file(s) … 17 class(es) listed in EMBEDDED_ADAPTER_CLASSES », A20, A13, A15, A16 inchangées ; module-boundaries.json et module_boundary_adapters.py ne figurent pas dans diff-names.",
-      "preuve": "Non-régression : la sortie du garde est identique ligne à ligne entre audit4 (535a5017) et audit5 (75e10c68) sauf la ligne A11 (15 -> 0) : « A19 embedded adapters: 10 file(s) … 17 class(es) listed in EMBEDDED_ADAPTER_CLASSES », A20, A13, A15, A16 inchangées ; module-boundaries.json et module_boundary_adapters.py ne figurent pas dans diff-names. Les 77 auto-tests de test_check_module_boundaries_ratchets.py et les 86 de test_check_module_boundaries_adapters.py (dont EmbeddedAdapterRuleTest) passent sur la copie saine.",
-      "reserve": "Réserve inchangée : les 17 classes restent physiquement dans minos-application (cible conditionnelle ARCH-0087 § 1.4). L'ancienne réserve « ARCH-0087 Proposed » est levée (Accepted, ARCH-0087…md:10).",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Non-régression : sortie du garde identique ligne à ligne entre 75e10c68 et 4f4cac81 (diff vide) : « A19 embedded adapters: 10 file(s) .",
+      "preuve": "Non-régression : sortie du garde identique ligne à ligne entre 75e10c68 et 4f4cac81 (diff vide) : « A19 embedded adapters: 10 file(s) ... 17 class(es) listed in EMBEDDED_ADAPTER_CLASSES », A20 8 classes, A13, A15, A16 inchangées ; module-boundaries.json et module_boundary_adapters.py hors de diff-names.txt. Les 3 fichiers d'auto-tests rejoués passent.",
+      "reserve": "Inchangée.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -1936,6 +2149,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -1985,6 +2203,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé",
         "recontrole": false
       }
@@ -2037,6 +2261,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -2087,6 +2317,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -2137,6 +2373,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -2188,6 +2430,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -2240,6 +2488,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé",
+        "recontrole": false
       }
     ]
   },
@@ -2290,6 +2544,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -2342,6 +2602,12 @@
         "head": "75e10c68",
         "statut": "Fermé avec réserve",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ]
   },
@@ -2369,11 +2635,11 @@
     "statut": "Fermé avec réserve",
     "changement": "PR #792, changement OpenSpec aligner-la-prose-d-architecture-sur-le-code (archivé 2026-11-19)",
     "verification": {
-      "verdict": "Mutation rejouée : racine `com/minos/io/` retirée de la ligne Sources de minos-engine (arc42/05-vue-blocs.md:63) -> rc=1 « its 'Sources' line omits the package root(s) io » ; copie restaurée -> rc=0 (diff -r avec la source vide hors __pycache__).",
-      "preuve": "Mutation rejouée : racine `com/minos/io/` retirée de la ligne Sources de minos-engine (arc42/05-vue-blocs.md:63) -> rc=1 « its 'Sources' line omits the package root(s) io » ; copie restaurée -> rc=0 (diff -r avec la source vide hors __pycache__). A9 inchangée, le garde reste vert avec la prose modifiée par le sprint 10.",
-      "reserve": "Réserve du 20/11 inchangée (route explorateur de minos-app en prose non gardée).",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Mutation rejouée sur copie de 4f4cac81 : racine com/minos/io/ de la ligne Sources de minos-engine retirée de arc42/05-vue-blocs.md -> garde rc=1 « A9 … minos-engine: its 'Sources' line omits the package root(s) io » ; copie restaurée -> rc=0.",
+      "preuve": "Mutation rejouée sur copie de 4f4cac81 : racine com/minos/io/ de la ligne Sources de minos-engine retirée de arc42/05-vue-blocs.md -> garde rc=1 « A9 … minos-engine: its 'Sources' line omits the package root(s) io » ; copie restaurée -> rc=0. La sortie A9 est inchangée (14 module sections match the POM dependencies, A9 non modifiée par les 32 commits : module_boundary_documents.py absent de diff-names).",
+      "reserve": "Réserve du 20/11 inchangée (route explorateur de minos-app en prose, non gardée). Maven/ArchUnit non exécutés.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2394,6 +2660,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve"
       }
     ]
@@ -2418,11 +2689,11 @@
     "statut": "Info",
     "changement": "PR #779-#788, #791 (sprints 7-8) ; rejeu des gardes",
     "verification": {
-      "verdict": "Tient au 535a5017 : garde rc=0 (14 modules, 678 sources, A3 73 packages, A8 0 cycle connu), 308 auto-tests OK sur 5 fichiers (66+86+44+38+74), contre 304 au 19/11 ; gate de la copie saine identique octet pour octet à celui d'acd79cb8.",
-      "preuve": "Tient au 535a5017 : garde rc=0 (14 modules, 678 sources, A3 73 packages, A8 0 cycle connu), 308 auto-tests OK sur 5 fichiers (66+86+44+38+74), contre 304 au 19/11 ; gate de la copie saine identique octet pour octet à celui d'acd79cb8. Mutations : import de com.minos.runtime.local.wsl.WslCheck dans minos-provider-scip -> rc=1 (A13) ; import de com.minos.application.MinosApplication dans minos-domain -> rc=1 (A8, cycle hors KNOWN_PACKAGE_CYCLES). minos-explorer/pom.xml n'a pas changé (hors liste diff-names).",
-      "reserve": "Précision, non-régression : élargir allowedDependencies du JSON (minos-explorer -> minos-mcp) avec ou sans import correspondant reste vert côté Python tant que le POM ne déclare pas l'arête (identique à acd79cb8) ; le garde borne les POM par le plafond, il ne contrôle pas le plafond ; la règle de famille A2 échoue dès que le POM porte l'arête. ArchUnit/Maven non exécutés. La nature du constat Info tient, mais le câblage de main() est moins gardé qu'annoncé : voir le nouveau constat « main() du garde de frontières ». Les 308 tests sont le total de 5 fichiers (ratio non comparable à 252/304 d'un seul fichier).",
-      "date": "2026-11-20",
-      "head": "535a5017"
+      "verdict": "Tient au 4f4cac81 : garde rc=0 (14 modules, 678 sources, A9 14 sections), sortie identique octet pour octet à celle de 75e10c68 ; 335 auto-tests OK sur 6 fichiers contre 317 (comptes non comparables aux 252/304/308 d'un autre périmètre).",
+      "preuve": "Tient au 4f4cac81 : garde rc=0 (14 modules, 678 sources, A9 14 sections), sortie identique octet pour octet à celle de 75e10c68 ; 335 auto-tests OK sur 6 fichiers contre 317 (comptes non comparables aux 252/304/308 d'un autre périmètre). Mutation : import de com.minos.runtime.local.wsl.WslCheck dans un fichier de minos-provider-scip -> rc=1 (A13, minos-provider-scip -> minos-runtime-local). Garde rc=0 au HEAD (`modules=14, sources=678`, A15 : 12 entrées, A11 : minos-api=3, minos-cli=4, minos-mcp=1, explorer=0, nexus=0, A8 sans cycle connu) ; 332 auto-tests sur les cinq fichiers (77+86+50+38+81) contre 314 au 25/11 (69+86+44+38+77), tous OK ; fichiers modifiés = scripts du garde, MinosApplication et classes `Local*`, aucune arête de module ajoutée. `ModuleArchitectureTest` gagne un test (`:332`), non exécuté.",
+      "reserve": "Précision inchangée : allowedDependencies borne les POM mais n'est pas lui-même contrôlé ; ArchUnit/Maven non exécutés.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2445,6 +2716,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2468,11 +2744,11 @@
     "statut": "Info",
     "changement": "PR #795 (fetch-verified.sh, repli Apache dans Dockerfile.mcp.release), Dependabot #752-#756",
     "verification": {
-      "verdict": "Toutes les lignes uses: de .github/workflows/*.yml sont épinglées par SHA de 40 caractères (grep des non-conformes : seuls 4 appels 'uses: ./.github/workflows/*.yml' de workflows réutilisables locaux, hors périmètre) ; check-workflow-pins.py rc=0 (external uses=106).",
-      "preuve": "Toutes les lignes uses: de .github/workflows/*.yml sont épinglées par SHA de 40 caractères (grep des non-conformes : seuls 4 appels 'uses: ./.github/workflows/*.yml' de workflows réutilisables locaux, hors périmètre) ; check-workflow-pins.py rc=0 (external uses=106). Les 13 workflows diffèrent uniquement par setup-java 77dd5b2c... (v6.2.0) -> d1374f8ac74474200d16ef8ecee22c7ae7a51880 (v6.3.0) ; pr-ci.yml ajoute en plus upload-artifact/download-artifact (déjà utilisés, mêmes SHA cf430e03 v7.0.2 / 9000827c v8.2.0) et sonarqube-scan-action 70bad232...",
-      "reserve": "Correspondance SHA <-> version annoncée en commentaire non vérifiable sans réseau (setup-java v6.3.0, scan-action v8.5.1). Nuance : « sommes SHA-256 des wrappers » tient par présence des lignes (maven-wrapper.properties:4, gradle-wrapper.properties:3), mais aucun gate ne l'exige (voir nouveau constat). Correspondance SHA <-> tag des actions et digests d'images non vérifiable hors ligne. DOCKERHUB_USERNAME reste lu au niveau du job verify (pr-ci.yml:352), identifiant seul, autorisé par le gate.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Tient : .github/workflows/ identique, 106 usages externes épinglés par SHA, check-workflow-pins.py rc=0 et 108 tests OK.",
+      "preuve": "Tient : .github/workflows/ identique, 106 usages externes épinglés par SHA, check-workflow-pins.py rc=0 et 108 tests OK. `check-workflow-pins.py` rc=0 (external uses=106, runs-on=30), `check-image-pins.py`, `check-toolchain-baseline.py`, `check-ci-wiring.py`, `check-single-execution.py`, `check-compose-limits.py`, `check-tools-manifest.py` rc=0 sur la copie ; `.github/` identique à 75e10c68 (diff -rq) ; `pull_request_target` n'apparaît que dans un commentaire (`release-promotion-gate.yml:23`) ; 28 `persist-credentials: false` ; sommes de wrapper désormais exigées par la règle 13 ; six archives de l'image vérifiées par le gate.",
+      "reserve": "Correspondance SHA/version non rejouée (proxy sans accès GitHub). Le décompte « 104 » du constat est devenu 106 (workflows inchangés depuis la vérification précédente à 106) : écart de décompte, pas de régression.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2493,6 +2769,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Info"
       }
     ]
@@ -2517,11 +2798,11 @@
     "statut": "Info",
     "changement": "PR #781 (libellés français dans app.js)",
     "verification": {
-      "verdict": "Tient : bornes de pages et de voisins minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java:41-42 (200), balayage filtré :48 (2 000), borne stableKey :44 ; le diff du service ne les touche pas.",
-      "preuve": "Tient : bornes de pages et de voisins minos-application/src/main/java/com/minos/application/semantic/SemanticCorpusQueryService.java:41-42 (200), balayage filtré :48 (2 000), borne stableKey :44 ; le diff du service ne les touche pas. Front inchangé : app.js 21 886, map.js 17 285, index.html 4 346, app.css 4 930 octets (wc -c, 48 447 au total), identique à acd79cb8. ExplorerServer.java identique (cmp), FileSemanticVectorStore et PostgresSemanticReadQueries hors diff.",
-      "reserve": "Le temps d'une page avant/après n'est pas mesuré (tâche 1.4 de l'archive liberer-la-table-de-symboles-avec-sa-vue restée [ ] ; le suivi le dit).",
-      "date": "2026-11-20",
-      "head": "535a5017"
+      "verdict": "Aucun fichier de minos-explorer, minos-storage ni de la projection dans les 99 fichiers modifiés (`diff-names.txt` : 0 occurrence) : les constats de bornes restent ceux relus le 25/11.",
+      "preuve": "Aucun fichier de minos-explorer, minos-storage ni de la projection dans les 99 fichiers modifiés (`diff-names.txt` : 0 occurrence) : les constats de bornes restent ceux relus le 25/11.",
+      "reserve": "Non relu ligne à ligne : tient par absence de changement.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2544,6 +2825,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2567,11 +2853,11 @@
     "statut": "Info",
     "changement": "PR #784 (codec découpé), #786, rejeu des comptages",
     "verification": {
-      "verdict": "Recomptage au 535a5017 : TODO|FIXME|XXX|HACK en production -> 0 ; printStackTrace -> 0 ; @SuppressWarnings en production -> 4 (tous deprecation) ; NOSONAR -> 6 lignes (ProjectGitQuery.java:19 javadoc, :24, :26 ; ScipSymbolSnapshotImporter.java:169 ; DistributedArtifactBundleStore.java:207 ; SemanticCorpusQueryService.java:441 déplacée depuis :453) ; catch vides -> 38, non commentés 0 (même regex qu'au 19/11) ; les 8 nouveaux scripts Python de scripts/architecture n'ont ni `except:` nu, ni `except Exception: pass`, ni shell=True.",
-      "preuve": "Recomptage au 535a5017 : TODO|FIXME|XXX|HACK en production -> 0 ; printStackTrace -> 0 ; @SuppressWarnings en production -> 4 (tous deprecation) ; NOSONAR -> 6 lignes (ProjectGitQuery.java:19 javadoc, :24, :26 ; ScipSymbolSnapshotImporter.java:169 ; DistributedArtifactBundleStore.java:207 ; SemanticCorpusQueryService.java:441 déplacée depuis :453) ; catch vides -> 38, non commentés 0 (même regex qu'au 19/11) ; les 8 nouveaux scripts Python de scripts/architecture n'ont ni `except:` nu, ni `except Exception: pass`, ni shell=True. RemoteCloneBudget.java n'ajoute ni catch vide ni NOSONAR.",
-      "reserve": "Duplication et méthodes de plus de 80 lignes non recomptées (aucun outil de mesure ici). Non recomptés : catch vides (41), méthodes de plus de 80 lignes, duplication. Les 2 fichiers Java de production modifiés (SemanticCorpusQueryService, RemoteCloneBudget) ne sont pas mesurés pour la longueur de méthode (essai de script abandonné). Le chiffre « 4 NOSONAR nominatifs » est à lire comme 5 marqueurs + 1 javadoc.",
-      "date": "2026-11-20",
-      "head": "535a5017"
+      "verdict": "Production : 0 TODO|FIXME|XXX|HACK, 0 printStackTrace, 6 NOSONAR (identique à 75e10c68).",
+      "preuve": "Production : 0 TODO|FIXME|XXX|HACK, 0 printStackTrace, 6 NOSONAR (identique à 75e10c68). Le diff des fichiers main modifiés (minos-application, minos-app, minos-cli) n'ajoute ni `catch`, ni `System.out/err`, ni `@SuppressWarnings`, ni `NOSONAR` ; les scripts Python modifiés n'ajoutent ni `except:` nu, ni `except Exception: pass`, ni `shell=True`.",
+      "reserve": "Catch vides (41) et catch larges (85) non recomptés.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2594,6 +2880,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2617,11 +2908,11 @@
     "statut": "Info",
     "changement": "PR #781 (codes d'erreur fermés, libellés français), #788",
     "verification": {
-      "verdict": "Tient : ListeningPolicy, RequestGuard, SessionToken, WebResources, JsonObjectReader inchangés depuis 182ae1df ; CSP identique ; ExplorerServer ne change que le type des codes d'erreur (enum ExplorerErrorCode) ; app.js n'affiche plus que des libellés choisis par code, sans puits HTML ; refus du mode équipe conservé dans la session.",
-      "preuve": "diff -q des 5 classes -> identiques ; ExplorerServer.java:57-59 (CSP) ; diff ExplorerServer.java : seulement \"CODE\" -> ExplorerErrorCode.CODE (l.289-363) ; grep innerHTML|outerHTML|insertAdjacentHTML|eval(|document.write web/*.js -> 0 ; ExplorerSession.java:71-73 (teamControlPlane -> TEAM_MODE_REFUSED) ; check-explorer-front.py OK dans run_gates",
-      "reserve": null,
-      "date": "2026-11-19",
-      "head": "acd79cb8"
+      "verdict": "`minos-explorer` absent du diff (0 fichier) : ListeningPolicy, RequestGuard, SessionToken, ExplorerServer inchangés depuis la vérification précédente.",
+      "preuve": "`minos-explorer` absent du diff (0 fichier) : ListeningPolicy, RequestGuard, SessionToken, ExplorerServer inchangés depuis la vérification précédente.",
+      "reserve": "Tient par absence de changement.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2645,6 +2936,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2668,11 +2964,11 @@
     "statut": "Info",
     "changement": "PR #777 (taille du scratch PostgreSQL paramétrable), Dependabot pgvector",
     "verification": {
-      "verdict": "Tient : écoute conteneur, réseaux et publication 127.0.0.1 inchangés ; seules évolutions du compose : taille du tmpfs scratch (MINOS_MCP_SCRATCH_SIZE, validée par mcp-lifecycle.ps1) et digest pgvector.",
-      "preuve": "docker/compose-mcp.connected.yaml:138 MINOS_EXPLORER_CONTAINER_LISTEN: enabled, :154 networks [minos-runtime, minos-explorer-ingress], :158 `127.0.0.1:${MINOS_EXPLORER_PORT:-8765}:...`, :561 réseau ingress ; docs/user/docker-runtime.md:404,407 (limites documentées) ; diff compose 182ae1df..HEAD -> l.96-99, 163, 359, 524-536 uniquement",
-      "reserve": null,
-      "date": "2026-11-19",
-      "head": "acd79cb8"
+      "verdict": "`docker/compose-mcp.connected.yaml` et `docker/scripts` absents du diff : écoute conteneur, réseaux et publication 127.0.0.1 inchangés.",
+      "preuve": "`docker/compose-mcp.connected.yaml` et `docker/scripts` absents du diff : écoute conteneur, réseaux et publication 127.0.0.1 inchangés.",
+      "reserve": "Tient par absence de changement.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2696,6 +2992,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2719,11 +3020,11 @@
     "statut": "Info",
     "changement": "PR #772 (AUD-PERF-07 : empreinte de provenance réutilisée, copie hachée au vol)",
     "verification": {
-      "verdict": "Tient : seul WslIndexerExecutor change dans le package wsl. La provenance reste vérifiée (WslArtifactProvenance.verify) après acceptation par le magasin vérifié ; la copie est désormais hachée pendant l'écriture dans un fichier créé exclusivement sous un dossier privé, taille et SHA-256 recontrôlés. L'empreinte de provenance peut venir de l'empreinte de référence du run (validée [0-9a-f]{64}). La réserve d'origine (java du PATH de la distribution, SEC-0079) demeure.",
-      "preuve": "diff -q minos-runtime-local/.../wsl/*.java -> seul WslIndexerExecutor.java change ; WslIndexerExecutor.java:92,99-102 (accept, manifeste, provenance), :118-133 (provenanceFingerprint), :195-197 (taille + SHA-256) ; IndexingRuntimePorts.java:283-288 (empreinte exigée en SHA-256 minuscule) ; WslIndexWorker.java:161-162 (DENY exigé) ; ProcessWslCommandRunner.java:27,46-47 (sortie ≤ 1 Mio) ; WslCommandEnvironment.java:40-41",
-      "reserve": null,
-      "date": "2026-11-19",
-      "head": "acd79cb8"
+      "verdict": "Aucun fichier de `minos-runtime-local` (voie WSL) dans le diff.",
+      "preuve": "Aucun fichier de `minos-runtime-local` (voie WSL) dans le diff.",
+      "reserve": "Tient par absence de changement.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2747,6 +3048,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2770,11 +3076,11 @@
     "statut": "Info",
     "changement": "PR #769 (AUD-PERF-05 : relecture conditionnée au snapshot réservé)",
     "verification": {
-      "verdict": "Tient : la seule requête modifiée ajoute des conditions liées par paramètres ; une seule createStatement, celle du migrateur (identifiants via enquoteIdentifier).",
-      "preuve": "PostgresCodeKnowledgeSnapshotStore.java:419-420 (ACTIVE_SNAPSHOT_FROM constant), :450-454 (`AND s.snapshot_id=? AND s.sha256=?`, setObject/setString) ; grep createStatement()|execute(\"...\"+ */src/main -> seulement PostgresSchemaMigrator.java:21",
-      "reserve": null,
-      "date": "2026-11-19",
-      "head": "acd79cb8"
+      "verdict": "Aucun fichier de `minos-storage` dans le diff ; le diff de `minos-application` n'ajoute aucune requête SQL.",
+      "preuve": "Aucun fichier de `minos-storage` dans le diff ; le diff de `minos-application` n'ajoute aucune requête SQL.",
+      "reserve": "Tient par absence de changement.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2798,6 +3104,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2821,11 +3132,11 @@
     "statut": "Info",
     "changement": "PR #777 (mcp-lifecycle.ps1 : validation de MINOS_MCP_SCRATCH_SIZE)",
     "verification": {
-      "verdict": "Tient : bloc minos_inspect inchangé (REVOKE puis GRANT SELECT sur liste fermée, colonnes de projects sans root_value), pgAdmin publié sur 127.0.0.1 ; le diff du script ne touche que la validation des plafonds.",
-      "preuve": "docker/scripts/mcp-lifecycle.ps1:826 (NOSUPERUSER ... CONNECTION LIMIT 8), :828-831 (REVOKE ALL), :837 (GRANT SELECT liste fermée), :839 (colonnes de projects) ; docker/compose-mcp.connected.yaml:533 `127.0.0.1:${MINOS_PGADMIN_PORT:-5050}:8080` ; diff mcp-lifecycle.ps1 -> l.524-554 seulement",
-      "reserve": null,
-      "date": "2026-11-19",
-      "head": "acd79cb8"
+      "verdict": "`docker/scripts/mcp-lifecycle.ps1` et le compose absents du diff : bloc `minos_inspect` inchangé.",
+      "preuve": "`docker/scripts/mcp-lifecycle.ps1` et le compose absents du diff : bloc `minos_inspect` inchangé.",
+      "reserve": "Tient par absence de changement.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2849,6 +3160,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2872,11 +3188,11 @@
     "statut": "Info",
     "changement": "PR #772 (WslIndexerExecutorTest ajouté)",
     "verification": {
-      "verdict": "Tient : le nouveau test WSL injecte des collaborateurs factices (FingerprintCapture, ArtifactOpener) ; aucune distribution réelle en CI, décision toujours écrite.",
-      "preuve": "docs/developer/java-indexing-via-wsl.md:119-120 ; minos-runtime-local/src/test/java/com/minos/runtime/local/wsl/ -> 13 fichiers, WslIndexerExecutorTest.java sans ProcessBuilder ni wsl.exe ; WslIndexerExecutor.java:62-66 (couture package-private de test)",
-      "reserve": null,
-      "date": "2026-11-19",
-      "head": "acd79cb8"
+      "verdict": "Aucun fichier de test WSL dans le diff : aucune distribution réelle en CI, décision toujours écrite.",
+      "preuve": "Aucun fichier de test WSL dans le diff : aucune distribution réelle en CI, décision toujours écrite.",
+      "reserve": "Tient par absence de changement.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2900,6 +3216,11 @@
         "head": "75e10c68",
         "statut": "Info",
         "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Info"
       }
     ]
   },
@@ -2923,11 +3244,11 @@
     "statut": "Info",
     "changement": "rejeu complet au HEAD acd79cb8",
     "verification": {
-      "verdict": "0 @Disabled hors @DisabledOn*/DisabledIf au 75e10c68 (grep).",
-      "preuve": "0 @Disabled hors @DisabledOn*/DisabledIf au 75e10c68 (grep). Autres mesures du 20/11 (Mockito, nombre de tests) non recomptées.",
-      "reserve": "Comptage partiel.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "0 `@Disabled` hors `@DisabledOn*`/`@DisabledIf*`, 0 import Mockito, 4723 méthodes annotées `@Test|@ParameterizedTest|@RepeatedTest|@TestFactory` contre 4716 à 75e10c68 (+7) ; `check-ci-wiring.py` rc=0 : 58 auto-tests de gates câblés dans `invariants`, 34 gates avec auto-test, 8 en liste d'attente ; aucun `test_*.py` nouveau.",
+      "preuve": "0 `@Disabled` hors `@DisabledOn*`/`@DisabledIf*`, 0 import Mockito, 4723 méthodes annotées `@Test|@ParameterizedTest|@RepeatedTest|@TestFactory` contre 4716 à 75e10c68 (+7) ; `check-ci-wiring.py` rc=0 : 58 auto-tests de gates câblés dans `invariants`, 34 gates avec auto-test, 8 en liste d'attente ; aucun `test_*.py` nouveau.",
+      "reserve": "Le « 4 315 » du constat vient d'un autre décompte (non comparable) ; 36 classes PostgreSQL requises et revue des 36 méthodes sans assertion non recomptées.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2948,6 +3269,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Info"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Info"
       }
     ]
@@ -2973,11 +3299,11 @@
     "statut": "Fermé",
     "bloque": [],
     "verification": {
-      "verdict": "Tient : scripts/ci/plugin-gate.py et docker-gate.py identiques (cmp) ; test_docker_gate.py et test_plugin_gate.py OK ; --no-renames inchangé.",
-      "preuve": "Tient : scripts/ci/plugin-gate.py et docker-gate.py identiques (cmp) ; test_docker_gate.py et test_plugin_gate.py OK ; --no-renames inchangé.",
-      "reserve": "Pas de mutation rejouée (gate identique à la version du 20/11). Aucun test ne fixe la suppression pure d'un fichier de production (inchangé, indépendant du drapeau).",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Tient : scripts/ci/plugin-gate.py et docker-gate.py identiques ; test_docker_gate.py 28 tests OK, test_plugin_gate.py 21 tests OK.",
+      "preuve": "Tient : scripts/ci/plugin-gate.py et docker-gate.py identiques ; test_docker_gate.py 28 tests OK, test_plugin_gate.py 21 tests OK.",
+      "reserve": "Pas de mutation rejouée (gates identiques).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "historique_statut": [
       {
@@ -2998,6 +3324,11 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé"
       }
     ],
@@ -3038,14 +3369,19 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Mutation rejouée sur copie /tmp/facade-verif (retrait de chacune des 17 entrées de embeddedAdapterClasses, une à une, module-boundaries.json restauré puis garde re-vérifié rc=0) : 16 retraits donnent rc=1, un seul reste silencieux (rc=0) : FileProgramGraphProvider.",
-      "preuve": "Mutation rejouée sur copie /tmp/facade-verif (retrait de chacune des 17 entrées de embeddedAdapterClasses, une à une, module-boundaries.json restauré puis garde re-vérifié rc=0) : 16 retraits donnent rc=1, un seul reste silencieux (rc=0) : FileProgramGraphProvider. Résultat identique à celui du 20/11 pour les trois classes à API JDK (OllamaEmbeddingProvider, JavaAstSupport, JavaProgramModel : rc=1).",
-      "reserve": "Le résidu FileProgramGraphProvider est maintenant consigné dans un ADR Accepted (ARCH-0087 « Compliance and Enforcement », dernière puce ; SUIVI.md:220 décision 9), ce qui lève la réserve (1) du 20/11. La réserve (2) subsiste : la protection des autres entrées sans API tient à l'état courant des liens entre sources.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Mutation rejouée sur copie : retrait un à un des 17 entrées de embeddedAdapterClasses : 16 retraits -> rc=1, FileProgramGraphProvider seul reste rc=0 (résidu consigné dans ARCH-0087, inchangé) ; fichier restauré -> rc=0.",
+      "preuve": "Mutation rejouée sur copie : retrait un à un des 17 entrées de embeddedAdapterClasses : 16 retraits -> rc=1, FileProgramGraphProvider seul reste rc=0 (résidu consigné dans ARCH-0087, inchangé) ; fichier restauré -> rc=0.",
+      "reserve": "Résidu FileProgramGraphProvider inchangé et consigné.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "changement": "PR #796, changement OpenSpec proteger-les-adaptateurs-embarques-contre-le-retrait-de-leur-entree (archivé 2026-11-20)"
   },
@@ -3082,6 +3418,12 @@
       {
         "date": "2026-11-25",
         "head": "75e10c68",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
         "statut": "Fermé avec réserve",
         "recontrole": false
       }
@@ -3122,14 +3464,19 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Commandes de la spécification (openspec/changes/archive/2026-11-24-decrire-le-garde-de-frontieres-decoupe/specs/*/spec.md:8 et :21) rejouées sans git (rg équivalent, mêmes exclusions) : la recherche des motifs `check-module-boundaries.py:[0-9]|liste .MODULES.",
-      "preuve": "Commandes de la spécification (openspec/changes/archive/2026-11-24-decrire-le-garde-de-frontieres-decoupe/specs/*/spec.md:8 et :21) rejouées sans git (rg équivalent, mêmes exclusions) : la recherche des motifs `check-module-boundaries.py:[0-9]|liste .MODULES. du script|lue dans le script|ALLOWED. égale` ne rend aucune ligne (rc=1) ; la boucle grep -c rend 1 pour module_boundary_{adapters,documents,packages,policy,ratchets,sources}.py et gate_runner.py, 6 pour module-boundaries.json (docs/developer/quality-gates.md:59-72). rg 'check-module-boundaries.py:[0-9]' docs openspec/specs .claude : seules occurrences = documents figés ou historiques (docs/project/audits/**, ADR archivés) et le scénario négatif de openspec/specs/frontieres-de-modules/spec.md:1447 ; aucun renvoi de ligne périmé dans la documentation courante. Affirmations relues : table « fichier -> règles » de quality-gates.md:65-72 conforme aux fonctions réellement définies (adapters : A2 sources, R1/R2, A10, A19, A20, stockage ; ratchets : A11 à A14, A16, A18, code concret du moteur, PACKAGE_ROOTS_BY_MODULE :102 ; packages : A3, A7, A8, A15, mise en page ; documents : A9, A17, document généré) ; 14 modules (module-boundaries.json) ; ARCH-0058 (en-tête files:, puces :55-:58 : ModuleBoundaryPolicy.java existe, la règle Archgate lit bien POLICY/TEST/READER) ; ARCH-0068 + rules.ts:3-9 (PACKAGE_ROOTS_BY_MODULE dans module_boundary_ratchets.py, section modules du JSON, A9 portées/Sources/Interfaces conformes à module_boundary_documents.py:22-29) ; ARCH-0087:37 (sections infrastructureApiUsers et embeddedAdapterClasses présentes, A19) et :84 (public_composition_root_methods, check_application_test_jar_scope, MinosApplicationAccessorRatchetTest, ApplicationTestJarScopeRuleTest, MinosApplicationTestAccessTest, ApplicationTestAccessPackagingIT existent, table d'accesseurs à 0 au garde) ; SKILL.md:30 ; E4 du dossier (3, 4, 1, 0 = sortie A11 du garde) ; flèches du diagramme conformes à allowedDependencies.",
-      "reserve": "Des affirmations du dossier frontieres-de-modules.md restent fausses ou périmées, sans que la commande de la spécification (qui ne cherche que des numéros de ligne) les voie : voir le constat nouveau « Dossier frontieres-de-modules : libellés périmés après PR #810 » (:47 « 12 autres » alors que minos-app en dépend de 13, :86 règles A2 à A18 sans A19 et A20 et A17 décrite comme comparaison de tables, :209 E3 « le test en affirme cinq » alors que le test affirme 6, :219 « A2 à A18 »). Les deux exigences ajoutées n'ont aucun gate (décision D2 du design) : la récidive est tenue par la revue. Aucun archgate lancé ici.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Non-régression : rg 'check-module-boundaries.py:[0-9]|liste .MODULES.",
+      "preuve": "Non-régression : rg 'check-module-boundaries.py:[0-9]|liste .MODULES. du script|lue dans le script|ALLOWED. égale' sur docs, openspec/specs, .claude hors history/audits/archives -> seule occurrence : un scénario de mutation de la spécification (spec.md:1448), attendu. docs/developer/quality-gates.md:86 est le seul paragraphe de la prose du garde modifié (A11 étendu aux paramètres et au test-jar), cohérent avec le code. Non-régression : rg 'check-module-boundaries.py:[0-9]' docs openspec/specs .claude (grep -rnE équivalent) ne rend, au 4f4cac81, que des documents figés ou historiques (docs/project/audits/**, docs/architecture/adr/archive/0055:76) et le scénario négatif de openspec/specs/frontieres-de-modules/spec.md:1448 ; rien dans .claude ni dans la documentation courante. La sortie du garde sur audit5 (75e10c68) et audit6 (4f4cac81) est identique octet pour octet (cmp, 35 lignes, rc=0 des deux côtés).",
+      "reserve": "Inchangée ; la couverture de la prose du garde n'a pas été rejouée au-delà de ce recoupement. Réserve précédente (affirmations fausses du dossier non vues par la commande de la spécification) largement levée par AUD-ARC-16 pour les étiquettes et les fichiers du garde ; les renvois de ligne restent tenus par la revue, aucun gate ne les cherche.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "sprint": 10,
     "changement": "PR #810, sprint 10 (archivé 2026-11-24)"
@@ -3161,14 +3508,19 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé"
       }
     ],
     "verification": {
-      "verdict": "Copie saine /tmp/g5/clean de 75e10c68 : le garde rend 0 en 6,8 s ; auto-tests : 69 + 86 + 44 + 38 + 77 + 3 (test_gate_runner.py) = 317 tests OK, contre 308 au 535a5017 (66+86+44+38+74, mesuré sur audit4 : +3 MainWiringTest, +3 ratchets, +3 gate_runner).",
-      "preuve": "Copie saine /tmp/g5/clean de 75e10c68 : le garde rend 0 en 6,8 s ; auto-tests : 69 + 86 + 44 + 38 + 77 + 3 (test_gate_runner.py) = 317 tests OK, contre 308 au 535a5017 (66+86+44+38+74, mesuré sur audit4 : +3 MainWiringTest, +3 ratchets, +3 gate_runner). Les appels de règles sont désormais dans run_rules (check-module-boundaries.py:308-333), non dans main() (:426-427). Mutation de CHAQUE appel (23 instructions de run_rules, sans retenir de valeur neutre inventée : le résultat réel de la règle est recopié en littéral, ou `pass`) + les 4 sous-règles de check_pom_rules (:292-296) = 27 mutants : pour les 27 le garde rend rc=0 (le retrait est silencieux) et test_check_module_boundaries.py rend rc=1 (MainWiringTest, sous-test nommé d'après la règle retirée + test_the_real_run_passes_and_calls_every_rule) ; aucun mutant ne reste vert, y compris check_service_loader_class_loaders (:325), check_embedded_adapters (:322), check_package_cycles, check_architecture_documentation, check_pom_rules et ses quatre sous-règles, check_java_layout, check_source_boundaries, check_assembly_classes. Liste d'espions : rule_functions() (test_check_module_boundaries.py:465-469) dérive les check_* par dir() des six modules, RULES_NOT_RUN_BY_MAIN est vide (:462) ; sondes : une check_* ajoutée dans module_boundary_ratchets.py et appelée par personne -> rouge (3 échecs) ; erreur avalée par try/except autour de check_source_boundaries -> rouge ; appel détourné par import local (contourne le nom global espionné) -> rouge. gate_runner.py : 5 mutants (BaseException, return 0 sur échec, rapport d'échec sur stdout, rapport de succès sur stderr, code de succès 1) -> test_gate_runner.py rc=1 pour les 5 ; il est branché dans pr-ci.yml:179-180. Durée : test_check_module_boundaries.py 19,5 s au 535a5017 -> 5,5 s au 75e10c68 (poste au repos) ; les totaux 51 s -> 21 s du suivi n'ont pas été reproduits à la seconde près.",
-      "reserve": "Reste un trou de même nature, nouveau et Faible (voir « Liste de modules de rule_functions tenue à la main ») : un nouveau module de règles absent du tuple de test_check_module_boundaries.py:467 échappe au contrôle de câblage. Les fonctions de main() qui ne s'appellent pas check_* dépendent de ENTRY_POINT_FUNCTIONS (:455-458, une seule entrée : runtime_service_edges). Les fonctions print_*_report ne sont pas contrôlées (seul « SUCCESS » est affirmé). Python 3 sous Linux uniquement, pas de job CI rejoué.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Mutation de chaque appel de règle sur copie saine de 4f4cac81 : 29 mutants (23 instructions de run_rules, check_hexagonal_boundaries :296, les 5 sous-règles de check_pom_rules :332-337 dont la nouvelle check_application_test_jar_content :335, check_reactor_modules :351), valeur réelle recopiée en littéral ou `pass` : pour les 29 test_check_module_boundaries.py rend rc=1 (MainWiringTest nomme la règle retirée : test_the_error_of_every_rule_turns_main_red et test_the_real_run_passes_and_calls_every_rule ; pour :296 et :337 aussi PomRulesOnRealPomsTest) ; aucun mutant vert.",
+      "preuve": "Mutation de chaque appel de règle sur copie saine de 4f4cac81 : 29 mutants (23 instructions de run_rules, check_hexagonal_boundaries :296, les 5 sous-règles de check_pom_rules :332-337 dont la nouvelle check_application_test_jar_content :335, check_reactor_modules :351), valeur réelle recopiée en littéral ou `pass` : pour les 29 test_check_module_boundaries.py rend rc=1 (MainWiringTest nomme la règle retirée : test_the_error_of_every_rule_turns_main_red et test_the_real_run_passes_and_calls_every_rule ; pour :296 et :337 aussi PomRulesOnRealPomsTest) ; aucun mutant vert. Le garde seul reste à rc=0 pour 27 d'entre eux (retrait silencieux, deux rc=1 dus à mon stub). Le suivi comptait 27 mutants au 25/11 : la règle ajoutée est couverte.",
+      "reserve": "Réserve du 25/11 (liste de modules tenue à la main) levée par AUD-TST-14 ; reste ce qu'il y a derrière les conventions de nommage (voir AUD-TST-14). Les fonctions print_*_report ne sont toujours pas contrôlées, et les nouvelles règles (A11 paramètres, contenu du test-jar) n'impriment aucune ligne de rapport.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
     "sprint": 10,
     "changement": "PR #814, sprint 10 (archivé 2026-11-24)"
@@ -3200,6 +3552,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ],
     "verification": {
@@ -3239,6 +3597,12 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Fermé avec réserve"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve",
+        "recontrole": false
       }
     ],
     "verification": {
@@ -3265,7 +3629,7 @@
     "axes": [
       "Architecture"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3273,14 +3637,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "javac 21 (sourcepath de tous les src/main/java, 0 erreur) puis javap -p -s aux deux commits : au 75e10c68, MinosApplication.java:359 `public .",
+      "preuve": "javac 21 (sourcepath de tous les src/main/java, 0 erreur) puis javap -p -s aux deux commits : au 75e10c68, MinosApplication.java:359 `public ... projectIndexing(UnaryOperator<IndexingRuntimePorts$IndexerExecutor>)` ; au 4f4cac81, MinosApplication.java:371 la même méthode est package-private et :376 `decoratedProjectIndexing` (package-private, relais 1 pour 1). Aucune méthode ni constructeur public de MinosApplication (hors Builder) ne nomme un type de com.minos.orchestration ou du moteur en paramètre ni en retour (javap). Appelants : MinosApplicationTestAccess.java:87-89 (relais public `decoratedProjectIndexing`, nom listé dans RELAYED de MinosApplicationTestAccessTest.java:39-42), UseCaseFacadeTest.java:66, IncrementalIndexingRealFixtureTest.java:67, RemoteIndexingUseCases.java:22 ; production : seul MinosApplication.java:402 (lambda de remoteIndexing). Garde : module_boundary_ratchets.py:148-199 et :251-280 (`minos_application_engine_parameters`, sans table) appelé par check_minos_application_accessors ; MINOS_APPLICATION_ENGINE_ACCESSORS = {} (:46) ; `minos_application_engine_parameters()` rend [] sur le dépôt réel (auto-test the_real_application_takes_no_engine_type). Rouge avant vert sur copies /tmp/facade-verif : copie saine rc=0 ; `public void leakParam(com.minos.registry.ProjectRegistry r) {}` -> rc=1 (« MinosApplication.leakParam is public and takes parameter r of type registry.ProjectRegistry ») ; même fuite avec type importé -> rc=1 ; varargs `final ProjectRegistry... r` -> rc=1 ; `projectIndexing(UnaryOperator<IndexerExecutor>)` remise public -> rc=1 (type orchestration.IndexingRuntimePorts). Auto-tests rejoués : test_check_module_boundaries 77 OK, _ratchets 81 OK, _documents 50 OK. « Garder l'indexation distante sur la méthode d'origine » : le diff 75e10c68 -> 4f4cac81 ne contient aucun hunk dans remoteIndexing() (lambda :402 appelle toujours projectIndexing(decorator)) ; le relais n'est lu que par les tests via TestAccess. Aucune régression de comportement possible sur ce chemin : même méthode, même construction à chaque appel (`new ProjectIndexingUseCase(indexingDependencies(providerRuntimeManager()), decorator)`), seule la visibilité change. Les diffs des commits 3203e2ab1, 86eb88814 et a1e796403 ne sont pas reconstructibles (pas de .git, deux instantanés seulement) : l'équivalence est établie sur l'état final. Rejoué sur copie de 4f4cac81 : `check-module-boundaries.py` rc=0 au HEAD ; avec `public void leakParam(ProjectRegistry r)`, `public static ... leakParam2(final @Deprecated ProjectRegistry r)`, un paramètre générique `Map<String,ProjectRegistry>`, un tableau, un varargs, une signature multi-ligne, un constructeur public et `public final synchronized` : rc=1 chaque fois, A11 nomme la méthode et `registry.ProjectRegistry` (`module_boundary_ratchets.py:148-279`, appelé en `:411-413`) ; `package-private` accepté (rc=0). `javac` des sources main de minos-application + `javap -public MinosApplication` : aucun type de minos-engine ni `com.minos.orchestration` dans une signature publique (20 types application, 1 domain) ; `decoratedProjectIndexing` et `projectIndexing(UnaryOperator)` sont package-private (`MinosApplication.java:371,376`), relais `MinosApplicationTestAccess.java:87`, `RELAYED` complété (`MinosApplicationTestAccessTest.java:42`), les trois appelants de test migrés (`RemoteIndexingUseCases.java:21-22`, `IncrementalIndexingRealFixtureTest.java:67`, `UseCaseFacadeTest.java:66-69` avec `assertNotSame` à chaque appel).",
+      "reserve": "(1) Le cliquet est à zéro par construction (aucune table), mais il est aveugle aux méthodes publiques génériques : `public <T> void leakGeneric(com.minos.registry.ProjectRegistry r)` et `public <T> ProjectRegistry leakRet()` donnent rc=0 (PUBLIC_METHOD, module_boundary_ratchets.py:129-130, exige un type de retour qui commence par une lettre) : voir constat nouveau. (2) Hors règle, comme annoncé : Builder (22 méthodes publiques, ~20 prennent un type du moteur) et services (ProjectInspectionService.statusView(RegisteredProject) :140 et view(RegisteredProject) :169 restent publics avec un type moteur). (3) Le gate imprime un seul compteur A11 (accesseurs = 0) : le contrôle des paramètres est muet en cas de succès, la sortie du garde est identique ligne à ligne entre 75e10c68 et 4f4cac81. (4) UseCaseFacadeTest.java:66-70 ne prouve que l'identité (assertNotSame), pas que le décorateur est appliqué. (5) ARCH-0087 non mis à jour (tâche 4.2 annoncée par le suivi, tenue pour ouverte) ; java-api.md:372 promet encore un remplaçant public (constat nouveau). Tests Java (MinosApplicationTestAccessTest, UseCaseFacadeTest, compilation des tests des trois modules) non exécutés : pas de Maven ni de JUnit ; seules les sources main de minos-application ont été compilées par javac. `docs/user/java-api.md:372` promet encore `application.projectIndexing(executorDecorator)` (nouveau constat). Garde aveugle à `public <T extends ProjectRegistry>` (nouveau constat). Tâche 4.2 (mise à jour d'ARCH-0087) non cochée, nommée par SUIVI.md:169 et « Tâches manuelles » ; ARCH-0087 non modifié (absent de diff-names).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #823, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-ARC-14",
@@ -3296,7 +3668,7 @@
     "axes": [
       "Architecture"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3304,14 +3676,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Les classes ne puisent plus les ports de l'application : LocalProjectOperations reçoit un record package-private `Dependencies` à 7 collaborateurs avec requireNonNull nommés (LocalProjectOperations.java:55-70, constructeur package-private :74 et privé :88-96) ; les constructeurs publics (Path) et (MinosApplication) sont conservés et délèguent à `application.localProjectOperationsDependencies()` (MinosApplication.java:309-313).",
+      "preuve": "Les classes ne puisent plus les ports de l'application : LocalProjectOperations reçoit un record package-private `Dependencies` à 7 collaborateurs avec requireNonNull nommés (LocalProjectOperations.java:55-70, constructeur package-private :74 et privé :88-96) ; les constructeurs publics (Path) et (MinosApplication) sont conservés et délèguent à `application.localProjectOperationsDependencies()` (MinosApplication.java:309-313). ProviderPlatformService.defaults(application) délègue à `application.providerPlatformService()` (:316-318, ProviderPlatformService.java:38) : le catalogue est toujours lu à chaque appel (test theProviderPlatformReadsTheCatalogAtEachCall, LocalOperationsAssemblyTest.java:56-67). LocalProjectGitQuery(MinosApplication) passe par `gitQuery()` (:321). LocalProjectSymbolQuery(MinosApplication) ne lit plus que `projectQueryService()`, accesseur public (LocalProjectSymbolQuery.java:29-30). Les 5 accesseurs sans lecteur sont retirés : providerCatalog, scipArtifactImporter, gitIntelligence, indexImportHistoryStore, hostedControlPlaneService (javap -p, audit5 vs audit6 ; le champ hostedControlPlaneService disparaît aussi, MinosApplication.java:229-230) ; rg au 75e10c68 : hostedControlPlaneService() n'avait aucun appelant ; plus aucun appelant des cinq au 4f4cac81. Règle ArchUnit sur les lecteurs de ports : EXISTE, ModuleArchitectureTest.onlyTheFacadeReadsItsPorts (:332-366) : aucune classe de production hors MinosApplication (et ses imbriquées) n'appelle une méthode non publique de la façade dont le type de retour implique une classe du moteur ou MinosApplicationComposer ; moteur dérivé de la politique. Compatibilité : constructeurs publics conservés, donc aucune rupture ; java-api.md:352 et :357 (`new LocalProjectOperations(application)`) et release-notes/unreleased.md:28-37 restent exacts. Tests : LocalProjectOperationsRetentionTest injecte Dependencies sans MinosApplication (importScip via `new LocalProjectOperations(dependencies())`, :169) et ajoute aMissingCollaboratorIsNamedBeforeTheRegistryIsRead (7 NPE nommés) ; LocalOperationsAssemblyTest (nouveau, 4 tests) couvre le catalogue lu à chaque appel, le port Git (inspect/analyze du port injecté) et le refus d'un importeur SCIP absent. Seul recours restant : les 13 accesseurs package-private (compositionRoot, projectRegistry, ... snapshotPromoter) n'ont plus aucun lecteur de production, uniquement MinosApplicationTestAccess (rg). Au HEAD, `javap -p MinosApplication` (compilation javac des sources main) ne montre plus `gitIntelligence()`, `providerCatalog()`, `scipArtifactImporter()`, `indexImportHistoryStore()` ni `hostedControlPlaneService()` (restent les champs privés, `MinosApplication.java:93,98,190-194,200`) ; aucun appelant de ces noms hors `compositionRoot(...)` des tests. `LocalProjectOperations.Dependencies` est un enregistrement package-private à 7 composantes non nulles (`LocalProjectOperations.java:53-74`), assemblé par `MinosApplication.java:309-312` ; `ProviderPlatformService.defaults`, `LocalProjectGitQuery(MinosApplication)` et `LocalProjectSymbolQuery(MinosApplication)` délèguent (`MinosApplication.java:316-321`). `javap -public` des quatre classes : les cinq points d'entrée conservés, aucun `Dependencies` public. Analyse du bytecode compilé : les seules méthodes non publiques de MinosApplication appelées par une autre classe sont `localProjectOperationsDependencies`, `providerPlatformService` et `gitQuery`, qui ne rendent aucun type du moteur : la règle `ModuleArchitectureTest.java:332-366` passerait.",
+      "reserve": "(1) Décision D5 et trace dans ARCH-0087 en attente (SUIVI.md, tâche 3.3), non faites. (2) ModuleArchitectureTest.onlyTheFacadeReadsItsPorts n'a pas été exécuté (pas de Maven) ; son rouge est déduit par lecture (appel d'un accesseur package-private à retour moteur depuis une autre classe -> violation), non observé ; elle ne regarde que les types de retour et n'a pas de contrôle positif. (3) La preuve d'injection est inégale : theSymbolQueryOfAnApplicationIsBuiltOverItsQueryService (LocalOperationsAssemblyTest.java:96-101) n'affirme rien (aucune assertion hors NPE sur null) ; le chemin heureux de `new LocalProjectOperations(application)` n'est exercé que par un cas de refus (Retention :104-109). (4) Les constructeurs publics prennent toujours l'application entière : la fabrique de collaborateurs vit désormais dans trois méthodes package-private de la façade (:309-321). `onlyTheFacadeReadsItsPorts` et les tests `LocalOperationsAssemblyTest` / `LocalProjectOperationsRetentionTest` non exécutés (pas d'ArchUnit ni JUnit). Lecture seule de la règle : elle parcourt `getMethodCallsFromSelf()` et ne voit probablement pas une référence de méthode `application::gitQuery` (à confirmer sous ArchUnit). Le contournement par un conteneur package-private (comme `Dependencies`) est voulu. Tâche 3.3 (trace D5 dans ARCH-0087) non faite, nommée par le suivi (SUIVI.md:171 et « Tâches manuelles »).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #824, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-ARC-15",
@@ -3327,7 +3707,7 @@
     "axes": [
       "Architecture"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3335,14 +3715,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Tous les sites du constat sont alignés au 4f4cac81 : SUIVI.md:7 « Les sprints 1 à 11 sont fusionnés et archivés » (plus de « reporté ») ; docs/architecture/adr/README.md:92 liste les trois changements dont `retirer-la-racine-de-composition-de-la-facade` ; Javadoc de MinosApplication.java:66-69 « Facade of one MINOS home .",
+      "preuve": "Tous les sites du constat sont alignés au 4f4cac81 : SUIVI.md:7 « Les sprints 1 à 11 sont fusionnés et archivés » (plus de « reporté ») ; docs/architecture/adr/README.md:92 liste les trois changements dont `retirer-la-racine-de-composition-de-la-facade` ; Javadoc de MinosApplication.java:66-69 « Facade of one MINOS home ... keeps its ports and composition root package-private (ADR 0087) » ; ARCH-0042:333-334 « lu par MinosApplication dans son package ; la racine n'est pas publique, ARCH-0087 § 2 » ; ARCH-0042:401 sans « (Proposed) » ; public-surfaces.md:12 `<<application facade>>` ; mémoire d'agent project_audit_2026_11_15_clos.md:19-21 (« exigence ... retirée du delta, livrée ensuite par retirer-la-racine-de-composition-de-la-facade », plus de « reporté » ni de « Proposed ») ; ARCH-0087:10 Accepted. Replay de la commande de la spécification (spec.md:1605) avec ses exclusions (docs/project/history, docs/project/audits, archives) : rg 'Long-lived composition root|composition root long-lived|via .MinosApplication.compositionRoot().|ARCH-0087](...) (Proposed)' docs minos-application/src -> seules occurrences dans docs/project/audits (ETAT, findings.md/json, citations d'audit exclues par la spécification), donc rc=1 avec exclusions. rg 'Proposed' autour d'ARCH-0087 : seule la citation de SUIVI.md:172. rg 'reporté' : aucun résidu sur le groupe 4 hors citations d'audit. Commande du scénario « Prose en vigueur » (`git grep -nE 'Long-lived composition root|…|ARCH-0087\\]\\([^)]*\\) \\(Proposed\\)' -- docs minos-application/src/main …`) rejouée sur copie git : rc=1, aucune ligne ; commande de l'index ADR : rc=0, `README.md:92` cite `retirer-la-racine-de-composition-de-la-facade`. Javadoc de classe réécrit (`MinosApplication.java:66-69`), `ARCH-0042:333` et `:401` réécrits (lien sans statut), `public-surfaces.md:12` en `<<application facade>>`, mémoire d'agent `project_audit_2026_11_15_clos.md` sans l'exemple à statut. La recherche française (« MinosApplication … racine de composition ») ne ramène que des descriptions exactes de l'état en vigueur (ARCH-0087:26,43 ; java-api.md:352,356).",
+      "reserve": "Aucun build : le Javadoc est un commentaire seul (compilé par javac sans erreur). `public-surfaces.md:314` (« tests composition root ») reste ambigu mais ne présente pas MinosApplication comme racine.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #821, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-ARC-16",
@@ -3358,7 +3746,7 @@
     "axes": [
       "Architecture"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3366,14 +3754,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Relu au 4f4cac81, docs/architecture/diagrams/capacites/frontieres-de-modules.md : :47 n'écrit plus de nombre (« dépend de tous les autres modules » ; module-boundaries.json donne 13 modules autorisés pour minos-app et minos-app/pom.xml 14 éléments <dependency> dont le test-jar d'application, soit 13 modules distincts : le faux « 12 autres » a disparu) ; :79-89 liste A2 à A20 en nommant A19 et A20 et décrit A17 comme refus d'une table recopiée, puis « Aucune règle ne porte les étiquettes A1 et A4 à A6 » (vrai : les sources du garde portent A2, A3, A7 à A20) ; E3 (:223) cite désormais test_the_real_tree_passes_a_loader_at_every_site et est clos ; la spec n'écrit plus le compte (spec.md:339-340) ; « Questions ouvertes : Aucune » (:229-231) ; quality-gates.md:75-101 porte les puces A19 (:99) et A20 (:100), MainWiringTest (:101) et test_gate_runner.py (:75) ; .claude/rules/java-production.md:11 dit « A2, A3, A7 à A20 ».",
+      "preuve": "Relu au 4f4cac81, docs/architecture/diagrams/capacites/frontieres-de-modules.md : :47 n'écrit plus de nombre (« dépend de tous les autres modules » ; module-boundaries.json donne 13 modules autorisés pour minos-app et minos-app/pom.xml 14 éléments <dependency> dont le test-jar d'application, soit 13 modules distincts : le faux « 12 autres » a disparu) ; :79-89 liste A2 à A20 en nommant A19 et A20 et décrit A17 comme refus d'une table recopiée, puis « Aucune règle ne porte les étiquettes A1 et A4 à A6 » (vrai : les sources du garde portent A2, A3, A7 à A20) ; E3 (:223) cite désormais test_the_real_tree_passes_a_loader_at_every_site et est clos ; la spec n'écrit plus le compte (spec.md:339-340) ; « Questions ouvertes : Aucune » (:229-231) ; quality-gates.md:75-101 porte les puces A19 (:99) et A20 (:100), MainWiringTest (:101) et test_gate_runner.py (:75) ; .claude/rules/java-production.md:11 dit « A2, A3, A7 à A20 ». grep -nE '12 autres|A2 à A18|tables Java et Python|en affirme cinq' sur le dossier -> rc=1. Spec principale cohérente : les 10 exigences ajoutées ou modifiées par actualiser-le-dossier…, deriver-…, tenir-le-contrat-…, injecter-… sont identiques mot pour mot aux deltas archivés (script de comparaison), et leurs scénarios correspondent au code (rejoués : mutations de run_rules, module de règles non câblé, test-jar). Auto-test léger : test_check_module_boundaries_documents.py:369-486, 50 tests rc=0 sur la copie saine ; mutations rejouées -> rc=1 : A20 ou A19 retirée du paragraphe du dossier (nomme la liste d'étiquettes), étiquette A21 en trop dans le dossier ou dans un module de règles, amorce « Règles du garde » réécrite, puce A19/A20 de quality-gates retirée ou non en gras, `test_gate_runner.py` retiré de quality-gates, A20 déplacée dans la phrase « Aucune règle ne porte ». `test_check_module_boundaries_documents.py` (50 cas, rc=0) compare au dépôt réel les étiquettes `A<n>` des sources du garde au dossier et à `quality-gates.md`. Cinq mutations rejouées sur copie, chacune rc=1 en nommant l'élément : `A19` retirée du dossier ; `module_boundary_x.py` ajouté ; `test_gate_runner.py` retiré de `quality-gates.md` ; puce A20 retirée (`quality-gates.md:100`) ; étiquette `A21` ajoutée à un message de `module_boundary_ratchets.py`. Libellés corrigés : dossier « dépend de tous les autres modules », A17/A19/A20 et « étiquettes A1 et A4 à A6 », E3 clos, « Questions ouvertes : Aucune » (la question sur le libellé de l'étape CI est bien périmée : `pr-ci.yml:161`, « Maven module-boundary fitness gate ») ; `java-production.md:11` « A2, A3, A7 à A20 » ; `quality-gates.md:75,99-101`. Les 331 références `fichier#test` des trois dossiers modifiés existent.",
+      "reserve": "(1) L'auto-test ne protège que les étiquettes A<n> et les noms de fichiers : écrire de nouveau « 12 autres modules » ligne :47 (le remplacement 13 -> 12 demandé) ou supprimer « A1 et » de la phrase « Aucune règle ne porte… » laisse le test vert (rc=0, mutants D5 et D5b) ; l'exigence « aucun nombre dérivé de la politique » (spec.md:1709) n'a aucun contrôle, comme le design D2 le disait. (2) Le dossier contredit encore cette exigence : E2 (:221) écrit « 14 modules » et « 13 modules », E4 (:223) « 3, 4, 1 et 0 » et « 14, 15, 4, 6 » (nombres tirés de module-boundaries.json et de la sortie A11) ; E2 reste listé comme écart alors que le scénario fautif a été réécrit (plus de « 13 modules » dans la spec). (3) E1 demeure : spec.md:66 « affiche 4 cycles connus couvrant 15 packages » contre :114 (table vide). (4) L'en-tête du dossier (:4) dit « Relevé au commit 4fee1ed4 (2026-11-25) » alors que le contenu a été modifié par la PR #825 ; non vérifiable sans git. (5) La documentation des « 154 cas » de STATUS.md/ROADMAP.md (hors périmètre selon le suivi) n'a pas été relue ici. Aucun archgate lancé. L'en-tête du dossier cite le commit de relevé `4fee1ed4` (2026-11-25), absent des copies (pas de .git) : non vérifié. E8 (`frontieres-de-modules.md:227`) cite encore comme preuve des accesseurs supprimés (nouveau constat). « 154 cas » de STATUS/ROADMAP reste faux (nouveau constat).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #825, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-DEP-09",
@@ -3389,7 +3785,7 @@
     "axes": [
       "Dépendances"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3397,14 +3793,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Règle 13 de scripts/quality/check-toolchain-baseline.py (:392-457) exige exactement une distributionSha256Sum de 64 hex minuscules, une distributionUrl https sous l'hôte attendu pour .mvn/wrapper/maven-wrapper.properties:3-4 et minos-intellij/gradle/wrapper/gradle-wrapper.properties:3-4, et distributionType=only-script pour Maven.",
+      "preuve": "Règle 13 de scripts/quality/check-toolchain-baseline.py (:392-457) exige exactement une distributionSha256Sum de 64 hex minuscules, une distributionUrl https sous l'hôte attendu pour .mvn/wrapper/maven-wrapper.properties:3-4 et minos-intellij/gradle/wrapper/gradle-wrapper.properties:3-4, et distributionType=only-script pour Maven. Rejeu sur copies /tmp/deps-verif/m09 : copie saine rc=0 (43 lieux) ; rc=1 pour somme absente (Maven puis Gradle), 63 et 65 caractères, MAJUSCULES (refusées : le garde exige du minuscule), deux lignes, ligne commentée, URL http (Maven et Gradle), hôte étranger, type bin, type absent, fixture `00`, somme vide, guillemets. Auto-test : 69 tests OK rc=0 (47 au 75e10c68, +22 dont WrapperDistributionSumTest) ; la fixture `distributionSha256Sum=00` a été remplacée par la vraie somme Gradle (test_check_toolchain_baseline.py). Le fail-open de mvnw.cmd:137-150 et de mvnw:226 n'est pas modifié (fichiers identiques) : il est neutralisé uniquement par le gate, exécuté dans le check exigé « Static invariants (single run) » (pr-ci.yml:99-103, .github/required-checks.json) : une PR Dependabot qui retire la ligne est refusée en CI (rc=1 rejoué). Règle 13 (`check-toolchain-baseline.py:413-452`) rejouée sur copie : somme Maven supprimée, URL `http://`, hôte `evil.example.org`, somme `00`, somme en majuscules, `distributionType=bin`, somme Gradle supprimée, URL Gradle en `http` : rc=1 chaque fois, message avec fichier et ligne ; dépôt sain rc=0, compte des sites 35 -> 43 (2 pour la règle 13, 6 pour la règle 14). `mvnw.cmd:137-150` : même schéma que `mvnw` (somme vérifiée seulement si présente), mais `$ErrorActionPreference = \"Stop\"` (`mvnw.cmd:48`) rend le `Write-Error` fatal. Auto-test 69 cas OK. GEN-0077:99 nomme la règle 13 (« Compliance and Enforcement »), `TOOLCHAIN_POLICY.md:13` la décrit, le skill (étape 5) dit de relever URL et somme ensemble.",
+      "reserve": "1) Le garde est plus tolérant que l'analyseur de mvnw : `distributionSha256Sum =<somme>`, `distributionSha256Sum:<somme>`, clé indentée ou tabulée donnent rc=0 au gate (PROPERTY :396 accepte \\s*[=:]\\s*) alors que la boucle `IFS=\"=\" read` de mvnw:113-117 ne reconnaît pas la clé (rejoué : sum=[<unset>]) et saute donc toute vérification. Voir nouveau constat. 2) Non mesuré : que les sommes soient celles des archives publiées (proxy 403 sur repo.maven.apache.org et services.gradle.org), comportement de mvnw.cmd (pas de pwsh). 3) Le fail-open des wrappers subsiste en local/hors CI. Une URL `https://repo.maven.apache.org/maven2/../../x/` passe (préfixe seul comparé) : même hôte, sans effet pratique. Ni `mvnw` ni `mvnw.cmd` exécutés sans somme (hors périmètre hors ligne). La règle ne prouve pas que la somme est celle de l'archive publiée (écrit dans la docstring).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #826, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-DEP-10",
@@ -3420,7 +3824,7 @@
     "axes": [
       "Dépendances"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3428,14 +3832,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Règle de check-tools-manifest.py (:352-486) : six ARG d'empreinte reconnus (`verified archives=6`, Node, Maven, Coursier, scip-clang, rust-analyzer, scip-dotnet NuGet), lecture du catalogue (expected_docker_args), exactement un RUN consommateur, `set -e`, interdiction de `|| true`/`|| :`/`set +e`/`trap`/`||` après le contrôle, un seul `printf .",
+      "preuve": "Règle de check-tools-manifest.py (:352-486) : six ARG d'empreinte reconnus (`verified archives=6`, Node, Maven, Coursier, scip-clang, rust-analyzer, scip-dotnet NuGet), lecture du catalogue (expected_docker_args), exactement un RUN consommateur, `set -e`, interdiction de `|| true`/`|| :`/`set +e`/`trap`/`||` après le contrôle, un seul `printf ... | sha256sum -c -`, aucun usage du fichier avant le contrôle sauf curl/rm -f. Copie saine rc=0 ; rc=1 pour `|| true` (Maven, Node, Coursier), `|| :`, `|| echo`, `set -ux` (Maven, Node, Coursier), `set +e`, `trap`, contrôle déplacé après unzip (Maven) ou gunzip (Coursier), contrôle retiré (Node, Maven, Coursier, scip-clang, rust-analyzer, scip-dotnet), ARG vide ou absent, MAVEN_ZIP_SHA256 altéré dans le catalogue ou dans le Dockerfile, RUN supplémentaire consommant l'ARG, chmod/tar/unzip avant le contrôle. Auto-test : 62 tests OK (46 au 75e10c68, +16 ArchiveCheckTest/ShippedTreeTest). docker/ est identique entre 75e10c68 et 4f4cac81 (diff -r). M29DockerAdministrationContractTest.java est inchangé et :168 reste `assertTrue(dockerfile.contains(\"sha256sum -c -\"))`, assertion faible (n'importe quelle occurrence suffit) : la garde réelle est désormais le gate Python. `check_archive_checks` (`check-tools-manifest.py:394-431`) lit les `ARG` d'empreinte du catalogue (six reconnus : NODE, MAVEN, COURSIER, SCIP_CLANG, RUST_ANALYZER, SCIP_DOTNET_NUPKG ; `Dockerfile.mcp.release:81-94` ; succès « verified archives=6 »). Mutations rejouées sur copie, rc=1 avec `Dockerfile:ligne` : `|| true`, `|| :`, `|| exit 0`, `|| echo`, `set -ux`, `set +e`, `trap`, `unzip` avant le contrôle, contrôle supprimé, doublé, `if …; then :; fi`, `ARG` lu par un second `RUN`, `set -e` absent du `RUN` Node, contrôle NuGet supprimé ; Dockerfile sain rc=0 ; auto-test 62 cas OK ; `sync-tools-manifest.py` rc=0. `scripts/ci/fetch-verified.sh` existe bien (non utilisé : écarté). BE-0065:95 complété.",
+      "reserve": "1) Trou rejoué : le contrôle Node déplacé APRÈS `tar -xJf` reste rc=0 (le RUN Node fait `cd /tmp` puis `tar \"${node_archive}\"` en nom relatif, que names() ne rapproche pas de `/tmp/${node_archive}`, check-tools-manifest.py:389-391,471-480). 2) Un contrôle porté sur un autre fichier (`/tmp/other.gz`, `/tmp/nothing.zip`) reste rc=0 : limite écrite dans la docstring (« le fichier contrôlé est celui utilisé »). 3) Le découpage 6831fa6df n'a pas pu être relu comme commit (src sans .git) ; relu dans son état final : aucune mutation attendue ne passe sauf les deux ci-dessus. 4) Construction Docker et M29 (10 tests) non rejoués (pas de Maven/Docker). Contournement non détecté : `set +o errexit` ajouté au `RUN` Maven -> rc=0 (nouveau constat). Construction Docker et `M29DockerAdministrationContractTest` non exécutés (pas de Docker ni Maven).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #827, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-DEP-11",
@@ -3451,7 +3863,7 @@
     "axes": [
       "Dépendances"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3459,14 +3871,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Le skill .claude/skills/minos-dependency-update/SKILL.md:15 écrit l'instantané apt (relever UBUNTU_APT_SNAPSHOT dans la même PR, déplacer la date de M29 et de docker-runtime.md ; « aucun gate ne compare les deux dates ») et :16 que mvnw.cmd, minos.cmd, gradlew.bat restent i/lf dans l'index avec correction `git add --renormalize`.",
+      "preuve": "Le skill .claude/skills/minos-dependency-update/SKILL.md:15 écrit l'instantané apt (relever UBUNTU_APT_SNAPSHOT dans la même PR, déplacer la date de M29 et de docker-runtime.md ; « aucun gate ne compare les deux dates ») et :16 que mvnw.cmd, minos.cmd, gradlew.bat restent i/lf dans l'index avec correction `git add --renormalize`. check-posix-script-eol.py:130-160 étend la règle à tout fichier dont l'attribut résolu est eol=lf ou eol=crlf. Rejeu dans des dépôts git /tmp/deps-verif/m11* (git init + .gitattributes de l'arbre, *.cmd text eol=crlf ligne 36) : copie saine rc=0 (17 scripts, 159 fichiers à fin de ligne épinglée) ; rc=1 pour mvnw.cmd i/crlf (update-index sans filtre), i/mixed, `git add` d'un mvnw.cmd en CRLF, minos.cmd i/crlf, gradlew.bat i/crlf, fichier i/crlf sous `docs/*.dat eol=lf`, sous eol=crlf et sous eol=lf sans text ; racine non git rc=1 ; `git add` d'un fichier LF puis CRLF : l'index normalise puis la 2e version est refusée. --self-test : 16 cas SUCCESS (13 au 75e10c68). Ferme la réserve d'AUD-DEP-02 (mvnw.cmd i/crlf rc=0). `check-posix-script-eol.py:130-160` refuse tout fichier à `eol=lf`/`eol=crlf` enregistré `i/crlf` ou `i/mixed`. Rejoué : dépôt temporaire avec `mvnw.cmd` indexé CRLF (`git hash-object -w --no-filters` + `update-index --cacheinfo`) : `git ls-files --eol` donne `i/crlf w/crlf attr/text eol=crlf`, gate rc=1 « mvnw.cmd: recorded as i/crlf, expected i/lf; run 'git add --renormalize -- mvnw.cmd' » ; blob LF -> rc=0. Auto-test 16 cas OK ; sur la copie du dépôt (index recréé) « files with pinned line endings checked=159 ». `.gitattributes:36` `*.cmd text eol=crlf` confirmé. Skill `minos-dependency-update` : étape 4 (instantané apt `UBUNTU_APT_SNAPSHOT=20261120T000000Z`, `Dockerfile.mcp.release:79`, `M29DockerAdministrationContractTest.java:151`, `docker-runtime.md:165` : trois dates alignées) et étape 5 (wrappers, `i/lf`).",
+      "reserve": "Contournement rejoué : retirer `eol=crlf` de la ligne .gitattributes:36 (`*.cmd text`) ou la passer en `binary`, avec mvnw.cmd en i/crlf, donne rc=0 (le compteur tombe de 159 à 157 fichiers, aucun message). La règle suit l'attribut, rien ne garde le pin lui-même. L'instantané apt reste à la charge du skill (assumé). Application du skill à une vraie PR Dependabot (tâche 3.3) non constatée. Tâche 3.3 (application du skill à la prochaine PR Dependabot Temurin ou wrapper) non cochée : manuelle, nommée par le suivi. L'index réel du dépôt n'est pas mesurable (pas de .git) ; l'index de la copie a été recréé par `git add`, qui normalise.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #828, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-DEP-12",
@@ -3482,7 +3902,7 @@
     "axes": [
       "Dépendances"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3490,14 +3910,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "`rg 'Maven 3\\.10\\.[0-9]'` sur docs, README.md, AGENTS.md, .claude hors docs/project/audits/ : plus de trace dans STATUS, ROADMAP, TOOLCHAIN_POLICY, code-audit.md, docker-runtime.md (STATUS.md:303, ROADMAP.md:131, code-audit.md:23, docker-runtime.md renvoient à .mvn/wrapper/maven-wrapper.properties) ; il reste GEN-0077:114 (preuve datée de la décision, :115 note 3.10.2), ADR archivés 0004:175 et GEN-0067:97, et docs/developer/quality/code-audit-couverture.md:15,362 (relevé daté du 8/10, non modifié comme le dit SUIVI).",
+      "preuve": "`rg 'Maven 3\\.10\\.[0-9]'` sur docs, README.md, AGENTS.md, .claude hors docs/project/audits/ : plus de trace dans STATUS, ROADMAP, TOOLCHAIN_POLICY, code-audit.md, docker-runtime.md (STATUS.md:303, ROADMAP.md:131, code-audit.md:23, docker-runtime.md renvoient à .mvn/wrapper/maven-wrapper.properties) ; il reste GEN-0077:114 (preuve datée de la décision, :115 note 3.10.2), ADR archivés 0004:175 et GEN-0067:97, et docs/developer/quality/code-audit-couverture.md:15,362 (relevé daté du 8/10, non modifié comme le dit SUIVI). Règle 14 (check-toolchain-baseline.py:455-503, liste fermée MAVEN_DOCUMENTS de six documents) : mutation `wrapper Maven 3.10.0` ajoutée à STATUS.md -> rc=1 `STATUS.md:333 states Maven 3.10.0; the wrapper downloads 3.10.2 and the image ships 3.9.16` ; idem ROADMAP (3.10.1), POLICY (apache-maven-3.10.0-bin.zip), code-audit, docker-runtime, supply-chain ; `wrapper Maven 3.10.2` accepté (rc=0). Règle 14 (`check-toolchain-baseline.py:460-495`, liste fermée `MAVEN_DOCUMENTS`) rejouée sur copie de STATUS.md : « Maven 3.10.0 » -> rc=1 (nomme `STATUS.md:303`, 3.10.2 et 3.9.16) ; « wrapper 3.10.0 » rc=1 ; « Apache Maven 3.10.0 » rc=1 ; « Maven 3.10.2 » et « Maven 3.9.16 » acceptés. Le wrapper télécharge 3.10.2 (`maven-wrapper.properties:3`), l'image 3.9.16 (`Dockerfile.mcp.release:82`). STATUS.md:303, ROADMAP.md:131, `code-audit.md:23`, `docker-runtime.md:166` renvoient à `.mvn/wrapper/maven-wrapper.properties` sans recopier la version ; `code-audit-couverture.md` (relevé daté, « 3.10.0 » aux lignes 15 et 362) non modifié, hors liste. GEN-0077:115 : note du 2026-11-25.",
+      "reserve": "Formes non vues par la règle (rc=0 rejoué) : `Maven 3.10` sans correctif, `maven 3.10.0` en minuscules, `Maven v3.10.0`, version sur la ligne suivante ; et tout document hors liste (README.md, AGENTS.md, code-audit-couverture.md). code-audit-couverture.md:362 est une commande de reprise qui annonce « Maven 3.10.0 et Java 24.0.1 » : faux aujourd'hui, mais dans un relevé daté. L'écart de fond (politique « Maven 3.9.x » vs wrapper 3.10.2) est toujours « à trancher par le propriétaire » (GEN-0077:115). Formes non détectées, déclarées dans la docstring : « Maven v3.10.0 », « Maven 3.10 », « mvn 3.10.0 » -> rc=0 sur copie. Une version recopiée hors des six documents de la liste n'est pas gardée. L'écart GEN-0077 (décision Maven 3.9.x, wrapper en 3.10.2) reste à trancher par le propriétaire (ADR :115).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #828, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-QUA-08",
@@ -3513,7 +3941,7 @@
     "axes": [
       "Qualité"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3521,14 +3949,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "docs/user/java-api.md:359 : `retentionService()` -> « aucun remplaçant à la demande : la rétention s'applique après chaque indexation et chaque import qui publie un snapshot (`LocalProjectOperations.importScip`, voir autonomous-indexing.md) » ; la promesse `new LocalProjectOperations(application)` (rétention des snapshots) a disparu (diff 75e10c68 -> 4f4cac81 de la ligne).",
+      "preuve": "docs/user/java-api.md:359 : `retentionService()` -> « aucun remplaçant à la demande : la rétention s'applique après chaque indexation et chaque import qui publie un snapshot (`LocalProjectOperations.importScip`, voir autonomous-indexing.md) » ; la promesse `new LocalProjectOperations(application)` (rétention des snapshots) a disparu (diff 75e10c68 -> 4f4cac81 de la ligne). La ligne :358 ne cite plus `projectIndexing(executorDecorator)`. Cohérent avec le code : la rétention n'est appelée qu'après publication (LocalProjectOperations.java, PublishedSnapshotRetention) et le test LocalProjectOperationsRetentionTest. Les autres remplaçants du tableau :355-361 sont tous des méthodes publiques (projectQueryService, projectInspectionService().resumableRun, knowledgeExport, projectIndexingViaWsl, remoteIndexing, runtimeIntelligenceService, ProviderPlatformService.defaults/listProviders/runtimes/installRuntime : javap et lecture). `docs/user/java-api.md:359` dit « aucun remplaçant à la demande : la rétention s'applique après chaque indexation et chaque import qui publie un snapshot » avec lien `autonomous-indexing.md` (fichier existant) ; la commande du scénario (`git grep -nE 'retentionService\\(\\)` \\| `new LocalProjectOperations' -- docs/user/java-api.md`) rend rc=1. La rétention de l'import publié est bien dans `LocalProjectOperations.java:175-177` (`retention.compact`) et celle de l'indexation dans `ProjectIndexingUseCase.java:52,75-76`. Les autres remplaçants de la table `:355-361` (`projectIndexing()`, `projectIndexingViaWsl`, `remoteIndexing()`, `runtimeIntelligenceService()`, `ProviderPlatformService.defaults`) sont des méthodes publiques au HEAD (`javap -public`). Le « :140-142 » du SUIVI est l'état à 75e10c68 (décalé de +34 lignes par la PR #824), conforme à l'en-tête de colonne.",
+      "reserve": "Le même fichier promet encore à java-api.md:372 un remplaçant non public pour `ProjectIndexingUseCase.of(MinosApplication, UnaryOperator)` : voir constat nouveau (l'exigence de la spécification ne porte que sur la table des accesseurs, :355-361). Une autre table de rupture du même fichier, `java-api.md:372`, promet `application.projectIndexing(executorDecorator)`, devenue package-private : voir nouveau constat.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #821, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-SEC-12",
@@ -3544,7 +3980,7 @@
     "axes": [
       "Sécurité"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3552,14 +3988,22 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "check_application_test_jar_content (check-module-boundaries.py:167-201, appelée :335 par check_pom_rules pour chaque module) lit toutes les exécutions du but test-jar de maven-jar-plugin (build, pluginManagement, profils : `.//m:plugin`), exige exactement une exécution, `<includes>` == [com/minos/application/MinosApplicationTestAccess.class] (niveau exécution, puis plugin) et aucun `<excludes>`.",
+      "preuve": "check_application_test_jar_content (check-module-boundaries.py:167-201, appelée :335 par check_pom_rules pour chaque module) lit toutes les exécutions du but test-jar de maven-jar-plugin (build, pluginManagement, profils : `.//m:plugin`), exige exactement une exécution, `<includes>` == [com/minos/application/MinosApplicationTestAccess.class] (niveau exécution, puis plugin) et aucun `<excludes>`. Mutations sur copies du pom (copie saine rc=0) : includes élargi à `com/minos/application/**` -> rc=1 (« the test-jar includes com/minos/application/**; it publishes ...MinosApplicationTestAccess.class only ») ; includes retiré -> rc=1 (« no <includes> ») ; seconde exécution test-jar (classifier more) -> rc=1 (« 2 executions ») ; includes complété d'une autre classe -> rc=1 ; `<excludes>` ajouté -> rc=1 ; seconde exécution test-jar dans un profil -> rc=1. Non détectés par le garde, et sans fuite de contenu : `<phase>none</phase>` et classifier modifié (le jar n'est plus produit : la résolution des 7 consommateurs échoue, l'IT échoue sur le jar manquant), plugin tiers vide. Auto-tests ApplicationTestJarContentRuleTest (test_check_module_boundaries.py:291-347) : 8 cas, rejoués OK. IT : ApplicationTestAccessPackagingIT.java:42-52 (nouveau test) liste les entrées non répertoire hors META-INF/, triées, et exige `List.of(TEST_ACCESS)` ; le jar lu est celui de la propriété minos.application.tests.jar (minos-app/pom.xml:79), jar absent -> assertTrue rouge (fail-closed). Rouge DÉDUIT par lecture, non observé (IT non exécutable ici) : includes élargi ou retiré -> le jar contient d'autres .class -> assertEquals rouge ; un autre plugin qui ajoute une entrée hors META-INF -> rouge. Règle `check_application_test_jar_content` (`check-module-boundaries.py:167-201`, appelée en `:335`) rejouée sur copie, rouge puis vert : `<includes>` élargi à `com/minos/application/**` rc=1 ; include supplémentaire rc=1 ; `<includes>` supprimé rc=1 ; `<includes/>` vide rc=1 ; `<excludes>` ajouté rc=1 ; seconde exécution `test-jar` rc=1 (« 2 executions ») ; POM réel rc=0. Chaque message nomme `minos-application/pom.xml` et la valeur trouvée. `ApplicationTestAccessPackagingIT.java:46-56` affirme que les entrées fichiers hors `META-INF/` valent exactement `{MinosApplicationTestAccess.class}` (3 tests dans la classe). Le POM (`minos-application/pom.xml:44-67`) a une seule exécution, un seul include, et le commentaire nomme le garde et l'IT.",
+      "reserve": "L'IT n'a pas été exécuté (Maven absent) : son rouge est déduit. Le garde ne lit que minos-application/pom.xml : une configuration de test-jar héritée du pom racine (pluginManagement, pom.xml:271) n'est pas vue ; seule l'IT la couvrirait. Une seconde exécution avec un classifier distinct produirait un second jar que l'IT (qui ne lit que -tests.jar) ne voit pas ; seul le garde la refuse, et il la refuse. L'IT n'a pas été exécuté (pas de Maven) : le contenu réel du test-jar construit et les entrées META-INF réelles ne sont pas mesurés ; le rouge de l'IT annoncé en tâche 2.3 est déduit. Tâche 4.2 (ARCH-0087 « Compliance and Enforcement ») non faite, nommée par le suivi. Le SUIVI.md n'écrit pas ce reste sur la ligne AUD-SEC-12 (seulement sur AUD-ARC-13 et dans « Tâches manuelles »).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #823, sprint 11 (archivé 2026-11-26)"
   },
   {
     "id": "AUD-TST-14",
@@ -3575,7 +4019,7 @@
     "axes": [
       "Tests"
     ],
-    "statut": "Ouvert",
+    "statut": "Fermé avec réserve",
     "depends_on": [],
     "bloque": [],
     "historique_statut": [
@@ -3583,13 +4027,269 @@
         "date": "2026-11-25",
         "head": "75e10c68",
         "statut": "Ouvert"
+      },
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Fermé avec réserve"
       }
     ],
     "verification": {
-      "verdict": "Constat ouvert le 25/11.",
-      "date": "2026-11-25",
-      "head": "75e10c68"
+      "verdict": "Dérivation par glob confirmée au 4f4cac81 : test_check_module_boundaries.py:525-548 (RULE_MODULE_GLOB = module_boundary_*.py, répertoire pris par Path(__file__).resolve().parent, donc indépendant du cwd ; glob vide ou module chargé mais non trouvé -> AssertionError) et RuleModulesTest:557-570.",
+      "preuve": "Dérivation par glob confirmée au 4f4cac81 : test_check_module_boundaries.py:525-548 (RULE_MODULE_GLOB = module_boundary_*.py, répertoire pris par Path(__file__).resolve().parent, donc indépendant du cwd ; glob vide ou module chargé mais non trouvé -> AssertionError) et RuleModulesTest:557-570. Mutations rejouées sur copies de /tmp/garde-verif/san : module_boundary_extra.py avec check_extra_rule jamais appelé -> rc=1 (3 sous-tests dont test_the_real_run_passes_and_calls_every_rule, nomme check_extra_rule) ; même module atteint par `import module_boundary_extra` sans appel -> rc=1 ; from-import + appel dans run_rules puis appel retiré -> rc=1 ; module câblé mais sans test qui le cite -> rc=1 (EveryRuleHasATest) ; module_boundary_outside.py hors du répertoire mais importé par le garde -> rc=1 (« loaded by the gate but not found by module_boundary_*.py ») ; glob de l'auto-test mutilé (*.pyx) -> rc=1 « cannot be derived » ; glob relatif au cwd (Path('.')) lancé depuis /tmp -> rc=1 ; try/except autour de check_package_cycles ou de check_dependency_policy -> rc=1. Le garde seul reste à rc=0 sur ces mutants (le gate ne les voit pas, l'auto-test oui). Copie saine : garde rc=0, 335 auto-tests OK (77+38+86+81+50+3), contre 317 au 25/11 (+8 test_check_module_boundaries, +4 ratchets, +6 documents, 0 packages/adapters/gate_runner) ; python3 -m unittest discover sur tout scripts/architecture : 397 OK, donc le contrôle `sys.modules` ne casse pas en exécution groupée. `rule_module_names` dérive les modules de `module_boundary_*.py` par glob et échoue sur glob vide ou sur un module chargé hors glob (`test_check_module_boundaries.py:527-546`) ; `RuleModulesTest` couvre le glob vide (répertoire temporaire) et le module « ailleurs ». Rouge/vert rejoué sur copie : `module_boundary_extra.py` avec `check_extra_rule` non branché dans `main()` -> `test_check_module_boundaries.py` rc=1 (3 échecs, « rules that main() does not run » nomme `check_extra_rule`) ; fichier retiré -> 77 tests OK rc=0. Les cinq `test_check_module_boundaries*.py` + `test_gate_runner.py` : 77+86+50+38+81+3 tests, tous OK.",
+      "reserve": "Le trou est fermé pour la forme d'import du garde et pour tout module qui s'appelle module_boundary_*.py ; il reste lié à des conventions de nommage : (a) un module de règles hors du glob (ex. rules_extra.py), non importé par le garde, avec une check_* -> auto-test vert (rc=0, mutant M8) ; il n'est pas non plus exécuté par le garde ; (b) un module module_boundary_*.py dont la fonction ne s'appelle pas check_* (verify_extra) importée et appelée par run_rules -> vert (M7), seule ENTRY_POINT_FUNCTIONS (test_check_module_boundaries.py:515, une entrée) couvre ce cas à la main ; (c) un module vide de check_* (M6), un sous-répertoire (M12), une méthode de classe (M13), _check_x (M15), un nom en casse différente (M16) restent verts, ce qui est voulu mais non documenté. Le mutant « glob vide » ne peut pas être produit par suppression de fichiers : le garde ne s'importe plus (ModuleNotFoundError rc=1, pas l'assertion) ; le fail-closed est prouvé par le test unitaire sur répertoire vide et la mutation du motif. Un module hors glob importé par le garde reste vu (dir(_MODULE)). Le cas « module importé par `import` plutôt que par `from … import` » n'a pas été mis en mutation séparée (la dérivation par glob l'englobe).",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
     },
-    "sprint": 11
+    "sprint": 11,
+    "changement": "PR #822, sprint 11 (archivé 2026-11-26)"
+  },
+  {
+    "id": "AUD-QUA-09",
+    "titre": "java-api.md:372 promet comme remplaçant une méthode que la façade n'expose plus publiquement (projectIndexing(executorDecorator))",
+    "severite": "Faible",
+    "axe": "Qualité",
+    "effort": "S",
+    "preuve": "docs/user/java-api.md:372 : `ProjectIndexingUseCase.of(MinosApplication, UnaryOperator<IndexerExecutor>)` -> `application.projectIndexing(executorDecorator)` ; MinosApplication.java:371 : cette méthode est package-private depuis PR #823 (javap -p : non publique) ; le relais public n'existe que dans le test-jar (MinosApplicationTestAccess.java:87-89). La ligne :358 a été corrigée, pas :372 ; release-notes/unreleased.md:28-37 n'en parle pas. La spécification archivée (spec.md, exigence « La table de rupture de la façade ne promet aucun remplaçant absent ») ne vise que la table des accesseurs retirés. | Recoupé par un second vérificateur : docs/user/java-api.md:372 (table « Signature retirée / Remplaçant », `ProjectIndexingUseCase.of(MinosApplication, UnaryOperator<IndexerExecutor>)` -> `application.projectIndexing(executorDecorator)`) ; `MinosApplication.java:371` : `ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor>)` sans `public` (javap -p confirme). La tâche 1.5 de `tenir-le-contrat-de-la-facade-par-le-garde` n'a retiré le remplaçant qu'à la ligne 358 ; l'exigence « La table de rupture de la façade ne promet aucun remplaçant absent » (spec.md frontieres-de-modules) n'est tenue par aucune commande sur cette table.",
+    "impact": "Un hôte qui décorait les exécuteurs par la fabrique statique retirée (publique en 1.2.0) est renvoyé vers une méthode qui ne compile pas ; il n'existe pas de remplaçant public. Le suivi dit que la méthode est « absente de v1.3.0 » : la table de rupture de la même version l'annonce pourtant.",
+    "action": "Écrire à :372 « aucun remplaçant public ; la décoration des exécuteurs est réservée aux tests (MinosApplicationTestAccess) », ou supprimer la ligne ; ajouter une phrase aux notes de version non publiées ; étendre la règle de la spécification à toutes les tables de rupture de java-api.md. Non couvert par un constat de findings-25.json.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Qualité"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
+  },
+  {
+    "id": "AUD-ARC-17",
+    "titre": "A11 (retours et paramètres) ne voit pas les méthodes publiques génériques de MinosApplication",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "effort": "S",
+    "preuve": "module_boundary_ratchets.py:129-130 (PUBLIC_METHOD : après les modificateurs, le type de retour doit commencer par [A-Za-z_]) : `public <T> ...` n'est pas reconnu, ni par public_instance_methods (retours) ni par public_signatures (:148-159, paramètres). Mutations sur copies du dépôt au 4f4cac81 : `public <T> void leakGeneric(com.minos.registry.ProjectRegistry r) {}` -> rc=0 ; `public <T> ProjectRegistry leakRet() { return null; }` -> rc=0 (les mêmes fuites non génériques donnent rc=1). Pas de test auto couvrant ce cas (test_check_module_boundaries_ratchets.py:373-413). | Recoupé par un second vérificateur : scripts/architecture/module_boundary_ratchets.py:129-130 (PUBLIC_METHOD : le type de retour doit commencer par [A-Za-z_], `public <T> void f(Engine e)` n'est pas apparié), :148-157 (public_signatures s'appuie sur cette regex), :262 (les imports joker sont exclus de `imported`). Rejoué sur copie de 4f4cac81 avec MinosApplication.java modifié : `public <T> void b(PrivateLocalStorage s, T t) {}` -> minos_application_engine_parameters = [] et check_minos_application_accessors vert ; `public <T> T k(PrivateLocalStorage s)` idem ; `import com.minos.io.*;` + `public void e(BoundedFileLease s) {}` -> vert. Les formes simples, qualifiées, varargs, tableau, annotées, multi-lignes, constructeur, Function<Engine,…> et MinosApplicationComposer sont refusées (sur 24 variantes : 17 refusées par la règle, 3 contrôles négatifs justes, 3 manques). `public static <T extends Engine> void c(T t)` est refusée par hasard par la règle des accesseurs (mauvais message). | Recoupé par un second vérificateur : `module_boundary_ratchets.py:129-130` (`PUBLIC_METHOD` : le type de retour doit commencer par une lettre, donc `public <T extends …> …` n'est pas reconnu) ; mutation sur copie de MinosApplication.java : `public <T extends com.minos.registry.ProjectRegistry> void leakTP(T r) {}` -> `check-module-boundaries.py` rc=0 ; `public <T extends com.minos.registry.ProjectRegistry> T leakRet() { return null; }` -> rc=0. Les variantes sans paramètre de type (importé, qualifié, générique `Map<…>`, tableau, varargs, statique, constructeur) rougissent (rc=1).",
+    "impact": "Le « cliquet à zéro » annoncé pour AUD-ARC-13 (et pour les retours depuis AUD-ARC-01/02) se contourne par une méthode générique publique ; le trou est antérieur pour les retours, il est repris par la nouvelle règle sur les paramètres.",
+    "action": "Accepter `(?:<[^>]*>\\s+)?` avant le type de retour dans PUBLIC_METHOD et ajouter deux variantes génériques à test_a_public_signature_taking_an_engine_type_is_refused. Non couvert par un constat existant de findings-25.json.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
+  },
+  {
+    "id": "AUD-TST-15",
+    "titre": "Preuve d'injection inégale des opérations locales : un test sans assertion et un chemin heureux non exercé",
+    "severite": "Faible",
+    "axe": "Tests",
+    "effort": "S",
+    "preuve": "LocalOperationsAssemblyTest.java:96-101 (theSymbolQueryOfAnApplicationIsBuiltOverItsQueryService) construit `new LocalProjectSymbolQuery(application)` sans aucune assertion (seul le NPE sur null est vérifié) ; le constructeur public `new LocalProjectOperations(MinosApplication)` n'est exercé que par un cas de refus d'artefact (LocalProjectOperationsRetentionTest.java:104-109, IllegalArgumentException avant toute lecture de port), alors que le chemin heureux passe par `localProjectOperationsDependencies()` (MinosApplication.java:309-313) seulement en production.",
+    "impact": "Une erreur d'assemblage dans la façade (collaborateur permuté entre deux ports de même type, ou oublié dans localProjectOperationsDependencies) ne rougirait aucun test de minos-application ; seuls les tests des surfaces l'attraperaient. Aucun défaut observé : le code relu est correct.",
+    "action": "Faire passer un import SCIP complet par `new LocalProjectOperations(fixture.application())` (retention + état comme dans importScip) et affirmer que le service de requête de LocalProjectSymbolQuery est celui de l'application (par un appel observable). Non couvert par un constat de findings-25.json.",
+    "connu": "",
+    "confiance": "confirmé (un vérificateur)",
+    "axes": [
+      "Tests"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
+  },
+  {
+    "id": "AUD-ARC-18",
+    "titre": "Le dossier frontieres-de-modules écrit encore des nombres dérivés de la politique que sa propre exigence interdit, sans contrôle",
+    "severite": "Faible",
+    "axe": "Architecture",
+    "effort": "S",
+    "preuve": "openspec/specs/frontieres-de-modules/spec.md:1709 (« Le dossier SHALL n'écrire aucun nombre dérivé de la politique (modules, dépendances, découvertes) ») contre docs/architecture/diagrams/capacites/frontieres-de-modules.md:221 (E2 : « 14 modules », « 13 modules ») et :223 (E4 : « 3, 4, 1 et 0 », « 14, 15, 4, 6 ») ; test_check_module_boundaries_documents.py:369-486 ne compare que des étiquettes A<n> et des noms de fichiers (mutants rejoués : « 12 autres modules » et retrait de « A1 et » restent rc=0). | Recoupé par un second vérificateur : docs/architecture/diagrams/capacites/frontieres-de-modules.md:227 (E8 : preuve `MinosApplication.java` (`gitIntelligence()`, `hostedControlPlaneService()`, ports du moteur)) ; ces accesseurs n'existent plus (`javap -p MinosApplication`, PR #824) ; spec.md:708,731 écrivent toujours des scénarios sur `opened.hostedControlPlaneService()` et `app.gitIntelligence()`.",
+    "impact": "Les nombres de E2/E4 vieilliront (E4 compte le cliquet A11 qui ne fait que baisser) ; l'exigence n'est tenue que par la revue.",
+    "action": "Réécrire E2 et E4 sans compte (ou marquer E2 clos : la spec n'écrit plus « 13 modules ») ; ajouter à l'auto-test une recherche des motifs « [0-9]+ (autres )?modules » hors tableau des écarts.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Architecture"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
+  },
+  {
+    "id": "AUD-QUA-10",
+    "titre": "STATUS.md:19 et ROADMAP.md:23 écrivent « 154 cas » pour l'auto-test du garde de frontières ; le décompte réel est 332",
+    "severite": "Faible",
+    "axe": "Qualité",
+    "effort": "S",
+    "preuve": "docs/project/governance/STATUS.md:19, ROADMAP.md:23 ; `python3 scripts/architecture/test_check_module_boundaries*.py` au 4f4cac81 : 77+86+50+38+81 = 332 cas (335 avec `test_gate_runner.py`), contre 69+86+44+38+77 = 314 à 75e10c68 : « 154 » était déjà faux avant le sprint 11, que SUIVI.md:174 range « hors périmètre, pour `/minos:docs-sync` ». | Recoupé par un second vérificateur : SUIVI.md:169 ; design.md:58 de `tenir-le-contrat-de-la-facade-par-le-garde` (« nom corrigé » ) et proposal.md:31 ; `ProjectInspectionService.java:140` `public ProjectView statusView(RegisteredProject)` ET `:169` `public ProjectView view(RegisteredProject)`, tous deux au 75e10c68 et au 4f4cac81 (`LocalProjectOperations.java:114` appelle `inspectionService.view`).",
+    "impact": "Les documents courants donnent à moitié le nombre réel de cas ; le gate `check-current-docs.py` ne lit pas ce nombre.",
+    "action": "Retirer le nombre (« testée règle par règle ») ou le lire d'une source ; passer `/minos:docs-sync` comme le suivi l'annonce.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Qualité"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
+  },
+  {
+    "id": "AUD-DEP-16",
+    "titre": "Le gate des wrappers accepte des formes de clé que mvnw ignore : `distributionSha256Sum =`, `:` ou clé indentée laissent mvnw sans vérification",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "effort": "S",
+    "preuve": "scripts/quality/check-toolchain-baseline.py:396 (PROPERTY = ^\\s*key\\s*[=:]\\s*value) et :401-410 acceptent ces formes (rc=0 rejoué sur copie) ; mvnw:113-117 lit `while IFS=\"=\" read -r key value` + `case distributionSha256Sum)` : la clé `distributionSha256Sum ` (espace), `distributionSha256Sum:...` ou `  distributionSha256Sum` ne correspond pas (rejoué : sum=[<unset>]), donc mvnw:226 `if [ -n \"${distributionSha256Sum-}\" ]` saute le contrôle. Auto-test sans cas pour ces formes.",
+    "impact": "Une PR (ou une édition Dependabot/IDE) qui reformate la ligne passe « Static invariants » alors que mvnw (Linux CI, poste) exécute l'archive Maven non vérifiée : le fail-open d'AUD-DEP-09 renaît derrière un gate vert. Risque faible (modification volontaire ou formatage rare) mais c'est exactement la classe que la règle 13 prétend fermer.",
+    "action": "Aligner properties_of() sur l'analyseur de mvnw pour distributionUrl et distributionSha256Sum : exiger `^(key)=value$` sans espace ni `:` ni indentation (clé exacte avant le premier `=`), avec cas d'auto-test `Sum =`, `Sum:`, clé indentée ; ne garder la tolérance `\\:` que pour gradle-wrapper.properties (analyseur Java Properties).",
+    "connu": "",
+    "confiance": "confirmé (un vérificateur)",
+    "axes": [
+      "Dépendances"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
+  },
+  {
+    "id": "AUD-DEP-17",
+    "titre": "Gate des outils livrés : un contrôle d'empreinte placé après `tar` (nom relatif après `cd /tmp`) ou portant sur un autre fichier reste vert",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "effort": "S",
+    "preuve": "Rejeu : dans docker/Dockerfile.mcp.release:183-190 (RUN Node : curl -> `cd /tmp` -> `tar -xJf \"${node_archive}\"`), déplacer la ligne `printf ... \"${NODE_LINUX_SHA256}\" \"/tmp/${node_archive}\" | sha256sum -c -` après le tar donne check-tools-manifest.py rc=0 (verified archives=6) : names() (:389-391) cherche `/tmp/${node_archive}` et ne voit pas `${node_archive}`. Un contrôle sur `/tmp/other.gz` (Coursier) ou `/tmp/nothing.zip` (Maven) donne aussi rc=0 (limite écrite dans la docstring). Le Dockerfile actuel est correct (contrôle avant usage, :186). | Recoupé par un second vérificateur : `check-tools-manifest.py:353-357` (`DISARMING`, motif `\\bset\\s+\\+[A-Za-z]*e`) ; mutation sur copie de `docker/Dockerfile.mcp.release` : `RUN set -eux; set +o errexit; …` devant le contrôle Maven -> `check-tools-manifest.py` rc=0 ; `set +e`, `trap`, `|| true`, `|| :`, `|| exit 0`, `set -ux` rc=1.",
+    "impact": "Le contrôle déplacé après usage (le cas AUD-DEP-10 « contrôle après unzip ») n'est refusé que pour les ARG dont l'usage cite le chemin absolu ; l'archive Node serait extraite avant vérification sans que le gate rougisse. M29DockerAdministrationContractTest.java:168 ne rattrape rien (simple contains).",
+    "action": "Dans use_before_check_failures, comparer aussi le nom de base du fichier (basename du token, variable shell comprise) et refuser tout `cd` avant le contrôle ; exiger que le fichier du contrôle soit celui écrit par le `curl -o` du même RUN. Ajouter les cas tar relatif et fichier différent à ArchiveCheckTest.",
+    "connu": "",
+    "confiance": "confirmé",
+    "axes": [
+      "Dépendances"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
+  },
+  {
+    "id": "AUD-DEP-18",
+    "titre": "Le pin `eol=crlf` de .gitattributes:36 n'est pas lui-même gardé : le retirer neutralise la règle i/lf des .cmd",
+    "severite": "Faible",
+    "axe": "Dépendances",
+    "effort": "S",
+    "preuve": "check-posix-script-eol.py:130-133 (pinned_eol_files) ne retient que les fichiers dont l'attribut résolu contient eol=lf/eol=crlf. Rejeu : `*.cmd text` ou `*.cmd binary` à la place de `*.cmd text eol=crlf` avec mvnw.cmd en i/crlf : rc=0, compteur 159 -> 157, aucun message ; le test « CRLF file without eol attribute » de l'auto-test fige ce comportement.",
+    "impact": "La même PR peut retirer le pin et enregistrer mvnw.cmd en CRLF (le piège que la règle vise : candidat Windows refusé car arbre modifié). Visible dans le diff de .gitattributes, mais aucun garde ne l'exige.",
+    "action": "Lister dans le gate une liste fermée de motifs/fichiers dont le pin est requis (mvnw.cmd, minos.cmd, minos-intellij/gradlew.bat, *.sh, mvnw) et échouer si leur attribut résolu n'est pas eol=lf ou eol=crlf.",
+    "connu": "",
+    "confiance": "confirmé (un vérificateur)",
+    "axes": [
+      "Dépendances"
+    ],
+    "statut": "Ouvert",
+    "depends_on": [],
+    "bloque": [],
+    "historique_statut": [
+      {
+        "date": "2026-11-27",
+        "head": "4f4cac81",
+        "statut": "Ouvert"
+      }
+    ],
+    "verification": {
+      "verdict": "Constat ouvert le 27/11.",
+      "date": "2026-11-27",
+      "head": "4f4cac81"
+    },
+    "sprint": 12
   }
 ]
