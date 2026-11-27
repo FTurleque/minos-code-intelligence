@@ -16,11 +16,19 @@ embeds it. Three consumers read it and one gate checks all of them:
 
 Every SHA-256 ``ARG`` the catalogue gives the image (key ``sha256`` of ``dockerArgs``) is checked before its archive
 is used: exactly one ``RUN`` instruction consumes it; that instruction starts with ``set -e`` (``-eux`` and the like)
-and holds no ``|| true``, ``|| :``, ``set +e`` nor ``trap``; it holds once the line
-``printf '%s  %s\\n' "${ARG}" <file> | sha256sum -c -``, with no ``||`` after it; and no command before that line names
-``<file>``, except ``curl`` that writes it and ``rm -f`` that removes it. The list of ``ARG`` comes from the catalogue,
-so a tool added to it is covered. What this does not prove: that the checked file is the one used on disk, nor that
-the image builds (the Docker qualification does).
+and holds no ``|| true``, ``|| :``, ``set +e``, ``set +o errexit`` nor ``trap``; it holds once the line
+``printf '%s  %s\\n' "${ARG}" <file> | sha256sum -c -``, with no ``||`` after it; ``<file>`` is written by a
+``curl -o`` (``-Lo``, ``-fsSLo``) of that instruction, under the same text, double quotes aside; and no command before
+that line names ``<file>``, nor its base name (the last segment, a shell variable included, ``${x}`` and ``$x``
+alike) unless a ``/`` precedes it, as at the end of a download URL; only ``curl`` that writes it and ``rm -f`` that
+removes it may. The list of ``ARG`` comes from the catalogue, so a tool added to it is covered.
+
+The shell is read in the forms the Dockerfile uses, and another form is refused rather than understood: a command
+starts with ``curl``, ``if curl`` or ``rm -f`` (not ``until curl`` or ``VAR=x curl``), the output option is a short
+``-o`` (not ``--output``), single quotes are part of the name, and a ``;`` ends a command even between quotes. What
+this does not prove: that the checked file is the one used on disk. Not seen: a use of the base name behind a ``/``
+(``./<name>`` or ``"$dir"/<name>`` when the check reads a path with a directory), through a glob, or chained to
+``curl`` or ``rm -f`` with ``&&``, ``||`` or ``|``; nor that the image builds (the Docker qualification does).
 
 ``ScipIndexerCatalog`` keeps the provider versions the product advertises: the catalogue must say the same.
 
@@ -353,10 +361,15 @@ SET_ERREXIT = re.compile(r"^\s*RUN\s+set\s+-(?P<options>[A-Za-z]+)\b")
 DISARMING = (
     (re.compile(r"\|\|\s*(?:true|:)(?=[\s;]|$)"), "|| true"),
     (re.compile(r"\bset\s+\+[A-Za-z]*e"), "set +e"),
+    (re.compile(r"\bset\b[^;&|]*?\s\+[A-Za-z]*o\s+errexit\b"), "set +o errexit"),
     (re.compile(r"\btrap\b"), "trap"),
 )
 COMMAND_START = re.compile(r"^(?:if\s+)?(?P<command>curl\b|rm\s+-f\b)")
 OPENING_KEYWORDS = ("do", "then", "else")
+BRACED_VARIABLE = re.compile(r"\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}")
+SHELL_OPERATOR = re.compile(r"&&|\|\|?")
+CURL_COMMAND = re.compile(r"^(?:RUN\s+)?(?:if\s+)?curl\s")
+CURL_OUTPUT = re.compile(r"\s-[A-Za-z]*o\s+(?P<target>(?:\"[^\"]*\"|[^\s\"])+)")
 
 
 def archive_check(name: str) -> re.Pattern[str]:
@@ -389,6 +402,33 @@ def shell_commands(lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
 def names(text: str, token: str) -> bool:
     """Whether ``text`` names the file ``token`` (a path or a shell variable), not a longer name that starts like it."""
     return re.search(re.escape(token) + r"(?![A-Za-z0-9_])", text) is not None
+
+
+def names_base_name(text: str, token: str) -> bool:
+    """Whether ``text`` names the file ``token`` by its base name alone, as after ``cd``.
+
+    The base name preceded by a ``/`` is another path, or the end of a download URL, and does not count. A literal
+    name is a whole word: ``mycs.gz`` and ``cs.gz.sig`` are other files than ``cs.gz``. A variable starts at its ``$``.
+    """
+    plain_text, plain_token = (BRACED_VARIABLE.sub(r"$\g<name>", value) for value in (text, token))
+    base = plain_token.rsplit("/", 1)[-1]
+    if not base:
+        return False
+    if base.startswith("$"):
+        before, after = r"(?<!/)", r"(?![A-Za-z0-9_])"
+    else:
+        before, after = r"(?<![A-Za-z0-9_./-])", r"(?![A-Za-z0-9_-]|\.[A-Za-z0-9_])"
+    return re.search(before + re.escape(base) + after, plain_text) is not None
+
+
+def curl_targets(code: list[tuple[int, str]]) -> set[str]:
+    """The files the ``curl`` commands of a RUN instruction write through ``-o``, quotes removed."""
+    targets: set[str] = set()
+    for _number, command in shell_commands(code):
+        for part in SHELL_OPERATOR.split(command):
+            if CURL_COMMAND.match(part.strip()):
+                targets.update(match.group("target").strip('"') for match in CURL_OUTPUT.finditer(part))
+    return targets
 
 
 def check_archive_checks(root: Path, catalog: dict, failures: list[str]) -> int:
@@ -448,6 +488,7 @@ def archive_check_failures(name: str, run: list[tuple[int, str]], failures: list
         failures.append(f"{DOCKERFILE.as_posix()}:{first}: ARG {name} is checked {len(checks)} times in the form "
                         f"`printf '%s  %s\\n' \"${{{name}}}\" <file> | sha256sum -c -`; expected exactly once")
         return False
+    downloaded_file_failures(name, code, checks[0], failures)
     use_before_check_failures(name, code, checks[0], failures)
     return len(failures) == before
 
@@ -468,13 +509,23 @@ def disarming_failures(name: str, code: list[tuple[int, str]], failures: list[st
     return neutralised
 
 
+def downloaded_file_failures(name: str, code: list[tuple[int, str]], check: tuple[int, str],
+                             failures: list[str]) -> None:
+    """Reports a check of ``name`` that reads a file no ``curl`` of its RUN instruction writes."""
+    check_line, file = check
+    token = file.strip('"')
+    if token not in curl_targets(code):
+        failures.append(f"{DOCKERFILE.as_posix()}:{check_line}: the check of ARG {name} reads {token}, which no "
+                        "`curl -o` of this RUN instruction writes")
+
+
 def use_before_check_failures(name: str, code: list[tuple[int, str]], check: tuple[int, str],
                               failures: list[str]) -> None:
     """Reports each command before the check of ``name`` that uses its file, other than curl and rm -f."""
     check_line, file = check
     token = file.strip('"')
     for number, command in shell_commands([(n, line) for n, line in code if n < check_line]):
-        if names(command, token) and not COMMAND_START.match(command):
+        if (names(command, token) or names_base_name(command, token)) and not COMMAND_START.match(command):
             failures.append(f"{DOCKERFILE.as_posix()}:{number}: {token} is used before the check of ARG {name} "
                             "(only curl may write it and rm -f remove it)")
 

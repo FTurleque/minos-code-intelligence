@@ -83,6 +83,15 @@ MAVEN_RUN = ('RUN set -eux; \\\n'
              '    rm -f "/tmp/${maven_archive}"\n')
 
 
+def cs_run(checked: str = "/tmp/cs.gz", before_check: str = "") -> str:
+    """A RUN instruction shaped like the Coursier one: literal paths, one download, one check."""
+    return ('RUN set -eux; \\\n'
+            '    curl -fsSLo /tmp/cs.gz "https://one.example/${MAVEN_VERSION}/cs.gz"; \\\n'
+            f"{before_check}"
+            f"    printf '%s  %s\\n' \"${{MAVEN_ZIP_SHA256}}\" {checked} | sha256sum -c -; \\\n"
+            '    gunzip /tmp/cs.gz\n')
+
+
 def dockerfile(sha: str = TOOL_SHA, maven: str = "3.9.16", java: str = "1.0.0", extra: str = "",
                inventory_block: str | None = None, maven_run: str = MAVEN_RUN) -> str:
     return (f"FROM eclipse-temurin:24@sha256:{'a' * 64}\nARG MAVEN_VERSION={maven}\nARG MAVEN_ZIP_SHA256={sha}\n"
@@ -474,6 +483,60 @@ class ArchiveCheckTest(unittest.TestCase):
                                     + MAVEN_CHECK)
         self.assertEqual([], self.failures(mutated))
 
+    def test_an_archive_used_by_its_relative_name_before_its_check_is_refused(self):
+        for written in ('"${maven_archive}"', '"$maven_archive"'):
+            with self.subTest(written=written):
+                self.assert_refused(
+                    MAVEN_RUN.replace(MAVEN_CHECK, f"    cd /tmp; \\\n    tar -xJf {written}; \\\n" + MAVEN_CHECK),
+                    "/tmp/${maven_archive} is used before the check of ARG MAVEN_ZIP_SHA256")
+
+    def test_a_literal_archive_used_by_its_base_name_before_its_check_is_refused(self):
+        self.assert_refused(cs_run(before_check="    cd /tmp; \\\n    gunzip cs.gz; \\\n"),
+                            "/tmp/cs.gz is used before the check of ARG MAVEN_ZIP_SHA256")
+
+    def test_a_download_url_that_ends_with_the_archive_name_is_accepted(self):
+        mutated = MAVEN_RUN.replace(MAVEN_CHECK, '    echo "https://one.example/${maven_archive}"; \\\n' + MAVEN_CHECK)
+        self.assertEqual([], self.failures(mutated))
+
+    def test_a_longer_name_that_contains_the_base_name_is_accepted(self):
+        for written in ("mycs.gz", "old-cs.gz", "cs.gz.sig", "cs.gz-old"):
+            with self.subTest(written=written):
+                self.assertEqual([], self.failures(cs_run(before_check=f"    ls {written}; \\\n")))
+
+    def test_a_target_quoted_in_part_is_the_file_the_check_reads(self):
+        run = ('RUN set -eux; \\\n'
+               '    curl -fsSLo "$dir"/cs.gz "https://one.example/cs.gz"; \\\n'
+               "    printf '%s  %s\\n' \"${MAVEN_ZIP_SHA256}\" \"$dir\"/cs.gz | sha256sum -c -; \\\n"
+               '    gunzip "$dir"/cs.gz\n')
+        self.assertEqual([], self.failures(run))
+
+    def test_errexit_turned_off_by_its_long_name_is_refused(self):
+        for command in ("set +o errexit", "set +x +o errexit", "set -u +o errexit", "set +uo errexit"):
+            with self.subTest(command=command):
+                self.assert_refused(MAVEN_RUN.replace("RUN set -eux;", f"RUN set -eux; {command};"),
+                                    "disarms its check (`set +o errexit`)")
+
+    def test_another_long_option_turned_off_is_accepted(self):
+        self.assertEqual([], self.failures(MAVEN_RUN.replace("RUN set -eux;", "RUN set -eux; set +o xtrace;")))
+
+    def test_a_check_of_a_file_no_curl_writes_is_refused(self):
+        self.assert_refused(cs_run(checked="/tmp/other.gz"),
+                            "reads /tmp/other.gz, which no `curl -o` of this RUN instruction writes")
+
+    def test_a_check_of_the_curl_target_after_a_change_of_directory_is_accepted(self):
+        for option in ("-o", "-Lo", "-fsSLo"):
+            with self.subTest(option=option):
+                run = ('RUN set -eux; \\\n'
+                       '    cd /tmp; \\\n'
+                       f'    curl {option} cs.gz "https://one.example/cs.gz"; \\\n'
+                       "    printf '%s  %s\\n' \"${MAVEN_ZIP_SHA256}\" cs.gz | sha256sum -c -; \\\n"
+                       '    gunzip cs.gz\n')
+                self.assertEqual([], self.failures(run))
+
+    def test_an_echoed_curl_does_not_write_the_checked_file(self):
+        failures = self.failures(cs_run(checked="/tmp/other.gz", before_check='    echo curl -o /tmp/other.gz; \\\n'))
+        self.assertTrue(any("which no `curl -o` of this RUN instruction writes" in f for f in failures), failures)
+
 
 class ShippedTreeTest(unittest.TestCase):
     def test_the_repository_itself_passes(self):
@@ -503,6 +566,37 @@ class ShippedTreeTest(unittest.TestCase):
         self.assertEqual(1, len(failures), failures)
         self.assertRegex(failures[0], r"^docker/Dockerfile\.mcp\.release:\d+: the RUN instruction that verifies "
                                       r"ARG MAVEN_ZIP_SHA256 disarms its check")
+
+    def shipped_archive_failures(self, mutated: str) -> list[str]:
+        shipped_catalog = json.loads((gate.DEFAULT_ROOT / gate.CATALOG).read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / gate.DOCKERFILE
+            path.parent.mkdir(parents=True)
+            path.write_text(mutated, encoding="utf-8")
+            failures: list[str] = []
+            gate.check_archive_checks(Path(directory), shipped_catalog, failures)
+        return failures
+
+    def test_the_shipped_dockerfile_with_the_node_check_after_tar_is_refused(self):
+        lines = (gate.DEFAULT_ROOT / gate.DOCKERFILE).read_text(encoding="utf-8").split("\n")
+        check = next(index for index, line in enumerate(lines) if '"${NODE_LINUX_SHA256}"' in line)
+        tar = next(index for index, line in enumerate(lines) if "tar -xJf" in line)
+        self.assertLess(check, tar, "the shipped Dockerfile no longer checks the Node archive before extracting it")
+        moved = lines.pop(check)
+        lines.insert(tar, moved)  # popping the check moved `tar` up by one: this is the line right after it
+        failures = self.shipped_archive_failures("\n".join(lines))
+        self.assertEqual(1, len(failures), failures)
+        self.assertTrue(failures[0].startswith(f"docker/Dockerfile.mcp.release:{tar}: "), failures[0])
+        self.assertIn("is used before the check of ARG NODE_LINUX_SHA256", failures[0])
+
+    def test_the_shipped_dockerfile_with_errexit_turned_off_by_its_long_name_is_refused(self):
+        shipped = (gate.DEFAULT_ROOT / gate.DOCKERFILE).read_text(encoding="utf-8")
+        anchor = "RUN set -eux; \\\n    maven_archive="
+        self.assertEqual(1, shipped.count(anchor), "the shipped Maven RUN instruction changed its first line")
+        failures = self.shipped_archive_failures(
+            shipped.replace(anchor, "RUN set -eux; set +o errexit; \\\n    maven_archive="))
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("verifies ARG MAVEN_ZIP_SHA256 disarms its check (`set +o errexit`)", failures[0])
 
     def test_the_shipped_catalogue_with_an_older_node_major_on_linux_is_refused(self):
         shipped = json.loads((gate.DEFAULT_ROOT / gate.CATALOG).read_text(encoding="utf-8"))

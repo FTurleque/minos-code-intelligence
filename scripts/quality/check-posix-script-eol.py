@@ -21,6 +21,11 @@ shows it modified, and the Windows candidate refuses to build from a modified tr
 ``mvnw.cmd`` this way. The gate keeps its name and label (the CI and the capability dossier cite them) although it
 covers more than POSIX scripts.
 
+A batch file is a tracked file whose name ends with ``.cmd`` or ``.bat``, in any case, outside any ``fixtures/``
+directory. Its resolved attribute must carry the ``eol=crlf`` token, recorded with or without carriage return: without
+the pin the rule above no longer covers it, and nothing guarantees CRLF on checkout. The list comes from the index,
+so a new batch file is covered.
+
 Fail-closed: ``git`` missing, a root that is not the top level of a Git repository, or zero POSIX script found is a
 failure, never a success on zero files. Messages name repository-relative paths only.
 
@@ -46,6 +51,7 @@ import gate_cli  # noqa: E402 - after the script's directory is added to the pat
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 LABEL = "POSIX SCRIPT EOL CHECK"
 WRAPPER_PROPERTIES = ".mvn/wrapper/maven-wrapper.properties"
+BATCH_EXTENSIONS = (".cmd", ".bat")
 # The interpreter name follows the "#!", a "/" or the "env" word and its options: "fish" or "/usr/bin/fish" is not "sh".
 POSIX_SHEBANG = re.compile(r"^#!\s*(?:\S*/)?(?:env\s+(?:-\S+\s+)*(?:\S*/)?)?(?:sh|bash|dash|ksh|zsh)(?:\s|$)")
 # Only the variables Git needs to start and to locate its own configuration; nothing else is inherited.
@@ -133,17 +139,28 @@ def pinned_eol_files(entries: dict[str, tuple[str, str]]) -> list[str]:
                   if {"eol=lf", "eol=crlf"} & set(attributes.split()))
 
 
-def check_counts(root: Path) -> tuple[list[str], int, int]:
-    """(failures, number of POSIX scripts checked, number of files with pinned line endings checked)."""
+def batch_files(entries: dict[str, tuple[str, str]]) -> list[str]:
+    """Tracked batch files, whatever the case of their extension, outside any ``fixtures/`` directory."""
+    return sorted(path for path in entries if path.lower().endswith(BATCH_EXTENSIONS) and not is_fixture(path))
+
+
+def batch_pin_failures(entries: dict[str, tuple[str, str]], batches: list[str]) -> list[str]:
+    """One failure per batch file whose resolved attribute does not pin CRLF on checkout."""
+    return [f"{path}: no 'eol=crlf' attribute ({entries[path][1]}); add '*{path[-4:]} text eol=crlf' to .gitattributes"
+            for path in batches if "eol=crlf" not in entries[path][1].split()]
+
+
+def check_counts(root: Path) -> tuple[list[str], int, int, int]:
+    """(failures, POSIX scripts checked, files with pinned line endings checked, batch files checked)."""
     try:
         require_repository_root(root)
         entries = eol_entries(root)
         scripts = {path for path in entries if path.endswith(".sh")} | shebang_scripts(root)
     except GateError as error:
-        return [str(error)], 0, 0
+        return [str(error)], 0, 0, 0
     scripts = {path for path in scripts if path in entries and not is_fixture(path)}
     if not scripts:
-        return ["no POSIX shell script is tracked; the gate refuses to succeed on zero files"], 0, 0
+        return ["no POSIX shell script is tracked; the gate refuses to succeed on zero files"], 0, 0, 0
     checked = sorted(scripts | ({WRAPPER_PROPERTIES} & entries.keys()))
     failures: list[str] = []
     for path in checked:
@@ -158,20 +175,23 @@ def check_counts(root: Path) -> tuple[list[str], int, int]:
         index = entries[path][0]
         if path not in already and index in ("i/crlf", "i/mixed"):
             failures.append(f"{path}: recorded as {index}, expected i/lf; run 'git add --renormalize -- {path}'")
-    return failures, len(checked), len(pinned)
+    batches = batch_files(entries)
+    failures.extend(batch_pin_failures(entries, batches))
+    return failures, len(checked), len(pinned), len(batches)
 
 
 def check(root: Path) -> tuple[list[str], int]:
     """(failures, number of POSIX scripts checked)."""
-    failures, scripts, _pinned = check_counts(root)
+    failures, scripts, _pinned, _batches = check_counts(root)
     return failures, scripts
 
 
 def run(root: Path) -> int:
-    failures, count, pinned = check_counts(root)
+    failures, count, pinned, batches = check_counts(root)
     if gate_cli.report_failures(LABEL, failures):
         return 1
-    print(f"{LABEL} SUCCESS (POSIX scripts checked={count}, files with pinned line endings checked={pinned})")
+    print(f"{LABEL} SUCCESS (POSIX scripts checked={count}, files with pinned line endings checked={pinned}, "
+          f"batch files checked={batches})")
     return 0
 
 
@@ -227,6 +247,7 @@ def self_test_cases() -> list[tuple]:
     rules = "*.sh text eol=lf\noutil text eol=lf\n"
     fish_script = b"#!/usr/bin/fish\necho ok\n"
     crlf_batch = b"@echo off\r\necho ok\r\n"
+    lf_batch = b"@echo off\necho ok\n"
     return [
         ("script without attribute", {"build.sh": lf_script}, None, False, 1, "add '*.sh text eol=lf'", None),
         ("shebang script without extension", {"outil": lf_script, "a.sh": lf_script}, "*.sh text eol=lf\n", False, 1,
@@ -251,6 +272,22 @@ def self_test_cases() -> list[tuple]:
          "*.sh text eol=lf\n*.ps1 text eol=crlf\n", True, 1, "x.ps1: recorded as i/crlf", None),
         ("CRLF file without eol attribute", {"a.sh": lf_script, "notes.txt": crlf_batch}, "*.sh text eol=lf\n", True,
          0, None, 1),
+        ("batch file whose rule lost eol=crlf", {"a.sh": lf_script, "mvnw.cmd": lf_batch},
+         "*.sh text eol=lf\n*.cmd text\n", False, 1,
+         "mvnw.cmd: no 'eol=crlf' attribute (attr/text); add '*.cmd text eol=crlf' to .gitattributes", None),
+        ("batch file made binary", {"a.sh": lf_script, "gradlew.bat": lf_batch}, "*.sh text eol=lf\n*.bat binary\n",
+         False, 1, "gradlew.bat: no 'eol=crlf' attribute (attr/-text); add '*.bat text eol=crlf' to .gitattributes",
+         None),
+        ("batch file pinned to LF", {"a.sh": lf_script, "mvnw.cmd": lf_batch},
+         "*.sh text eol=lf\n*.cmd text eol=lf\n", False, 1, "mvnw.cmd: no 'eol=crlf' attribute", None),
+        ("unpinned batch file recorded with CRLF", {"a.sh": lf_script, "mvnw.cmd": crlf_batch}, "*.sh text eol=lf\n",
+         True, 1, "mvnw.cmd: no 'eol=crlf' attribute", None),
+        ("batch extension in upper case", {"a.sh": lf_script, "tools/RUN.BAT": lf_batch}, "*.sh text eol=lf\n", False,
+         1, "tools/RUN.BAT: no 'eol=crlf' attribute (attr/); add '*.BAT text eol=crlf' to .gitattributes", None),
+        ("batch file in a fixtures directory only", {"a.sh": lf_script, "src/fixtures/x.cmd": lf_batch},
+         "*.sh text eol=lf\n", False, 0, None, 1),
+        ("batch file pinned to CRLF", {"a.sh": lf_script, "mvnw.cmd": lf_batch},
+         "*.sh text eol=lf\n*.cmd text eol=crlf\n", False, 0, None, 1),
         ("compliant repository", {"a.sh": lf_script, "outil": lf_script, "bin/run": b"#!/bin/sh\nexit 0\n",
                                   "bin/env-s": b"#!/usr/bin/env -S bash -e\nexit 0\n",
                                   "tool.py": b"#!/usr/bin/env python3\n"},
