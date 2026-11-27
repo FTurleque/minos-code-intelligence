@@ -388,12 +388,184 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
              ("com.minos.registry.ProjectRegistry",)),
             ("    public void wire(MinosApplicationComposer root) { }", "MinosApplication.wire", "root",
              "MinosApplicationComposer", ()),
+            # AUD-ARC-17: a type parameter section hides neither the signature nor the types of its bounds.
+            ("    public <T> void leakGeneric(ProjectRegistry r) { }", "MinosApplication.leakGeneric", "parameter r",
+             "registry.ProjectRegistry", ("com.minos.registry.ProjectRegistry",)),
+            ("    public static <T> MinosApplication of(T t, ProjectRegistry r) { return null; }",
+             "MinosApplication.of", "parameter r", "registry.ProjectRegistry",
+             ("com.minos.registry.ProjectRegistry",)),
+            ("    public <T extends ProjectRegistry> void leakBound(T r) { }", "MinosApplication.leakBound",
+             "parameter r", "registry.ProjectRegistry", ("com.minos.registry.ProjectRegistry",)),
+            # No parameter: the bound counts as returned.
+            ("    public <T extends java.util.Map<String, ProjectRegistry>> T nested() { return null; }",
+             "MinosApplication.nested", "accessor returning", "registry.ProjectRegistry",
+             ("com.minos.registry.ProjectRegistry",)),
+            ("    public <T> MinosApplication(ProjectRegistry r) { }", "MinosApplication.MinosApplication",
+             "parameter r", "registry.ProjectRegistry", ("com.minos.registry.ProjectRegistry",)),
+            # A constructor has no return type: its bound is reported even without a parameter.
+            ("    public <T extends ProjectRegistry> MinosApplication() { }", "MinosApplication.MinosApplication",
+             "parameter <type parameters>", "registry.ProjectRegistry", ("com.minos.registry.ProjectRegistry",)),
         )
         for members, method, parameter, engine_type, imports in variants:
-            with self.subTest(method=method):
+            with self.subTest(members=members):
                 self.application_with(members, imports)
                 self.refused(lambda: self.check_accessors({}), "A11", method, parameter, engine_type,
                              "package-private")
+
+    def test_a_generic_method_returning_an_engine_type_is_refused(self):
+        # AUD-ARC-17: the return type of a generic method is read like any other.
+        self.application_with("    public <T> ProjectRegistry leakRet() { return null; }")
+        self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.leakRet",
+                     "new public accessor returning registry.ProjectRegistry")
+
+    def test_a_public_static_method_returning_an_engine_type_is_refused(self):
+        # AUD-ARC-17: a static method is no accessor of the table, and may not return an engine type either.
+        variants = (
+            ("    public static ProjectRegistry leakStatic() { return null; }", "MinosApplication.leakStatic"),
+            ("    public static <T> ProjectRegistry leakStaticGeneric() { return null; }",
+             "MinosApplication.leakStaticGeneric"),
+            ("    public static <T extends ProjectRegistry> T leakStaticBound() { return null; }",
+             "MinosApplication.leakStaticBound"),
+        )
+        for members, method in variants:
+            with self.subTest(method=method):
+                self.application_with(members)
+                self.refused(lambda: self.check_accessors({}), "A11", method,
+                             "public static method returning registry.ProjectRegistry", "package-private")
+                self.assertEqual({}, RATCHETS.minos_application_accessors(self.root, "com.minos"))
+
+    def test_a_public_static_composition_root_is_refused(self):
+        for members in ("    public static MinosApplicationComposer root() { return null; }",
+                        "    public static <T> MinosApplicationComposer root() { return null; }",
+                        "    public static <T extends MinosApplicationComposer> T root() { return null; }"):
+            with self.subTest(members=members):
+                self.application_with(members)
+                self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.root",
+                             "returning MinosApplicationComposer, the composition root")
+
+    def test_a_wildcard_import_of_an_engine_package_in_the_facade_is_refused(self):
+        # AUD-ARC-17: a simple name imported by wildcard resolves to nothing, so the import itself is refused.
+        self.application_with("    public void e(ProjectRegistry r) { }", ["com.minos.registry.*"])
+        self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.java",
+                     "imports com.minos.registry.*")
+        self.application_with("    public void name(String value) { }", ["java.util.*"])
+        self.assertEqual(0, self.check_accessors({}))
+
+    def refused_declarations(self, variants, *fragments, imports=("com.minos.registry.ProjectRegistry",)):
+        for members in variants:
+            with self.subTest(members=members):
+                self.application_with("    " + members, imports)
+                self.refused(lambda: self.check_accessors({}), "A11", "registry.ProjectRegistry", *fragments)
+
+    def test_an_annotation_inside_a_declaration_does_not_hide_it(self):
+        # AUD-ARC-17: an annotation may sit anywhere between the modifiers and the name.
+        self.refused_declarations(
+            ("public @Deprecated ProjectRegistry x() { return null; }",
+             "public @Tag(v = @In({1, 2})) ProjectRegistry x() { return null; }",
+             "public <T> @Deprecated ProjectRegistry x() { return null; }"),
+            "MinosApplication.x is a new public accessor")
+        self.refused_declarations(
+            ("public static @Deprecated final ProjectRegistry x() { return null; }",
+             "public @Deprecated static ProjectRegistry x() { return null; }"),
+            "MinosApplication.x is a public static method")
+        self.refused_declarations(
+            ("public com.minos.registry.@Nullable ProjectRegistry x() { return null; }",),
+            "MinosApplication.x", imports=())
+        self.refused_declarations(("public void x(@Tag(v = @In(1)) ProjectRegistry r) { }",),
+                                  "MinosApplication.x", "parameter r")
+
+    def test_a_member_is_read_whatever_the_case_of_its_name(self):
+        # AUD-ARC-17: a method name is any Java identifier, not only a lower-case one.
+        self.refused_declarations(("public ProjectRegistry Leak() { return null; }",
+                                   "public void Leak(ProjectRegistry r) { }"), "MinosApplication.Leak")
+        self.refused_declarations(("public ProjectRegistry $leak() { return null; }",), "MinosApplication.$leak")
+        self.refused_declarations(("public void leak(ProjectRegistry $) { }",), "MinosApplication.leak",
+                                  "parameter $")
+
+    def test_a_header_written_over_several_lines_is_read(self):
+        # AUD-ARC-17: line breaks inside a type, qualified names included, hide nothing.
+        self.refused_declarations(
+            ("public Map<String,\n            ProjectRegistry> x() { return null; }",),
+            "MinosApplication.x", imports=("com.minos.registry.ProjectRegistry", "java.util.Map"))
+        self.refused_declarations(
+            ("public com.minos.registry\n            .ProjectRegistry x() { return null; }",
+             "public com.minos.registry.\n            ProjectRegistry x() { return null; }",
+             "public void x(com.minos.registry\n            .ProjectRegistry r) { }"),
+            "MinosApplication.x", imports=())
+
+    def test_declarations_without_an_engine_type_are_accepted(self):
+        self.application_with(
+            "    public static final String NAME = of(\"x\");\n"
+            "    @Override public @Deprecated void close() { }\n"
+            "    public int[] Values(@Tag(v = @In(1)) String... names) { return null; }\n"
+            "    public record Name(String value) { }\n"
+            "    public record Box<T>(T value) { }\n"
+            "    public @interface Marker { }\n"
+            "    public enum Kind { FIRST(1); Kind(int rank) { } }")
+        self.assertEqual(0, self.check_accessors({}))
+        self.assertEqual([], RATCHETS.minos_application_engine_parameters(self.root, "com.minos"))
+        self.assertEqual({}, RATCHETS.minos_application_accessors(self.root, "com.minos"))
+
+    def test_an_unreadable_member_header_fails_closed(self):
+        self.application_with("    public ProjectRegistry () { return null; }")
+        self.refused(lambda: self.check_accessors({}), "A11 unreadable MinosApplication member")
+
+    def test_a_wildcard_import_through_an_engine_type_is_refused(self):
+        # AUD-ARC-17: the member types of an engine type imported by wildcard resolve to nothing.
+        ports = "com.minos.orchestration.IndexingRuntimePorts"
+        for imported in (ports + ".*", "static " + ports + ".*", ports + ".IndexerExecutor.*"):
+            with self.subTest(imported=imported):
+                self.application_with("    public IndexerExecutor x() { return null; }", [imported])
+                self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.java",
+                             "imports " + imported.removeprefix("static "))
+
+    def test_a_static_import_of_a_nested_engine_type_is_read(self):
+        # AUD-ARC-17: `import static` brings a member type in scope like a plain import.
+        nested = "static com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor"
+        for members in ("    public IndexerExecutor x() { return null; }", "    public void x(IndexerExecutor e) { }"):
+            with self.subTest(members=members):
+                self.application_with(members, [nested])
+                self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.x",
+                             "orchestration.IndexingRuntimePorts")
+
+    def test_a_static_import_outside_the_engine_or_shadowed_is_accepted(self):
+        # A single-type import wins over a static import of the same simple name.
+        self.application_with(
+            "    public Path x(Map.Entry<String, String> entry) { requireText(entry); return null; }",
+            ["static com.minos.domain.Preconditions.requireText", "java.util.Map", "java.util.Map.*",
+             "java.nio.file.Path", "static com.minos.orchestration.IndexingRuntimePorts.Path"])
+        self.assertEqual(0, self.check_accessors({}))
+
+    def test_a_generic_signature_without_an_engine_type_is_accepted(self):
+        self.application_with("    public <T extends Comparable<T>> java.util.List<T> sorted(java.util.List<T> values) "
+                              "{ return values; }\n"
+                              "    public static <T> java.util.List<T> none() { return null; }\n"
+                              "    public <T> MinosApplication(T value) { }")
+        self.assertEqual(0, self.check_accessors({}))
+        self.assertEqual([], RATCHETS.minos_application_engine_parameters(self.root, "com.minos"))
+        self.assertEqual({}, RATCHETS.minos_application_accessors(self.root, "com.minos"))
+
+    def test_a_type_parameter_section_written_without_a_space_is_read(self):
+        for members in ("    public<T> void leak(ProjectRegistry r) { }",
+                        "    public<T> ProjectRegistry leak() { return null; }",
+                        "    public static<T extends ProjectRegistry> void leak(T r) { }"):
+            with self.subTest(members=members):
+                self.application_with(members)
+                self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.leak",
+                             "registry.ProjectRegistry")
+
+    def test_annotation_arguments_do_not_close_the_type_parameter_section(self):
+        # Braces and '>' inside the arguments of an annotation belong to the annotation.
+        self.application_with('    public <@Tag({"a", "b"}) T> void m(T value) { }\n'
+                              '    public <T extends java.util.List<@Tag(v = {1, 2}) String>> void n(T value) { }')
+        self.assertEqual(0, self.check_accessors({}))
+        self.application_with("    public <@Tag(2 > 1) T> void leak(ProjectRegistry r) { }")
+        self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.leak", "parameter r",
+                     "registry.ProjectRegistry")
+
+    def test_an_unbalanced_type_parameter_section_fails_closed(self):
+        self.application_with("    public <T extends Comparable<T> void broken() { }")
+        self.refused(lambda: self.check_accessors({}), "A11 unbalanced MinosApplication type parameters")
 
     def test_a_package_private_signature_or_a_non_engine_parameter_is_accepted(self):
         self.application_with("    void leak(ProjectRegistry registry) { }\n"
