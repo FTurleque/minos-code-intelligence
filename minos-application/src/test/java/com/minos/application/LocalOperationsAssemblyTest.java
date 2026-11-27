@@ -2,6 +2,7 @@ package com.minos.application;
 
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.domain.SymbolSearchCriteria;
 import com.minos.domain.git.ActivityQuery;
 import com.minos.domain.git.ActivityReport;
 import com.minos.domain.git.RepositoryView;
@@ -21,6 +22,7 @@ import com.minos.orchestration.ProviderCapabilityProfile;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.program.analysis.TestProgramGraphProviders;
 import com.minos.registry.ProjectRegistry;
+import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.storage.StorageBackend;
@@ -34,8 +36,12 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -91,11 +97,29 @@ class LocalOperationsAssemblyTest {
         assertThrows(NullPointerException.class, () -> new LocalProjectGitQuery((MinosApplication) null));
     }
 
+    /** A symbol search looks the project up in the registry of the application, then finds no active snapshot. */
     @Test
     void theSymbolQueryOfAnApplicationIsBuiltOverItsQueryService() throws Exception {
-        try (MinosApplication application = builder(List::of, unused(GitIntelligence.class)).build()) {
-            new LocalProjectSymbolQuery(application);
+        Instant now = Instant.parse("2026-09-01T00:00:00Z");
+        RegisteredProject project = new RegisteredProject(
+                UUID.randomUUID(), home.resolve("project"), "demo", Optional.empty(), now, now);
+        List<Object> lookedUp = new CopyOnWriteArrayList<>();
+        ProjectRegistry registry = answering(ProjectRegistry.class, "findProject", arguments -> {
+            lookedUp.add(arguments[0]);
+            return Optional.of(project);
+        });
+        CodeKnowledgeSnapshotStore withoutSnapshot =
+                answering(CodeKnowledgeSnapshotStore.class, "loadActiveReadView", arguments -> Optional.empty());
+        try (MinosApplication application = builder(List::of, unused(GitIntelligence.class))
+                .projectRegistry(registry)
+                .snapshotStore(withoutSnapshot)
+                .build()) {
+            LocalProjectSymbolQuery symbolQuery = new LocalProjectSymbolQuery(application);
+
+            assertThrows(IllegalStateException.class, () -> symbolQuery.findSymbols(
+                    project.id().toString(), SymbolSearchCriteria.lexical("demo", 10)));
         }
+        assertEquals(List.of(project.id()), lookedUp);
         assertThrows(NullPointerException.class, () -> new LocalProjectSymbolQuery((MinosApplication) null));
     }
 
@@ -181,15 +205,22 @@ class LocalOperationsAssemblyTest {
     }
 
     private static <T> T unused(Class<T> type) {
-        Object proxy = Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (self, method, arguments) ->
-                switch (method.getName()) {
-                    case "toString" -> type.getSimpleName();
-                    case "hashCode" -> System.identityHashCode(self);
-                    case "equals" -> self == arguments[0];
-                    case "id" -> "in-memory";
-                    case "close" -> null;
-                    default -> throw new UnsupportedOperationException(type.getSimpleName() + "." + method.getName());
-                });
+        return answering(type, "", arguments -> null);
+    }
+
+    /** A port that answers the method named {@code answered} and refuses the other calls of its contract. */
+    private static <T> T answering(Class<T> type, String answered, Function<Object[], Object> answer) {
+        Object proxy = Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (self, method, arguments) -> {
+            if (method.getName().equals(answered)) return answer.apply(arguments);
+            return switch (method.getName()) {
+                case "toString" -> type.getSimpleName();
+                case "hashCode" -> System.identityHashCode(self);
+                case "equals" -> self == arguments[0];
+                case "id" -> "in-memory";
+                case "close" -> null;
+                default -> throw new UnsupportedOperationException(type.getSimpleName() + "." + method.getName());
+            };
+        });
         return type.cast(proxy);
     }
 }
