@@ -33,3 +33,16 @@ ou de NEXUS : `com.minos.application.MinosApplication` ne rend plus publiquement
 `providerRuntimeManager()`…). Un code qui les appelait passe par les services, les cas d'usage de la façade,
 `LocalProjectOperations` ou `ProviderPlatformService`, et doit être recompilé. Table de remplacement :
 [API Java, « Accesseurs de `MinosApplication` retirés »](../java-api.md#ruptures).
+
+## API Java : fabriques statiques des cas d'usage retirées
+
+Rupture de classes internes, sans changement de `com.minos.api` : les fabriques statiques de `ProjectIndexingUseCase`,
+`RemoteIndexingUseCase` et `KnowledgeExportUseCase` sont retirées, et `com.minos.application.MinosApplication` expose les
+cas d'usage. La décoration des exécuteurs (`ProjectIndexingUseCase.of(MinosApplication, UnaryOperator<IndexerExecutor>)`)
+n'a pas de remplaçant public. Un code qui appelait ces fabriques doit être modifié et recompilé. Table de remplacement :
+[API Java, « Cas d'usage obtenus par la façade »](../java-api.md#ruptures).
+
+Le port interne `com.minos.application.MinosApplicationComposer` gagne aussi des méthodes abstraites, pour les
+fournisseurs embarqués et pour l'historique d'import, qu'une implémentation tierce du port doit ajouter (rupture de
+source) : voir les sections « Fournisseurs embarqués câblés par la racine de composition » et « Port de l'historique
+d'import » de [API Java, « Ruptures »](../java-api.md#ruptures).
