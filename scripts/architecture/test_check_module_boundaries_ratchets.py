@@ -17,7 +17,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from module_boundaries_testing import (
-    RATCHETS, RatchetTreeTestCase, _MODULE, cut_around_dots, second_on_its_line)
+    RATCHETS, RatchetTreeTestCase, _MODULE, annotated_before_the_last_part, cut_around_dots, escaped,
+    second_on_its_line)
 
 
 class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
@@ -137,6 +138,27 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
         self.assertEqual(1, self.check()["minos-cli"])
         self.write("minos-cli", "com.minos.cli", "Quiet", f"final class Quiet {{ void f({cut} ... roles) {{ }} }}")
         self.refused(self.check, "A11", "Quiet.java", "uses com.minos.hosted.HostedRole, absent from")
+
+    def refused_bodies(self, bodies):
+        for form, body in bodies.items():
+            with self.subTest(form=form):
+                self.write("minos-cli", "com.minos.cli", "Cut", f"final class Cut {{ {body} }}")
+                self.refused(self.check, "A11", "Cut.java", "uses com.minos.hosted.HostedRole, absent from")
+
+    def test_a_name_written_with_a_unicode_escape_is_read(self):
+        # AUD-ARC-17: Java translates unicode escapes before it reads anything else.
+        self.refused_bodies({
+            "escaped dot": f"com.minos.hosted{escaped('.')}HostedRole r;",
+            "escaped letter": f"com.minos.hosted.{escaped('H')}ostedRole r;"})
+
+    def test_an_annotation_inside_a_qualified_name_does_not_hide_it(self):
+        role = "com.minos.hosted.HostedRole"
+        self.refused_bodies({form: f"{written} r;" for form, written in annotated_before_the_last_part(role).items()})
+
+    def test_a_type_named_by_an_annotation_inside_a_name_is_still_read(self):
+        self.refused_bodies({
+            "annotation type": "java.util.@com.minos.hosted.HostedRole List r;",
+            "annotation argument": "java.util.@Tag(com.minos.hosted.HostedRole.class) List r;"})
 
     def test_a_dead_entry_is_refused(self):
         listed = {"minos-cli": {"query.SymbolResult": 1, "hosted.HostedRole": 1}}
@@ -396,6 +418,11 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
                      ["com.minos.application.MinosApplicationComposers"])
         self.refused(lambda: self.check_accessors(self.LISTED), "A11", "Bootstrap.java")
 
+    def test_the_composition_root_written_with_a_unicode_escape_is_refused(self):
+        self.surface("minos-cli", "Bootstrap", "final class Bootstrap { Object s(MinosApplication app) { "
+                     f"return app.{escaped('c')}ompositionRoot(); }} }}")
+        self.refused(lambda: self.check_accessors(self.LISTED), "A11", "Bootstrap.java", "composition root")
+
     def test_the_composition_root_in_a_comment_a_literal_or_a_test_is_ignored(self):
         self.surface("minos-mcp", "Quiet", 'final class Quiet { // app.compositionRoot()\n '
                      'String s = "MinosApplicationComposers"; }')
@@ -435,6 +462,10 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
         self.write("minos-engine", "com.minos.registry", "ProjectRegistry", "public interface ProjectRegistry { }")
         self.write("minos-application", "com.minos.application", "MinosApplication",
                    "public final class MinosApplication {\n" + members + "\n}", list(imports))
+
+    def test_a_facade_type_written_with_a_unicode_escape_is_read(self):
+        self.application_with(f"    public {escaped('P')}rojectRegistry leak() {{ return null; }}")
+        self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.leak", "registry.ProjectRegistry")
 
     def test_a_public_signature_taking_an_engine_type_is_refused(self):
         # AUD-ARC-13: the facade neither returns nor takes an engine type.
@@ -761,6 +792,15 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
         self.refused(self.check, "A12", "minos-engine/io.Redirects")
         self.assertEqual(2, self.check({**self.LISTED, "minos-engine/io.Redirects": 0}))
 
+    def test_a_launcher_written_with_a_unicode_escape_is_refused(self):
+        # AUD-ARC-17: an escape hides no word, and an escaped line break ends a line comment.
+        bodies = {"EscapedLetter": f'Object p = new {escaped("P")}rocessBuilder("x");',
+                  "EscapedBreak": f'// {escaped(chr(10))} Object p = new ProcessBuilder("x");\n'}
+        for name, body in bodies.items():
+            with self.subTest(launcher=name):
+                self.write("minos-engine", "com.minos.io", name, f"final class {name} {{ {body} }}")
+                self.refused(self.check, "A12", f"minos-engine/io.{name}", "is not in PROCESS_LAUNCHERS")
+
     def test_a_negative_count_is_refused(self):
         self.refused(lambda: self.check({"minos-engine/io.PrivateLocalStorage": -1}), "A12", "not a count")
 
@@ -918,6 +958,13 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
             with self.subTest(form=form):
                 self.write("minos-provider-scip", "com.minos.adapter.scip", "Cut", "final class Cut { }", [written])
                 self.refused(self.check, "A13", "wildcard", f"Cut.java -> {package}.*")
+
+    def test_a_name_of_another_adapter_interrupted_by_an_annotation_is_read(self):
+        service = "com.minos.storage.local.store.SnapshotIntegrityService"
+        for form, written in annotated_before_the_last_part(service).items():
+            with self.subTest(form=form):
+                self.write("minos-provider-scip", "com.minos.adapter.scip", "Cut", f"final class Cut {{ {written} s; }}")
+                self.refused(self.check, "A13", "minos-provider-scip -> minos-storage", service)
 
     def test_a_couple_absent_from_the_table_is_refused(self):
         self.write("minos-integration-git", "com.minos.integration.git", "Leak", "final class Leak { SnapshotCodec c; }",

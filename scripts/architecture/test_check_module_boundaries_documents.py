@@ -20,7 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import BOUNDARY_POLICY, DOCUMENTS, MODULES, RatchetTreeTestCase, _MODULE
+from module_boundaries_testing import (
+    BOUNDARY_POLICY, DOCUMENTS, MODULES, RatchetTreeTestCase, _MODULE, escaped)
 
 
 class GeneratedDocumentRuleTest(unittest.TestCase):
@@ -234,6 +235,17 @@ class ArchitectureTestPolicyRuleTest(unittest.TestCase):
         self.test.write_text(self.READING, encoding="utf-8")
         self.assertEqual(len(_MODULE.ALLOWED_DEPENDENCIES), self.check())
 
+    def test_the_sources_of_the_architecture_test_are_read_with_their_escapes_decoded(self):
+        self.test.write_text(self.READING, encoding="utf-8")
+        self.reader.write_text(self.reader.read_text(encoding="utf-8").replace(
+            "module-boundaries.json", f"module-boundaries{escaped('.')}json"), encoding="utf-8")
+        self.assertEqual(len(_MODULE.ALLOWED_DEPENDENCIES), self.check())
+        table = 'Map.ofEntries(\n            Map.entry("minos-domain", Set.of()));'
+        self.test.write_text(self.READING.replace("POLICY.allowed();", table.replace("Map", f"{escaped('M')}ap")),
+                             encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, r"A17 .*ModuleArchitectureTest.java.*ALLOWED"):
+            self.check()
+
     def test_a_copied_allowed_table_is_refused(self):
         self.test.write_text(self.READING.replace("POLICY.allowed();", 'Map.ofEntries(\n'
                              '            Map.entry("minos-domain", Set.of()));'), encoding="utf-8")
@@ -360,6 +372,13 @@ class DocumentedScopeSourcesAndInterfacesTest(unittest.TestCase):
     def test_a_section_without_an_interfaces_line_is_accepted(self):
         self.assertIsNone(DOCUMENTS.interfaces_problem("minos-api", [], self.OWNERS, ["MinosApi"]))
 
+    def test_a_public_interface_declared_with_a_unicode_escape_is_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "minos-domain" / "src" / "main" / "java" / "Port.java"
+            source.parent.mkdir(parents=True)
+            source.write_text(f"public {escaped('i')}nterface Port {{ }}\n", encoding="utf-8")
+            self.assertEqual(["Port"], DOCUMENTS.public_interfaces(Path(directory), "minos-domain"))
+
     def test_the_real_reactor_owners_and_public_interfaces_are_read(self):
         owners = DOCUMENTS.reactor_type_owners(BOUNDARY_POLICY.ROOT, MODULES)
         self.assertEqual({"minos-domain"}, owners["SemanticVectorStore"])
@@ -419,7 +438,7 @@ def quality_gate_rule_labels(text: str) -> set[str]:
 def guard_files(directory: Path = GUARD_DIRECTORY) -> list[str]:
     """Every file of the module boundary guard, found on disk rather than copied."""
     names = ["check-module-boundaries.py", "module-boundaries.json", "gate_runner.py", "test_gate_runner.py",
-             "module_boundaries_testing.py"]
+             "module_boundaries_testing.py", "java_escapes.py"]
     names += [path.name for pattern in ("module_boundary_*.py", "test_check_module_boundaries*.py")
               for path in sorted(directory.glob(pattern))]
     missing = [name for name in names if not (directory / name).is_file()]

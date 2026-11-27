@@ -21,7 +21,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import PACKAGES, _MODULE, cut_around_dots, second_on_its_line, write_root_pom
+from module_boundaries_testing import (
+    PACKAGES, _MODULE, annotated_before_the_last_part, cut_around_dots, escaped, second_on_its_line, write_root_pom)
 
 
 check_package_ownership = _MODULE.check_package_ownership
@@ -95,6 +96,12 @@ class SplitPackageTest(BoundaryTestCase):
     def test_test_declared_in_a_package_owned_by_another_module_fails(self):
         relative = self.tree.java("minos-b", "test", "com.example.a", "ReachesIntoAlphaTest")
         self.assertFailure(self.ownership, "A3", relative, "package com.example.a", "belong to minos-a")
+
+    def test_a_package_declared_with_a_unicode_escape_is_the_same_package(self):
+        # AUD-ARC-17: Java translates unicode escapes before it reads anything else.
+        source = self.tree.root / self.tree.java("minos-b", "main", "com.example.a", "Intruder")
+        source.write_text(f"package com.example{escaped('.')}a;\n\nclass Intruder {{\n}}\n", encoding="utf-8")
+        self.assertFailure(self.ownership, "A3", "package com.example.a", "minos-a, minos-b")
 
     def test_package_declared_in_a_comment_does_not_count(self):
         source = self.tree.root / self.tree.java("minos-b", "main", "com.example.b", "Commented")
@@ -172,6 +179,10 @@ class JavaLayoutRuleTest(unittest.TestCase):
         with self.assertRaises(RuntimeError) as raised:
             _MODULE.check_java_layout(self.root)
         self.assertIn("duplicate production source", str(raised.exception))
+
+    def test_a_package_declared_with_a_unicode_escape_matches_its_directory(self):
+        self.write("minos-domain", Path("com/minos/domain"), f"com.minos{escaped('.')}domain")
+        self.assertEqual(1, _MODULE.check_java_layout(self.root)[0])
 
     def test_a_package_that_does_not_match_its_directory_is_refused(self):
         self.write("minos-domain", Path("com/minos/domain"), "com.minos.elsewhere")
@@ -276,6 +287,17 @@ class PackageCycleRuleTest(unittest.TestCase):
                     source.write_text("package com.example.a;\n" + text.format(written) + "\n", encoding="utf-8")
                     self.refused("A8", "com.example.a", "com.example.b")
 
+    def test_a_cycle_closed_by_an_escaped_or_annotated_name_is_refused(self):
+        self.java("minos-b", "com.example.b", "B", ["com.example.a.A"])
+        source = self.root / "minos-a" / "src" / "main" / "java" / "com" / "example" / "a" / "A.java"
+        writings = {**annotated_before_the_last_part("com.example.b.B"),
+                    "escape": f"com.example.b{escaped('.')}B"}
+        for form, written in writings.items():
+            with self.subTest(form=form):
+                self.java("minos-a", "com.example.a", "A")
+                source.write_text(f"package com.example.a;\nclass A {{ {written} b; }}\n", encoding="utf-8")
+                self.refused("A8", "com.example.a", "com.example.b")
+
     def test_imports_in_comments_and_test_sources_do_not_count(self):
         self.java("minos-a", "com.example.a", "A", ["com.example.b.B"])
         self.java("minos-b", "com.example.b", "B")
@@ -337,6 +359,22 @@ class UnreferencedProductionTypeRuleTest(unittest.TestCase):
                 with self.subTest(use=use, form=form):
                     self.write("minos-application", "main", "com.minos.b", "Caller", body.format(written))
                     self.assertEqual(0, self.check())
+
+    def test_an_escaped_annotated_or_annotating_name_references_the_type(self):
+        writings = {**annotated_before_the_last_part("com.minos.a.Used"),
+                    "escape": f"com.minos.a{escaped('.')}Used",
+                    "annotating": "java.util.@com.minos.a.Used List"}
+        for form, written in writings.items():
+            with self.subTest(form=form):
+                self.write("minos-application", "main", "com.minos.b", "Caller",
+                           f"final class Caller {{ {written} used; }}")
+                self.assertEqual(0, self.check())
+
+    def test_a_listed_type_whose_package_is_escaped_still_exists(self):
+        self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")
+        source = self.root / "minos-engine" / "src" / "main" / "java" / "com" / "minos" / "a" / "Orphan.java"
+        source.write_text(f"package com.minos{escaped('.')}a;\n\npublic final class Orphan {{ }}\n", encoding="utf-8")
+        self.assertEqual(1, self.check({"minos-engine/com.minos.a.Orphan": "reason"}))
 
     def test_public_class_without_caller_is_refused(self):
         self.write("minos-engine", "main", "com.minos.a", "Orphan", "public final class Orphan { }")

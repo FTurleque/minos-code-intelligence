@@ -159,6 +159,13 @@ class PrivateIoGateTest(unittest.TestCase):
         self.assertEqual(1, len(violations))
         self.assertIn("Files.write", violations[0])
 
+    def test_an_escaped_line_break_ends_a_line_comment(self):
+        for code in ("000a", "000d"):
+            with self.subTest(code=code):
+                violations = self.violations(java("// " + BACKSLASH + "u" + code + " Files.write(file, bytes);\n"))
+                self.assertEqual(1, len(violations))
+                self.assertIn("Files.write", violations[0])
+
     def test_an_escaped_backslash_before_u_is_not_a_unicode_escape(self):
         text = BACKSLASH * 2 + "u0046iles.write"
         self.assertEqual([], self.violations(java('String s = "' + text + '";')))

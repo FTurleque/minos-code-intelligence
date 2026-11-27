@@ -70,6 +70,19 @@ def cut_around_dots(name: str) -> dict[str, str]:
         ("comment", "./* note */"))}
 
 
+def escaped(character: str) -> str:
+    """The unicode escape Java reads as `character`."""
+    return chr(92) + "u%04x" % ord(character)
+
+
+def annotated_before_the_last_part(name: str) -> dict[str, str]:
+    """`name` with the type annotations Java accepts before its last part: form -> text."""
+    qualifier, simple = name.rsplit(".", 1)
+    return {form: f"{qualifier}{written}{simple}" for form, written in (
+        ("annotation", ".@Ann "), ("annotation with arguments", ".@Ann(value = {1, 2}) "),
+        ("two annotations", ' . @Ann @other.Marker("x")\n    '))}
+
+
 class RatchetTreeTestCase(unittest.TestCase):
     """A temporary reactor tree (root pom.xml with groupId com.minos) for the A11-A14 ratchets."""
 
