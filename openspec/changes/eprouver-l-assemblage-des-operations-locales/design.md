@@ -44,4 +44,4 @@ Relu au commit `4f4cac814` (PR #829), le 2026-11-27.
 
 | Constat | Exigence | Tâches | Preuve attendue |
 |---|---|---|---|
-| AUD-TST-15 | frontieres-de-modules › Les points d'entrée publics des opérations locales sont éprouvés sur une application | 1.1 à 1.5 | cas rouges puis verts ; mutation de l'assemblage rouge ; `Verify` vert |
+| AUD-TST-15 | frontieres-de-modules › Les points d'entrée publics des opérations locales sont éprouvés sur une application | 1.1 à 1.5 | `LocalProjectOperationsRetentionTest#aPublishedImportThroughTheApplicationAppliesItsRetention` et `LocalOperationsAssemblyTest#theSymbolQueryOfAnApplicationIsBuiltOverItsQueryService` verts ; rouges sur une rétention ou un registre qui n'est pas celui de l'application ; mutation de `localProjectOperationsDependencies()` rouge ; `Verify` vert sur la PR (tâche 2.2) |
