@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: La somme du wrapper Maven est écrite sous la forme que lit mvnw
-Dans `.mvn/wrapper/maven-wrapper.properties`, toute ligne non commentaire qui porte la clé `distributionUrl` ou `distributionSha256Sum` SHALL commencer par cette clé suivie aussitôt de `=`. `check-toolchain-baseline.py` SHALL échouer en nommant le fichier et la ligne sur une clé indentée, suivie d'une espace ou séparée par `:`. `gradle-wrapper.properties` SHALL rester lu comme un fichier de propriétés Java.
+Dans `.mvn/wrapper/maven-wrapper.properties`, toute ligne non commentaire qui porte la clé `distributionUrl` ou `distributionSha256Sum` SHALL commencer par cette clé suivie aussitôt de `=` et finir par un saut de ligne. `check-toolchain-baseline.py` SHALL échouer en nommant le fichier et la ligne sur une clé indentée, suivie d'une espace, séparée par `:`, ou en dernière ligne sans saut de ligne. `gradle-wrapper.properties` SHALL rester lu comme un fichier de propriétés Java.
 
 #### Scenario: Espace avant le signe égal
 - **GIVEN** une copie du dépôt où la ligne de somme du wrapper Maven devient `distributionSha256Sum =<somme>`
@@ -12,6 +12,11 @@ Dans `.mvn/wrapper/maven-wrapper.properties`, toute ligne non commentaire qui po
 - **GIVEN** l'auto-test du gate, avec un wrapper Maven dont la ligne est `distributionSha256Sum:<somme>`, puis `  distributionSha256Sum=<somme>`
 - **WHEN** `python scripts/quality/test_check_toolchain_baseline.py` est exécuté
 - **THEN** chaque cas constate le refus et le message qui nomme la ligne
+
+#### Scenario: Somme sans saut de ligne final
+- **GIVEN** une copie du dépôt dont le wrapper Maven finit par la ligne de somme, sans saut de ligne
+- **WHEN** `python scripts/quality/check-toolchain-baseline.py --root <copie>` est exécuté
+- **THEN** le gate se termine avec le code 1 et nomme `.mvn/wrapper/maven-wrapper.properties` et la ligne
 
 #### Scenario: Espaces après le signe égal
 - **GIVEN** l'auto-test du gate, avec `distributionSha256Sum= <somme>` dans le wrapper Maven et `distributionUrl=https\://services.gradle.org/…` dans le wrapper Gradle

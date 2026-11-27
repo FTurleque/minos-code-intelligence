@@ -66,10 +66,18 @@ Rule:
     distributions/`; the `\\:` escape of the properties format is read as `:`). The Maven wrapper keeps
     `distributionType=only-script`: no `maven-wrapper.jar` is downloaded, so no `wrapperSha256Sum` is needed. A
     missing file fails.
+    In the Maven wrapper, every line that carries `distributionUrl` or `distributionSha256Sum` starts with that key
+    followed at once by `=`. The reference is the parser of `mvnw` (`while IFS="=" read -r key value`), which reads an
+    indented key, `key =value` or `key:value` as another key: without a sum it downloads unchecked, without a URL it
+    stops. The failure names the file and the line; blanks after the `=` are accepted (`mvnw` trims the value). A last
+    line that carries one of these keys ends with a newline: the `read` loop of `mvnw` skips an unterminated line. The
+    Gradle wrapper keeps the tolerant reading (blanks, `=` or `:`, the `\\:` escape); a key with neither `=` nor `:`
+    is not counted.
 
 What this rule does not prove: that the sum is the one of the published archive (a wrong but well-formed sum fails
-the first download, in the first `Verify` or plugin job), nor anything about `gradle-wrapper.jar` (setup-gradle
-validates it in the plugin jobs) or about `MVNW_REPOURL`, which changes the URL at run time but not the sum checked.
+the first download, in the first `Verify` or plugin job), that `mvnw` reads a file whose lines end in a lone carriage
+return, nor anything about `gradle-wrapper.jar` (setup-gradle validates it in the plugin jobs) or about
+`MVNW_REPOURL`, which changes the URL at run time but not the sum checked.
 
 The wrapper and the image each name one Maven version; a current document that copies a Maven version falls behind
 at the next raise unless it names one of these two. Rule:
@@ -394,6 +402,8 @@ WRAPPER_HOSTS = (
     (WRAPPER, "https://services.gradle.org/distributions/"),
 )
 PROPERTY = re.compile(r"^\s*(?P<key>[A-Za-z0-9_.-]+)\s*[=:]\s*(?P<value>.*?)\s*$")
+# A line that carries one of the two keys `mvnw` reads, however it is written; a comment line does not match.
+MVNW_KEY = re.compile(r"^\s*(?P<key>distributionUrl|distributionSha256Sum)(?![A-Za-z0-9_.-])")
 SHA256_SUM = re.compile(r"^[0-9a-f]{64}$")
 MAVEN_DISTRIBUTION_TYPE = "only-script"
 
@@ -410,9 +420,29 @@ def properties_of(text: str) -> dict[str, list[tuple[int, str]]]:
     return entries
 
 
+def mvnw_form_failures(relative: str, text: str) -> list[str]:
+    """Rule 13 for the Maven wrapper: a line that carries a key `mvnw` reads is written as `mvnw` reads it.
+
+    The reference is the parser of `mvnw`: `while IFS="=" read -r key value; do case "${key-}" in`. Only `=`
+    separates, and the key is everything before the first one, blanks included. `read` fails on a last line without a
+    newline, so the loop body never runs for it.
+    """
+    failures: list[str] = []
+    lines = text.splitlines()
+    for number, line in enumerate(lines, start=1):
+        carried = MVNW_KEY.match(line)
+        if carried and not line.startswith(f"{carried.group('key')}="):
+            key = carried.group("key")
+            failures.append(f"{relative}:{number} must start with `{key}=` (the key at the start of the line, `=` right "
+                            "after it): mvnw splits the line on `=` alone and would not read this one")
+    if lines and not text.endswith("\n") and MVNW_KEY.match(lines[-1]):
+        failures.append(f"{relative}:{len(lines)} must end with a newline: mvnw does not read a last line without one")
+    return failures
+
+
 def wrapper_failures(relative: str, text: str, prefix: str) -> list[str]:
     """Rule 13 for one wrapper: one well-formed sum, one https URL under the expected host."""
-    failures: list[str] = []
+    failures = mvnw_form_failures(relative, text) if relative == MAVEN_WRAPPER else []
     entries = properties_of(text)
     sums = entries.get("distributionSha256Sum", [])
     if len(sums) != 1:
