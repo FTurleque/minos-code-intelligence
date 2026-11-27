@@ -451,6 +451,91 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
         self.application_with("    public void name(String value) { }", ["java.util.*"])
         self.assertEqual(0, self.check_accessors({}))
 
+    def refused_declarations(self, variants, *fragments, imports=("com.minos.registry.ProjectRegistry",)):
+        for members in variants:
+            with self.subTest(members=members):
+                self.application_with("    " + members, imports)
+                self.refused(lambda: self.check_accessors({}), "A11", "registry.ProjectRegistry", *fragments)
+
+    def test_an_annotation_inside_a_declaration_does_not_hide_it(self):
+        # AUD-ARC-17: an annotation may sit anywhere between the modifiers and the name.
+        self.refused_declarations(
+            ("public @Deprecated ProjectRegistry x() { return null; }",
+             "public @Tag(v = @In({1, 2})) ProjectRegistry x() { return null; }",
+             "public <T> @Deprecated ProjectRegistry x() { return null; }"),
+            "MinosApplication.x is a new public accessor")
+        self.refused_declarations(
+            ("public static @Deprecated final ProjectRegistry x() { return null; }",
+             "public @Deprecated static ProjectRegistry x() { return null; }"),
+            "MinosApplication.x is a public static method")
+        self.refused_declarations(
+            ("public com.minos.registry.@Nullable ProjectRegistry x() { return null; }",),
+            "MinosApplication.x", imports=())
+        self.refused_declarations(("public void x(@Tag(v = @In(1)) ProjectRegistry r) { }",),
+                                  "MinosApplication.x", "parameter r")
+
+    def test_a_member_is_read_whatever_the_case_of_its_name(self):
+        # AUD-ARC-17: a method name is any Java identifier, not only a lower-case one.
+        self.refused_declarations(("public ProjectRegistry Leak() { return null; }",
+                                   "public void Leak(ProjectRegistry r) { }"), "MinosApplication.Leak")
+        self.refused_declarations(("public ProjectRegistry $leak() { return null; }",), "MinosApplication.$leak")
+        self.refused_declarations(("public void leak(ProjectRegistry $) { }",), "MinosApplication.leak",
+                                  "parameter $")
+
+    def test_a_header_written_over_several_lines_is_read(self):
+        # AUD-ARC-17: line breaks inside a type, qualified names included, hide nothing.
+        self.refused_declarations(
+            ("public Map<String,\n            ProjectRegistry> x() { return null; }",),
+            "MinosApplication.x", imports=("com.minos.registry.ProjectRegistry", "java.util.Map"))
+        self.refused_declarations(
+            ("public com.minos.registry\n            .ProjectRegistry x() { return null; }",
+             "public com.minos.registry.\n            ProjectRegistry x() { return null; }",
+             "public void x(com.minos.registry\n            .ProjectRegistry r) { }"),
+            "MinosApplication.x", imports=())
+
+    def test_declarations_without_an_engine_type_are_accepted(self):
+        self.application_with(
+            "    public static final String NAME = of(\"x\");\n"
+            "    @Override public @Deprecated void close() { }\n"
+            "    public int[] Values(@Tag(v = @In(1)) String... names) { return null; }\n"
+            "    public record Name(String value) { }\n"
+            "    public record Box<T>(T value) { }\n"
+            "    public @interface Marker { }\n"
+            "    public enum Kind { FIRST(1); Kind(int rank) { } }")
+        self.assertEqual(0, self.check_accessors({}))
+        self.assertEqual([], RATCHETS.minos_application_engine_parameters(self.root, "com.minos"))
+        self.assertEqual({}, RATCHETS.minos_application_accessors(self.root, "com.minos"))
+
+    def test_an_unreadable_member_header_fails_closed(self):
+        self.application_with("    public ProjectRegistry () { return null; }")
+        self.refused(lambda: self.check_accessors({}), "A11 unreadable MinosApplication member")
+
+    def test_a_wildcard_import_through_an_engine_type_is_refused(self):
+        # AUD-ARC-17: the member types of an engine type imported by wildcard resolve to nothing.
+        ports = "com.minos.orchestration.IndexingRuntimePorts"
+        for imported in (ports + ".*", "static " + ports + ".*", ports + ".IndexerExecutor.*"):
+            with self.subTest(imported=imported):
+                self.application_with("    public IndexerExecutor x() { return null; }", [imported])
+                self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.java",
+                             "imports " + imported.removeprefix("static "))
+
+    def test_a_static_import_of_a_nested_engine_type_is_read(self):
+        # AUD-ARC-17: `import static` brings a member type in scope like a plain import.
+        nested = "static com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor"
+        for members in ("    public IndexerExecutor x() { return null; }", "    public void x(IndexerExecutor e) { }"):
+            with self.subTest(members=members):
+                self.application_with(members, [nested])
+                self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.x",
+                             "orchestration.IndexingRuntimePorts")
+
+    def test_a_static_import_outside_the_engine_or_shadowed_is_accepted(self):
+        # A single-type import wins over a static import of the same simple name.
+        self.application_with(
+            "    public Path x(Map.Entry<String, String> entry) { requireText(entry); return null; }",
+            ["static com.minos.domain.Preconditions.requireText", "java.util.Map", "java.util.Map.*",
+             "java.nio.file.Path", "static com.minos.orchestration.IndexingRuntimePorts.Path"])
+        self.assertEqual(0, self.check_accessors({}))
+
     def test_a_generic_signature_without_an_engine_type_is_accepted(self):
         self.application_with("    public <T extends Comparable<T>> java.util.List<T> sorted(java.util.List<T> values) "
                               "{ return values; }\n"
