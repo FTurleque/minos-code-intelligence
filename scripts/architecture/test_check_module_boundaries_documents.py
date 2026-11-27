@@ -4,7 +4,8 @@ reading) and the generated module dependency document with its execution edges b
 
 Each case builds a throw-away document or tree and runs one rule of the real script against it. GuardDocumentationTest
 also reads the real repository: the rule labels carried by the guard sources are those the capability dossier and
-docs/developer/quality-gates.md list, and quality-gates.md names every file of the guard, found on disk.
+docs/developer/quality-gates.md list, quality-gates.md names every file of the guard, found on disk, and the dossier
+writes no count of the policy.
 """
 
 from __future__ import annotations
@@ -376,6 +377,8 @@ NO_RULE_SENTENCE = "Aucune règle ne porte"
 QUALITY_GATE_RULES = "applique, sans compilation"
 BULLET = re.compile(r"^\s*- (.*)$", re.MULTILINE)
 BOLD = re.compile(r"\*\*([^*]+)\*\*")
+POLICY_COUNT = re.compile(r"\b\d+\s+(?:autres\s+)?(?:modules?|dépendances?|découvertes?|packages?|cycles?)\b",
+                          re.IGNORECASE)
 
 
 def guard_rule_labels(directory: Path = GUARD_DIRECTORY) -> set[str]:
@@ -428,13 +431,22 @@ def guard_files(directory: Path = GUARD_DIRECTORY) -> list[str]:
     return names
 
 
+def dossier_policy_counts(text: str) -> list[str]:
+    """Each count of the policy written in digits, as "line <n>: <count>"; a count wrapped over two lines is found and
+    reported on its first line."""
+    return [f"line {text.count(chr(10), 0, found.start()) + 1}: {' '.join(found.group().split())}"
+            for found in POLICY_COUNT.finditer(text)]
+
+
 def numbered(labels: set[str]) -> list[str]:
     return sorted(labels, key=lambda label: int(label[1:]))
 
 
 class GuardDocumentationTest(unittest.TestCase):
     """AUD-ARC-16: the documentation names every rule label and every file of the guard (structural identifiers, not
-    phrases, ADR 0043); a missing paragraph, list or label set fails."""
+    phrases, ADR 0043); a missing paragraph, list or label set fails.
+
+    AUD-ARC-18: the dossier writes no number in digits before a noun of the policy."""
 
     def test_the_dossier_lists_exactly_the_rules_of_the_guard(self):
         documented = dossier_rule_labels(DOSSIER.read_text(encoding="utf-8"))
@@ -473,6 +485,18 @@ class GuardDocumentationTest(unittest.TestCase):
         self.assertNotIn("A20", dossier_rule_labels(re.sub(r"\bA20\b", "A-twenty", dossier)))
         gates = QUALITY_GATES.read_text(encoding="utf-8")
         self.assertNotIn("A20", quality_gate_rule_labels(re.sub(r"(- \*\*)A20\b", r"\1Assembly", gates)))
+
+    def test_the_dossier_writes_no_count_of_the_policy(self):
+        """Refuses, naming each line, a number written in digits before a module, dependency, discovery, package or cycle
+        (French nouns, "autres" allowed in between). Limit: a number spelled out in words and a line reference of the
+        dossier are not read; review covers them."""
+        self.assertEqual([], dossier_policy_counts(DOSSIER.read_text(encoding="utf-8")),
+                         "counts of the policy written in the dossier")
+
+    def test_a_count_written_back_into_the_dossier_is_seen(self):
+        dossier = DOSSIER.read_text(encoding="utf-8")
+        mutated = f"{dossier}minos-app dépend des 12 autres modules\n"
+        self.assertIn(f"line {dossier.count(chr(10)) + 1}: 12 autres modules", dossier_policy_counts(mutated))
 
     def test_a_new_rule_module_or_label_is_seen(self):
         with tempfile.TemporaryDirectory() as copy:
