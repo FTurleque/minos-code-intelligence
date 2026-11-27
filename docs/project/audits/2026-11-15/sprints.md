@@ -6,7 +6,7 @@ L'affectation a été contrôlée par script (`consolidate.py`) : chaque constat
 
 ## Vue d'ensemble
 
-Au 25/11 : les sprints 1 à 10 sont exécutés et vérifiés (aucun partiel ne subsiste). Un sprint 11 de reprises reçoit les onze constats Faible ouverts ce jour ([`ETAT-2026-11-25.md`](ETAT-2026-11-25.md)).
+Au 27/11 : les sprints 1 à 11 sont exécutés et vérifiés (aucun partiel ne subsiste). Un sprint 12 de reprises reçoit les huit constats Faible ouverts ce jour ([`ETAT-2026-11-27.md`](ETAT-2026-11-27.md)).
 
 | Sprint | Titre | Constats | Composition | Charge (j) |
 |---|---|---:|---|---|
@@ -39,7 +39,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** aucun.
 **Ordre interne.** libre ; la liste ci-dessous donne l’ordre recommandé.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-TST-01 | Moyenne | S | – | Fermé avec réserve | Les zones nouvelles depuis le 10/10 (minos-explorer 1 291 l., voie WSL2 2 367 l., projection 2D ~1 017 l., QueryViewMemoryBudget 327 l.) ne sont dans aucun scope JaCoCo nominatif : seul le scope global les voit |
 | AUD-TST-02 | Moyenne | M | – | Fermé | Le front de l'explorateur (app.js, 784 lignes, 45 fonctions) n'est jamais exécuté par un test : seules des recherches de sous-chaînes le vérifient, sans contrôle de syntaxe ni lint en CI |
@@ -59,7 +59,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** aucun.
 **Ordre interne.** libre ; la liste ci-dessous donne l’ordre recommandé.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-SEC-01 | Faible | M | – | Fermé avec réserve | Le clone distant (JGit) est hors du périmètre de la décision sur les filtres Git : il applique les pilotes filter.* de la configuration de l'utilisateur au contenu d'un dépôt non fiable, et sa revalidation ouvre le dépôt sans passer par l'ouverture de confiance (règle 5) |
 | AUD-SEC-05 | Faible | S | – | Fermé | L'invariant « le motif de secret l'emporte sur toute liste » n'est pas appliqué aux variables héritées : il tient seulement par le contenu des listes statiques |
@@ -79,7 +79,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** aucun.
 **Ordre interne.** libre ; la liste ci-dessous donne l’ordre recommandé.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-QUA-02 | Moyenne | M | – | Fermé avec réserve | MCP, explorateur et worker WSL ne conservent aucune trace de pile d'un échec interne : seul le type de l'exception est écrit, et l'explorateur ne donne même pas la cause racine |
 | AUD-QUA-01 | Moyenne | M | – | Fermé avec réserve | Les trois surfaces (explorateur, API, MCP) traduisent toute IllegalArgumentException en erreur d'usage sans rien journaliser : un bogue interne s'affiche comme « requête invalide » |
@@ -96,7 +96,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** AUD-PERF-13 (S1), AUD-TST-02 (S1).
 **Ordre interne.** libre ; la liste ci-dessous donne l’ordre recommandé.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-PERF-01 | Moyenne | S | AUD-PERF-13 | Fermé avec réserve | Préparation de la projection 2D sous PostgreSQL et pages de l'explorateur : chaque page de 1 000 vecteurs recompte tous les documents du projet (COUNT(*) par page, coût quadratique par passe, calculé et non mesuré) |
 | AUD-PERF-02 | Faible | M | AUD-PERF-13 | Fermé avec réserve | Projection PCA : jusqu'à 43 lectures complètes de l'index (borne théorique, nombre réel de passes non relevé), y compris pour les passes d'ajustement qui ne retiennent qu'un échantillon |
@@ -114,7 +114,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** aucun.
 **Ordre interne.** libre ; la liste ci-dessous donne l’ordre recommandé.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-PERF-04 | Moyenne | M | – | Fermé avec réserve | Caches applicatifs à taille fixe hors du budget de mémoire des vues : corpus hybride 256 Mio, index vectoriel 256 Mio, graphe de programme 256 Mio, projection jusqu'à 512 Mio de fichier, symboles retenus par l'explorateur |
 | AUD-PERF-05 | Faible | S | – | Fermé avec réserve | AUD-PERF-16 toujours ouvert : la charge utile PostgreSQL est relue par project_id seul, hors de la version dont la taille a été réservée |
@@ -130,7 +130,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** aucun.
 **Ordre interne.** libre ; la liste ci-dessous donne l’ordre recommandé.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-PERF-07 | Faible | S | – | Fermé avec réserve | Voie WSL2 : l'arbre source est haché une fois de plus par indexation scip-java (seul indexeur de cette voie), en plus des empreintes déjà calculées par l'orchestration |
 | AUD-PERF-08 | Faible | S | – | Fermé avec réserve | Voie WSL2 : l'artefact SCIP (jusqu'à 512 Mio) est lu cinq à six fois entre l'acceptation du paquet et sa copie sous runs/ |
@@ -149,7 +149,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** aucun.
 **Ordre interne.** libre ; la liste ci-dessous donne l’ordre recommandé.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-ARC-02 | Moyenne | L | – | Fermé avec réserve | MinosApplication sert de localisateur de services : 36 méthodes publiques d'instance, dont 15 rendent un type du moteur et compositionRoot() rend la racine de composition ; les cas d'usage reçoivent l'objet entier et y puisent 14 collaborateurs |
 | AUD-ARC-01 | Moyenne | L | – | Fermé avec réserve | minos-application embarque et câble elle-même trois adaptateurs d'infrastructure (client HTTP Ollama, analyseur Java fondé sur javac, lecteur de fichiers sidecar), hors de la racine de composition |
@@ -167,7 +167,7 @@ Les constats qui débloquent le plus de travail en aval :
 **Prérequis des sprints antérieurs.** AUD-ARC-01 (S7), AUD-ARC-02 (S7), AUD-TST-02 (S1).
 **Ordre interne.** AUD-ARC-08 avant AUD-ARC-07.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-ARC-08 | Faible | S | – | Fermé | minos-nexus est classé surface mais sert de bibliothèque de traduction à une autre surface : arête minos-cli → minos-nexus en portée compile, module de 4 classes (347 l.) dont une sans appelant |
 | AUD-ARC-04 | Faible | M | AUD-ARC-01, AUD-ARC-02 | Fermé | Les tables du garde de frontières sont recopiées dans ModuleArchitectureTest : chaque mouvement de cliquet (82 commits sur check-module-boundaries.py, 1 912 l.) doit être fait deux fois |
@@ -183,7 +183,7 @@ Les constats qui débloquent le plus de travail en aval :
 
 **Prérequis des sprints antérieurs.** aucun.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-ARC-11 | Faible | S | – | Fermé avec réserve | Règle A19 : retirer une entrée encore valide de la liste des adaptateurs embarqués lève leur protection sans que le garde le voie |
 | AUD-PERF-14 | Faible | S | – | Fermé avec réserve | La table de symboles de l'explorateur survit à l'éviction de sa vue jusqu'au prochain accès à la WeakHashMap, qui n'a lieu qu'après le chargement de la vue suivante : les symboles de l'ancien snapshot restent retenus hors de tout compte |
@@ -196,7 +196,7 @@ Les constats qui débloquent le plus de travail en aval :
 
 **Prérequis des sprints antérieurs.** aucun.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
 | AUD-ARC-12 | Faible | S | – | Fermé avec réserve | La prose d'architecture cite encore l'ancien garde de frontières (lignes 59-85, copie dans ModuleArchitectureTest, « liste MODULES du script ») et ne décrit nulle part son découpage en huit modules |
 | AUD-TST-13 | Faible | S | – | Fermé | Le garde de frontières n'est pas vérifié sur le câblage de main() pour A2, A8, A9, A16 et A19, alors que la docstring de l'auto-test annonce « every rule » |
@@ -211,19 +211,38 @@ Les constats qui débloquent le plus de travail en aval :
 
 **Prérequis des sprints antérieurs.** aucun.
 
-| ID | Sévérité | Effort | Dépend de | Statut (25/11) | Titre |
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
 |---|---|---|---|---|---|
-| AUD-ARC-13 | Faible | S | – | Ouvert | A11 ne voit que les types de retour : une signature publique de MinosApplication nomme encore un type du moteur en paramètre, et une méthode publique à paramètre moteur passe le garde |
-| AUD-ARC-14 | Faible | M | – | Ouvert | Quatre classes publiques du package com.minos.application reçoivent encore l'application entière et y puisent leurs ports |
-| AUD-ARC-15 | Faible | S | – | Ouvert | Prose résiduelle sur le report du 2026-11-19 et sur ARCH-0087 après le sprint 10 |
-| AUD-ARC-16 | Faible | S | – | Ouvert | Dossier frontieres-de-modules : libellés périmés après la PR #810 |
-| AUD-DEP-09 | Faible | S | – | Ouvert | Aucun gate n'exige la somme SHA-256 des distributions Maven et Gradle : supprimer `distributionSha256Sum` d'un wrapper laisse tous les contrôles verts et le wrapper exécute alors sans vérifier |
-| AUD-DEP-10 | Faible | S | – | Ouvert | Le contrôle d'empreinte de l'archive Maven de l'image n'est gardé que par des assertions textuelles faibles : `sha256sum -c - \|\| true` passe tous les gates et l'archive altérée est décompressée |
-| AUD-DEP-11 | Faible | S | – | Ouvert | Deux pièges récurrents des PR Dependabot ne sont écrits que dans la mémoire d'agent, ni dans le skill minos-dependency-update ni dans un gate : instantané apt au moins aussi récent que l'image, mvnw.cmd en LF dans l'index |
-| AUD-DEP-12 | Faible | S | – | Ouvert | La documentation courante dit « wrapper Maven 3.10.0 » alors que le wrapper est en 3.10.2 |
-| AUD-QUA-08 | Faible | S | – | Ouvert | java-api.md promet un remplaçant de retentionService() que la façade n'offre pas à la demande |
-| AUD-SEC-12 | Faible | S | – | Ouvert | Le contenu « une seule classe » du test-jar n'est contrôlé ni par le garde ni par l'IT d'empaquetage |
-| AUD-TST-14 | Faible | S | – | Ouvert | Liste de modules de rule_functions tenue à la main : un nouveau module de règles échappe au contrôle de câblage de main() |
+| AUD-ARC-13 | Faible | S | – | Fermé avec réserve | A11 ne voit que les types de retour : une signature publique de MinosApplication nomme encore un type du moteur en paramètre, et une méthode publique à paramètre moteur passe le garde |
+| AUD-ARC-14 | Faible | M | – | Fermé avec réserve | Quatre classes publiques du package com.minos.application reçoivent encore l'application entière et y puisent leurs ports |
+| AUD-ARC-15 | Faible | S | – | Fermé | Prose résiduelle sur le report du 2026-11-19 et sur ARCH-0087 après le sprint 10 |
+| AUD-ARC-16 | Faible | S | – | Fermé avec réserve | Dossier frontieres-de-modules : libellés périmés après la PR #810 |
+| AUD-DEP-09 | Faible | S | – | Fermé avec réserve | Aucun gate n'exige la somme SHA-256 des distributions Maven et Gradle : supprimer `distributionSha256Sum` d'un wrapper laisse tous les contrôles verts et le wrapper exécute alors sans vérifier |
+| AUD-DEP-10 | Faible | S | – | Fermé avec réserve | Le contrôle d'empreinte de l'archive Maven de l'image n'est gardé que par des assertions textuelles faibles : `sha256sum -c - \|\| true` passe tous les gates et l'archive altérée est décompressée |
+| AUD-DEP-11 | Faible | S | – | Fermé avec réserve | Deux pièges récurrents des PR Dependabot ne sont écrits que dans la mémoire d'agent, ni dans le skill minos-dependency-update ni dans un gate : instantané apt au moins aussi récent que l'image, mvnw.cmd en LF dans l'index |
+| AUD-DEP-12 | Faible | S | – | Fermé avec réserve | La documentation courante dit « wrapper Maven 3.10.0 » alors que le wrapper est en 3.10.2 |
+| AUD-QUA-08 | Faible | S | – | Fermé | java-api.md promet un remplaçant de retentionService() que la façade n'offre pas à la demande |
+| AUD-SEC-12 | Faible | S | – | Fermé avec réserve | Le contenu « une seule classe » du test-jar n'est contrôlé ni par le garde ni par l'IT d'empaquetage |
+| AUD-TST-14 | Faible | S | – | Fermé avec réserve | Liste de modules de rule_functions tenue à la main : un nouveau module de règles échappe au contrôle de câblage de main() |
+
+## Sprint 12 — Reprises de la vérification du 27/11
+
+**Pourquoi ici.** Huit défauts courts révélés par le sprint 11 : des gardes qui laissent passer des formes voisines de ce qu'ils interdisent (méthodes génériques pour A11, clés de somme que mvnw ignore, contrôle d'empreinte déplacé, pin de fins de ligne non gardé) et des chiffres ou renvois restés derrière le code (java-api.md, STATUS, ROADMAP, SUIVI, dossier des frontières). Indépendants entre eux et de gravité Faible.
+
+**Critère de sortie.** Chaque garde nouvellement posé rougit sur ses variantes voisines, prouvé par une mutation rouge ; les documents courants citent des chiffres, des noms et des remplaçants exacts au HEAD ; la preuve d'injection des opérations locales exerce le chemin heureux.
+
+**Prérequis des sprints antérieurs.** aucun.
+
+| ID | Sévérité | Effort | Dépend de | Statut (27/11) | Titre |
+|---|---|---|---|---|---|
+| AUD-QUA-09 | Faible | S | – | Ouvert | java-api.md:372 promet comme remplaçant une méthode que la façade n'expose plus publiquement (projectIndexing(executorDecorator)) |
+| AUD-ARC-17 | Faible | S | – | Ouvert | A11 (retours et paramètres) ne voit pas les méthodes publiques génériques de MinosApplication |
+| AUD-TST-15 | Faible | S | – | Ouvert | Preuve d'injection inégale des opérations locales : un test sans assertion et un chemin heureux non exercé |
+| AUD-ARC-18 | Faible | S | – | Ouvert | Le dossier frontieres-de-modules écrit encore des nombres dérivés de la politique que sa propre exigence interdit, sans contrôle |
+| AUD-QUA-10 | Faible | S | – | Ouvert | STATUS.md:19 et ROADMAP.md:23 écrivent « 154 cas » pour l'auto-test du garde de frontières ; le décompte réel est 332 |
+| AUD-DEP-16 | Faible | S | – | Ouvert | Le gate des wrappers accepte des formes de clé que mvnw ignore : `distributionSha256Sum =`, `:` ou clé indentée laissent mvnw sans vérification |
+| AUD-DEP-17 | Faible | S | – | Ouvert | Gate des outils livrés : un contrôle d'empreinte placé après `tar` (nom relatif après `cd /tmp`) ou portant sur un autre fichier reste vert |
+| AUD-DEP-18 | Faible | S | – | Ouvert | Le pin `eol=crlf` de .gitattributes:36 n'est pas lui-même gardé : le retirer neutralise la règle i/lf des .cmd |
 
 ## Constats Info, hors sprint
 

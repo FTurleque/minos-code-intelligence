@@ -1,6 +1,6 @@
 # Audit technique du 15 novembre 2026
 
-> **État au 25/11/2026** (`75e10c68`) : les sprints 1 à 10 sont exécutés et vérifiés ; 54 constats fermés sur 65, **11 restent à traiter** : onze défauts Faible nouveaux, rangés au sprint 11. Notes sur les constats non fermés : Sécurité 99, Qualité 99, Tests 99, Architecture 96, Performance 100, Dépendances 96. Détail : [`ETAT-2026-11-25.md`](ETAT-2026-11-25.md) (vérifications précédentes : [`ETAT-2026-11-20.md`](ETAT-2026-11-20.md), [`ETAT-2026-11-19.md`](ETAT-2026-11-19.md), [`ETAT-2026-11-17.md`](ETAT-2026-11-17.md)).
+> **État au 27/11/2026** (`4f4cac81`) : les sprints 1 à 11 sont exécutés et vérifiés ; 65 constats fermés sur 73, **8 restent à traiter** : huit défauts Faible nouveaux, rangés au sprint 12. Notes sur les constats non fermés : Sécurité 100, Qualité 98, Tests 99, Architecture 98, Performance 100, Dépendances 97. Détail : [`ETAT-2026-11-27.md`](ETAT-2026-11-27.md) (vérifications précédentes : [`ETAT-2026-11-25.md`](ETAT-2026-11-25.md), [`ETAT-2026-11-20.md`](ETAT-2026-11-20.md), [`ETAT-2026-11-19.md`](ETAT-2026-11-19.md), [`ETAT-2026-11-17.md`](ETAT-2026-11-17.md)).
 
 **Cible** : `origin/main` au commit `89be3fb4` (PR #735). **Profil** : complet, six axes. **Résultat** : 58 constats, dont 47 à traiter et 11 Info ; aucun Critique, aucun Élevé.
 
@@ -78,7 +78,8 @@ Charge par sprint en bornes basse et haute (S 0,25 à 1 j, M 1 à 3 j, L 3 à 8 
 - [`sprints.md`](sprints.md) et [`sprints-meta.json`](sprints-meta.json) : ordre de correction.
 - [`architecture.md`](architecture.md) : découpage observé et graphe.
 - [`plan-action.md`](plan-action.md) : classement par urgence.
-- [`ETAT-2026-11-25.md`](ETAT-2026-11-25.md) : vérification du 25/11 (statuts, désaccords avec le suivi, notes recalculées).
+- [`ETAT-2026-11-27.md`](ETAT-2026-11-27.md) : vérification du 27/11 (statuts, désaccords avec le suivi, notes recalculées).
+- [`ETAT-2026-11-25.md`](ETAT-2026-11-25.md) : vérification du 25/11.
 - [`ETAT-2026-11-20.md`](ETAT-2026-11-20.md) : vérification du 20/11.
 - [`ETAT-2026-11-19.md`](ETAT-2026-11-19.md) : vérification du 19/11.
 - [`ETAT-2026-11-17.md`](ETAT-2026-11-17.md) : vérification du 17/11.
