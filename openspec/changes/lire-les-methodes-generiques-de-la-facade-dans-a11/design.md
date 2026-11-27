@@ -75,3 +75,30 @@ Les exigences en vigueur sur A11 (« Les accesseurs de MinosApplication typés m
 | Constat | Exigence | Tâches | Preuve attendue |
 |---|---|---|---|
 | AUD-ARC-17 | frontieres-de-modules › Une méthode générique ou un import joker de la façade ne contourne pas A11 | 1.1 à 1.4, 2.1 | mutations rouges (rc=1), auto-test vert, garde vert au HEAD |
+
+### Preuves exécutées le 2026-11-27 (base `87d24b8ff`)
+
+Mutations sur des copies `git archive HEAD` dans le scratchpad ; « après » : même copie portant le `module_boundary_ratchets.py` corrigé.
+
+| Mutation de `MinosApplication` | rc au HEAD | rc après | Message après (méthode ou package, type) |
+|---|---|---|---|
+| témoin | 0 | 0 | |
+| `leakPlain` | 1 | 1 | `leakPlain`, `registry.ProjectRegistry` |
+| `leakGeneric`, `leakRet`, `leakBound` | 0 | 1 | méthode, `registry.ProjectRegistry` |
+| borne imbriquée ; constructeur générique à borne | 0 | 1 | méthode, `registry.ProjectRegistry` |
+| retour statique `leakStatic` | 0 | 1 | `public static method returning registry.ProjectRegistry` |
+| retour statique générique | 1 (lecture accidentelle) | 1 | idem |
+| `import com.minos.registry.*;` + `e(RegisteredProject)` | 0 | 1 | `com.minos.registry.*` |
+| `import com.minos.io.*;` + `e(BoundedFileLease)` | 0 | 1 | `com.minos.io.*` |
+| `import com.minos.registry.*;` + `e(ProjectRegistry)` | 1 | 1 | package et `e` |
+
+- La dernière ligne est la forme écrite en tâche 1.1 : `MinosApplication` importe déjà `ProjectRegistry` par son nom, la fuite est donc lue au HEAD. Le rouge du joker se prouve avec un type que seul le joker importe.
+- Auto-test : rouge avant chaque correction, puis 89 sur 89. La variante `public static <T> MinosApplication of(T t, ProjectRegistry r)` passe aussi au HEAD (même lecture accidentelle).
+- La section de paramètres de type se lit aussi sans espace (`public<T>`), et les arguments d'annotation qu'elle porte (accolades, `>`) ne la ferment pas : les deux formes ont leur cas dans l'auto-test.
+- Garde sur le dépôt : rc=0, sortie identique à celle du HEAD. `run_gates.py` 88 sur 88, `openspec validate --all --strict` 27 sur 27, `archgate check` 11 sur 11.
+- Consommateurs de la lecture des membres publics : les seules fonctions de `module_boundary_ratchets.py` (accesseurs, paramètres, retours statiques, racine de composition) ; aucun autre script de `scripts/`.
+- **[Décision]** La racine de composition est refusée aussi en retour d'une méthode statique, générique ou non : `public static <T> MinosApplicationComposer` est refusé au HEAD par la lecture accidentelle, et la lecture exacte des modificateurs le laisserait passer. L'exigence du delta ne nomme pas ce cas.
+
+### Formes que la règle ne lit pas (hors de ce changement)
+
+Sondées sur des arbres temporaires, acceptées par le garde : annotation entre `public` et le type de retour ; nom de méthode commençant par une majuscule ; type de retour coupé sur deux lignes ; `import com.minos.orchestration.IndexingRuntimePorts.*;` (membres d'un type) ; `import static` d'un type imbriqué du moteur.
