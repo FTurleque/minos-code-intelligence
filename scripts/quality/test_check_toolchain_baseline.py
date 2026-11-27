@@ -217,6 +217,75 @@ class WrapperDistributionSumTest(unittest.TestCase):
         self.assertEqual([f"{gate.WRAPPER} must hold exactly one distributionSha256Sum, found 2: "
                           "the distribution would run unverified"], self.failures())
 
+    @staticmethod
+    def unread_by_mvnw(number: int, key: str) -> str:
+        return (f"{gate.MAVEN_WRAPPER}:{number} must start with `{key}=` (the key at the start of the line, `=` right "
+                "after it): mvnw splits the line on `=` alone and would not read this one")
+
+    def test_a_maven_sum_that_mvnw_would_not_read_is_refused_with_its_line(self):
+        read_line = "distributionSha256Sum="
+        for written in ("distributionSha256Sum =", "distributionSha256Sum\t=", "distributionSha256Sum:",
+                        "  distributionSha256Sum=", "\tdistributionSha256Sum="):
+            with self.subTest(written=written):
+                self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace(read_line, written))
+                self.assertEqual(([self.unread_by_mvnw(4, "distributionSha256Sum")], 1),
+                                 gate.check_wrapper_sums(self.root))
+
+    def test_a_maven_url_that_mvnw_would_not_read_is_refused_with_its_line(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace("distributionUrl=", "distributionUrl :"))
+        failures = self.failures()
+        self.assertEqual(self.unread_by_mvnw(3, "distributionUrl"), failures[0], failures)
+
+    def test_a_bare_sum_key_after_the_sum_is_refused_because_mvnw_keeps_the_last_value(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER + "distributionSha256Sum\n")
+        self.assertEqual([self.unread_by_mvnw(5, "distributionSha256Sum")], self.failures())
+
+    @staticmethod
+    def unterminated(number: int) -> str:
+        return f"{gate.MAVEN_WRAPPER}:{number} must end with a newline: mvnw does not read a last line without one"
+
+    def test_a_maven_sum_without_a_final_newline_is_refused_with_its_line(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.rstrip("\n"))
+        self.assertEqual(([self.unterminated(4)], 1), gate.check_wrapper_sums(self.root))
+
+    def test_a_maven_url_without_a_final_newline_is_refused_with_its_line(self):
+        url = next(line for line in MAVEN_WRAPPER.splitlines() if line.startswith("distributionUrl="))
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace(url + "\n", "") + url)
+        self.assertEqual([self.unterminated(4)], self.failures())
+
+    def test_a_missing_final_newline_after_another_line_or_in_the_gradle_wrapper_is_accepted(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER + "# a comment")
+        self.write(gate.WRAPPER, wrapper("9.9.2").rstrip("\n"))
+        self.assertEqual(([], 2), gate.check_wrapper_sums(self.root))
+
+    def test_a_copy_of_the_repository_without_the_final_newline_is_refused(self):
+        for relative in (gate.MAVEN_WRAPPER, gate.WRAPPER):
+            self.write(relative, (REPOSITORY / relative).read_text(encoding="utf-8"))
+        lines = (REPOSITORY / gate.MAVEN_WRAPPER).read_text(encoding="utf-8").splitlines()
+        self.assertTrue(lines[-1].startswith("distributionSha256Sum="), lines[-1])
+        self.write(gate.MAVEN_WRAPPER, "\n".join(lines))
+        self.assertEqual([self.unterminated(len(lines))], self.failures())
+
+    def test_spaces_after_the_equals_sign_and_the_gradle_escape_are_accepted(self):
+        self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace("distributionSha256Sum=", "distributionSha256Sum= ")
+                   + "# distributionSha256Sum : a comment is no key\n! distributionUrl : neither is this one\n")
+        self.assertIn("distributionUrl=https\\://services.gradle.org/", wrapper("9.9.2"))
+        self.assertEqual(([], 2), gate.check_wrapper_sums(self.root))
+
+    def test_the_gradle_wrapper_is_still_read_as_a_java_properties_file(self):
+        self.write(gate.WRAPPER, wrapper("9.9.2").replace("distributionSha256Sum=", "  distributionSha256Sum : "))
+        self.assertEqual(([], 2), gate.check_wrapper_sums(self.root))
+
+    def test_a_copy_of_the_repository_with_a_space_before_the_equals_sign_is_refused(self):
+        for relative in (gate.MAVEN_WRAPPER, gate.WRAPPER):
+            self.write(relative, (REPOSITORY / relative).read_text(encoding="utf-8"))
+        text = (REPOSITORY / gate.MAVEN_WRAPPER).read_text(encoding="utf-8")
+        self.assertEqual(1, text.count("distributionSha256Sum="))
+        number = next(index for index, line in enumerate(text.splitlines(), start=1)
+                      if line.startswith("distributionSha256Sum="))
+        self.write(gate.MAVEN_WRAPPER, text.replace("distributionSha256Sum=", "distributionSha256Sum ="))
+        self.assertEqual([self.unread_by_mvnw(number, "distributionSha256Sum")], self.failures())
+
     def test_a_distribution_over_http_is_refused(self):
         self.write(gate.MAVEN_WRAPPER, MAVEN_WRAPPER.replace("https://repo.maven", "http://repo.maven"))
         failures = self.failures()
