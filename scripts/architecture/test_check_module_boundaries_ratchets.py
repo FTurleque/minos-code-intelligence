@@ -649,10 +649,10 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
             "    public static final String NAME = of(\"x\");\n"
             "    @Override public @Deprecated void close() { }\n"
             "    public int[] Values(@Tag(v = @In(1)) String... names) { return null; }\n"
-            "    public record Name(String value) { }\n"
-            "    public record Box<T>(T value) { }\n"
-            "    public @interface Marker { }\n"
-            "    public enum Kind { FIRST(1); Kind(int rank) { } }")
+            "    record Name(String value) { }\n"
+            "    private record Box<T>(T value) { }\n"
+            "    @interface Marker { }\n"
+            "    enum Kind { FIRST(1); Kind(int rank) { } }")
         self.assertEqual(0, self.check_accessors({}))
         self.assertEqual([], RATCHETS.minos_application_engine_parameters(self.root, "com.minos"))
         self.assertEqual({}, RATCHETS.minos_application_accessors(self.root, "com.minos"))
@@ -685,6 +685,60 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
             "    public Path x(Map.Entry<String, String> entry) { requireText(entry); return null; }",
             ["static com.minos.domain.Preconditions.requireText", "java.util.Map", "java.util.Map.*",
              "java.nio.file.Path", "static com.minos.orchestration.IndexingRuntimePorts.Path"])
+        self.assertEqual(0, self.check_accessors({}))
+
+    def test_a_public_field_of_an_engine_type_is_refused(self):
+        # AUD-ARC-17: a field hands out a type like a method does.
+        self.refused_declarations(("public ProjectRegistry registry;",
+                                   "public static final ProjectRegistry registry = null;",
+                                   "public java.util.List<ProjectRegistry> registry;",
+                                   "public java.util.Map<String, ProjectRegistry> registry, other;",
+                                   "public ProjectRegistry[] registry, other;",
+                                   "public @Deprecated volatile ProjectRegistry registry[];",
+                                   "public @Tag(v = 1) ProjectRegistry registry;"),
+                                  "MinosApplication.registry is a public field")
+
+    def test_a_public_field_of_the_composition_root_type_is_refused(self):
+        self.application_with("    public MinosApplicationComposer root;")
+        self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.root is a public field",
+                     "MinosApplicationComposer")
+
+    def test_a_field_without_an_engine_type_or_not_public_is_accepted(self):
+        # The name of a field is not a type, even when it reads like one.
+        self.application_with("    public static final String NAME = \"x\";\n"
+                              "    public String ProjectRegistry;\n"
+                              "    public java.util.Map<String, Integer> first = null, second;\n"
+                              "    public int ranks[];\n"
+                              "    private ProjectRegistry hidden;\n"
+                              "    ProjectRegistry internal;")
+        self.assertEqual(0, self.check_accessors({}))
+
+    def test_an_unreadable_public_field_fails_closed(self):
+        self.application_with("    public registry;")
+        self.refused(lambda: self.check_accessors({}), "A11 unreadable MinosApplication member")
+
+    def test_a_public_nested_type_other_than_the_builder_is_refused(self):
+        # AUD-ARC-17: the members of a nested type may be public without saying so, so the type itself is refused.
+        for members in ("public record Port(ProjectRegistry registry) { }",
+                        "public record Port<T>(T value) { }",
+                        "public static final class Port { public ProjectRegistry x() { return null; } }",
+                        "public interface Port { ProjectRegistry registry(); }",
+                        "public sealed interface Port permits Impl { }",
+                        "public enum Port { ONLY }",
+                        "public @interface Port { }",
+                        "public @Tag(v = 1) record Port(String value) { }"):
+            with self.subTest(members=members):
+                self.application_with("    " + members)
+                self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.Port is a public nested type",
+                             "Builder")
+
+    def test_the_builder_and_non_public_nested_types_are_accepted(self):
+        self.application_with("    public static final class Builder {\n"
+                              "        public ProjectRegistry registry;\n"
+                              "        public Builder projectRegistry(ProjectRegistry value) { return this; }\n"
+                              "    }\n"
+                              "    record Stores(ProjectRegistry registry) { }\n"
+                              "    private record Queries(ProjectRegistry registry) { }")
         self.assertEqual(0, self.check_accessors({}))
 
     def test_a_generic_signature_without_an_engine_type_is_accepted(self):
