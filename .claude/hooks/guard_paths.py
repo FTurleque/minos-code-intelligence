@@ -7,13 +7,16 @@
   goldens de caractérisation, workflows, liste des checks exigés, listes de tolérance des gardes,
   licence et sécurité.
 
+Les motifs s'appliquent au chemin du fichier dans son arbre de travail (dossier principal ou
+`.claude/worktrees/<nom>`).
+
 Voir docs/developer/ai-configuration.md.
 """
 from __future__ import annotations
 
 import re
 
-from _common import permission, project_root, read_event, relative_posix
+from _common import locate, permission, read_event
 
 DENY_PREFIXES = (
     ("target/", "fichier généré par Maven : le régénérer par le build"),
@@ -70,9 +73,10 @@ def content_of(tool_input: dict) -> str:
 def main() -> None:
     event = read_event()
     tool_input = event.get("tool_input") or {}
-    relative = relative_posix(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
-    if relative is None:
+    located = locate(tool_input.get("file_path") or tool_input.get("notebook_path") or "", event.get("cwd") or "")
+    if located is None:
         return
+    tree, relative = located
     for prefix, reason in DENY_PREFIXES:
         if relative.startswith(prefix):
             permission("deny", f"{relative} : {reason}.")
@@ -86,7 +90,7 @@ def main() -> None:
                                "ne jamais versionner de secret (Gitleaks est un check exigé).")
     for pattern, reason in ASK_RULES:
         if pattern.search(relative):
-            if relative.startswith("docs/architecture/adr/") and not (project_root() / relative).exists():
+            if relative.startswith("docs/architecture/adr/") and not (tree / relative).exists():
                 continue  # un nouvel ADR se crée librement (commande /minos:adr)
             permission("ask", f"{relative} : {reason}")
 
