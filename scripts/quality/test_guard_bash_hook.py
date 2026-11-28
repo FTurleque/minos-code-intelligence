@@ -390,5 +390,14 @@ class PowerShellMainFolderOnThematicBranchTest(GuardCase):
         self.refused("git push -u origin $(git branch --show-current)", tree)
 
 
+class SettingsWiringTest(unittest.TestCase):
+    def test_the_guard_is_wired_to_both_shells(self) -> None:
+        settings = json.loads((HOOK.parents[1] / "settings.json").read_text(encoding="utf-8"))
+        wired = {tool for entry in settings["hooks"]["PreToolUse"]
+                 if any(HOOK.name in hook["command"] for hook in entry["hooks"])
+                 for tool in entry["matcher"].split("|")}
+        self.assertEqual({"Bash", "PowerShell"}, wired)
+
+
 if __name__ == "__main__":
     unittest.main()
