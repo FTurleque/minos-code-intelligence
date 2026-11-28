@@ -63,4 +63,4 @@ Aucun secret versionné (Gitleaks) ; environnement des processus externes issu d
 
 ## Documentation
 
-État produit : `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md` (gardés par `check-current-docs.py` et `product-facts.py --check`). Historique figé : `docs/project/history/`, `docs/project/audits/archive/`, `openspec/changes/archive/`. Audit en cours : `docs/project/audits/2026-10-10/` (suivi dans `SUIVI.md`).
+État produit : `docs/project/governance/STATUS.md`, `docs/project/governance/ROADMAP.md` (gardés par `check-current-docs.py` et `product-facts.py --check`). Historique figé : `docs/project/history/`, `docs/project/audits/archive/`, `openspec/changes/archive/`. Audit en cours : le dossier daté le plus récent de `docs/project/audits/` (suivi dans `SUIVI.md`, index dans `docs/project/audits/README.md`).

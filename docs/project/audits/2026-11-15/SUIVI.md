@@ -83,7 +83,7 @@ Ordre : `paginer-…`, `retirer-…`, `ajuster-…`, `rendre-…`.
 
 ## Sprint 5 — Budget mémoire et PostgreSQL (fusionné et archivé le 2026-11-17)
 
-AUD-PERF-05 et AUD-PERF-06 reprennent AUD-PERF-16 et AUD-PERF-17 de l'audit du 10 octobre, ouverts le 11/11 dans [`../2026-10-10/ETAT-2026-10-13.md`](../2026-10-10/ETAT-2026-10-13.md) sans décision.
+AUD-PERF-05 et AUD-PERF-06 reprennent AUD-PERF-16 et AUD-PERF-17 de l'audit du 10 octobre, ouverts le 11/11 dans [`../2026-10-10/ETAT-2026-10-13.md`](../archive/2026-10-10/ETAT-2026-10-13.md) sans décision.
 
 | Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
 |---|---|---|---|

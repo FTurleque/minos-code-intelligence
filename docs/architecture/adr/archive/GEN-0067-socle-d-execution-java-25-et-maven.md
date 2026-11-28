@@ -101,5 +101,5 @@ Relevés le 2026-10-23 (audit des ADR) ; la décision ci-dessus reste celle en v
 - ADR remplacés : [0004](0004-stack-java-maven-core-sans-framework.md) (décision C0 : Maven, cœur sans framework serveur), [0059](0059-migrer-le-socle-vers-java-25-lts.md) (Java 25 LTS et gate de baseline) ; [0005](0005-aligner-java-24-environnement-developpement.md) (Java 24, remplacé par 0059).
 - ADR liés : [0027](../ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md) (plugin IntelliJ externe en Java 21), [0057](../ARCH-0057-finaliser-les-frontieres-hexagonales.md) (aucun framework serveur), [0069](../ARCH-0069-backends-mcp-natif-et-docker.md) (runtime embarqué de la distribution native).
 - Politique : [`docs/developer/TOOLCHAIN_POLICY.md`](../../../developer/TOOLCHAIN_POLICY.md).
-- Audit : [`docs/project/audits/2026-10-10/findings.md`](../../../project/audits/2026-10-10/findings.md) (AUD-DEP-01).
+- Audit : [`docs/project/audits/archive/2026-10-10/findings.md`](../../../project/audits/archive/2026-10-10/findings.md) (AUD-DEP-01).
 - Historique de C0 : [`docs/project/history/c0/VALIDATION_C0.md`](../../../project/history/c0/VALIDATION_C0.md).
