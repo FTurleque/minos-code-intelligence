@@ -362,14 +362,14 @@ Aucune signature de `com.minos.api` ne change, ni aucune sortie de la CLI, du se
 
 Un hôte qui gérait lui-même les magasins ouvre le stockage par `StorageBackends.open(configuration)`, garde la référence au `StorageBackend` et le donne à `MinosApplication.builder(home).storageBackend(backend)`. `MinosApplication` reste nommée par les contrats publics comme type opaque (`MinosApplication.open`, `MinosApplication.builder`, constructeurs `Local*Api(MinosApplication)`) ; ses accesseurs sont internes.
 
-### Cas d'usage obtenus par la façade ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), version 1.3.0
+### Cas d'usage obtenus par la façade ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), prochaine version
 
 Aucune signature de `com.minos.api` ne change. Les cas d'usage reçoivent leurs collaborateurs et `com.minos.application.MinosApplication` les expose, construits à la première demande ; leurs fabriques statiques sont retirées (rupture de source et binaire de classes internes) :
 
 | Signature retirée | Remplaçant |
 |---|---|
 | `ProjectIndexingUseCase.of(MinosApplication)` | `application.projectIndexing()` |
-| `ProjectIndexingUseCase.of(MinosApplication, UnaryOperator<IndexerExecutor>)` | `application.projectIndexing(executorDecorator)` |
+| `ProjectIndexingUseCase.of(MinosApplication, UnaryOperator<IndexerExecutor>)` | aucun remplaçant public : sur la façade, la décoration des exécuteurs est réservée aux tests (`MinosApplicationTestAccess` du `test-jar`) |
 | `ProjectIndexingUseCase.viaWsl(MinosApplication, Optional<String>)` | `application.projectIndexingViaWsl(distribution)` |
 | `RemoteIndexingUseCase.of(MinosApplication)` | `application.remoteIndexing()` |
 | `RemoteIndexingUseCase.of(MinosApplication, RemoteRepositoryMaterializer, RemoteIndexingRuntime)` | `new RemoteIndexingUseCase(new RemoteIndexingUseCase.Dependencies(...))` |
@@ -377,7 +377,7 @@ Aucune signature de `com.minos.api` ne change. Les cas d'usage reçoivent leurs 
 
 `ProjectIndexStateReconciler`, `PublishedSnapshotRetention` et `ProviderRuntimeSummary` passent de `com.minos.application` à `com.minos.application.indexing` : un code qui les importait doit changer son import et être recompilé.
 
-### Fournisseurs embarqués câblés par la racine de composition ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), version 1.3.0
+### Fournisseurs embarqués câblés par la racine de composition ([ARCH-0087](../architecture/adr/ARCH-0087-adaptateurs-embarques-et-facade-reduite.md)), prochaine version
 
 Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.application.MinosApplicationComposer` gagne trois méthodes abstraites, qu'une implémentation tierce du port doit ajouter (rupture de source) :
 
@@ -387,7 +387,7 @@ Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.applic
 
 La classe interne `com.minos.program.analysis.ProgramGraphService` perd son constructeur `(ProjectRegistry, CodeKnowledgeSnapshotStore)` et ses deux méthodes statiques `productionProviders` ; son constructeur à liste explicite ne complète plus la liste reçue (rupture de source et binaire). Remplacement : `MinosApplication.open(home).programGraphService()`, ou le constructeur à liste explicite avec une liste complétée par `new DefaultMinosApplicationComposer().completeProgramGraphProviders(...)`.
 
-### Port de l'historique d'import, version 1.3.0
+### Port de l'historique d'import, prochaine version
 
 Aucune signature de `com.minos.api` ne change. Le port interne `com.minos.application.MinosApplicationComposer` gagne la méthode abstraite `IndexImportHistoryStore indexImportHistoryStore(Path home)` : une implémentation tierce du port doit l'ajouter (rupture de source) ; celle de `minos-bootstrap` rend `com.minos.storage.home.FileIndexImportHistoryStore`. Le premier paramètre des deux constructeurs publics de `com.minos.application.ProjectInspectionService` passe de `Path home` à `IndexImportHistoryStore historyStore` (rupture de source et binaire) ; remplacement : `new FileIndexImportHistoryStore(home)`, ou `MinosApplication.open(home).projectInspectionService()`. Le format du fichier d'historique ne change pas.
 
