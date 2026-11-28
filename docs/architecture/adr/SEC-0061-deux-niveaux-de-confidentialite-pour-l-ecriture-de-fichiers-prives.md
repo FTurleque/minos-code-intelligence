@@ -109,5 +109,5 @@ Option B. Le niveau « arbre privé » est **partiel** par construction : la con
 ## References
 
 - Changement OpenSpec : `completer-les-primitives-d-e-s-privees` (archivé sous `openspec/changes/archive/`)
-- Suivi : [`docs/project/audits/2026-10-10/SUIVI.md`](../../project/audits/2026-10-10/SUIVI.md)
+- Suivi : [`docs/project/audits/archive/2026-10-10/SUIVI.md`](../../project/audits/archive/2026-10-10/SUIVI.md)
 - ADR liés : [ADR-0038](archive/0038-aggregate-worker-resource-containment.md) (confinement des workers), [ADR-0074](SEC-0074-java-non-indexable-depuis-windows-voie-wsl2.md) (arbre lu par le conteneur Windows)

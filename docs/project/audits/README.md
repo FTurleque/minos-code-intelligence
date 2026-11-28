@@ -6,19 +6,16 @@ Ce dossier regroupe les audits du dépôt `minos-code-intelligence`. **Seul le d
 
 | Dossier | Audit | État |
 |---|---|---|
-| [`2026-11-15/`](2026-11-15/README.md) | Audit technique complet du 15 novembre 2026 sur `main` `89be3fb4` (6 axes, 58 constats dont 47 à traiter, aucun Critique ni Élevé, 8 sprints) : `README.md`, `findings.md` / `findings.json`, `sprints.md`, `plan-action.md`, `architecture.md`, `SUIVI.md` | Ouvert : les 8 sprints sont spécifiés en OpenSpec (40 changements), aucun n'est implémenté. Le suivi vivant est `SUIVI.md` de ce dossier. |
-| `2026-10-10/` | Audit technique complet du 10 octobre 2026 (6 axes, 11 sprints) : `README.md`, `findings.md` / `findings.json`, `sprints.md`, `plan-action.md`, `architecture.md`, `SUIVI.md` | Sprint 1 corrigé et archivé ; sprint 2 spécifié ; sprints 3 à 11 à traiter. Le suivi vivant est `SUIVI.md` de ce dossier. |
-
+| [`2026-11-15/`](2026-11-15/README.md) | Audit technique complet du 15 novembre 2026 sur `main` `89be3fb4` (6 axes, aucun constat Critique ni Élevé) et ses vérifications successives : `README.md`, `findings.md` / `findings.json`, `sprints.md`, `plan-action.md`, `architecture.md`, `SUIVI.md`, `ETAT-*.md` | Ouvert. Les 12 sprints sont fusionnés et leurs changements archivés (2026-11-28). La dernière vérification indépendante, [`ETAT-2026-11-27.md`](2026-11-15/ETAT-2026-11-27.md), compte 8 constats Faibles à traiter, « Ouvert » dans `findings.json` : le sprint 12 les traite et n'est pas revérifié. Les mesures, preuves manuelles et décisions du propriétaire restantes sont nommées dans le suivi vivant, [`SUIVI.md`](2026-11-15/SUIVI.md). |
 L'audit outillé du 8 octobre 2026 (SpotBugs, PIT, ArchUnit, Dependency-Check, Gitleaks) est tenu dans [`../quality/`](../../developer/quality/code-audit-couverture.md), non ici. Ses changements OpenSpec sont tous archivés, le dernier (`etendre-audit-outille-a-tout-le-perimetre`) le 2026-11-03.
 
 ## Archive
 
 | Dossier | Contenu | Pourquoi archivé |
 |---|---|---|
+| [`archive/2026-10-10/`](archive/2026-10-10/README.md) | Audit technique complet du 10 octobre 2026 (6 axes, 11 sprints) : [`README.md`](archive/2026-10-10/README.md), `findings.md` / `findings.json`, `sprints.md`, `plan-action.md`, `architecture.md`, [`SUIVI.md`](archive/2026-10-10/SUIVI.md), [`ETAT-2026-10-13.md`](archive/2026-10-10/ETAT-2026-10-13.md) et les prompts d'orchestration (`PROMPT-*.md`) | Les 11 sprints sont fusionnés et leurs changements OpenSpec archivés. `findings.json` porte « Ouvert » pour AUD-PERF-16 et AUD-PERF-17 : l'audit du 15 novembre les reprend sous AUD-PERF-05 et AUD-PERF-06, fermés avec réserve (PR #769). |
 | [`archive/2026-10-06/`](archive/2026-10-06/README.md) | Audit d'octobre 2026 (101 constats) : [`README.md`](archive/2026-10-06/README.md), [`constats.md`](archive/2026-10-06/constats.md), [`annexes/`](archive/2026-10-06/annexes/), [`architecture-actuelle.md`](archive/2026-10-06/architecture-actuelle.md), [`CAPACITES.md`](archive/2026-10-06/CAPACITES.md), [`plan-de-remediation.md`](archive/2026-10-06/plan-de-remediation.md) | Ses huit changements OpenSpec sont implémentés, fusionnés dans `develop` et archivés (`openspec/changes/archive/2026-10-07-*`). L'audit du 10 octobre le revérifie. |
 | [`archive/2026-09/`](archive/2026-09/AUDIT-2026-09.md) | Audit de septembre 2026 ([`AUDIT-2026-09.md`](archive/2026-09/AUDIT-2026-09.md)), les suivis de ses chantiers (`*-SUIVI.md`, `S15-REGRESSION-RUNTIME-GRANT.md`) et les prompts d'orchestration (`PROMPT-*.md`) | Les chantiers sont fusionnés dans `develop` (PR #305 à #332, promotion `develop` → `main` en PR #322) ; ce qui restait ouvert est repris et requalifié par l'audit du 10 octobre. Les ADR 0039 à 0047 renvoient à ces suivis pour les mesures et les preuves. |
-
-L'archive de l'audit du 10 octobre suivra la même règle quand ses 11 sprints seront traités ; le prompt du sprint 1 (terminé) est déjà dans `2026-10-10/archive/`.
 
 ## Règle de rangement
 

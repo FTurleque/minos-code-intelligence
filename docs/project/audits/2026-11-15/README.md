@@ -6,7 +6,7 @@
 
 ## Contexte
 
-L'audit du 10 octobre (93 constats, [`../2026-10-10/`](../2026-10-10/README.md)) est presque entièrement fermé : au 11/11, seuls AUD-PERF-16 et AUD-PERF-17 restaient ouverts. Cet audit repart de zéro sur `main`, devenue seule branche d'intégration, et regarde en priorité ce qui est arrivé depuis : l'explorateur web et sa projection 2D, la voie d'indexation WSL2, le budget mémoire des vues (DATA-0081), la fusion des stockages, la suppression de Testcontainers.
+L'audit du 10 octobre (93 constats, [`../2026-10-10/`](../archive/2026-10-10/README.md)) est presque entièrement fermé : au 11/11, seuls AUD-PERF-16 et AUD-PERF-17 restaient ouverts. Cet audit repart de zéro sur `main`, devenue seule branche d'intégration, et regarde en priorité ce qui est arrivé depuis : l'explorateur web et sa projection 2D, la voie d'indexation WSL2, le budget mémoire des vues (DATA-0081), la fusion des stockages, la suppression de Testcontainers.
 
 Méthode : lecture directe du code par six auditeurs d'axe en parallèle, gates et auto-tests du dépôt rejoués (62 sur 62 verts dans l'environnement d'audit), et build complet `mvnw -B -ntp -fae verify` sur le poste du mainteneur (Windows, JDK 21.0.13, copie extraite de 89be3fb4) : BUILD SUCCESS en 33 min 36, 4 576 tests exécutés, 0 échec, 0 erreur, 357 sautés (tests PostgreSQL sans serveur, tests Linux sous Windows) ; gate JaCoCo vert (global 0,857 en lignes / 0,736 en branches, 31 scopes nominatifs, scopes Linux et PostgreSQL non applicables), puis relecture par un agent qui n'a produit aucun constat : 9 constats requalifiés (5 sévérités baissées), 9 titres corrigés, 3 dépendances retirées et 6 ajoutées, 1 constat ajouté (AUD-PERF-13). Aucun serveur d'indexation de code n'a été utilisé.
 

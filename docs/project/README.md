@@ -21,6 +21,7 @@ La documentation a été réorganisée le 2026-10-17. Les relevés datés (histo
 | `docs/TOOLCHAIN_POLICY.md` | `docs/developer/TOOLCHAIN_POLICY.md` |
 | `docs/adr/` | `docs/architecture/adr/` |
 | `docs/audit/` | `docs/project/audits/` |
+| `docs/project/audits/2026-10-10/` | `docs/project/audits/archive/2026-10-10/` |
 | `docs/roadmap/` | `docs/project/roadmap/` |
 | `docs/research/` | `docs/project/research/` |
 | `docs/history/` | `docs/project/history/` |

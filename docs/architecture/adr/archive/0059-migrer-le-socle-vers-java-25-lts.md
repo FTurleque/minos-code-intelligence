@@ -69,6 +69,6 @@ Mesures du 2026-10-13 :
 
 ## References
 
-- Audit : [`docs/project/audits/2026-10-10/findings.md`](../../../project/audits/2026-10-10/findings.md) (AUD-DEP-01).
+- Audit : [`docs/project/audits/archive/2026-10-10/findings.md`](../../../project/audits/archive/2026-10-10/findings.md) (AUD-DEP-01).
 - Politique : [`docs/developer/TOOLCHAIN_POLICY.md`](../../../developer/TOOLCHAIN_POLICY.md).
 - ADR remplacé : [0005](0005-aligner-java-24-environnement-developpement.md) ; notes de mise en œuvre ajoutées aux ADR [0004](0004-stack-java-maven-core-sans-framework.md), [0021](0021-native-runtime-autonomous-indexing.md) et [0027](../ARCH-0027-intellij-external-client-and-versioned-cli-protocol.md).
