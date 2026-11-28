@@ -1813,6 +1813,254 @@ A11 SHALL lire les méthodes publiques, statiques comprises, et les constructeur
 - **WHEN** `git grep -nE "gitIntelligence\(\)|hostedControlPlaneService\(\)" -- docs/architecture/diagrams/capacites/frontieres-de-modules.md` est exécuté
 - **THEN** la commande ne rend aucune ligne et se termine avec le code 1
 
+### Requirement: L'écriture d'une déclaration de la façade ne contourne pas A11
+A11 SHALL lire une méthode ou un constructeur public de `MinosApplication` quels que soient les annotations placées dans sa déclaration, la casse de son nom et les retours à la ligne de son en-tête, nom qualifié compris. Une déclaration publique suivie d'une parenthèse dont A11 ne lit pas le nom SHALL faire échouer le garde.
+
+#### Scenario: Annotation à l'intérieur de la déclaration
+- **GIVEN** l'auto-test du garde, avec `public @Deprecated ProjectRegistry x()`, une annotation à arguments imbriqués, entre deux modificateurs, après les paramètres de type ou dans un nom qualifié
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque variante est refusée en A11, message nommant la méthode et `registry.ProjectRegistry`
+
+#### Scenario: Nom de méthode qui n'est pas en minuscules
+- **GIVEN** l'auto-test du garde, avec `public ProjectRegistry Leak()`, `public void Leak(ProjectRegistry r)` et `public ProjectRegistry $leak()`
+- **WHEN** le même auto-test est exécuté
+- **THEN** chaque variante est refusée en A11 et nomme la méthode
+
+#### Scenario: En-tête sur plusieurs lignes
+- **GIVEN** l'auto-test du garde, avec un retour `Map<String,` puis `ProjectRegistry>` à la ligne suivante, puis un nom qualifié coupé avant son dernier segment
+- **WHEN** le même auto-test est exécuté
+- **THEN** chaque variante est refusée en A11 et nomme `registry.ProjectRegistry`
+
+#### Scenario: Déclarations sans type du moteur
+- **GIVEN** l'auto-test du garde, avec des membres annotés, un champ initialisé par un appel et un `record` imbriqué non public
+- **WHEN** le même auto-test est exécuté
+- **THEN** les règles de la façade réussissent
+
+#### Scenario: Déclaration illisible
+- **GIVEN** l'auto-test du garde, avec `public ProjectRegistry (`
+- **WHEN** le même auto-test est exécuté
+- **THEN** le cas constate l'échec du garde, message `A11 unreadable MinosApplication member`
+
+#### Scenario: Façade au HEAD
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0
+
+### Requirement: Un import qui passe par un type du moteur ne contourne pas A11
+Dans `MinosApplication`, un import joker, statique ou non, dont la cible est un type de `minos-engine` ou un type imbriqué d'un tel type SHALL faire échouer A11 en nommant la cible. Un type importé par `import static` depuis un type de `minos-engine` SHALL compter comme un type du moteur quand une signature publique de la façade le nomme.
+
+#### Scenario: Joker sur les membres d'un type du moteur
+- **GIVEN** l'auto-test du garde, avec `import com.minos.orchestration.IndexingRuntimePorts.*;`, puis sa forme `import static`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque forme est refusée en A11, message nommant `com.minos.orchestration.IndexingRuntimePorts.*`
+
+#### Scenario: Import statique d'un type imbriqué
+- **GIVEN** l'auto-test du garde, avec `import static com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;` et `public IndexerExecutor x()`
+- **WHEN** le même auto-test est exécuté
+- **THEN** la méthode est refusée en A11, message nommant `x` et `orchestration.IndexingRuntimePorts`
+
+#### Scenario: Import statique hors du moteur
+- **GIVEN** l'auto-test du garde, avec `import static` d'une méthode d'un type de `minos-domain` et un joker sur les membres d'un type du JDK
+- **WHEN** le même auto-test est exécuté
+- **THEN** la règle réussit
+
+### Requirement: La façade ne rend pas la racine de composition par une méthode statique
+Une méthode statique publique de `MinosApplication` dont le type de retour ou une borne de paramètre de type nomme `MinosApplicationComposer` SHALL faire échouer A11 en nommant la méthode, qu'elle soit générique ou non.
+
+#### Scenario: Racine de composition rendue par une méthode statique
+- **GIVEN** l'auto-test du garde, avec `public static MinosApplicationComposer root()`, `public static <T> MinosApplicationComposer root()` et `public static <T extends MinosApplicationComposer> T root()`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque variante est refusée en A11, message nommant `root` et la racine de composition
+
+### Requirement: La façade n'a aucun champ public typé moteur
+`MinosApplication` SHALL NOT déclarer de champ public, statique ou non, dont le type déclaré nomme un type de `minos-engine` ou `MinosApplicationComposer`. A11 SHALL échouer en nommant le champ et le type.
+
+#### Scenario: Champ typé moteur refusé
+- **GIVEN** l'auto-test du garde, avec `public ProjectRegistry registry;`, un champ `static final`, `java.util.List<ProjectRegistry>`, puis `public ProjectRegistry[] a, b;`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque variante est refusée en A11, message nommant le champ et `registry.ProjectRegistry`
+
+#### Scenario: Champ typé racine de composition refusé
+- **GIVEN** l'auto-test du garde, avec `public MinosApplicationComposer root;`
+- **WHEN** le même auto-test est exécuté
+- **THEN** le champ est refusé en A11, message nommant `root` et `MinosApplicationComposer`
+
+#### Scenario: Champ sans type du moteur ou non public
+- **GIVEN** l'auto-test du garde, avec `public static final String NAME = "x";` et `private ProjectRegistry registry;`
+- **WHEN** le même auto-test est exécuté
+- **THEN** la règle réussit
+
+#### Scenario: Champs de la façade au HEAD
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0
+
+### Requirement: Le `Builder` est le seul type imbriqué public de la façade
+Un type imbriqué public de `MinosApplication` autre que `Builder` (classe, `record`, interface, enum ou annotation) SHALL faire échouer A11 en le nommant, qu'il nomme ou non un type du moteur. Un type imbriqué non public SHALL rester accepté.
+
+#### Scenario: Type imbriqué public refusé
+- **GIVEN** l'auto-test du garde, avec tour à tour un `public record` générique ou non, une `public static final class`, une `public interface` dont les méthodes sont implicitement publiques, un `public enum` et une `public @interface`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque variante est refusée en A11, message nommant le type imbriqué
+
+#### Scenario: Builder et types non publics acceptés
+- **GIVEN** l'auto-test du garde, avec `public static final class Builder` portant une méthode typée moteur, un `record` privé au package et un `private record`
+- **WHEN** le même auto-test est exécuté
+- **THEN** la règle réussit
+
+### Requirement: Un import est lu quelle que soit sa position dans la ligne
+Les règles de `check-module-boundaries.py` qui lisent les déclarations d'import SHALL lire chacune d'elles où qu'elle soit dans sa ligne : à son début, ou à la suite d'un autre import, de la déclaration de package, d'un point-virgule seul ou d'un commentaire. Un `import` écrit dans un commentaire ou dans un littéral SHALL rester ignoré.
+
+#### Scenario: Second import d'une ligne dans la façade
+- **GIVEN** l'auto-test des cliquets, avec `MinosApplication` qui écrit sur une même ligne `import java.util.List;` puis un import simple, joker ou statique qui atteint un type de `minos-engine`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque forme est refusée en A11
+
+#### Scenario: Joker de package en second sur sa ligne
+- **GIVEN** les auto-tests, avec ce joker dans une surface (A11), un adaptateur (A13), une source qui ne doit nommer aucun adaptateur (A2), un module hors de `minos-runtime-local` (A10), `minos-bootstrap` (R1) et un package du stockage
+- **WHEN** les auto-tests des cliquets et des adaptateurs sont exécutés
+- **THEN** chaque règle refuse et nomme le package ou le fichier
+
+#### Scenario: Cycle et type référencé par un second import
+- **GIVEN** l'auto-test des packages, avec un cycle fermé par un joker en second sur sa ligne, puis un type public nommé par le seul joker de son package, en second sur sa ligne
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_packages.py` est exécuté
+- **THEN** le cycle est refusé en A8
+- **AND** A15 ne déclare pas le type sans appelant
+
+#### Scenario: Autres positions
+- **GIVEN** l'auto-test des cliquets, avec un import de façade placé après la déclaration de package, après un point-virgule seul ou après un commentaire de bloc fermé sur la ligne d'un autre import
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque forme est refusée en A11
+
+#### Scenario: Import écrit dans un commentaire ou un littéral
+- **GIVEN** l'auto-test des cliquets, avec le même texte d'import dans un commentaire de ligne, un commentaire de bloc, une chaîne et un bloc de texte
+- **WHEN** le même auto-test est exécuté
+- **THEN** la règle réussit
+
+#### Scenario: Dépôt au HEAD
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0
+
+### Requirement: Un joker sur un type du module visé échoue en A11 et en A13
+Dans les sources de production d'une surface, d'un module de contrat (A11) ou d'un adaptateur (A13), un import joker non statique dont la cible est un type du module visé, ou un type imbriqué d'un tel type, SHALL faire échouer le garde en nommant le fichier et la cible, que ce type soit listé ou non.
+
+#### Scenario: Joker sur un type non listé
+- **GIVEN** l'auto-test des cliquets, avec `import com.minos.orchestration.IndexingRuntimePorts.*;` dans une surface puis dans `minos-nexus`, sur le type ou sur un de ses types imbriqués
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque forme est refusée en A11, message nommant le fichier et la cible suivie de `.*`
+- **AND** le type est aussi signalé absent de la table
+
+#### Scenario: Joker sur un type listé
+- **GIVEN** le même auto-test, avec la table qui liste le type pour la surface
+- **WHEN** l'auto-test est exécuté
+- **THEN** le joker est refusé
+- **AND** le message ne demande pas de retirer l'entrée
+
+#### Scenario: Joker sur un type d'un autre adaptateur
+- **GIVEN** le même auto-test, avec ce joker entre deux adaptateurs
+- **WHEN** l'auto-test est exécuté
+- **THEN** il est refusé en A13, message nommant le couple, le fichier et la cible
+
+#### Scenario: Joker hors du module visé et joker statique
+- **GIVEN** le même auto-test, avec un joker sur les membres d'un type du JDK ou de `minos-domain`, puis un `import static` joker sur un type listé
+- **WHEN** l'auto-test est exécuté
+- **THEN** la règle réussit et compte le fichier de l'import statique comme un usage du type listé
+
+### Requirement: Un joker sur une classe d'adaptateur échoue en A2
+Hors des adaptateurs et de `minos-bootstrap`, une source de production qui importe par joker les membres d'une classe d'adaptateur, ou d'un type imbriqué d'une telle classe, SHALL faire échouer A2 en nommant le fichier, la classe et son module.
+
+#### Scenario: Joker sur les membres d'une classe d'adaptateur
+- **GIVEN** l'auto-test des adaptateurs, avec ce joker dans une source de `minos-cli`, sur la classe puis sur un de ses types imbriqués
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
+- **THEN** chaque forme est refusée en A2, message nommant le fichier, la classe et son module
+
+#### Scenario: Joker sur les membres d'une classe hors des adaptateurs
+- **GIVEN** le même auto-test, avec un joker sur les membres d'un type de `minos-domain`
+- **WHEN** l'auto-test est exécuté
+- **THEN** la règle réussit
+
+### Requirement: Un nom coupé autour d'un point est lu en entier
+Les règles de `check-module-boundaries.py` qui lisent des noms, importés ou qualifiés, SHALL lire un nom dont les points sont entourés de blancs, de retours à la ligne ou de commentaires comme le même nom écrit d'un seul tenant, le `.*` d'un joker compris. Un tel texte dans un commentaire ou un littéral SHALL rester ignoré.
+
+#### Scenario: Import coupé
+- **GIVEN** les auto-tests, avec un import coupé autour de ses points dans une surface (A11), un adaptateur (A13), une source qui ne doit nommer aucun adaptateur (A2), un module hors de `minos-runtime-local` (A10), `minos-bootstrap` (R1) et un package du stockage
+- **WHEN** les auto-tests des cliquets et des adaptateurs sont exécutés
+- **THEN** chaque règle refuse et nomme la cible d'un seul tenant
+
+#### Scenario: Nom qualifié coupé dans le code
+- **GIVEN** les mêmes auto-tests, avec le nom qualifié coupé écrit dans le code sans import
+- **WHEN** les mêmes auto-tests sont exécutés
+- **THEN** chaque règle refuse et nomme le type d'un seul tenant
+
+#### Scenario: Joker coupé
+- **GIVEN** les mêmes auto-tests, avec un import joker dont le `.*` est coupé, dans une surface, un adaptateur et la façade `MinosApplication`
+- **WHEN** les mêmes auto-tests sont exécutés
+- **THEN** chaque forme est refusée comme le joker écrit d'un seul tenant
+
+#### Scenario: Cycle et type référencé
+- **GIVEN** l'auto-test des packages, avec un cycle fermé par un nom coupé, puis un type public nommé par un seul nom coupé
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_packages.py` est exécuté
+- **THEN** le cycle est refusé en A8
+- **AND** A15 ne déclare pas le type sans appelant
+
+#### Scenario: Commentaire, littéral et ellipse
+- **GIVEN** l'auto-test des cliquets, avec un nom coupé dans un commentaire et dans une chaîne, puis un paramètre à nombre variable `com.minos.hosted . HostedRole ... roles`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le commentaire et la chaîne n'ajoutent aucun usage
+- **AND** le paramètre est refusé en A11 en nommant `com.minos.hosted.HostedRole`
+
+#### Scenario: Dépôt au HEAD
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0
+
+### Requirement: Un échappement Unicode ne cache rien aux règles de frontières
+Les règles de `check-module-boundaries.py` qui lisent un source Java SHALL le lire échappements Unicode décodés, comme le compilateur, avant d'écarter commentaires et littéraux. Une barre oblique inverse elle-même échappée par une autre SHALL ne pas ouvrir d'échappement.
+
+#### Scenario: Nom ou mot écrit avec un échappement
+- **GIVEN** les auto-tests, avec un point ou une lettre écrits en échappement dans un nom que A2 refuse, puis dans un mot que A12, A16 et A18 comptent
+- **WHEN** les auto-tests des cliquets et des adaptateurs sont exécutés
+- **THEN** chaque règle refuse comme pour l'écriture directe
+
+#### Scenario: Échappement qui termine un commentaire de ligne
+- **GIVEN** l'auto-test des adaptateurs, avec un nom d'adaptateur placé dans un commentaire après un échappement de saut de ligne, puis de retour chariot
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
+- **THEN** le nom est refusé en A2
+
+#### Scenario: Barre oblique inverse échappée
+- **GIVEN** le même auto-test, avec le même échappement précédé d'une seconde barre oblique inverse
+- **WHEN** l'auto-test est exécuté
+- **THEN** la règle réussit
+
+### Requirement: Une annotation dans un nom qualifié ne le cache pas
+Les règles de `check-module-boundaries.py` qui lisent des noms SHALL lire un nom qualifié interrompu par une ou plusieurs annotations de type comme le nom sans elles. Le type de chaque annotation et ses arguments SHALL rester lus.
+
+#### Scenario: Nom annoté
+- **GIVEN** les auto-tests, avec une annotation, avec ou sans arguments, puis deux annotations, devant la dernière partie d'un nom qualifié (A2, A11, A13, A8)
+- **WHEN** les auto-tests des cliquets, des adaptateurs et des packages sont exécutés
+- **THEN** chaque règle refuse ; A2, A11 et A13 nomment le type d'un seul tenant, A8 les deux packages du cycle
+- **AND** des arguments d'annotation non fermés font échouer le garde en nommant le fichier
+
+#### Scenario: Type nommé par l'annotation
+- **GIVEN** l'auto-test des cliquets, avec un type du moteur nommé par une annotation placée dans un autre nom, comme annotation puis comme argument
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** ce type est refusé en A11
+
+### Requirement: A19 lit le joker sur une API d'infrastructure
+Dans `minos-application`, A19 SHALL compter comme nommant une API d'infrastructure un source qui importe par joker `java.net.http`, `javax.tools`, `com.sun.source` ou l'un de ses sous-packages, et un source qui importe `java.net.*` et nomme `HttpURLConnection`.
+
+#### Scenario: Joker sur un package d'infrastructure
+- **GIVEN** l'auto-test des adaptateurs, avec chacun de ces jokers dans un source absent de la liste
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
+- **THEN** chaque forme est refusée en A19
+
+#### Scenario: Joker de java.net
+- **GIVEN** le même auto-test, avec `import java.net.*;` dans un source qui nomme `HttpURLConnection`, puis dans un source qui ne nomme que `URI`
+- **WHEN** l'auto-test est exécuté
+- **THEN** le premier est refusé en A19
+- **AND** le second est accepté
+
+#### Scenario: Dépôt au HEAD
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0
+
 ## Documentation liée
 
 - Dossier durable (vues, traçabilité, écarts) : [frontieres-de-modules](../../../docs/architecture/diagrams/capacites/frontieres-de-modules.md)
