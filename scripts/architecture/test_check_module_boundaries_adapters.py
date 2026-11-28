@@ -16,7 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import ADAPTERS, MODULES, RATCHETS, RatchetTreeTestCase, _MODULE, write_root_pom
+from module_boundaries_testing import (
+    ADAPTERS, MODULES, RATCHETS, RatchetTreeTestCase, _MODULE, annotated_before_the_last_part, cut_around_dots,
+    escaped, second_on_its_line, write_root_pom)
 
 
 class SourceBoundaryRuleTest(RatchetTreeTestCase):
@@ -47,6 +49,76 @@ class SourceBoundaryRuleTest(RatchetTreeTestCase):
     def test_a_wildcard_import_of_a_package_holding_adapter_classes_is_refused(self):
         self.write("minos-api", "com.minos.api", "Facade", "class Facade { }", ["com.minos.storage.local.store.*"])
         self.refused("com.minos.storage.local.store.*")
+
+    def test_a_wildcard_import_on_the_members_of_an_adapter_class_is_refused(self):
+        # AUD-ARC-17: the member types brought in by the wildcard are written by their simple name only.
+        for target in (self.ADAPTER_CLASS, f"{self.ADAPTER_CLASS}.Entry"):
+            with self.subTest(target=target):
+                self.write("minos-cli", "com.minos.cli", "Cmd", "class Cmd { Entry e; }", [f"{target}.*"])
+                self.refused(f"minos-cli/src/main/java/com/minos/cli/Cmd.java -> {self.ADAPTER_CLASS} [minos-storage]")
+
+    def test_a_wildcard_import_on_the_members_of_a_domain_type_is_accepted(self):
+        self.write("minos-domain", "com.minos.domain", "Kind", "public final class Kind { public enum Level { LOW } }")
+        self.write("minos-cli", "com.minos.cli", "Cmd", "class Cmd { Level l; }", ["com.minos.domain.Kind.*"])
+        _MODULE.check_source_boundaries(self.root)
+
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        self.write("minos-api", "com.minos.api", "Facade", "class Facade { }",
+                   [second_on_its_line("com.minos.storage.local.store.*")])
+        self.refused("com.minos.storage.local.store.*")
+
+    def test_a_name_cut_around_its_dots_is_refused(self):
+        # AUD-ARC-17: blanks, line breaks and comments may surround the dots of a name.
+        package = "com.minos.storage.local.store"
+        for use, name, body, expected in (
+                ("import", self.ADAPTER_CLASS, "class Cmd {{ FileStore s; }}", self.ADAPTER_CLASS),
+                ("wildcard", f"{package}.*", "class Cmd {{ }}", f"{package}.*"),
+                ("qualified name", self.ADAPTER_CLASS, "class Cmd {{ {} s; }}", self.ADAPTER_CLASS)):
+            for form, written in cut_around_dots(name).items():
+                with self.subTest(use=use, form=form):
+                    imports = [] if use == "qualified name" else [written]
+                    self.write("minos-cli", "com.minos.cli", "Cmd", body.format(written), imports)
+                    self.refused(f"minos-cli/src/main/java/com/minos/cli/Cmd.java -> {expected}")
+
+    def refused_body(self, body):
+        self.write("minos-cli", "com.minos.cli", "Cmd", f"class Cmd {{ {body} }}")
+        self.refused(f"minos-cli/src/main/java/com/minos/cli/Cmd.java -> {self.ADAPTER_CLASS}")
+
+    def test_a_name_written_with_a_unicode_escape_is_refused(self):
+        # AUD-ARC-17: Java translates unicode escapes before it reads anything else.
+        package = "com.minos.storage.local.store"
+        for form, written in (("dot", f"{package}{escaped('.')}FileStore"),
+                              ("letter", f"{package}.{escaped('F')}ileStore"),
+                              ("several u", f"{package}{chr(92)}uuu002eFileStore")):
+            with self.subTest(form=form):
+                self.refused_body(f"{written} s;")
+
+    def test_an_escaped_line_break_ends_a_line_comment(self):
+        for end in (chr(10), chr(13)):
+            with self.subTest(end=ord(end)):
+                self.refused_body(f"// {escaped(end)} {self.ADAPTER_CLASS} s;\n")
+
+    def test_an_annotation_holding_an_annotated_name_is_read_once_and_in_full(self):
+        # In the arguments: a name left whole, then the name the rule refuses.
+        package = "com.minos.storage.local.store"
+        self.refused_body(f"{package}.@Tag(v = java.util.@Other List.class) FileStore s;")
+        self.refused_body(f"java.util.@Tag({package}.@Other FileStore.class) List l;")
+
+    def test_an_annotation_whose_arguments_do_not_close_fails_the_guard(self):
+        self.write("minos-cli", "com.minos.cli", "Cmd",
+                   "class Cmd { com.minos.storage.local.store.@Tag(1 FileStore s; }")
+        with self.assertRaisesRegex(RuntimeError, "unbalanced annotation inside a qualified name in Cmd.java"):
+            _MODULE.check_source_boundaries(self.root)
+
+    def test_an_escaped_backslash_opens_no_escape(self):
+        self.write("minos-cli", "com.minos.cli", "Cmd",
+                   f"class Cmd {{ // {chr(92)}{escaped(chr(10))} {self.ADAPTER_CLASS} s;\n }}")
+        _MODULE.check_source_boundaries(self.root)
+
+    def test_a_name_interrupted_by_an_annotation_is_refused(self):
+        for form, written in annotated_before_the_last_part(self.ADAPTER_CLASS).items():
+            with self.subTest(form=form):
+                self.refused_body(f"{written} s;")
 
     def test_a_fully_qualified_name_is_refused(self):
         self.write("minos-mcp", "com.minos.mcp", "Tool", f"class Tool {{ Object o = {self.ADAPTER_CLASS}.create(); }}")
@@ -132,6 +204,28 @@ class RuntimeLocalExportRuleTest(unittest.TestCase):
         self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "class Leak { }", [f"{self.PREFIX}.sandbox.*"])
         self.refused(f"{self.PREFIX}.sandbox.*")
 
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Leak", "class Leak { }",
+                   [second_on_its_line(f"{self.PREFIX}.sandbox.*")])
+        self.refused("Leak.java", f"{self.PREFIX}.sandbox.*")
+
+    def test_a_name_cut_around_its_dots_is_refused(self):
+        job = f"{self.PREFIX}.sandbox.LinuxCgroupJob"
+        for use, name, body in (("import", job, "class Leak {{ }}"),
+                                ("wildcard", f"{self.PREFIX}.sandbox.*", "class Leak {{ }}"),
+                                ("qualified name", job, "class Leak {{ {} j; }}")):
+            for form, written in cut_around_dots(name).items():
+                with self.subTest(use=use, form=form):
+                    imports = [] if use == "qualified name" else [written]
+                    self.write("minos-cli", "com.minos.cli", "Leak", body.format(written), imports)
+                    self.refused(f"Leak.java -> {name}")
+
+    def test_a_name_written_with_a_unicode_escape_is_refused(self):
+        job = f"{self.PREFIX}.sandbox.LinuxCgroupJob"
+        self.write("minos-cli", "com.minos.cli", "Leak",
+                   f"class Leak {{ {self.PREFIX}.sandbox{escaped('.')}LinuxCgroupJob j; }}")
+        self.refused(f"Leak.java -> {job}")
+
     def test_a_fully_qualified_name_of_a_type_that_is_not_exported_is_refused(self):
         self.write("minos-cli", "com.minos.cli", "Leak",
                    f"class Leak {{ Object job = {self.PREFIX}.sandbox.LinuxCgroupJob.class; }}")
@@ -201,6 +295,12 @@ class ServiceLoaderClassLoaderTest(unittest.TestCase):
 
     def check(self):
         return _MODULE.check_service_loader_class_loaders(self.root, ("minos-a",))
+
+    def test_a_call_written_with_a_unicode_escape_is_refused(self):
+        # AUD-ARC-17: an escape hides no word from a rule.
+        self.source("main", "Escaped", f"Object s = {escaped('S')}erviceLoader.load(Escaped.class);")
+        with self.assertRaisesRegex(RuntimeError, "A16 .*Escaped.java"):
+            self.check()
 
     def test_a_one_argument_call_in_production_is_refused_with_file_and_line(self):
         self.source("main", "Implicit", "    Object o = ServiceLoader.load(Port.class);")
@@ -290,6 +390,31 @@ class EmbeddedAdapterRuleTest(RatchetTreeTestCase):
 
     def test_the_listed_files_and_classes_are_accepted_and_the_family_names_itself(self):
         self.assertEqual((2, 3), self.check())
+
+    def refused_client(self, body, imports, named):
+        self.write("minos-application", "com.minos.application", "RemoteClient",
+                   f"final class RemoteClient {{ {body} }}", imports=imports)
+        self.refused(self.check, "A19", f"RemoteClient.java names {named}", "not in INFRASTRUCTURE_API_USERS")
+
+    def test_a_wildcard_import_of_an_infrastructure_package_is_refused(self):
+        # AUD-ARC-17: the types brought in by the wildcard are written by their simple name only.
+        for package in ("java.net.http", "javax.tools", "com.sun.source", "com.sun.source.tree"):
+            with self.subTest(package=package):
+                self.refused_client("", (f"{package}.*",), f"{package}.*")
+
+    def test_the_http_connection_under_a_wildcard_of_java_net_is_refused(self):
+        self.refused_client("HttpURLConnection c;", ("java.net.*",), "java.net.HttpURLConnection")
+
+    def test_a_wildcard_of_java_net_without_the_http_connection_is_accepted(self):
+        self.write("minos-application", "com.minos.application", "Address", "final class Address { URI u; }",
+                   imports=("java.net.*",))
+        self.assertEqual((2, 3), self.check())
+
+    def test_an_infrastructure_name_written_otherwise_is_refused(self):
+        for form, body in (("annotation", "javax.tools.@Ann JavaCompiler c;"),
+                           ("escape", f"javax.tools{escaped('.')}JavaCompiler c;")):
+            with self.subTest(form=form):
+                self.refused_client(body, (), "javax.tools.JavaCompiler")
 
     def test_a_new_http_client_of_the_application_is_refused_with_the_file_and_the_api(self):
         self.write("minos-application", "com.minos.application", "RemoteClient",
@@ -423,6 +548,28 @@ class StoragePackageIsolationRuleTest(RatchetTreeTestCase):
                    ["com.minos.storage.local.registry.*"])
         self.refused(self.check, "home -> backends", "com.minos.storage.local.registry.*")
 
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        self.write("minos-storage", "com.minos.storage.home", "Mapping", "final class Mapping { }",
+                   [second_on_its_line("com.minos.storage.local.registry.*")])
+        self.refused(self.check, "home -> backends", "Mapping.java", "com.minos.storage.local.registry.*")
+
+    def test_a_name_cut_around_its_dots_is_refused(self):
+        registry = "com.minos.storage.local.registry"
+        for use, name, body in (("import", f"{registry}.Registry", "final class Mapping {{ }}"),
+                                ("wildcard", f"{registry}.*", "final class Mapping {{ }}"),
+                                ("qualified name", f"{registry}.Registry", "final class Mapping {{ {} r; }}")):
+            for form, written in cut_around_dots(name).items():
+                with self.subTest(use=use, form=form):
+                    imports = [] if use == "qualified name" else [written]
+                    self.write("minos-storage", "com.minos.storage.home", "Mapping", body.format(written), imports)
+                    self.refused(self.check, "home -> backends", f"Mapping.java -> {name}")
+
+    def test_a_name_written_with_a_unicode_escape_is_refused(self):
+        registry = "com.minos.storage.local.registry"
+        self.write("minos-storage", "com.minos.storage.home", "Mapping",
+                   f"final class Mapping {{ {registry}{escaped('.')}Registry r; }}")
+        self.refused(self.check, "home -> backends", f"Mapping.java -> {registry}.Registry")
+
     def test_a_codec_test_naming_the_postgresql_backend_is_refused(self):
         self.write("minos-storage", "com.minos.storage.codec", "CodecTest",
                    "final class CodecTest { Object p = new com.minos.storage.postgresql.PostgresStorageBackend(); }",
@@ -534,6 +681,12 @@ class SnapshotReadPortRuleTest(RatchetTreeTestCase):
                    "public final class ProjectQueryService { SnapshotReadView view; CodeKnowledgeReader reader; }",
                    ["com.minos.store.SnapshotReadView", "com.minos.store.CodeKnowledgeReader"])
 
+    def test_a_word_written_with_a_unicode_escape_is_refused(self):
+        # AUD-ARC-17: an escape hides no word from a rule.
+        self.write("minos-application", "com.minos.application", "Escaped",
+                   f"final class Escaped {{ {escaped('I')}nMemoryCodeKnowledgeStore s; }}")
+        self.refused(self.check, "A18", "Escaped.java", "InMemoryCodeKnowledgeStore")
+
     def check(self, listed=None):
         return _MODULE.check_snapshot_read_port(self.root, listed=self.LISTED if listed is None else listed,
                                                 modules=self.MODULES)
@@ -641,6 +794,28 @@ class PostgresqlBackendIsolationRuleTest(RatchetTreeTestCase):
         self.write("minos-bootstrap", "com.minos.bootstrap", "Static", "final class Static { }", [f"static {self.BACKEND}.open"])
         self.write("minos-bootstrap", "com.minos.bootstrap", "Wild", "final class Wild { }", ["com.minos.storage.postgresql.*"])
         self.refused(self.check, "Static.java", "Wild.java", "com.minos.storage.postgresql.*")
+
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        for target in ("com.minos.storage.postgresql", "org.postgresql"):
+            with self.subTest(target=target):
+                self.write("minos-bootstrap", "com.minos.bootstrap", "Wild", "final class Wild { }",
+                           [second_on_its_line(f"{target}.*")])
+                self.refused(self.check, "R1", "Wild.java", f"{target}.*")
+
+    def test_a_name_cut_around_its_dots_is_refused(self):
+        for use, name, body in (("import", self.BACKEND, "final class Cut {{ }}"),
+                                ("wildcard", "org.postgresql.*", "final class Cut {{ }}"),
+                                ("qualified name", "org.postgresql.Driver", "final class Cut {{ {} d; }}")):
+            for form, written in cut_around_dots(name).items():
+                with self.subTest(use=use, form=form):
+                    imports = [] if use == "qualified name" else [written]
+                    self.write("minos-bootstrap", "com.minos.bootstrap", "Cut", body.format(written), imports)
+                    self.refused(self.check, "R1", f"Cut.java -> {name}")
+
+    def test_a_name_written_with_a_unicode_escape_is_refused(self):
+        self.write("minos-bootstrap", "com.minos.bootstrap", "Cut",
+                   f"final class Cut {{ org.postgresql{escaped('.')}Driver d; }}")
+        self.refused(self.check, "R1", "Cut.java -> org.postgresql.Driver")
 
     def test_a_qualified_name_of_the_driver_in_the_scip_provider_is_refused(self):
         self.write("minos-provider-scip", "com.minos.adapter.scip", "Leak",

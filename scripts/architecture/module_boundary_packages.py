@@ -13,7 +13,7 @@ from pathlib import Path
 
 from module_boundary_policy import MODULES, NS, ROOT, fail, repository_group_id
 from module_boundary_sources import (
-    COMMENTS_AND_LITERALS, PACKAGE, SOURCE_IMPORT, declared_package, production_sources, qualified_name_pattern)
+    PACKAGE, SOURCE_IMPORT, declared_package, name_reading_code, production_sources, qualified_name_pattern, read_java)
 
 
 # A15 / AUD-QUA-02 — a public production type is used by production, or declared. Each entry names one top-level
@@ -81,9 +81,9 @@ def unreferenced_production_types(root: Path = ROOT) -> dict[str, str]:
     for module, source in production_sources(root, MODULES):
         if source.name in ("package-info.java", "module-info.java"):
             continue
-        text = source.read_text(encoding="utf-8")
+        text = read_java(source)
         match = PACKAGE.search(text)
-        parsed.append((module, source, match.group(1) if match else "", COMMENTS_AND_LITERALS.sub(" ", text)))
+        parsed.append((module, source, match.group(1) if match else "", name_reading_code(text, source)))
     declared: list[tuple[str, str, str, Path, str]] = []
     for module, source, package, code in parsed:
         type_match = TOP_LEVEL_PUBLIC_TYPE.search(code)
@@ -125,7 +125,7 @@ def declared_production_entries(root: Path) -> set[str]:
     """module/package.Type of every production source of the reactor."""
     existing = set()
     for module, source in production_sources(root, MODULES):
-        match = PACKAGE.search(source.read_text(encoding="utf-8"))
+        match = PACKAGE.search(read_java(source))
         existing.add(f"{module}/{match.group(1) if match else ''}.{source.stem}")
     return existing
 
@@ -167,7 +167,7 @@ def check_java_layout(root: Path = ROOT) -> tuple[int, dict[str, int]]:
                     fail(f"duplicate production source {relative}: {previous} and {module}")
                 owners[relative] = module
 
-                text = source.read_text(encoding="utf-8")
+                text = read_java(source)
                 match = PACKAGE.search(text)
                 if match is None:
                     fail(f"{module}: production Java source must declare a package: {relative}")
@@ -284,7 +284,7 @@ def declared_classes(root: Path, owners: tuple[str, ...]) -> tuple[dict[str, str
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
-            code = COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))
+            code = name_reading_code(read_java(source), source)
             match = PACKAGE.search(code)
             package = match.group(1) if match else ""
             classes[".".join(source.relative_to(source_root).with_suffix("").parts)] = package

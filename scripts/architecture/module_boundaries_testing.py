@@ -58,6 +58,31 @@ def element(text: str) -> ET.Element:
     return ET.fromstring(text)
 
 
+def second_on_its_line(imported: str) -> str:
+    """An entry of the `imports` of a fixture that writes `import <imported>;` after another import of the same line."""
+    return f"java.util.List; import {imported}"
+
+
+def cut_around_dots(name: str) -> dict[str, str]:
+    """`name` written with what Java accepts around its dots: form -> text."""
+    return {form: name.replace(".", dot) for form, dot in (
+        ("spaces", " . "), ("newline after the dot", ".\n    "), ("newline before the dot", "\n    ."),
+        ("comment", "./* note */"))}
+
+
+def escaped(character: str) -> str:
+    """The unicode escape Java reads as `character`."""
+    return chr(92) + "u%04x" % ord(character)
+
+
+def annotated_before_the_last_part(name: str) -> dict[str, str]:
+    """`name` with the type annotations Java accepts before its last part: form -> text."""
+    qualifier, simple = name.rsplit(".", 1)
+    return {form: f"{qualifier}{written}{simple}" for form, written in (
+        ("annotation", ".@Ann "), ("annotation with arguments", ".@Ann(value = {1, 2}) "),
+        ("two annotations", ' . @Ann @other.Marker("x")\n    '))}
+
+
 class RatchetTreeTestCase(unittest.TestCase):
     """A temporary reactor tree (root pom.xml with groupId com.minos) for the A11-A14 ratchets."""
 
