@@ -221,6 +221,10 @@ jobs:
       - name: Twin script functions gate self-test
         run: python scripts/quality/test_check_twin_script_functions.py -v
 
+      # The guard of .claude/hooks reads the branch of the directory a push runs in: both worktree directions.
+      - name: Claude Code push guard self-test (temporary Git repositories and worktrees)
+        run: python scripts/quality/test_guard_bash_hook.py -v
+
       - name: CI wiring, ruleset comparison, plugin gate and Docker gate self-tests
         run: |
           python scripts/quality/test_check_ci_wiring.py -v

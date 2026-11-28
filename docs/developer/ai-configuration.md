@@ -23,16 +23,18 @@ Ne sont **pas** versionnés : `.claude/settings.local.json` (réglages personnel
 
 ## Hooks
 
-Python 3, bibliothèque standard seule ; ils n'échouent jamais par accident (entrée illisible ou erreur interne = l'action passe). Lancement par `python3`, avec repli sur `python`.
+Python 3, bibliothèque standard seule ; ils n'échouent jamais par accident (entrée illisible ou erreur interne = l'action passe), à une exception près, fermée par défaut : un push dont la branche source ne peut pas être établie est refusé. Lancement par `python3`, avec repli sur `python`. Les scripts exécutés sont ceux du dossier principal (`$CLAUDE_PROJECT_DIR`), y compris pour une session dans un arbre de travail.
 
 | Hook | Événement | Effet |
 |---|---|---|
-| `guard_bash.py` | PreToolUse (Bash) | **Refuse** : push forcé, push direct vers `main`, `--no-verify`, signature désactivée, `gh pr merge --admin`, suppression ou déplacement d'un tag `vX.Y.Z`, modification d'une release. **Demande confirmation** : `git reset --hard`, `git clean -f`, restauration de tout l'arbre, `--force-with-lease` |
+| `guard_bash.py` | PreToolUse (Bash) | **Refuse** : push forcé, push qui met à jour `main` (branche du dossier d'exécution, détail ci-dessous), `--no-verify`, signature désactivée, `gh pr merge --admin`, suppression ou déplacement d'un tag `vX.Y.Z`, modification d'une release. **Demande confirmation** : `git reset --hard`, `git clean -f`, restauration de tout l'arbre, `--force-with-lease` |
 | `guard_paths.py` | PreToolUse (Edit, Write) | **Refuse** : fichiers générés (`target/`, `build/`, `.intellijPlatform/`, `docs/developer/generated/`), secret apparent dans le contenu. **Demande confirmation** : archives OpenSpec, audits archivés, `docs/project/history/`, `openspec/specs/`, goldens de caractérisation, workflows, `required-checks.json`, liste de tolérance de `check-private-io`, ADR existants, `LICENSE`/`SECURITY.md`/`CONTRIBUTING.md`/`.gitleaks.toml` |
 | `post_edit.py` | PostToolUse (Edit, Write) | Rappelle les gates qui citent le fichier modifié, valide le YAML d'un workflow, signale un `.ps1` en LF, rappelle le câblage d'un nouveau gate |
 | `session_start.py` | SessionStart | Branche, état local, changements OpenSpec actifs, avancement de l'audit |
 
-Test d'un hook à la main : `echo '{"tool_input":{"command":"git push origin main"}}' | CLAUDE_PROJECT_DIR=. python .claude/hooks/guard_bash.py`.
+**Branche d'un push.** `guard_bash.py` lit la branche du dossier où la commande s'exécute : le `cwd` de l'événement, modifié par les `cd` en tête de commande (ou par un sous-shell qui entoure toute la commande) et par `git -C`, ou la branche que la commande crée avant le push dans une chaîne `&&` (`git switch -c`, `git checkout -b`). Une destination thématique nommée (`git push origin fix/x`) passe quel que soit ce dossier. Quand le push dépend de la branche courante (aucune destination, `HEAD`, `@`, variable ou substitution), il est refusé si elle est `main` ou si elle ne peut pas être établie : dossier hors dépôt ou illisible, HEAD détachée, `cd` ailleurs qu'en tête, `--git-dir`, `--work-tree`, `GIT_DIR`, autre `git switch` ou `git checkout` plus tôt dans la même commande. Nommer la branche de destination lève ce refus. `--all`, `--mirror` et le refspec `:` sont refusés, car ils incluent `main`. La commande est découpée par `_shell.py` : le texte entre guillemets, les commentaires et le corps des heredocs de `cat` et `git commit` ne sont pas des commandes. Le garde ne voit que l'outil Bash et ne suit pas les commandes lancées par un autre programme (`bash -c`, substitution affectée à une variable) : le ruleset GitHub reste l'autorité.
+
+Auto-test du garde de push : `python scripts/quality/test_guard_bash_hook.py` (joué par le job `invariants`). Test d'un hook à la main : `echo '{"tool_input":{"command":"git push origin main"}}' | CLAUDE_PROJECT_DIR=. python .claude/hooks/guard_bash.py`.
 
 ## Principes
 

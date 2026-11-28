@@ -2,7 +2,8 @@
 
 Règle de conduite : un hook ne doit jamais bloquer le travail par accident. Toute erreur interne
 (entrée illisible, git absent, délai dépassé) laisse passer l'action ; seuls les refus explicites
-écrits dans les gardes sont émis.
+écrits dans les gardes sont émis. L'un d'eux est fermé par défaut : un push dont la branche source
+ne peut pas être lue est refusé (`guard_bash.py`).
 """
 from __future__ import annotations
 
@@ -43,18 +44,20 @@ def relative_posix(file_path: str) -> str | None:
         return None
 
 
-def git(*arguments: str, timeout: float = 5.0) -> str:
+def git(*arguments: str, timeout: float = 5.0, directory: Path | None = None) -> str:
+    """Sortie d'une commande git lancée dans `directory` (par défaut le dossier principal), "" en cas d'échec."""
     try:
         completed = subprocess.run(
-            ["git", *arguments], cwd=project_root(), capture_output=True, text=True,
+            ["git", *arguments], cwd=directory or project_root(), capture_output=True, text=True,
             timeout=timeout, check=False)
         return completed.stdout.strip() if completed.returncode == 0 else ""
     except Exception:
         return ""
 
 
-def current_branch() -> str:
-    return git("branch", "--show-current")
+def current_branch(directory: Path | None = None) -> str:
+    """Branche extraite dans `directory` ; "" si elle est illisible ou si HEAD est détachée."""
+    return git("branch", "--show-current", directory=directory)
 
 
 def permission(decision: str, reason: str) -> None:
