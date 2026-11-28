@@ -11,13 +11,13 @@ S'implémente après `lire-toutes-les-ecritures-de-la-facade-dans-a11`, et s'arc
 
 ## 2. Suites manuelles
 
-- [ ] 2.1 AUD-ARC-17 — **(manuelle)** Ajouter ces deux refus à la proposition de mise à jour d'ARCH-0087 (« Compliance and Enforcement »). Aucun ADR modifié ici.
+- [ ] 2.1 AUD-ARC-17 — **(manuelle)** Ajouter ces deux refus à la proposition de mise à jour d'ARCH-0087 (« Compliance and Enforcement »). Aucun ADR modifié ici. Constat : non faite ; le texte à soumettre au propriétaire est dans la section « Sprint 12 » du suivi de l'audit du 2026-11-15, aucun ADR modifié.
 
 ## 3. Clôture
 
 - [x] 3.1 AUD-ARC-17 — Mettre à jour la matrice de traçabilité du design, preuves manquantes nommées.
-- [ ] 3.2 AUD-ARC-17 — `openspec validate --all --strict` vert ; après archivage, lignes des exigences dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` et `python scripts/docs/check-capability-dossiers.py` vert.
-- [ ] 3.3 AUD-ARC-17 — Documents avant archivage : `quality-gates.md` (1.4), dossier de capacité (3.2), suivi de l'audit (coordinateur, après fusion). Vérifier : chacun est fait ou nommé comme reste.
+- [x] 3.2 AUD-ARC-17 — `openspec validate --all --strict` vert ; après archivage, lignes des exigences dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` et `python scripts/docs/check-capability-dossiers.py` vert. Constat : archivé le 2026-11-28, lignes ajoutées au dossier, `openspec validate --all --strict`, `check-capability-dossiers.py` verts sur la branche d'archivage.
+- [x] 3.3 AUD-ARC-17 — Documents avant archivage : `quality-gates.md` (1.4), dossier de capacité (3.2), suivi de l'audit (coordinateur, après fusion). Vérifier : chacun est fait ou nommé comme reste. Constat : `quality-gates.md` fait à l'implémentation ; dossier et suivi de l'audit mis à jour à l'archivage.
 
 ## Workflow follow-up
 

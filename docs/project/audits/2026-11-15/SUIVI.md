@@ -4,7 +4,7 @@ Suivi de la correction des constats de [`findings.md`](findings.md), dans l'ordr
 
 ## État au 2026-11-28
 
-Les sprints 1 à 12 sont fusionnés et leurs changements archivés. Le sprint 12 solde les huit constats Faibles de la vérification du 27/11 par cinq changements (PR #831, #832, #833, #834 et #838, archivés le 2026-11-28). Le suivi d'AUD-ARC-17 se poursuit hors de ces cinq changements, par cinq autres fusionnés (PR #835, #836 et #837) qui restent à archiver.
+Les sprints 1 à 12 sont fusionnés et leurs changements archivés. Le sprint 12 solde les huit constats Faibles de la vérification du 27/11 par cinq changements (PR #831, #832, #833, #834 et #838, archivés le 2026-11-28). AUD-ARC-17 a en outre cinq changements de suite, fusionnés (PR #835, #836 et #837) et archivés le 2026-11-28.
 
 ## État au 2026-11-26
 
@@ -198,7 +198,7 @@ La colonne « Écart » décrit l'état au commit de la spécification.
 |---|---|---|---|
 | AUD-QUA-09 | `aligner-la-documentation-courante-apres-le-sprint-11` | Fait (PR #834, archivé) | Le titre « version 1.3.0 » de la table est faux : au tag `v1.3.0`, les fabriques `ProjectIndexingUseCase.of(…)` sont publiques ; elles sont retirées par `76afac5ed` (2026-11-18). Deux autres sections (`java-api.md:380`, `:390`) portent le même titre faux. `unreleased.md` n'annonce aucune de ces ruptures. |
 | AUD-QUA-10 | idem | Fait (PR #834, archivé) | Le décompte des règles est 332 (335 avec l'auto-test du lanceur partagé) : nombre retiré, non remplacé. La phrase de la ligne AUD-ARC-13 du sprint 11 sur `statusView` est à corriger par le coordinateur (les deux méthodes existent). |
-| AUD-ARC-17 | `lire-les-methodes-generiques-de-la-facade-dans-a11` | Fait (PR #832, archivé) ; suites : PR #835, #836 et #837 fusionnées, cinq changements à archiver ; reste : lignes à joindre à la proposition ARCH-0087 (tâche 2.2) | L'expression proposée par l'audit ne voit pas `<T extends ProjectRegistry> void f(T r)` (la borne porte le type) et coupe une borne imbriquée. Un import joker d'un package du moteur et une méthode statique publique qui rend un type du moteur contournent aussi A11 : refusés par la même exigence. |
+| AUD-ARC-17 | `lire-les-methodes-generiques-de-la-facade-dans-a11` | Fait (PR #832, archivé) ; cinq changements de suite fusionnés (PR #835, #836 et #837) et archivés ; reste : proposition ARCH-0087 à soumettre au propriétaire et limites de lecture du garde (« Reste » ci-dessous) | L'expression proposée par l'audit ne voit pas `<T extends ProjectRegistry> void f(T r)` (la borne porte le type) et coupe une borne imbriquée. Un import joker d'un package du moteur et une méthode statique publique qui rend un type du moteur contournent aussi A11 : refusés par la même exigence. |
 | AUD-ARC-18 | `retirer-les-nombres-du-dossier-des-frontieres` | Fait (PR #838, archivé) ; exigence partielle (nombres en chiffres ; preuves d'écart sans auto-test) | Des nombres aussi dans E1 et la ligne de traçabilité des cycles connus ; E2 déjà résolu ; E8 cite des accesseurs retirés. Spécification (E1, E4, E8) inchangée. |
 | AUD-TST-15 | `eprouver-l-assemblage-des-operations-locales` | Fait (PR #831, archivé) ; les deux classes de test passent sans cas sauté sur les deux `Verify` | Les sept collaborateurs ont des types distincts : une permutation ne compile pas ; le risque réel est une autre instance du même port ou une rétention oubliée. |
 | AUD-DEP-16 | `aligner-les-gardes-de-la-chaine-d-approvisionnement-sur-leurs-lecteurs` | Fait (PR #833, archivé) | `mvnw` lit `distributionSha256Sum= <somme>` (valeur réduite) : la règle porte sur la clé, pas sur les espaces de la valeur. Le wrapper Gradle garde la lecture des propriétés Java. |
@@ -226,7 +226,24 @@ La colonne « Écart » décrit l'état au commit de la spécification.
 
 **Preuves de CI relevées dans les journaux.** PR #831 : `LocalOperationsAssemblyTest` et `LocalProjectOperationsRetentionTest` sans échec ni cas sauté sous Ubuntu et Windows. PR #833 : le job `Static invariants (single run)` exécute les trois gates et leurs auto-tests ; `M29DockerAdministrationContractTest` passe sans cas sauté sur les deux `Verify`.
 
-**Reste.** Lignes A11 à joindre à la proposition de mise à jour d'ARCH-0087 (méthodes génériques et leurs bornes, retours statiques, imports joker du moteur), avec les refus ajoutés par les cinq changements de suite (leurs tâches manuelles) ; archivage de `lire-toutes-les-ecritures-de-la-facade-dans-a11` (PR #835), `lire-les-ecritures-d-import-dans-les-regles-de-frontieres`, `lire-les-noms-coupes-autour-d-un-point-dans-les-frontieres`, `lire-les-ecritures-restantes-d-un-nom-dans-les-frontieres` (PR #837) et `tenir-les-champs-et-types-imbriques-de-la-facade-dans-a11` (PR #836).
+**Suites d'AUD-ARC-17.** Les 12 exigences ajoutées et l'exigence modifiée sont dans la spécification `frontieres-de-modules` et dans la traçabilité de son dossier.
+
+| Changement OpenSpec | PR | Tâche manuelle ARCH-0087 (non faite) |
+|---|---|---|
+| `lire-toutes-les-ecritures-de-la-facade-dans-a11` | #835 | 2.1 |
+| `tenir-les-champs-et-types-imbriques-de-la-facade-dans-a11` | #836 | 2.1 |
+| `lire-les-ecritures-d-import-dans-les-regles-de-frontieres` | #837 | 3.4 |
+| `lire-les-noms-coupes-autour-d-un-point-dans-les-frontieres` | #837 | 2.4 |
+| `lire-les-ecritures-restantes-d-un-nom-dans-les-frontieres` | #837 | 4.6 |
+
+**Proposition de texte pour ARCH-0087, « Compliance and Enforcement » (non appliquée, décision du propriétaire).** Elle réunit les tâches du tableau et les lignes d'A11 de `lire-les-methodes-generiques-de-la-facade-dans-a11`, à ajouter après la puce « Contrôle automatique de la façade » :
+
+> - Contrôle automatique des membres de la façade (règle **A11**) : échouent, dans `MinosApplication`, un paramètre d'une méthode ou d'un constructeur public qui nomme un type de `minos-engine` ou `MinosApplicationComposer` ; une méthode publique statique qui rend l'un de ces types (les bornes de paramètre de type d'une méthode ou d'un constructeur génériques comptent comme rendues et prises) ; un champ public de ces types ; un type imbriqué public autre que `Builder` ; un import joker, statique ou non, d'un package de `minos-engine` ou des membres d'un de ses types. Un type obtenu par `import static` compte comme un type importé. Un membre est lu quels que soient ses annotations, la casse de son nom et ses retours à la ligne ; un en-tête public que le garde ne lit pas le fait échouer.
+> - Contrôle automatique des imports par joker : un joker sur un type du module visé (**A11**, **A13**) ou sur les membres d'une classe d'adaptateur (**A2**) échoue ; pour **A19**, un joker sur `java.net.http`, `javax.tools`, `com.sun.source` ou un de leurs sous-packages nomme l'API, comme `import java.net.*;` dans une source qui nomme `HttpURLConnection`.
+> - Lecture des sources par le garde : un import est lu où qu'il soit dans sa ligne ; un nom est lu en entier quand des blancs, des retours à la ligne ou des commentaires entourent ses points, quand une annotation de type l'interrompt et quand il est écrit avec des échappements Unicode.
+> - Revue : une méthode héritée d'une interface, un type membre hérité nommé sans import et un identificateur contenant un caractère que le compilateur ignore échappent à la lecture de la source.
+
+**Reste.** La proposition ci-dessus, avec celle du sprint 11 (« Tâches manuelles »). Limites écrites dans les designs et non traitées : les trois cas de la dernière puce ; les règles Archgate compagnes d'ARCH-0068 lisent les déclarations `package` telles qu'elles sont écrites ; `FOREIGN_IMPORT` d'ARCH-0027 est ancré en début de ligne. Les preuves relevées dans les designs sont des exécutions sous Windows ; Linux n'y est pas mesuré.
 
 ## Recouvrements entre changements
 
@@ -311,7 +328,7 @@ Chaque design donne les options et une recommandation. Au 2026-11-24, toutes son
 - **CI et GitHub** : lecture des rapports JaCoCo des deux jobs `Verify` ; type du jeton SonarCloud ; `verify-ruleset.py` contre GitHub ; secrets Dependabot Docker Hub ; `code-audit.yml` pour `minos-storage`, `minos-explorer` et le plugin.
 - **Poste** : remise à niveau du clone et des worktrees après l'attribut `eol=lf` ; échec réel du worker sur une distribution WSL préparée ; rotation des journaux sous Docker ; parcours de la carte dans un navigateur.
 - **Sprint 11** : mise à jour d'ARCH-0087 à proposer au propriétaire (AUD-ARC-13, AUD-SEC-12) et décision D5 (AUD-ARC-14) ; application du skill `minos-dependency-update` à la prochaine PR Dependabot d'image Temurin ou de wrapper Maven (AUD-DEP-11).
-- **Sprint 12** : joindre à la même proposition ARCH-0087 les règles d'A11 sur les méthodes génériques, les retours statiques et les imports joker, ainsi que les refus des cinq changements de suite (AUD-ARC-17).
+- **Sprint 12** : soumettre au propriétaire, avec cette proposition, le texte d'ARCH-0087 de la section « Sprint 12 » (AUD-ARC-17).
 
 ## Restes de la spécification
 
