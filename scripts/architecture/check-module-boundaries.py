@@ -8,8 +8,9 @@ generated dependency document also shows the execution edges created by META-INF
 This script holds the POM rules (A2 dependency policy, hexagonal families, hidden internal dependencies) and runs
 every rule. The other rules live next to it: module_boundary_policy (module-boundaries.json), module_boundary_sources
 (Java source reading), module_boundary_adapters (A2 sources, A10, A19, A20 and storage isolation),
-module_boundary_ratchets (A11 to A14, A16, A18), module_boundary_packages (A3, A7, A8, A15) and
-module_boundary_documents (A9, A17 and the generated dependency document).
+module_boundary_ratchets (A11 to A14, A16, A18), module_boundary_facade (A11, the MinosApplication facade),
+module_boundary_packages (A3, A7, A8, A15) and module_boundary_documents (A9, A17 and the generated
+dependency document).
 Self-test: scripts/architecture/test_check_module_boundaries*.py.
 """
 
@@ -24,16 +25,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gate_runner import run_gate
 from module_boundary_policy import (
     ADAPTER_MODULES, ALLOWED_DEPENDENCIES, APPLICATION_MODULE, ARTIFACT_TO_MODULE, ASSEMBLY_MODULE, BOOTSTRAP_MODULE,
-    CONTRACT_MODULES, CONTRACT_MODULE_DEPENDENCIES, CONTRACT_TO_BOOTSTRAP_SCOPES, MODULES, NS, ROOT, SURFACE_MODULES,
-    SURFACE_TO_BOOTSTRAP_SCOPES, TEST_ONLY_DEPENDENCIES, fail, repository_group_id)
+    CONTRACT_MODULES, CONTRACT_MODULE_DEPENDENCIES, CONTRACT_TO_BOOTSTRAP_SCOPES, ENGINE_MODULE, MODULES, NS, ROOT,
+    SURFACE_MODULES, SURFACE_TO_BOOTSTRAP_SCOPES, TEST_ONLY_DEPENDENCIES, fail, repository_group_id)
 from module_boundary_adapters import (
     check_assembly_classes, check_embedded_adapters, check_postgresql_backend_isolation, check_runtime_local_exports,
     check_source_boundaries, check_storage_package_isolation)
+from module_boundary_facade import check_minos_application_accessors
 from module_boundary_ratchets import (
-    ADAPTER_COUPLING_REASONS, ADAPTER_TYPES_NAMED_BY_ADAPTER, ENGINE_MODULE, ENGINE_TYPES_NAMED_BY_SURFACE,
+    ADAPTER_COUPLING_REASONS, ADAPTER_TYPES_NAMED_BY_ADAPTER, ENGINE_TYPES_NAMED_BY_SURFACE,
     PROCESS_LAUNCHERS, check_adapter_types_named_by_adapters, check_engine_types_named_by_surfaces,
-    check_minos_application_accessors, check_package_roots, check_process_launchers, check_service_loader_class_loaders,
-    check_snapshot_read_port, engine_concrete_code)
+    check_package_roots, check_process_launchers, check_service_loader_class_loaders, check_snapshot_read_port,
+    engine_concrete_code)
 from module_boundary_packages import (
     KNOWN_PACKAGE_CYCLES, check_java_layout, check_package_cycles, check_package_ownership, check_reactor_modules,
     check_unreferenced_production_types)

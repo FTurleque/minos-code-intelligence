@@ -173,6 +173,9 @@ jobs:
       - name: Module-boundary checker self-test (A11 to A13 ratchets)
         run: python scripts/architecture/test_check_module_boundaries_ratchets.py -v
 
+      - name: Module-boundary checker self-test (A11 MinosApplication facade)
+        run: python scripts/architecture/test_check_module_boundaries_facade.py -v
+
       - name: Module-boundary checker self-test (A9 documentation, A17 ArchUnit policy, generated document)
         run: python scripts/architecture/test_check_module_boundaries_documents.py -v
 
