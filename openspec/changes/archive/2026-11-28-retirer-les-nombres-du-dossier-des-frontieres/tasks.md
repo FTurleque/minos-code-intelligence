@@ -12,5 +12,5 @@ Changement indépendant des autres du sprint 12, mais il réécrit `docs/archite
 ## 2. Clôture
 
 - [x] 2.1 AUD-ARC-18 — Mettre à jour la matrice de traçabilité du design.
-- [ ] 2.2 AUD-ARC-18 — Valider : `openspec validate --all --strict` vert ; après archivage, ligne de l'exigence ajoutée dans le dossier (sans nombre, le cas de 1.1 la relit) ; `python scripts/docs/check-capability-dossiers.py` vert.
-- [ ] 2.3 AUD-ARC-18 — Documents à mettre à jour avant archivage : dossier de capacité (1.2, 2.2), ligne AUD-ARC-18 du suivi de l'audit (coordinateur, après fusion). Si le propriétaire retient D2 option b, ouvrir un changement à part pour les scénarios de la spécification.
+- [x] 2.2 AUD-ARC-18 — Valider : `openspec validate --all --strict` vert ; après archivage, ligne de l'exigence ajoutée dans le dossier (sans nombre, le cas de 1.1 la relit) ; `python scripts/docs/check-capability-dossiers.py` vert. Constat : archivé le 2026-11-28, lignes ajoutées au dossier, `openspec validate --all --strict` 23/23 et `check-capability-dossiers.py` vert.
+- [x] 2.3 AUD-ARC-18 — Documents à mettre à jour avant archivage : dossier de capacité (1.2, 2.2), ligne AUD-ARC-18 du suivi de l'audit (coordinateur, après fusion). Si le propriétaire retient D2 option b, ouvrir un changement à part pour les scénarios de la spécification. Constat : dossier et suivi de l'audit mis à jour à l'archivage.

@@ -2,6 +2,10 @@
 
 Suivi de la correction des constats de [`findings.md`](findings.md), dans l'ordre de [`sprints.md`](sprints.md). Une ligne par constat ; la preuve d'une fermeture est une commande ou une assertion de test, pas « la CI est verte ».
 
+## État au 2026-11-28
+
+Les sprints 1 à 12 sont fusionnés et leurs changements archivés. Le sprint 12 solde les huit constats Faibles de la vérification du 27/11 par cinq changements (PR #831, #832, #833, #834 et #838, archivés le 2026-11-28). Le suivi d'AUD-ARC-17 se poursuit hors de ces cinq changements, par cinq autres fusionnés (PR #835, #836 et #837) qui restent à archiver.
+
 ## État au 2026-11-26
 
 Les sprints 1 à 11 sont fusionnés et archivés. Le sprint 11 solde les onze constats Faibles de la vérification du 25/11 ([`ETAT-2026-11-25.md`](ETAT-2026-11-25.md)) par huit changements (PR #821 à #828, archivés le 2026-11-26). Les tâches non faites sont des mesures, des preuves manuelles et des décisions, nommées dans la colonne « Statut » de chaque sprint et dans « Tâches manuelles ».
@@ -166,7 +170,7 @@ La colonne « Écart » décrit l'état au commit de la spécification.
 
 | Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
 |---|---|---|---|
-| AUD-ARC-13 | `tenir-le-contrat-de-la-facade-par-le-garde` | Fait (PR #823, archivé) ; reste : proposition de mise à jour d'ARCH-0087 au propriétaire (tâche 4.2) | L'option « méthode package-private relayée par l'accès de test » seule ne ferme pas le trou et casse `MinosApplicationTestAccessTest` si le relais garde le nom : relais `decoratedProjectIndexing`, puis A11 étendu aux paramètres en cliquet à zéro. `ProjectInspectionService.view` s'appelle `statusView` au HEAD. `java-api.md:358` présente la méthode comme remplaçant public. Méthode absente de v1.3.0 : aucune rupture publiée. |
+| AUD-ARC-13 | `tenir-le-contrat-de-la-facade-par-le-garde` | Fait (PR #823, archivé) ; reste : proposition de mise à jour d'ARCH-0087 au propriétaire (tâche 4.2) | L'option « méthode package-private relayée par l'accès de test » seule ne ferme pas le trou et casse `MinosApplicationTestAccessTest` si le relais garde le nom : relais `decoratedProjectIndexing`, puis A11 étendu aux paramètres en cliquet à zéro. `ProjectInspectionService` expose `view` et `statusView`. `java-api.md:358` présente la méthode comme remplaçant public. Méthode absente de v1.3.0 : aucune rupture publiée. |
 | AUD-SEC-12 | idem | Fait (PR #823, archivé) | Élargir, compléter ou supprimer `<includes>` laisse le garde vert. Les deux contrôles sont retenus, non l'un ou l'autre : le garde lit `<includes>` et refuse une seconde exécution `test-jar` ; l'IT affirme que le jar ne contient, hors `META-INF/`, que la classe d'accès. |
 | AUD-ARC-14 | `injecter-les-ports-des-operations-locales` | Fait (PR #824, archivé) ; reste : décision D5 sur ARCH-0087 (tâche 3.3) | `LocalProjectSymbolQuery` ne lit qu'un accesseur public. `LocalProjectOperations` lit aussi `projectInspectionService()`. Les constructeurs sont des remplaçants documentés (`java-api.md`, notes de version) : conservés, ils délèguent. Un cliquet sur le nombre d'accesseurs figerait à tort la façade ; le design propose une règle ArchUnit sur les lecteurs. 5 accesseurs sans lecteur, dont `hostedControlPlaneService()` sans aucun appelant. |
 | AUD-ARC-15 | `aligner-la-prose-de-la-facade-apres-le-sprint-10` | Fait (PR #821, archivé) | Deux sites de plus : `ARCH-0042:401` (« ARCH-0087 (Proposed) ») et `docs/developer/public-surfaces.md:12` (stéréotype `composition root`). La mémoire d'agent est en tâche sans exigence (fichier traité comme figé par la spécification courante). |
@@ -184,7 +188,7 @@ Fusionnés dans l'ordre #821, #822, #823, #824, #825, #826, #827, #828, puis arc
 
 **ADR.** Aucun créé. Planifiés en tâche : compléter « Mise en œuvre » et « Compliance » d'ARCH-0087 (`tenir-…`, `injecter-…`) et de GEN-0077 (`exiger-…`, `consigner-…`) ; deux parenthèses de mise en œuvre d'ARCH-0042 (`aligner-…`).
 
-## Sprint 12 — Reprises de la vérification du 27/11 (spécifié le 2026-11-27)
+## Sprint 12 — Reprises de la vérification du 27/11 (fusionné et archivé le 2026-11-28)
 
 Huit constats Faibles de la vérification du 27/11, au commit `4f4cac81`. Chaque preuve a été relue au HEAD ; les mutations des gardes (A11 générique, clés de somme, contrôle Node après `tar`, `set +o errexit`) ont été rejouées sur des copies (rc=0 confirmé), sans build Maven ni Docker. Non rejoués : l'import joker d'A11 et le retrait du pin `eol=crlf` (établis par l'audit). `openspec validate --all --strict` : 27 éléments sur 27 ; `check-capability-dossiers.py` : 22 dossiers ; `run_gates.py --fast` : 30 sur 30. Contre-vérification indépendante (agent `minos-spec-verifier`) : neuf corrections reportées dans les changements, dont la règle du nom de base qui aurait rendu le Dockerfile du HEAD rouge.
 
@@ -192,14 +196,14 @@ La colonne « Écart » décrit l'état au commit de la spécification.
 
 | Constat | Changement OpenSpec | Statut | Écart constaté à l'analyse |
 |---|---|---|---|
-| AUD-QUA-09 | `aligner-la-documentation-courante-apres-le-sprint-11` | Spécifié | Le titre « version 1.3.0 » de la table est faux : au tag `v1.3.0`, les fabriques `ProjectIndexingUseCase.of(…)` sont publiques ; elles sont retirées par `76afac5ed` (2026-11-18). Deux autres sections (`java-api.md:380`, `:390`) portent le même titre faux. `unreleased.md` n'annonce aucune de ces ruptures. |
-| AUD-QUA-10 | idem | Spécifié | Le décompte des règles est 332 (335 avec l'auto-test du lanceur partagé) : nombre retiré, non remplacé. La phrase de la ligne AUD-ARC-13 du sprint 11 sur `statusView` est à corriger par le coordinateur (les deux méthodes existent). |
-| AUD-ARC-17 | `lire-les-methodes-generiques-de-la-facade-dans-a11` | Spécifié | L'expression proposée par l'audit ne voit pas `<T extends ProjectRegistry> void f(T r)` (la borne porte le type) et coupe une borne imbriquée. Un import joker d'un package du moteur et une méthode statique publique qui rend un type du moteur contournent aussi A11 : refusés par la même exigence. |
-| AUD-ARC-18 | `retirer-les-nombres-du-dossier-des-frontieres` | Spécifié | Des nombres aussi dans E1 et la ligne de traçabilité des cycles connus ; E2 déjà résolu ; E8 cite des accesseurs retirés. Spécification (E1, E4, E8) inchangée. |
-| AUD-TST-15 | `eprouver-l-assemblage-des-operations-locales` | Spécifié | Les sept collaborateurs ont des types distincts : une permutation ne compile pas ; le risque réel est une autre instance du même port ou une rétention oubliée. |
-| AUD-DEP-16 | `aligner-les-gardes-de-la-chaine-d-approvisionnement-sur-leurs-lecteurs` | Spécifié | `mvnw` lit `distributionSha256Sum= <somme>` (valeur réduite) : la règle porte sur la clé, pas sur les espaces de la valeur. Le wrapper Gradle garde la lecture des propriétés Java. |
-| AUD-DEP-17 | idem | Spécifié | Refuser tout `cd` avant le contrôle casserait un `RUN` légitime : comparaison par nom de base non précédé de `/` (la boucle d'URL du `RUN` Maven le nomme), `set +o errexit` reconnu, fichier contrôlé égal à la cible du `curl`. |
-| AUD-DEP-18 | idem | Spécifié | `mvnw` et `*.sh` sont déjà tenus (`eol=lf` exigé) : le trou ne vaut que pour les fichiers batch, exigés `eol=crlf` par extension plutôt que par liste fermée. |
+| AUD-QUA-09 | `aligner-la-documentation-courante-apres-le-sprint-11` | Fait (PR #834, archivé) | Le titre « version 1.3.0 » de la table est faux : au tag `v1.3.0`, les fabriques `ProjectIndexingUseCase.of(…)` sont publiques ; elles sont retirées par `76afac5ed` (2026-11-18). Deux autres sections (`java-api.md:380`, `:390`) portent le même titre faux. `unreleased.md` n'annonce aucune de ces ruptures. |
+| AUD-QUA-10 | idem | Fait (PR #834, archivé) | Le décompte des règles est 332 (335 avec l'auto-test du lanceur partagé) : nombre retiré, non remplacé. La phrase de la ligne AUD-ARC-13 du sprint 11 sur `statusView` est à corriger par le coordinateur (les deux méthodes existent). |
+| AUD-ARC-17 | `lire-les-methodes-generiques-de-la-facade-dans-a11` | Fait (PR #832, archivé) ; suites : PR #835, #836 et #837 fusionnées, cinq changements à archiver ; reste : lignes à joindre à la proposition ARCH-0087 (tâche 2.2) | L'expression proposée par l'audit ne voit pas `<T extends ProjectRegistry> void f(T r)` (la borne porte le type) et coupe une borne imbriquée. Un import joker d'un package du moteur et une méthode statique publique qui rend un type du moteur contournent aussi A11 : refusés par la même exigence. |
+| AUD-ARC-18 | `retirer-les-nombres-du-dossier-des-frontieres` | Fait (PR #838, archivé) ; exigence partielle (nombres en chiffres ; preuves d'écart sans auto-test) | Des nombres aussi dans E1 et la ligne de traçabilité des cycles connus ; E2 déjà résolu ; E8 cite des accesseurs retirés. Spécification (E1, E4, E8) inchangée. |
+| AUD-TST-15 | `eprouver-l-assemblage-des-operations-locales` | Fait (PR #831, archivé) ; les deux classes de test passent sans cas sauté sur les deux `Verify` | Les sept collaborateurs ont des types distincts : une permutation ne compile pas ; le risque réel est une autre instance du même port ou une rétention oubliée. |
+| AUD-DEP-16 | `aligner-les-gardes-de-la-chaine-d-approvisionnement-sur-leurs-lecteurs` | Fait (PR #833, archivé) | `mvnw` lit `distributionSha256Sum= <somme>` (valeur réduite) : la règle porte sur la clé, pas sur les espaces de la valeur. Le wrapper Gradle garde la lecture des propriétés Java. |
+| AUD-DEP-17 | idem | Fait (PR #833, archivé) | Refuser tout `cd` avant le contrôle casserait un `RUN` légitime : comparaison par nom de base non précédé de `/` (la boucle d'URL du `RUN` Maven le nomme), `set +o errexit` reconnu, fichier contrôlé égal à la cible du `curl`. |
+| AUD-DEP-18 | idem | Fait (PR #833, archivé) | `mvnw` et `*.sh` sont déjà tenus (`eol=lf` exigé) : le trou ne vaut que pour les fichiers batch, exigés `eol=crlf` par extension plutôt que par liste fermée. |
 
 **Découpage.** Cinq changements fusionnables seuls : documentation (QUA-09, QUA-10), règle A11, dossier des frontières, tests de `minos-application`, gardes de la chaîne d'approvisionnement (DEP-16 à 18, trois sections aux fichiers disjoints, une seule CI au lieu de trois PR qui se mettent en retard).
 
@@ -209,9 +213,9 @@ La colonne « Écart » décrit l'état au commit de la spécification.
 
 **ADR.** Aucun créé. Planifiés en tâche : « Compliance and Enforcement » de GEN-0077 et BE-0065 (`aligner-les-gardes-…`) ; une ligne A11 ajoutée à la proposition de mise à jour d'ARCH-0087 déjà attendue du sprint 11 (`lire-les-methodes-…`).
 
-**Décisions en attente du propriétaire** (chacune avec une recommandation dans le design) :
+**Décisions.** Chacune est appliquée selon la recommandation du design. Pour AUD-DEP-16, le propriétaire a en outre retenu le 2026-11-27 le refus d'une dernière ligne sans saut de ligne final.
 
-| Constat | Question | Recommandation |
+| Constat | Question | Retenu |
 |---|---|---|
 | AUD-QUA-09 | Ligne de la fabrique décorée : « aucun remplaçant public », suppression, ou méthode rendue publique | « Aucun remplaçant public », titre « prochaine version » |
 | AUD-QUA-10 | Nombre retiré ou lu par `product-facts.py` ; gate ou commande de la spécification | Retiré ; commande rejouée à la clôture, sans gate |
@@ -220,7 +224,9 @@ La colonne « Écart » décrit l'état au commit de la spécification.
 | AUD-ARC-18 | Dossier seul ou aussi les scénarios de la spécification (E1, E4, E8) | Dossier seul |
 | AUD-DEP-16 à 18 | Forme de `mvnw` pour le seul wrapper Maven ; nom de base et cible du `curl` ; pin des fichiers batch par extension | Les trois, comme proposé |
 
-**Tâches manuelles.** CI des PR (`Verify` des deux OS pour les tests de `minos-application` et `M29DockerAdministrationContractTest`) ; correction de la phrase `statusView` de la ligne AUD-ARC-13 et lignes de statut de ce tableau après fusion ; ligne A11 à joindre à la proposition ARCH-0087.
+**Preuves de CI relevées dans les journaux.** PR #831 : `LocalOperationsAssemblyTest` et `LocalProjectOperationsRetentionTest` sans échec ni cas sauté sous Ubuntu et Windows. PR #833 : le job `Static invariants (single run)` exécute les trois gates et leurs auto-tests ; `M29DockerAdministrationContractTest` passe sans cas sauté sur les deux `Verify`.
+
+**Reste.** Lignes A11 à joindre à la proposition de mise à jour d'ARCH-0087 (méthodes génériques et leurs bornes, retours statiques, imports joker du moteur), avec les refus ajoutés par les cinq changements de suite (leurs tâches manuelles) ; archivage de `lire-toutes-les-ecritures-de-la-facade-dans-a11` (PR #835), `lire-les-ecritures-d-import-dans-les-regles-de-frontieres`, `lire-les-noms-coupes-autour-d-un-point-dans-les-frontieres`, `lire-les-ecritures-restantes-d-un-nom-dans-les-frontieres` (PR #837) et `tenir-les-champs-et-types-imbriques-de-la-facade-dans-a11` (PR #836).
 
 ## Recouvrements entre changements
 
@@ -305,6 +311,7 @@ Chaque design donne les options et une recommandation. Au 2026-11-24, toutes son
 - **CI et GitHub** : lecture des rapports JaCoCo des deux jobs `Verify` ; type du jeton SonarCloud ; `verify-ruleset.py` contre GitHub ; secrets Dependabot Docker Hub ; `code-audit.yml` pour `minos-storage`, `minos-explorer` et le plugin.
 - **Poste** : remise à niveau du clone et des worktrees après l'attribut `eol=lf` ; échec réel du worker sur une distribution WSL préparée ; rotation des journaux sous Docker ; parcours de la carte dans un navigateur.
 - **Sprint 11** : mise à jour d'ARCH-0087 à proposer au propriétaire (AUD-ARC-13, AUD-SEC-12) et décision D5 (AUD-ARC-14) ; application du skill `minos-dependency-update` à la prochaine PR Dependabot d'image Temurin ou de wrapper Maven (AUD-DEP-11).
+- **Sprint 12** : joindre à la même proposition ARCH-0087 les règles d'A11 sur les méthodes génériques, les retours statiques et les imports joker, ainsi que les refus des cinq changements de suite (AUD-ARC-17).
 
 ## Restes de la spécification
 
