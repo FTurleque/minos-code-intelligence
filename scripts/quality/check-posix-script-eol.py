@@ -150,6 +150,27 @@ def batch_pin_failures(entries: dict[str, tuple[str, str]], batches: list[str]) 
             for path in batches if "eol=crlf" not in entries[path][1].split()]
 
 
+def recorded_failure(path: str, index: str) -> str:
+    return f"{path}: recorded as {index}, expected i/lf; run 'git add --renormalize -- {path}'"
+
+
+def script_pin_failures(entries: dict[str, tuple[str, str]], checked: list[str]) -> list[str]:
+    """For each file of ``checked``: one failure without the `eol=lf` attribute, one when not recorded as `i/lf`."""
+    failures: list[str] = []
+    for path in checked:
+        index, attributes = entries[path]
+        if "eol=lf" not in attributes.split():
+            failures.append(f"{path}: no 'eol=lf' attribute ({attributes}); add '{rule_for(path)}' to .gitattributes")
+        if index != "i/lf":
+            failures.append(recorded_failure(path, index))
+    return failures
+
+
+def carriage_return_failures(entries: dict[str, tuple[str, str]], paths: list[str]) -> list[str]:
+    """One failure per file of ``paths`` recorded with a carriage return."""
+    return [recorded_failure(path, entries[path][0]) for path in paths if entries[path][0] in ("i/crlf", "i/mixed")]
+
+
 def check_counts(root: Path) -> tuple[list[str], int, int, int]:
     """(failures, POSIX scripts checked, files with pinned line endings checked, batch files checked)."""
     try:
@@ -162,21 +183,12 @@ def check_counts(root: Path) -> tuple[list[str], int, int, int]:
     if not scripts:
         return ["no POSIX shell script is tracked; the gate refuses to succeed on zero files"], 0, 0, 0
     checked = sorted(scripts | ({WRAPPER_PROPERTIES} & entries.keys()))
-    failures: list[str] = []
-    for path in checked:
-        index, attributes = entries[path]
-        if "eol=lf" not in attributes.split():
-            failures.append(f"{path}: no 'eol=lf' attribute ({attributes}); add '{rule_for(path)}' to .gitattributes")
-        if index != "i/lf":
-            failures.append(f"{path}: recorded as {index}, expected i/lf; run 'git add --renormalize -- {path}'")
     pinned = pinned_eol_files(entries)
     already = set(checked)
-    for path in pinned:
-        index = entries[path][0]
-        if path not in already and index in ("i/crlf", "i/mixed"):
-            failures.append(f"{path}: recorded as {index}, expected i/lf; run 'git add --renormalize -- {path}'")
     batches = batch_files(entries)
-    failures.extend(batch_pin_failures(entries, batches))
+    failures = (script_pin_failures(entries, checked)
+                + carriage_return_failures(entries, [path for path in pinned if path not in already])
+                + batch_pin_failures(entries, batches))
     return failures, len(checked), len(pinned), len(batches)
 
 
