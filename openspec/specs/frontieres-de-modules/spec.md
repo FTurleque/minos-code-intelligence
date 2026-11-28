@@ -408,7 +408,7 @@ Dans `minos-engine`, `minos-application` et `minos-domain`, une classe qui lance
 
 #### Scenario: Runtime tenu par une variable
 - **GIVEN** un arbre de test où une classe du moteur hors liste écrit `Runtime r = Runtime.getRuntime(); r.exec("x")`, ou appelle `exec` sur un champ ou un paramètre `Runtime`, ou référence `Runtime.getRuntime()::exec`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries.py ProcessLauncherRuleTest` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py ProcessLauncherRuleTest` est exécuté
 - **THEN** le garde échoue en nommant la classe, et accepte la même classe listée avec 1 site
 
 #### Scenario: Requête sur le Runtime sans lancement
@@ -526,7 +526,7 @@ Les sources de production de `minos-cli`, `minos-api` et `minos-mcp` SHALL NOT n
 
 #### Scenario: Retour d'un type retiré refusé
 - **GIVEN** un arbre temporaire de l'auto-test du garde, muni de la liste réelle de `minos-cli`, où une classe de production de la CLI importe `com.minos.remote.RemoteIndexingRuntime`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
 - **THEN** le cas attend et obtient l'échec d'A11 nommant `minos-cli`, le fichier et le type
 
 ### Requirement: L'indexation distante est un cas d'usage qui refuse avant tout effet
@@ -606,17 +606,17 @@ Le garde SHALL lire dans la source de `MinosApplication` ses méthodes publiques
 
 #### Scenario: Accesseur appelé sans nommer le type
 - **GIVEN** un arbre de test où `MinosApplication` déclare un accesseur public `snapshotStore()` qui rend `CodeKnowledgeSnapshotStore`, et où un fichier de `minos-api` l'appelle sans importer ce type, absent de la liste de l'API
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en nommant la surface, le fichier et le type rendu
 
 #### Scenario: Import remplacé par var
 - **GIVEN** un arbre de test où `MinosApplication` déclare un accesseur public qui rend `GitIntelligence`, et où un fichier qui importait ce type écrit `var g = app.gitIntelligence()` sans l'import
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde réussit avec le même compteur : le fichier utilise toujours le type
 
 #### Scenario: Méthode homonyme d'arité différente
 - **GIVEN** un arbre de test où une surface appelle `builder.gitIntelligence(supplier)`, à un argument
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que cet appel n'est pas compté comme un usage de `GitIntelligence`
 
 ### Requirement: Les types du moteur utilisés par le bytecode d'une surface le sont par liste fermée
@@ -711,7 +711,7 @@ Le package `com.minos.runtime.local.acl` SHALL être un package gardé du runtim
 
 #### Scenario: Aucune entrée hosted dans les tables
 - **GIVEN** le dépôt
-- **WHEN** `test_check_module_boundaries.py` et `ModuleArchitectureTest` sont exécutés
+- **WHEN** `test_check_module_boundaries_ratchets.py` et `ModuleArchitectureTest` sont exécutés
 - **THEN** ils sont verts et aucune surface n'a d'entrée `hosted.*` dans l'une ou l'autre table
 
 #### Scenario: Sorties inchangées
@@ -765,7 +765,7 @@ Les seules entrées `query.*` des surfaces dans les deux tables A11 SHALL être 
 
 #### Scenario: Les entrées de requête du dépôt réel
 - **GIVEN** le dépôt
-- **WHEN** l'auto-test `test_check_module_boundaries.py` est exécuté
+- **WHEN** l'auto-test `test_check_module_boundaries_ratchets.py` est exécuté
 - **THEN** l'ensemble des entrées `query.*` de `ENGINE_TYPES_NAMED_BY_SURFACE` est inclus dans les trois modèles de lecture publiés
 
 #### Scenario: Un service de requête du moteur nommé par la CLI
@@ -933,7 +933,7 @@ Hors de `minos-storage`, aucune source de production ni de test SHALL déclarer 
 
 #### Scenario: Sous-package du stockage dans le moteur
 - **GIVEN** un arbre de test où `minos-engine` (production), `minos-application` (production) ou `minos-bootstrap` (test) déclare `com.minos.storage.cache`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries.py StoragePackageIsolationRuleTest` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py StoragePackageIsolationRuleTest` est exécuté
 - **THEN** le garde échoue en nommant le fichier et « below com.minos.storage outside minos-storage »
 
 #### Scenario: Ports du stockage dans le moteur
@@ -946,7 +946,7 @@ Le garde de frontières SHALL afficher à chaque exécution, pour `minos-engine`
 
 #### Scenario: Mesure sur un arbre de test
 - **GIVEN** un arbre de test avec deux classes, une interface, un record, un enum, un `package-info` et un fichier sans déclaration dans `minos-engine`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries.py EngineConcreteCodeMeasureTest` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py EngineConcreteCodeMeasureTest` est exécuté
 - **THEN** chaque fichier est compté une fois dans son genre avec toutes ses lignes, et les tests et les autres modules sont ignorés
 
 #### Scenario: Mesure du dépôt
@@ -982,17 +982,17 @@ La table `MINOS_APPLICATION_ENGINE_ACCESSORS` SHALL être vide, et les accesseur
 
 #### Scenario: Une surface qui atteint la racine de composition
 - **GIVEN** un arbre de test où une classe de production de `minos-cli` appelle `app.compositionRoot().gitIntelligence()` ou `MinosApplicationComposers.resolve()`
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en A11 en nommant le fichier et la racine de composition
 
 #### Scenario: Un accesseur retiré sans mettre la table à jour
 - **GIVEN** un arbre de test où la table liste un accesseur que `MinosApplication` ne déclare plus publiquement
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en demandant de retirer l'entrée
 
 #### Scenario: Entrée ajoutée à la table vide refusée
 - **GIVEN** un arbre de test où la table reçoit l'entrée `projectRegistry` pendant que `MinosApplication` garde cet accesseur privé au package
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en demandant de retirer l'entrée
 
 #### Scenario: Table à jour au HEAD
@@ -1299,7 +1299,7 @@ Le garde de frontières SHALL refuser toute source de production de `minos-appli
 
 #### Scenario: Nouveau client HTTP dans l'application
 - **GIVEN** un arbre de test où une classe de production de `minos-application` importe `java.net.http.HttpClient`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
 - **THEN** le cas vérifie que le garde échoue en nommant le fichier et l'API
 
 #### Scenario: Table du HEAD acceptée
@@ -1337,7 +1337,7 @@ Le garde de frontières SHALL tenir la liste fermée des classes d'adaptateur qu
 
 #### Scenario: Entrée retirée alors que la classe nomme encore une API d'infrastructure
 - **GIVEN** un arbre de test où `OllamaEmbeddingProvider` nomme `java.net.HttpURLConnection`, figure dans `INFRASTRUCTURE_API_USERS` et manque à la liste des adaptateurs embarqués
-- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
 - **THEN** le cas vérifie que le garde échoue en nommant `OllamaEmbeddingProvider` et la liste où l'ajouter
 - **AND** le même arbre où une autre source nomme `OllamaEmbeddingProvider` échoue aussi
 
@@ -1364,7 +1364,7 @@ Le garde de frontières SHALL tenir la liste fermée des classes de production d
 
 #### Scenario: Nouvelle classe dans l'assemblage
 - **GIVEN** un arbre de test où `minos-app` gagne une classe de production absente de la liste
-- **WHEN** `python scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
 - **THEN** le cas vérifie que le garde échoue en nommant la classe et en demandant de la placer dans un module applicatif ou une surface
 
 #### Scenario: Entrée périmée
@@ -1538,22 +1538,22 @@ L'auto-test du câblage SHALL dériver la liste des règles de toutes les foncti
 
 #### Scenario: Racine de composition réintroduite refusée
 - **GIVEN** un arbre de test où `MinosApplication` déclare `public MinosApplicationComposer compositionRoot()`
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en A11 en nommant `compositionRoot` et `MinosApplicationComposer`
 
 #### Scenario: Accesseur typé moteur réintroduit refusé
 - **GIVEN** un arbre de test où `MinosApplication` déclare `public ProjectRegistry projectRegistry()` et où la table des accesseurs est vide
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en A11 en nommant `projectRegistry` et `registry.ProjectRegistry`
 
 #### Scenario: Paramètre typé moteur refusé
 - **GIVEN** un arbre de test où `MinosApplication` déclare `public void leak(ProjectRegistry registry)`, puis `public static MinosApplication of(com.minos.registry.ProjectRegistry registry)`, puis `public ProjectIndexingUseCase projectIndexing(UnaryOperator<IndexerExecutor> decorator)`
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que, pour chaque variante, le garde échoue en A11 en nommant la méthode et le type du moteur
 
 #### Scenario: Le Builder garde ses paramètres du moteur
 - **GIVEN** un arbre de test où seul le `Builder` imbriqué de `MinosApplication` déclare `public Builder projectRegistry(ProjectRegistry value)`
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que la règle des paramètres réussit
 
 #### Scenario: Aucune signature typée moteur au HEAD
@@ -1773,12 +1773,12 @@ A11 SHALL lire les méthodes publiques, statiques comprises, et les constructeur
 
 #### Scenario: Retour typé moteur d'une méthode statique
 - **GIVEN** l'auto-test du garde, avec `public static ProjectRegistry leakStatic()` puis `public static <T> ProjectRegistry leakStaticGeneric()`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque variante est refusée en A11, message nommant la méthode et `registry.ProjectRegistry`
 
 #### Scenario: Type du moteur porté par une borne
 - **GIVEN** l'auto-test du garde, avec `public <T extends ProjectRegistry> void leakBound(T r)` puis `public <T extends java.util.Map<String, ProjectRegistry>> T nested()`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque variante est refusée en A11, message nommant la méthode et `registry.ProjectRegistry`
 
 #### Scenario: Import joker d'un package du moteur
@@ -1818,7 +1818,7 @@ A11 SHALL lire une méthode ou un constructeur public de `MinosApplication` quel
 
 #### Scenario: Annotation à l'intérieur de la déclaration
 - **GIVEN** l'auto-test du garde, avec `public @Deprecated ProjectRegistry x()`, une annotation à arguments imbriqués, entre deux modificateurs, après les paramètres de type ou dans un nom qualifié
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque variante est refusée en A11, message nommant la méthode et `registry.ProjectRegistry`
 
 #### Scenario: Nom de méthode qui n'est pas en minuscules
@@ -1850,7 +1850,7 @@ Dans `MinosApplication`, un import joker, statique ou non, dont la cible est un 
 
 #### Scenario: Joker sur les membres d'un type du moteur
 - **GIVEN** l'auto-test du garde, avec `import com.minos.orchestration.IndexingRuntimePorts.*;`, puis sa forme `import static`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque forme est refusée en A11, message nommant `com.minos.orchestration.IndexingRuntimePorts.*`
 
 #### Scenario: Import statique d'un type imbriqué
@@ -1868,7 +1868,7 @@ Une méthode statique publique de `MinosApplication` dont le type de retour ou u
 
 #### Scenario: Racine de composition rendue par une méthode statique
 - **GIVEN** l'auto-test du garde, avec `public static MinosApplicationComposer root()`, `public static <T> MinosApplicationComposer root()` et `public static <T extends MinosApplicationComposer> T root()`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque variante est refusée en A11, message nommant `root` et la racine de composition
 
 ### Requirement: La façade n'a aucun champ public typé moteur
@@ -1876,7 +1876,7 @@ Une méthode statique publique de `MinosApplication` dont le type de retour ou u
 
 #### Scenario: Champ typé moteur refusé
 - **GIVEN** l'auto-test du garde, avec `public ProjectRegistry registry;`, un champ `static final`, `java.util.List<ProjectRegistry>`, puis `public ProjectRegistry[] a, b;`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque variante est refusée en A11, message nommant le champ et `registry.ProjectRegistry`
 
 #### Scenario: Champ typé racine de composition refusé
@@ -1898,7 +1898,7 @@ Un type imbriqué public de `MinosApplication` autre que `Builder` (classe, `rec
 
 #### Scenario: Type imbriqué public refusé
 - **GIVEN** l'auto-test du garde, avec tour à tour un `public record` générique ou non, une `public static final class`, une `public interface` dont les méthodes sont implicitement publiques, un `public enum` et une `public @interface`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque variante est refusée en A11, message nommant le type imbriqué
 
 #### Scenario: Builder et types non publics acceptés
@@ -1910,8 +1910,8 @@ Un type imbriqué public de `MinosApplication` autre que `Builder` (classe, `rec
 Les règles de `check-module-boundaries.py` qui lisent les déclarations d'import SHALL lire chacune d'elles où qu'elle soit dans sa ligne : à son début, ou à la suite d'un autre import, de la déclaration de package, d'un point-virgule seul ou d'un commentaire. Un `import` écrit dans un commentaire ou dans un littéral SHALL rester ignoré.
 
 #### Scenario: Second import d'une ligne dans la façade
-- **GIVEN** l'auto-test des cliquets, avec `MinosApplication` qui écrit sur une même ligne `import java.util.List;` puis un import simple, joker ou statique qui atteint un type de `minos-engine`
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **GIVEN** l'auto-test de la façade, avec `MinosApplication` qui écrit sur une même ligne `import java.util.List;` puis un import simple, joker ou statique qui atteint un type de `minos-engine`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque forme est refusée en A11
 
 #### Scenario: Joker de package en second sur sa ligne
@@ -1926,12 +1926,12 @@ Les règles de `check-module-boundaries.py` qui lisent les déclarations d'impor
 - **AND** A15 ne déclare pas le type sans appelant
 
 #### Scenario: Autres positions
-- **GIVEN** l'auto-test des cliquets, avec un import de façade placé après la déclaration de package, après un point-virgule seul ou après un commentaire de bloc fermé sur la ligne d'un autre import
-- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **GIVEN** l'auto-test de la façade, avec un import de façade placé après la déclaration de package, après un point-virgule seul ou après un commentaire de bloc fermé sur la ligne d'un autre import
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** chaque forme est refusée en A11
 
 #### Scenario: Import écrit dans un commentaire ou un littéral
-- **GIVEN** l'auto-test des cliquets, avec le même texte d'import dans un commentaire de ligne, un commentaire de bloc, une chaîne et un bloc de texte
+- **GIVEN** l'auto-test de la façade, avec le même texte d'import dans un commentaire de ligne, un commentaire de bloc, une chaîne et un bloc de texte
 - **WHEN** le même auto-test est exécuté
 - **THEN** la règle réussit
 
