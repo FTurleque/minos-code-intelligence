@@ -556,8 +556,8 @@ class RuleModulesTest(unittest.TestCase):
 
     def test_the_rule_modules_are_found_on_disk(self):
         names = rule_module_names()
-        for module in ("module_boundary_adapters", "module_boundary_documents", "module_boundary_packages",
-                       "module_boundary_ratchets"):
+        for module in ("module_boundary_adapters", "module_boundary_documents", "module_boundary_facade",
+                       "module_boundary_packages", "module_boundary_ratchets"):
             self.assertIn(module, names)
         self.assertEqual([], [name for name in sys.modules
                               if name.startswith(RULE_MODULE_PREFIX) and name not in names])
