@@ -1,5 +1,61 @@
 ## MODIFIED Requirements
 
+### Requirement: Le lancement de processus hors du runtime local est tenu par liste fermée
+Dans `minos-engine`, `minos-application` et `minos-domain`, une classe qui lance un processus SHALL figurer dans une liste fermée du garde avec son nombre de sites (`new ProcessBuilder`, `ProcessBuilder::new`, `ProcessBuilder.startPipeline`, `exec` sur `Runtime.getRuntime()` ou sur un nom de type `Runtime` ou affecté de `Runtime.getRuntime()`). Sur le dépôt, la liste SHALL être vide. Une classe hors liste, un nombre de sites différent ou une entrée sans lancement SHALL faire échouer le garde.
+
+#### Scenario: Second site de lancement dans le moteur
+- **GIVEN** une copie du dépôt où une classe de `minos-engine` hors liste instancie `ProcessBuilder`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant la classe
+
+#### Scenario: Troisième appel dans la classe listée
+- **GIVEN** un arbre de test où une classe listée avec 2 sites construit un troisième `ProcessBuilder`
+- **WHEN** le garde est exécuté sur cet arbre
+- **THEN** il échoue en nommant la classe, le nombre de sites listé et le nombre observé
+
+#### Scenario: Site retiré sans baisser le compteur
+- **GIVEN** un arbre de test où une classe listée avec 2 sites n'en a plus qu'un
+- **WHEN** le garde est exécuté sur cet arbre
+- **THEN** il échoue en donnant le nombre de sites à écrire
+
+#### Scenario: Site existant
+- **GIVEN** le dépôt, où aucune classe du domaine, du moteur ni de l'application ne lance de processus
+- **WHEN** le garde est exécuté
+- **THEN** il réussit et affiche 0 classe et 0 site de lancement
+
+#### Scenario: Retour d'icacls dans PrivateLocalStorage
+- **GIVEN** une copie du dépôt où `PrivateLocalStorage` construit un `ProcessBuilder` pour `icacls`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant la classe
+
+#### Scenario: Runtime tenu par une variable
+- **GIVEN** un arbre de test où une classe du moteur hors liste écrit `Runtime r = Runtime.getRuntime(); r.exec("x")`, ou appelle `exec` sur un champ ou un paramètre `Runtime`, ou référence `Runtime.getRuntime()::exec`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py ProcessLauncherRuleTest` est exécuté
+- **THEN** le garde échoue en nommant la classe, et accepte la même classe listée avec 1 site
+
+#### Scenario: Requête sur le Runtime sans lancement
+- **GIVEN** un arbre de test où une classe du moteur appelle `Runtime.getRuntime().availableProcessors()` et `maxMemory()` sur une variable `Runtime`
+- **WHEN** le garde est exécuté sur cet arbre
+- **THEN** il réussit et ne compte aucun site
+
+### Requirement: Les familles de l'indexation ne sont plus nommées par les surfaces
+Les sources de production de `minos-cli`, `minos-api` et `minos-mcp` SHALL NOT nommer de type de `com.minos.orchestration` ni de `com.minos.remote`, ni appeler `indexStateStore()`, `providerRuntimeManager()`, `indexerDescriptors()` ou `compositionRoot()` de `MinosApplication`. La table `ENGINE_TYPES_NAMED_BY_SURFACE` SHALL compter 15 entrées pour la CLI, 14 pour l'API, 4 pour le MCP et 6 pour NEXUS.
+
+#### Scenario: Aucun nom ni accesseur retiré dans les surfaces
+- **GIVEN** le dépôt après le changement
+- **WHEN** on recherche `com\.minos\.(orchestration|remote)\.` puis `\.(indexStateStore|providerRuntimeManager|indexerDescriptors|compositionRoot)\(\)` dans `minos-cli/src/main`, `minos-api/src/main` et `minos-mcp/src/main`
+- **THEN** aucune des deux recherches ne retourne de ligne
+
+#### Scenario: Décomptes du cliquet
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il réussit et affiche `minos-api=14, minos-cli=15, minos-mcp=4, minos-nexus=6`
+
+#### Scenario: Retour d'un type retiré refusé
+- **GIVEN** un arbre temporaire de l'auto-test du garde, muni de la liste réelle de `minos-cli`, où une classe de production de la CLI importe `com.minos.remote.RemoteIndexingRuntime`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** le cas attend et obtient l'échec d'A11 nommant `minos-cli`, le fichier et le type
+
 ### Requirement: Un accesseur de MinosApplication appelé par une surface compte comme un usage du type rendu
 Le garde SHALL lire dans la source de `MinosApplication` ses méthodes publiques d'instance dont le type de retour nomme un type de `minos-engine`. Dans une surface, un appel de même arité ou une référence `::nom` à l'une d'elles SHALL compter comme un usage du type rendu, dans le compteur de la règle A11. Un appel homonyme d'arité différente SHALL être ignoré.
 
@@ -18,6 +74,68 @@ Le garde SHALL lire dans la source de `MinosApplication` ses méthodes publiques
 - **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que cet appel n'est pas compté comme un usage de `GitIntelligence`
 
+### Requirement: Le contrôle hébergé est consommé par une façade applicative
+`minos-api`, `minos-cli` et `minos-mcp` SHALL obtenir le plan de contrôle de l'équipe par `TeamControlPlane` de `minos-application`, que rend `MinosApplication.teamControlPlane()`. Leurs sources de production SHALL NOT nommer ni utiliser un type de `com.minos.hosted`, par import, nom qualifié, chaînage d'accesseur ou en bytecode. Leurs sorties SHALL rester identiques.
+
+#### Scenario: Le moteur réimporté dans l'API
+- **GIVEN** une copie du dépôt où `LocalMinosTeamApi` importe de nouveau `com.minos.hosted.HostedRole`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur cette copie
+- **THEN** il échoue en A11 en nommant `minos-api`, le fichier et le type, absent de `ENGINE_TYPES_NAMED_BY_SURFACE`
+
+#### Scenario: Un accesseur du moteur chaîné par la CLI
+- **GIVEN** une copie du dépôt où `MinosCliRunner` appelle de nouveau `opened.hostedControlPlaneService()`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en A11 sur `hosted.HostedControlPlaneService` pour `minos-cli`
+
+#### Scenario: Aucune entrée hosted dans les tables
+- **GIVEN** le dépôt
+- **WHEN** `test_check_module_boundaries_ratchets.py` et `ModuleArchitectureTest` sont exécutés
+- **THEN** ils sont verts et aucune surface n'a d'entrée `hosted.*` dans l'une ou l'autre table
+
+#### Scenario: Sorties inchangées
+- **GIVEN** le dépôt
+- **WHEN** `A2SurfaceCharacterizationTest` et `RendererKeyOrderTest` sont exécutés
+- **THEN** `team.golden`, `retention.golden`, `api.golden` et `mcp-all-tools.golden` sont égaux à l'octet et l'ordre des clés est inchangé
+
+### Requirement: Les résultats de requête sont des modèles de lecture publiés
+Les seules entrées `query.*` des surfaces dans les deux tables A11 SHALL être `SymbolResult`, `UsageResult` et `RelationshipResult`, rendus par le port applicatif `ProjectSymbolQuery`. Chacune SHALL porter dans la table la raison écrite de sa présence (ADR 0057, point 6). Un autre type de `com.minos.query` nommé par une surface SHALL faire échouer A11.
+
+#### Scenario: Les entrées de requête du dépôt réel
+- **GIVEN** le dépôt
+- **WHEN** l'auto-test `test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** l'ensemble des entrées `query.*` de `ENGINE_TYPES_NAMED_BY_SURFACE` est inclus dans les trois modèles de lecture publiés
+
+#### Scenario: Un service de requête du moteur nommé par la CLI
+- **GIVEN** une copie du dépôt où un fichier de `minos-cli` importe `com.minos.query.SymbolQueryService`
+- **WHEN** le garde est exécuté sur cette copie
+- **THEN** il échoue en nommant `minos-cli`, le fichier et le type
+
+### Requirement: Les sous-packages de com.minos.storage appartiennent à minos-storage
+Hors de `minos-storage`, aucune source de production ni de test SHALL déclarer un package sous `com.minos.storage.` ; `minos-engine` garde le seul package racine `com.minos.storage`. Le garde SHALL refuser toute violation en nommant le fichier. Aucun package existant n'est renommé.
+
+#### Scenario: Sous-package du stockage dans le moteur
+- **GIVEN** un arbre de test où `minos-engine` (production), `minos-application` (production) ou `minos-bootstrap` (test) déclare `com.minos.storage.cache`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py StoragePackageIsolationRuleTest` est exécuté
+- **THEN** le garde échoue en nommant le fichier et « below com.minos.storage outside minos-storage »
+
+#### Scenario: Ports du stockage dans le moteur
+- **GIVEN** le dépôt, où `minos-engine` déclare `com.minos.storage` et `minos-storage` déclare `codec`, `home`, `local` et `postgresql`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il réussit
+
+### Requirement: La part de code concret du moteur est mesurée sans cliquet
+Le garde de frontières SHALL afficher à chaque exécution, pour `minos-engine`, les fichiers et lignes de production par genre de première déclaration de premier niveau (classe, interface, record, enum, `info`, `unclassified`). Il SHALL NOT échouer sur cette mesure (ADR 0068, décision D1 du 2026-10-28).
+
+#### Scenario: Mesure sur un arbre de test
+- **GIVEN** un arbre de test avec deux classes, une interface, un record, un enum, un `package-info` et un fichier sans déclaration dans `minos-engine`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py EngineConcreteCodeMeasureTest` est exécuté
+- **THEN** chaque fichier est compté une fois dans son genre avec toutes ses lignes, et les tests et les autres modules sont ignorés
+
+#### Scenario: Mesure du dépôt
+- **GIVEN** le dépôt
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il affiche la ligne `AUD-ARC-05 minos-engine concrete code` avec le nombre de fichiers de classes, leurs lignes et le total, et aucun fichier `unclassified`
+
 ### Requirement: Les accesseurs de MinosApplication typés moteur sont tenus par un cliquet
 La table `MINOS_APPLICATION_ENGINE_ACCESSORS` SHALL être vide, et les accesseurs publics d'instance de `MinosApplication` qui rendent un type de `minos-engine` SHALL être exactement ceux de cette table. Un accesseur hors table, un type rendu différent, une entrée sans accesseur ou une surface de production qui atteint la racine de composition SHALL faire échouer A11. `gitIntelligence`, `providerCatalog`, `scipArtifactImporter` et `hostedControlPlaneService` SHALL ne plus être publics.
 
@@ -28,12 +146,12 @@ La table `MINOS_APPLICATION_ENGINE_ACCESSORS` SHALL être vide, et les accesseur
 
 #### Scenario: Une surface qui atteint la racine de composition
 - **GIVEN** un arbre de test où une classe de production de `minos-cli` appelle `app.compositionRoot().gitIntelligence()` ou `MinosApplicationComposers.resolve()`
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en A11 en nommant le fichier et la racine de composition
 
 #### Scenario: Un accesseur retiré sans mettre la table à jour
 - **GIVEN** un arbre de test où la table liste un accesseur que `MinosApplication` ne déclare plus publiquement
-- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries.py` est exécuté
+- **WHEN** `python -m unittest scripts/architecture/test_check_module_boundaries_facade.py` est exécuté
 - **THEN** le cas de test vérifie que le garde échoue en demandant de retirer l'entrée
 
 #### Scenario: Entrée ajoutée à la table vide refusée
@@ -45,6 +163,76 @@ La table `MINOS_APPLICATION_ENGINE_ACCESSORS` SHALL être vide, et les accesseur
 - **GIVEN** le dépôt
 - **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
 - **THEN** il réussit et annonce 0 accesseur public typé moteur, et la CLI ne liste plus `registry.ProjectPathMappings` dans aucune table A11
+
+### Requirement: Les API d'infrastructure du JDK nommées par l'application le sont par liste fermée
+Le garde de frontières SHALL refuser toute source de production de `minos-application` qui nomme `java.net.HttpURLConnection`, un type de `java.net.http`, de `javax.tools` ou de `com.sun.source`, sauf les fichiers d'une table à cliquet. Un fichier hors table et une entrée qui ne nomme plus aucune de ces API SHALL faire échouer le garde. Commentaires et littéraux SHALL être ignorés.
+
+#### Scenario: Nouveau client HTTP dans l'application
+- **GIVEN** un arbre de test où une classe de production de `minos-application` importe `java.net.http.HttpClient`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant le fichier et l'API
+
+#### Scenario: Table du HEAD acceptée
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0 et annonce le nombre de fichiers de la table
+
+#### Scenario: Entrée périmée
+- **GIVEN** un arbre de test où un fichier de la table ne nomme plus aucune API surveillée
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en demandant de retirer l'entrée
+
+#### Scenario: Mention en commentaire
+- **GIVEN** un arbre de test où une classe hors table cite `javax.tools.ToolProvider` dans une Javadoc seulement
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde réussit
+
+### Requirement: Une classe d'adaptateur embarquée n'est nommée que par sa famille
+Le garde de frontières SHALL tenir la liste fermée des classes d'adaptateur que `minos-application` embarque, chacune avec sa justification. Aucune source de production de `minos-application` hors de cette liste SHALL nommer une de ces classes, par import, nom qualifié ou nom simple du même package. Chaque classe de `INFRASTRUCTURE_API_USERS` SHALL figurer dans cette liste par son nom simple. La liste SHALL seulement rétrécir.
+
+#### Scenario: Le service nomme de nouveau un adaptateur
+- **GIVEN** un arbre de test où `ProgramGraphService` instancie `FileProgramGraphProvider`
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant le fichier et la classe
+
+#### Scenario: Classes de la liste entre elles
+- **GIVEN** le dépôt après le changement, où `JavaProgramGraphEngine` nomme `JavaAstParser` et `SourceStateKeyMemo` nomme `JavaProgramGraphEngine.SourceStateKey`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** le garde réussit
+
+#### Scenario: Entrée sans classe
+- **GIVEN** un arbre de test où la liste nomme une classe absente des sources de production de `minos-application`
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en demandant de retirer l'entrée
+
+#### Scenario: Entrée retirée alors que la classe nomme encore une API d'infrastructure
+- **GIVEN** un arbre de test où `OllamaEmbeddingProvider` nomme `java.net.HttpURLConnection`, figure dans `INFRASTRUCTURE_API_USERS` et manque à la liste des adaptateurs embarqués
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant `OllamaEmbeddingProvider` et la liste où l'ajouter
+- **AND** le même arbre où une autre source nomme `OllamaEmbeddingProvider` échoue aussi
+
+### Requirement: Les classes de production de minos-app sont tenues par liste fermée
+Le garde de frontières SHALL tenir la liste fermée des classes de production de `minos-app`, chacune avec son rôle (assemblage, route de lancement, transport, configuration du backend du home). Une classe de production absente de la liste et une entrée sans classe SHALL faire échouer le garde. La liste SHALL NOT contenir de classe dont le rôle est une politique applicative.
+
+#### Scenario: Liste du HEAD acceptée
+- **GIVEN** le dépôt après le changement
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté
+- **THEN** il se termine avec le code 0 et annonce le nombre de classes de `minos-app`
+
+#### Scenario: Nouvelle classe dans l'assemblage
+- **GIVEN** un arbre de test où `minos-app` gagne une classe de production absente de la liste
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_adapters.py` est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant la classe et en demandant de la placer dans un module applicatif ou une surface
+
+#### Scenario: Entrée périmée
+- **GIVEN** un arbre de test où la liste nomme une classe que `minos-app` ne déclare plus
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en demandant de retirer l'entrée
+
+#### Scenario: Rôle absent
+- **GIVEN** un arbre de test où une entrée de la liste n'a pas de rôle écrit
+- **WHEN** l'auto-test du garde est exécuté
+- **THEN** le cas vérifie que le garde échoue en nommant l'entrée
 
 ### Requirement: La façade ne rend ni type du moteur ni racine de composition
 `MinosApplication` SHALL NOT déclarer, au niveau de son corps, de méthode publique ni de constructeur public dont le type de retour ou un paramètre nomme un type de `minos-engine` ou `MinosApplicationComposer` ; son `Builder` imbriqué est hors de cette règle. Ses ports et sa racine de composition SHALL rester lisibles par les seules classes du package `com.minos.application`. Le garde SHALL faire échouer A11 dès qu'une telle signature apparaît, en nommant la méthode et le type.
