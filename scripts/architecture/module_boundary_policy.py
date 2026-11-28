@@ -198,6 +198,8 @@ MODULES = POLICY.modules
 # and the surfaces, which may depend on it; no surface depends on another surface.
 ADAPTER_MODULES = POLICY.family("adapter")
 APPLICATION_MODULE = POLICY.single("application")
+# The core module: A11 holds the surfaces and the facade to its types, A12 and A18 read its sources.
+ENGINE_MODULE = "minos-engine"
 BOOTSTRAP_MODULE = POLICY.single("composition")
 ASSEMBLY_MODULE = POLICY.single("assembly")
 SURFACE_MODULES = POLICY.family("surface")

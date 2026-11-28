@@ -66,14 +66,15 @@ Le garde est un script d'entrée et des modules de règles qu'il importe, tous d
 | `module_boundary_policy.py` | lecture stricte de `module-boundaries.json` : modules et familles, `ALLOWED_DEPENDENCIES` dérivé de `allowedDependencies`, `groupId` du POM racine |
 | `module_boundary_sources.py` | lecture des sources Java partagée par les règles, échappements Unicode décodés : packages, imports (lus où qu'ils soient dans leur ligne), commentaires et littéraux, noms (lus en entier quand des blancs, des retours à la ligne ou des commentaires entourent leurs points, `.*` d'un joker compris ; une annotation placée dans un nom qualifié en sort et reste lue) |
 | `module_boundary_adapters.py` | A2 sources, R1/R2 (isolation du backend PostgreSQL), A10, A19, A20, isolation des packages de stockage |
-| `module_boundary_ratchets.py` | A11 à A14, A16, A18 et la mesure du code concret du moteur ; `PACKAGE_ROOTS_BY_MODULE` |
+| `module_boundary_ratchets.py` | A11 (types du moteur nommés par les surfaces) à A14, A16, A18 et la mesure du code concret du moteur ; `PACKAGE_ROOTS_BY_MODULE` |
+| `module_boundary_facade.py` | A11, lecture de la façade `MinosApplication` : accesseurs, signatures, champs, types imbriqués publics et imports joker, racine de composition atteinte par une surface ; `MINOS_APPLICATION_ENGINE_ACCESSORS` |
 | `module_boundary_packages.py` | A3, A7, A8, A15 et la disposition des sources Java ; `KNOWN_PACKAGE_CYCLES` |
 | `module_boundary_documents.py` | A9, A17 et le document généré `diagrams/module-dependencies.md` |
 | `java_escapes.py` | décodage des échappements Unicode d'un source Java, fins de ligne comprises, comme le compilateur avant toute lecture ; partagé avec `check-private-io.py` ; ni gate ni test |
 | `gate_runner.py` | lanceur partagé des gates d'architecture (le rapport sur stdout, ou une ligne d'échec sur stderr et le code 1), utilisé aussi par `check-private-io.py` |
 | `module_boundaries_testing.py` | fixtures communes des auto-tests ; ni gate ni test |
 
-Les auto-tests sont `test_check_module_boundaries.py` (règles des POM et câblage de `main()`), `test_check_module_boundaries_packages.py`, `test_check_module_boundaries_adapters.py`, `test_check_module_boundaries_ratchets.py` et `test_check_module_boundaries_documents.py`, plus `test_gate_runner.py` pour le lanceur partagé, chacun lancé par le job `invariants`. `test_check_module_boundaries_documents.py` vérifie aussi, sur le dépôt réel, que le dossier de capacité `frontieres-de-modules` et la liste ci-dessous nomment chaque étiquette de règle portée par les sources du garde, et que cette page nomme chaque fichier du garde.
+Les auto-tests sont `test_check_module_boundaries.py` (règles des POM et câblage de `main()`), `test_check_module_boundaries_packages.py`, `test_check_module_boundaries_adapters.py`, `test_check_module_boundaries_ratchets.py`, `test_check_module_boundaries_facade.py` et `test_check_module_boundaries_documents.py`, plus `test_gate_runner.py` pour le lanceur partagé, chacun lancé par le job `invariants`. `test_check_module_boundaries_documents.py` vérifie aussi, sur le dépôt réel, que le dossier de capacité `frontieres-de-modules` et la liste ci-dessous nomment chaque étiquette de règle portée par les sources du garde, et que cette page nomme chaque fichier du garde.
 
 `python scripts/architecture/check-module-boundaries.py` (job `invariants`) applique, sans compilation :
 
