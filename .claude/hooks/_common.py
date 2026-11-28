@@ -11,7 +11,7 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 PROTECTED_BRANCHES = ("main",)
 
@@ -30,18 +30,32 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def relative_posix(file_path: str) -> str | None:
-    """Chemin relatif au dépôt, séparateurs `/`, ou None s'il est hors du dépôt."""
+def working_tree(location: Path) -> Path | None:
+    """Racine de l'arbre de travail qui contient `location`, ou None hors du dossier principal.
+
+    Le premier dossier, de `location` vers le dossier principal, dont `.git` est un fichier : la marque d'un
+    arbre de travail lié (`.claude/worktrees/<nom>`). À défaut, le dossier principal.
+    """
+    root = project_root().resolve()
+    location = location.resolve()
+    if location != root and root not in location.parents:
+        return None
+    return next(folder for folder in (location, *location.parents) if folder == root or (folder / ".git").is_file())
+
+
+def locate(file_path: str, cwd: str = "") -> tuple[Path, str] | None:
+    """L'arbre de travail qui contient le fichier et son chemin dans cet arbre (séparateurs `/`).
+
+    Un chemin relatif part de `cwd`, le dossier de l'événement. None si le fichier est hors du dépôt.
+    """
     if not file_path:
         return None
-    root = project_root().resolve()
     candidate = Path(file_path)
     if not candidate.is_absolute():
-        candidate = root / candidate
-    try:
-        return PurePosixPath(candidate.resolve().relative_to(root).as_posix()).as_posix()
-    except ValueError:
-        return None
+        candidate = Path(cwd or project_root()) / candidate
+    candidate = candidate.resolve()
+    tree = working_tree(candidate.parent)
+    return None if tree is None else (tree, candidate.relative_to(tree).as_posix())
 
 
 def git(*arguments: str, timeout: float = 5.0, directory: Path | None = None) -> str:

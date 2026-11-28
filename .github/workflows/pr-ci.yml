@@ -225,6 +225,10 @@ jobs:
       - name: Claude Code push guard self-test (temporary Git repositories and worktrees)
         run: python scripts/quality/test_guard_bash_hook.py -v
 
+      # The other hooks judge a file, or a session, in the working tree that holds it.
+      - name: Claude Code worktree hooks self-test (protected paths, gate reminders, session context)
+        run: python scripts/quality/test_claude_hooks_worktree.py -v
+
       - name: CI wiring, ruleset comparison, plugin gate and Docker gate self-tests
         run: |
           python scripts/quality/test_check_ci_wiring.py -v
