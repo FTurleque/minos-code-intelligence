@@ -5,9 +5,9 @@ metadata:
   type: project
 ---
 
-Les douze sprints de l'audit 2026-11-15 sont fusionnés et archivés au 2026-11-28. Suites d'AUD-ARC-17 au 2026-11-28 :
-cinq changements fusionnés (#835, #836, #837) et non archivés. Les restes
-vivent dans `docs/project/audits/2026-11-15/SUIVI.md` (colonne « Statut », « Tâches manuelles ») et dans les tâches non
+Les douze sprints de l'audit 2026-11-15 et les cinq changements de suite d'AUD-ARC-17 (#835, #836, #837) sont
+fusionnés et archivés au 2026-11-28. La proposition de texte pour ARCH-0087 attend le propriétaire (section
+« Sprint 12 » du SUIVI). Les restes vivent dans `docs/project/audits/2026-11-15/SUIVI.md` (colonne « Statut », « Tâches manuelles ») et dans les tâches non
 cochées des archives `openspec/changes/archive/2026-11-{19,20,24,26}-*`.
 
 **Why:** des changements fusionnés sont restés actifs des jours faute d'archivage (sprints 2, 3, 4, 7) : l'utilisateur
