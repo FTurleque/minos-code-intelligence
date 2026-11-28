@@ -34,7 +34,7 @@ SPLAT = re.compile(r"@[A-Za-z_]\w*")
 REDIRECTION_OPERATOR = re.compile(r">>?(&\d)?|<")
 INTERPRETER_PIPE = re.compile(r"[ \t]*\|\s*(?:iex|invoke-expression|bash|sh|pwsh|powershell|cmd|ssh)\b", re.IGNORECASE)
 ASSIGNMENT_OPERATOR = re.compile(r"(?:[-+*/%]|\?\?)?=")
-ASSIGNMENT_TARGET = re.compile(rf"^(?:\[[^\]]*\])*{UNKNOWN}")  # `$x`, `[int]$x`, `$h['k']`
+ASSIGNMENT_TARGET = re.compile(rf"^(?:\[(?:[^\[\]]|\[[^\[\]]*\])*\])*{UNKNOWN}")  # `$x`, `[int]$x`, `$h['k']`
 GIT_VARIABLE = re.compile(r"^env(?::\\?|\.)GIT_(?:DIR|WORK_TREE)$", re.IGNORECASE)
 ITEM_WRITERS = ("set-item", "si", "new-item", "ni", "set-content", "sc")
 BLOCK_KEYWORDS = ("if", "elseif", "else", "foreach", "for", "while", "switch", "try", "catch", "finally", "do",
@@ -408,7 +408,7 @@ def location_target(arguments: list[str]) -> str | None:
         if option in ("-erroraction", "-ea"):
             index += 2
             continue
-        if option != "-passthru":
+        if option != "-passthru" and not option.startswith(("-erroraction:", "-ea:")):
             kept.append(arguments[index])
         index += 1
     if len(kept) == 2 and kept[0].lower() in PATH_PARAMETERS:
@@ -444,6 +444,8 @@ def powershell_command(words: list[str], separator: str, grouped: bool) -> Simpl
         words = ["popd"] if target is None else ["cd", target]
     elif name in UNFOLLOWED_CHANGES or re.fullmatch(r"[a-z]:", name):
         words = ["popd"]
+    elif UNKNOWN in words[0] and ["push"] in (words[1:2], words[3:4] if words[1:2] == ["-C"] else []):
+        words = ["git", *words[1:]]  # `& $git push` : le programme est jugé comme git
     else:
         program = re.split(r"[\\/]", name)[-1].removesuffix(".exe")
         if program in ("git", "gh"):
@@ -452,6 +454,7 @@ def powershell_command(words: list[str], separator: str, grouped: bool) -> Simpl
 
 
 def powershell_commands(command: str) -> list[SimpleCommand]:
+    command = command.replace("\r\n", "\n")  # `` en fin de ligne continue aussi en CRLF
     try:
         statements = PowerShellReader(command).read()
     except (Unreadable, RecursionError):

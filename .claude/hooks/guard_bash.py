@@ -128,6 +128,13 @@ def source_branch(directory: Path | None, known: str | None) -> str:
     return branch
 
 
+def check_destinations_are_read(remote: list[str], refspecs: list[str]) -> None:
+    named = [spec.split(":", 1)[-1] for spec in refspecs] or remote  # seule, la variable porte tout
+    if any(UNKNOWN in name for name in named):
+        permission("deny", "Push refusé : sa destination dépend d'une variable ou d'une expression PowerShell. "
+                           "Écrire la branche (`git push origin <branche>`) ou `git push origin HEAD`.")
+
+
 def check_git_push(args: list[str], directory: Path | None, known: str | None) -> None:
     args = without_redirections(args)
     if any(a == "--force" or a.startswith("--force=") or (re.fullmatch(r"-[a-zA-Z]+", a) and "f" in a) for a in args):
@@ -144,10 +151,7 @@ def check_git_push(args: list[str], directory: Path | None, known: str | None) -
                 permission("deny", "Suppression d'un tag de release refusée : les tags vX.Y.Z sont immuables.")
     positional = positional_arguments(args)
     refspecs = [spec.lstrip("+") for spec in positional[1:]]
-    named = [spec.split(":", 1)[-1] for spec in refspecs] or positional[:1]  # seule, la variable porte tout
-    if any(UNKNOWN in name for name in named):
-        permission("deny", "Push refusé : sa destination dépend d'une variable ou d'une expression PowerShell. "
-                           "Écrire la branche (`git push origin <branche>`) ou `git push origin HEAD`.")
+    check_destinations_are_read(positional[:1], refspecs)
     if any(a in ("--all", "--mirror", "--branches") for a in args) or ":" in refspecs:
         permission("deny", "Push de toutes les branches refusé : il inclut main. Nommer la branche thématique.")
     for spec in refspecs:
@@ -166,7 +170,9 @@ def check_git_push(args: list[str], directory: Path | None, known: str | None) -
 
 
 def check_git(sub: str, rest: list[str], words: list[str], directory: Path | None, known: str | None) -> None:
-    if sub == "push":
+    if UNKNOWN in sub:
+        permission("ask", "La sous-commande de git est une variable ou un splat que le garde ne lit pas. Confirmer.")
+    elif sub == "push":
         check_git_push(rest, directory, known)
     elif sub in ("commit", "merge", "rebase", "cherry-pick", "revert", "pull"):
         if "--no-verify" in rest or (sub == "commit" and "-n" in rest):

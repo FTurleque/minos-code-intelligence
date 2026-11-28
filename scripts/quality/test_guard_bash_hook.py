@@ -337,6 +337,31 @@ class PowerShellMainFolderOnMainTest(GuardCase):
             with self.subTest(command=command):
                 self.assertEqual("ask", self.decision(command, tree))
 
+    def test_crlf_line_endings_are_read_like_lf(self) -> None:
+        tree = self.layout.tree
+        for command in ("git push `\r\n  origin main", "git push origin `\r\n  main", "git push `\r\n  --force",
+                        "git push `\r\n  --no-verify", "gh pr merge 12 `\r\n  --admin"):
+            self.refused(command, tree)
+        self.accepted("git push `\r\n  origin fix/theme", self.layout.root)
+        self.accepted("git commit -m @'\r\ngit push origin main\r\n'@\r\ngit push", tree)
+
+    def test_program_or_subcommand_held_by_a_variable(self) -> None:
+        tree = self.layout.tree
+        for command in ("& $git push origin main", "& $git push --force origin fix/theme",
+                        "$g = 'git'; & $g -C . push origin main"):
+            self.refused(command, tree)
+        self.accepted("& $git push origin fix/theme", self.layout.root)
+        self.accepted("if ($mode -eq 'push') { git status }", self.layout.root)
+        for command in ("$sub = 'push'; git $sub origin main", "$a = 'push','origin','main'; git @a"):
+            with self.subTest(command=command):
+                self.assertEqual("ask", self.decision(command, tree))
+
+    def test_typed_targets_and_joined_options(self) -> None:
+        tree = self.layout.tree
+        self.refused("[string[]]$out = git push origin main", tree)
+        self.refused("[int[]]$n = 1; [object[]]$o = git push --force", tree)
+        self.accepted(f"Set-Location {literal(tree)} -ErrorAction:Stop; git push", self.layout.root)
+
     def test_too_deep_nesting_is_read_literally(self) -> None:
         self.refused("(" * 5000 + "\ngit push origin main\n" + ")" * 5000, self.layout.tree)
 
