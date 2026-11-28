@@ -25,6 +25,7 @@ Relu au commit `4f4cac814` (PR #829), le 2026-11-27.
 1. **Plus large que le constat.** L'audit cite E2 et E4. La recherche sur le dossier trouve aussi des nombres dans E1 (`:220`) et dans la ligne de traçabilité des cycles (`:122`) : ils citent la spécification, mais le lecteur ne peut pas les distinguer d'un décompte de la politique, et ils vieillissent de même.
 2. **E2 est déjà résolu.** Sa colonne « Suite » dit que le scénario fautif a été réécrit ; l'écart reste listé ouvert. Il passe « Clos », sans nombre.
 3. **E8 cite comme preuve ce qui n'existe plus.** Le défaut restant n'est pas dans `MinosApplication.java` mais dans les scénarios de la spécification (`:708`, `:731`) qui supposent ces accesseurs.
+4. **Renvoi à E2.** La ligne de traçabilité « Les packages de `minos-application` sont séparables » (`frontieres-de-modules.md:127`) cite « compte de modules faux (E2) » : la mention suit la clôture de E2.
 
 ## Décisions
 
@@ -55,6 +56,7 @@ L'exigence en vigueur « Le dossier de la capacité nomme chaque règle du garde
 
 ## Traçabilité
 
-| Constat | Exigence | Tâches | Preuve attendue |
+| Constat | Exigence | Tâches | Preuve |
 |---|---|---|---|
-| AUD-ARC-18 | frontieres-de-modules › Le dossier des frontières n'écrit aucun décompte de la politique | 1.1 à 1.4 | cas rouge puis vert ; mutation en mémoire refusée |
+| AUD-ARC-18 | frontieres-de-modules › Le dossier des frontières n'écrit aucun décompte de la politique (nombres en chiffres) | 1.1 à 1.4 | `scripts/architecture/test_check_module_boundaries_documents.py#test_the_dossier_writes_no_count_of_the_policy` (rouge sur les lignes 122, 220 et 221 avant correction du dossier) ; `#test_a_count_written_back_into_the_dossier_is_seen` ; sur une copie du dépôt avec la ligne ajoutée, code 1 et ligne nommée |
+| AUD-ARC-18 | même exigence, preuves d'écart sans méthode que `MinosApplication` ne déclare pas | 1.2, 1.4 | commande `git grep` du troisième scénario sans résultat ; aucun auto-test |
