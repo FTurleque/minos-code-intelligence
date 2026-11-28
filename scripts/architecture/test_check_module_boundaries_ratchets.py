@@ -16,7 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from module_boundaries_testing import RATCHETS, RatchetTreeTestCase, _MODULE
+from module_boundaries_testing import (
+    RATCHETS, RatchetTreeTestCase, _MODULE, annotated_before_the_last_part, cut_around_dots, escaped,
+    second_on_its_line)
 
 
 class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
@@ -74,6 +76,89 @@ class EngineTypesNamedBySurfaceRuleTest(RatchetTreeTestCase):
     def test_a_wildcard_import_of_an_engine_package_is_refused(self):
         self.write("minos-api", "com.minos.api", "Wide", "final class Wide { }", ["com.minos.hosted.*"])
         self.refused(self.check, "A11", "wildcard", "com.minos.hosted.*")
+
+    PORTS = "com.minos.orchestration.IndexingRuntimePorts"
+
+    def write_ports(self):
+        self.write("minos-engine", "com.minos.orchestration", "IndexingRuntimePorts",
+                   "public final class IndexingRuntimePorts { public interface IndexerExecutor { } }")
+
+    def test_a_wildcard_import_of_an_engine_type_is_refused_in_a_surface_and_a_contract_module(self):
+        # AUD-ARC-17: the member types brought in by the wildcard are written by their simple name only.
+        self.write_ports()
+        for module, target in (("minos-cli", self.PORTS), ("minos-nexus", self.PORTS),
+                               ("minos-api", f"{self.PORTS}.IndexerExecutor")):
+            package = "com.minos." + module.removeprefix("minos-")
+            source = f"{module}/src/main/java/{package.replace('.', '/')}/Wide.java"
+            with self.subTest(module=module, target=target):
+                self.write(module, package, "Wide", "final class Wide { IndexerExecutor e; }", [f"{target}.*"])
+                self.refused(self.check, "A11", f"{module}: wildcard import of a minos-engine package or type",
+                             f"{source} -> {target}.*", f"uses {self.PORTS}, absent from ENGINE_TYPES_NAMED_BY_SURFACE")
+                (self.root / source).unlink()
+
+    def test_a_wildcard_import_of_a_listed_engine_type_is_refused_without_asking_to_remove_the_entry(self):
+        self.write_ports()
+        self.write("minos-cli", "com.minos.cli", "Wide", "final class Wide { IndexerExecutor e; }", [f"{self.PORTS}.*"])
+        listed = {"minos-cli": {"query.SymbolResult": 1, "orchestration.IndexingRuntimePorts": 1}}
+        message = self.refused(lambda: self.check(listed), "A11", "wildcard", f"Wide.java -> {self.PORTS}.*")
+        self.assertNotIn("no longer named", message)
+        self.assertNotIn("listed for", message)
+
+    def test_wildcard_imports_outside_the_engine_and_static_ones_are_not_refused(self):
+        self.write("minos-domain", "com.minos.domain", "Kind", "public final class Kind { public enum Level { LOW } }")
+        self.write("minos-cli", "com.minos.cli", "Wide", "final class Wide { }",
+                   ["java.util.Map.*", "com.minos.domain.Kind.*", "static com.minos.query.SymbolResult.*"])
+        # The static wildcard names members of the listed type: a use of it, counted.
+        self.assertEqual(1, self.check({"minos-cli": {"query.SymbolResult": 2}})["minos-cli"])
+
+    def test_a_wildcard_import_following_another_on_its_line_is_refused(self):
+        self.write("minos-cli", "com.minos.cli", "Wide", "final class Wide { HostedRole r; }",
+                   [second_on_its_line("com.minos.hosted.*")])
+        self.refused(self.check, "A11", "wildcard", "Wide.java -> com.minos.hosted.*")
+
+    def test_a_name_cut_around_its_dots_is_read_in_a_surface(self):
+        # AUD-ARC-17: blanks, line breaks and comments may surround the dots of a name.
+        role = "com.minos.hosted.HostedRole"
+        for form, written in cut_around_dots(role).items():
+            for use, body, imports in (("import", "final class Cut { HostedRole r; }", [written]),
+                                       ("qualified name", f"final class Cut {{ {written} r; }}", [])):
+                with self.subTest(form=form, use=use):
+                    self.write("minos-cli", "com.minos.cli", "Cut", body, imports)
+                    self.refused(self.check, "A11", "Cut.java", f"uses {role}, absent from")
+
+    def test_a_wildcard_import_cut_around_its_dots_is_refused(self):
+        for form, written in cut_around_dots("com.minos.hosted.*").items():
+            with self.subTest(form=form):
+                self.write("minos-cli", "com.minos.cli", "Cut", "final class Cut { HostedRole r; }", [written])
+                self.refused(self.check, "A11", "wildcard", "Cut.java -> com.minos.hosted.*")
+
+    def test_a_cut_name_in_a_comment_or_a_literal_is_ignored_and_before_an_ellipsis_is_read(self):
+        cut = "com . minos . hosted . HostedRole"
+        self.write("minos-cli", "com.minos.cli", "Quiet", f'final class Quiet {{ // {cut}\n String s = "{cut}"; }}')
+        self.assertEqual(1, self.check()["minos-cli"])
+        self.write("minos-cli", "com.minos.cli", "Quiet", f"final class Quiet {{ void f({cut} ... roles) {{ }} }}")
+        self.refused(self.check, "A11", "Quiet.java", "uses com.minos.hosted.HostedRole, absent from")
+
+    def refused_bodies(self, bodies):
+        for form, body in bodies.items():
+            with self.subTest(form=form):
+                self.write("minos-cli", "com.minos.cli", "Cut", f"final class Cut {{ {body} }}")
+                self.refused(self.check, "A11", "Cut.java", "uses com.minos.hosted.HostedRole, absent from")
+
+    def test_a_name_written_with_a_unicode_escape_is_read(self):
+        # AUD-ARC-17: Java translates unicode escapes before it reads anything else.
+        self.refused_bodies({
+            "escaped dot": f"com.minos.hosted{escaped('.')}HostedRole r;",
+            "escaped letter": f"com.minos.hosted.{escaped('H')}ostedRole r;"})
+
+    def test_an_annotation_inside_a_qualified_name_does_not_hide_it(self):
+        role = "com.minos.hosted.HostedRole"
+        self.refused_bodies({form: f"{written} r;" for form, written in annotated_before_the_last_part(role).items()})
+
+    def test_a_type_named_by_an_annotation_inside_a_name_is_still_read(self):
+        self.refused_bodies({
+            "annotation type": "java.util.@com.minos.hosted.HostedRole List r;",
+            "annotation argument": "java.util.@Tag(com.minos.hosted.HostedRole.class) List r;"})
 
     def test_a_dead_entry_is_refused(self):
         listed = {"minos-cli": {"query.SymbolResult": 1, "hosted.HostedRole": 1}}
@@ -333,6 +418,11 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
                      ["com.minos.application.MinosApplicationComposers"])
         self.refused(lambda: self.check_accessors(self.LISTED), "A11", "Bootstrap.java")
 
+    def test_the_composition_root_written_with_a_unicode_escape_is_refused(self):
+        self.surface("minos-cli", "Bootstrap", "final class Bootstrap { Object s(MinosApplication app) { "
+                     f"return app.{escaped('c')}ompositionRoot(); }} }}")
+        self.refused(lambda: self.check_accessors(self.LISTED), "A11", "Bootstrap.java", "composition root")
+
     def test_the_composition_root_in_a_comment_a_literal_or_a_test_is_ignored(self):
         self.surface("minos-mcp", "Quiet", 'final class Quiet { // app.compositionRoot()\n '
                      'String s = "MinosApplicationComposers"; }')
@@ -372,6 +462,10 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
         self.write("minos-engine", "com.minos.registry", "ProjectRegistry", "public interface ProjectRegistry { }")
         self.write("minos-application", "com.minos.application", "MinosApplication",
                    "public final class MinosApplication {\n" + members + "\n}", list(imports))
+
+    def test_a_facade_type_written_with_a_unicode_escape_is_read(self):
+        self.application_with(f"    public {escaped('P')}rojectRegistry leak() {{ return null; }}")
+        self.refused(lambda: self.check_accessors({}), "A11", "MinosApplication.leak", "registry.ProjectRegistry")
 
     def test_a_public_signature_taking_an_engine_type_is_refused(self):
         # AUD-ARC-13: the facade neither returns nor takes an engine type.
@@ -450,6 +544,63 @@ class MinosApplicationAccessorRatchetTest(MinosApplicationTreeTestCase):
                      "imports com.minos.registry.*")
         self.application_with("    public void name(String value) { }", ["java.util.*"])
         self.assertEqual(0, self.check_accessors({}))
+
+    def test_a_wildcard_import_of_the_facade_cut_around_its_dots_is_refused(self):
+        for form, written in cut_around_dots("com.minos.registry.*").items():
+            with self.subTest(form=form):
+                self.application_with("    public void e(ProjectRegistry r) { }", [written])
+                self.refused(lambda: self.check_accessors({}), "A11", "imports com.minos.registry.*")
+
+    def application_source(self, header, members):
+        """MinosApplication with a header written as is: package line and imports."""
+        self.application_with(members, ())
+        source = RATCHETS.minos_application_source(self.root, "com.minos")
+        source.write_text(f"{header}\npublic final class MinosApplication {{\n{members}\n}}\n", encoding="utf-8")
+
+    def test_an_import_is_read_wherever_it_stands_on_its_line(self):
+        # AUD-ARC-17: Java does not tie an import to the start of a line.
+        self.write("minos-engine", "com.minos.orchestration", "IndexingRuntimePorts",
+                   "public final class IndexingRuntimePorts { public interface IndexerExecutor { } }")
+        package = "package com.minos.application;"
+        registry = "import com.minos.registry.ProjectRegistry;"
+        leak = "    public ProjectRegistry leak() { return null; }"
+        returned = ("MinosApplication.leak", "registry.ProjectRegistry")
+        variants = (
+            ("after an import", f"{package}\nimport java.util.List; {registry}", leak, returned),
+            ("glued to an import", f"{package}\nimport java.util.List;{registry}", leak, returned),
+            ("after the package", f"{package} {registry}", leak, returned),
+            ("after a lone semicolon", f"{package}\n; {registry}", leak, returned),
+            ("after a comment closing on the line of an import",
+             f"{package}\nimport java.util.List; /* note\n */ {registry}", leak, returned),
+            ("wildcard", f"{package}\nimport java.util.List; import com.minos.registry.*;", leak,
+             ("imports com.minos.registry.*",)),
+            ("static", f"{package}\nimport java.util.List; "
+             "import static com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;",
+             "    public IndexerExecutor leak() { return null; }",
+             ("MinosApplication.leak", "orchestration.IndexingRuntimePorts")),
+        )
+        for position, header, members, fragments in variants:
+            with self.subTest(position=position):
+                self.application_source(header, members)
+                self.refused(lambda: self.check_accessors({}), "A11", *fragments)
+
+    def test_an_import_written_in_a_comment_or_a_literal_is_not_an_import(self):
+        leak = "; import com.minos.registry.*;"
+        self.application_source(f"package com.minos.application; // {leak}\n/* {leak} */",
+                                f'    String line = "{leak}";\n    String block = """\n        {leak}\n        """;')
+        self.assertEqual(0, self.check_accessors({}))
+        self.assertEqual({"minos-api": 0, "minos-cli": 0, "minos-explorer": 0, "minos-mcp": 0, "minos-nexus": 0},
+                         _MODULE.check_engine_types_named_by_surfaces(self.root, listed={}))
+
+    def test_an_escaped_quote_does_not_close_a_text_block(self):
+        # The text of a block goes on after an escaped quote: what follows is still a literal.
+        leak = "; import com.minos.registry.*;"
+        for position, text in (("before three quotes", f'\\""" {leak}\n        '),
+                               ("before the closing quotes", f'{leak}\n        \\"')):
+            with self.subTest(position=position):
+                self.application_source("package com.minos.application;",
+                                        f'    String block = """\n        {text}""";\n    String after = "{leak}";')
+                self.assertEqual(0, self.check_accessors({}))
 
     def refused_declarations(self, variants, *fragments, imports=("com.minos.registry.ProjectRegistry",)):
         for members in variants:
@@ -695,6 +846,15 @@ class ProcessLauncherRuleTest(RatchetTreeTestCase):
         self.refused(self.check, "A12", "minos-engine/io.Redirects")
         self.assertEqual(2, self.check({**self.LISTED, "minos-engine/io.Redirects": 0}))
 
+    def test_a_launcher_written_with_a_unicode_escape_is_refused(self):
+        # AUD-ARC-17: an escape hides no word, and an escaped line break ends a line comment.
+        bodies = {"EscapedLetter": f'Object p = new {escaped("P")}rocessBuilder("x");',
+                  "EscapedBreak": f'// {escaped(chr(10))} Object p = new ProcessBuilder("x");\n'}
+        for name, body in bodies.items():
+            with self.subTest(launcher=name):
+                self.write("minos-engine", "com.minos.io", name, f"final class {name} {{ {body} }}")
+                self.refused(self.check, "A12", f"minos-engine/io.{name}", "is not in PROCESS_LAUNCHERS")
+
     def test_a_negative_count_is_refused(self):
         self.refused(lambda: self.check({"minos-engine/io.PrivateLocalStorage": -1}), "A12", "not a count")
 
@@ -818,6 +978,47 @@ class AdapterTypesNamedByAdapterRuleTest(RatchetTreeTestCase):
                    "final class Leak { Object s = new com.minos.storage.local.store.SnapshotIntegrityService(); }")
         self.refused(self.check, "A13", "minos-provider-scip -> minos-storage",
                      "com.minos.storage.local.store.SnapshotIntegrityService")
+
+    def test_a_wildcard_import_of_a_type_of_another_adapter_is_refused(self):
+        # AUD-ARC-17: a nested type counts as its top-level type, and the wildcard that brings it in is refused.
+        codec = "com.minos.storage.local.store.SnapshotCodec"
+        for target in (codec, f"{codec}.Version"):
+            with self.subTest(target=target):
+                self.write("minos-provider-scip", "com.minos.adapter.scip", "Store", "final class Store { }",
+                           [f"{target}.*"])
+                source = "minos-provider-scip/src/main/java/com/minos/adapter/scip/Store.java"
+                message = self.refused(self.check, "A13", "minos-provider-scip -> minos-storage: wildcard import",
+                                       f"{source} -> {target}.*")
+                self.assertNotIn("no longer named", message)
+
+    def test_a_wildcard_import_of_another_adapter_following_another_on_its_line_is_refused(self):
+        self.write("minos-provider-scip", "com.minos.adapter.scip", "Wide", "final class Wide { }",
+                   [second_on_its_line("com.minos.storage.local.store.*")])
+        self.refused(self.check, "A13", "wildcard", "Wide.java -> com.minos.storage.local.store.*")
+
+    def test_a_name_of_another_adapter_cut_around_its_dots_is_read(self):
+        # AUD-ARC-17: blanks, line breaks and comments may surround the dots of a name.
+        service = "com.minos.storage.local.store.SnapshotIntegrityService"
+        for form, written in cut_around_dots(service).items():
+            for use, body, imports in (("import", "final class Cut { SnapshotIntegrityService s; }", [written]),
+                                       ("qualified name", f"final class Cut {{ {written} s; }}", [])):
+                with self.subTest(form=form, use=use):
+                    self.write("minos-provider-scip", "com.minos.adapter.scip", "Cut", body, imports)
+                    self.refused(self.check, "A13", "minos-provider-scip -> minos-storage", service)
+
+    def test_a_wildcard_import_of_another_adapter_cut_around_its_dots_is_refused(self):
+        package = "com.minos.storage.local.store"
+        for form, written in cut_around_dots(f"{package}.*").items():
+            with self.subTest(form=form):
+                self.write("minos-provider-scip", "com.minos.adapter.scip", "Cut", "final class Cut { }", [written])
+                self.refused(self.check, "A13", "wildcard", f"Cut.java -> {package}.*")
+
+    def test_a_name_of_another_adapter_interrupted_by_an_annotation_is_read(self):
+        service = "com.minos.storage.local.store.SnapshotIntegrityService"
+        for form, written in annotated_before_the_last_part(service).items():
+            with self.subTest(form=form):
+                self.write("minos-provider-scip", "com.minos.adapter.scip", "Cut", f"final class Cut {{ {written} s; }}")
+                self.refused(self.check, "A13", "minos-provider-scip -> minos-storage", service)
 
     def test_a_couple_absent_from_the_table_is_refused(self):
         self.write("minos-integration-git", "com.minos.integration.git", "Leak", "final class Leak { SnapshotCodec c; }",

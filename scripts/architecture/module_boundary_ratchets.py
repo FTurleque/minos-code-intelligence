@@ -18,8 +18,9 @@ from module_boundary_policy import (
     repository_group_id)
 from module_boundary_sources import (
     production_sources,
-    COMMENTS_AND_LITERALS, SOURCE_IMPORT, blank_comments_and_literals, call_argument_count, declared_package,
-    literals_as_tokens, production_types, qualified_name_pattern, resolve_adapter_class)
+    COMMENTS_AND_LITERALS, QUALIFIER_GAP, SOURCE_IMPORT, blank_comments_and_literals, call_argument_count,
+    ANNOTATION_NAME, annotation_end, declared_package, literals_as_tokens, name_reading_code, production_types,
+    qualified_name_pattern, read_java, resolve_adapter_class)
 
 
 # A11 to A14 — debt held by ratchets (AUD-ARC-01, -05, -08, -12). Each table lists, from the production sources, what
@@ -147,9 +148,6 @@ FIELD_NAME = re.compile(r"(?<![\w$])" + JAVA_IDENTIFIER + r"(?=(?:\s*\[\s*\])*\s
 TYPE_DECLARATION = re.compile(r"(?<![\w$.])(?:class|interface|enum|record)\s+(" + JAVA_IDENTIFIER + r")")
 # The public nested types MinosApplication may declare: the Builder customises the composition (A11).
 FACADE_PUBLIC_NESTED_TYPES = frozenset({"Builder"})
-ANNOTATION_NAME = re.compile(r"@(?!\s*interface\b)\s*[\w$]+(?:\s*\.\s*[\w$]+)*")
-ANNOTATION_ARGUMENTS = re.compile(r"\s*\(")
-QUALIFIER_GAP = re.compile(r"(?<=[\w$])\s*\.\s*(?=[\w$])")
 RETURN_TYPE_WORD = re.compile(r"\b[A-Z]\w*(?:\.[A-Z]\w*)*")
 ACCESSOR_USE = re.compile(r"(::|\.)\s*([A-Za-z_]\w*)\b(\s*\()?")
 
@@ -316,19 +314,8 @@ def without_annotations(code: str) -> str:
     for match in ANNOTATION_NAME.finditer(code):
         if match.start() < position:  # an annotation inside the arguments of the previous one
             continue
-        end = match.end()
-        arguments = ANNOTATION_ARGUMENTS.match(code, end)
-        if arguments:
-            depth = 0
-            for index in range(arguments.end() - 1, len(code)):
-                depth += {"(": 1, ")": -1}.get(code[index], 0)
-                if depth == 0:
-                    end = index + 1
-                    break
-            else:
-                fail("A11 unbalanced MinosApplication annotation")
         kept += [code[position:match.start()], " "]
-        position = end
+        position = annotation_end(code, match, "A11 unbalanced MinosApplication annotation")
     return "".join(kept) + code[position:]
 
 
@@ -338,7 +325,7 @@ def minos_application_code(root: Path, group: str) -> str | None:
     source = minos_application_source(root, group)
     if not source.is_file():
         return None
-    return QUALIFIER_GAP.sub(".", without_annotations(literals_as_tokens(source.read_text(encoding="utf-8"))))
+    return QUALIFIER_GAP.sub(".", without_annotations(literals_as_tokens(read_java(source))))
 
 
 def engine_type_reader(root: Path, group: str, code: str):
@@ -503,9 +490,10 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str], qual
                           naming_package: str = "") -> tuple[dict[str, set[str]], list[str]]:
     """Target types the production sources of one module use (type -> files): by single or static import, by fully
     qualified name and, when accessors are given, by a call of a MinosApplication accessor that returns the type. Also
-    every wildcard import of a target package ('file -> package.*'). Comments and string literals are ignored; a nested
-    type counts as its top-level type. A naming package (dotted, under the source root) restricts the naming files to
-    that package and its subpackages."""
+    every non-static wildcard import of a target package or type, nested types included ('file -> target.*'); one on a
+    type is a use of that type too. Comments and string literals are ignored; a nested type counts as its top-level
+    type. A naming package (dotted, under the source root) restricts the naming files to that package and its
+    subpackages."""
     named: dict[str, set[str]] = {}
     wildcards: list[str] = []
     packages = set(targets.values())
@@ -514,15 +502,18 @@ def types_named_by_module(root: Path, module: str, targets: dict[str, str], qual
     if not naming_root.is_dir():
         return named, wildcards
     for source in sorted(naming_root.rglob("*.java")):
-        text = source.read_text(encoding="utf-8")
-        code = COMMENTS_AND_LITERALS.sub(" ", text)
+        text = read_java(source)
+        code = name_reading_code(text, source)
         relative = source.relative_to(root).as_posix()
         names = []
         for static, name, wildcard in SOURCE_IMPORT.findall(code):
             if wildcard and not static:
-                if name in packages:
+                # The simple names such an import brings in are written nowhere else: refused. On a type, they all
+                # belong to it (a nested type counts as its top-level type), so the file also uses that type.
+                if name in packages or resolve_adapter_class(name, targets):
                     wildcards.append(f"{relative} -> {name}.*")
-                continue
+                if name in packages:
+                    continue
             names.append(name)
         names += qualified_name.findall(SOURCE_IMPORT.sub(" ", code))
         if accessors:
@@ -550,7 +541,8 @@ def named_type_ratchet_problems(rule: str, label: str, table: str, root: Path, n
                  "use it" for name, count in sorted(listed.items())
                  if isinstance(count, bool) or not isinstance(count, int) or count < 1]
     named, wildcards = types_named_by_module(root, naming, targets, qualified_name, accessors, group, naming_package)
-    problems += [f"{label}: wildcard import of a {target} package {wildcard}" for wildcard in wildcards]
+    problems += [f"{label}: wildcard import of a {target} package or type {wildcard}; import each type by name"
+                 for wildcard in wildcards]
     for qualified in sorted(named):
         name = qualified.removeprefix(prefix)
         files = sorted(named[qualified])
@@ -571,7 +563,8 @@ def check_engine_types_named_by_surfaces(root: Path = ROOT, group_id: str | None
                                          listed: dict[str, dict[str, int]] | None = None) -> dict[str, int]:
     """A11 — each surface and each contract module uses only the minos-engine types of its
     ENGINE_TYPES_NAMED_BY_SURFACE list, each from the listed number of files; a call of a MinosApplication accessor
-    counts as a use of the engine type it returns."""
+    counts as a use of the engine type it returns. A non-static wildcard import of a minos-engine package or type
+    fails."""
     listed = ENGINE_TYPES_NAMED_BY_SURFACE if listed is None else listed
     group = group_id or repository_group_id(root)
     qualified_name = qualified_name_pattern(group)
@@ -642,7 +635,7 @@ def check_minos_application_accessors(root: Path = ROOT, group_id: str | None = 
         if not source_root.is_dir():
             continue
         for source in sorted(source_root.rglob("*.java")):
-            if COMPOSITION_ROOT_USE.search(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))):
+            if COMPOSITION_ROOT_USE.search(COMMENTS_AND_LITERALS.sub(" ", read_java(source))):
                 problems.append(f"{source.relative_to(root).as_posix()} reaches the composition root "
                                 "(compositionRoot() or MinosApplicationComposer); go through an application facade")
     if problems:
@@ -683,7 +676,7 @@ def check_process_launchers(root: Path = ROOT, group_id: str | None = None,
     prefix = (group_id or repository_group_id(root)) + "."
     found: dict[str, tuple[str, int]] = {}
     for module, source in production_sources(root, modules):
-        launches, sites = process_launch_sites(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8")))
+        launches, sites = process_launch_sites(COMMENTS_AND_LITERALS.sub(" ", read_java(source)))
         if launches:
             java_root = root / module / "src" / "main" / "java"
             name = ".".join(source.relative_to(java_root).with_suffix("").parts).removeprefix(prefix)
@@ -711,7 +704,8 @@ def check_adapter_types_named_by_adapters(root: Path = ROOT, group_id: str | Non
                                           listed: dict[tuple[str, str], dict[str, int]] | None = None,
                                           reasons: dict[tuple[str, str], str] | None = None) -> int:
     """A13 — an adapter names the types of another adapter only through ADAPTER_TYPES_NAMED_BY_ADAPTER, each from the
-    listed number of files, and each couple carries its written reason in ADAPTER_COUPLING_REASONS."""
+    listed number of files, and each couple carries its written reason in ADAPTER_COUPLING_REASONS. A non-static
+    wildcard import of a package or type of another adapter fails."""
     listed = ADAPTER_TYPES_NAMED_BY_ADAPTER if listed is None else listed
     reasons = ADAPTER_COUPLING_REASONS if reasons is None else reasons
     group = group_id or repository_group_id(root)
@@ -775,7 +769,7 @@ def check_service_loader_class_loaders(root: Path = ROOT, modules: tuple[str, ..
     violations: list[str] = []
     sites = 0
     for module, source in production_sources(root, modules):
-        code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
+        code = blank_comments_and_literals(read_java(source))
         for match in SERVICE_LOADER_LOAD.finditer(code):
             sites += 1
             if call_argument_count(code, match.end() - 1) < 2:
@@ -822,7 +816,7 @@ def check_snapshot_read_port(root: Path = ROOT, group_id: str | None = None,
         java_root = root / module / "src" / "main" / "java"
         name = ".".join(source.relative_to(java_root).with_suffix("").parts).removeprefix(group + ".")
         entry = f"{module}/{name}"
-        code = blank_comments_and_literals(source.read_text(encoding="utf-8"))
+        code = blank_comments_and_literals(read_java(source))
         for number, line in enumerate(code.splitlines(), start=1):
             if MEMORY_INDEX.search(line):
                 problems.append(f"{relative}:{number} names InMemoryCodeKnowledgeStore; read through "

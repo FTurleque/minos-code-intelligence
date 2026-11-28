@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 from module_boundary_policy import ALLOWED_DEPENDENCIES, ASSEMBLY_MODULE, MODULES, ROOT, fail
-from module_boundary_sources import COMMENTS_AND_LITERALS, production_types
+from module_boundary_sources import COMMENTS_AND_LITERALS, production_types, read_java
 from module_boundary_ratchets import PACKAGE_ROOTS_BY_MODULE
 
 
@@ -130,7 +130,7 @@ def public_interfaces(root: Path, module: str) -> list[str]:
     source_root = root / module / "src" / "main" / "java"
     found: set[str] = set()
     for source in sorted(source_root.rglob("*.java")) if source_root.is_dir() else []:
-        found.update(PUBLIC_INTERFACE.findall(COMMENTS_AND_LITERALS.sub(" ", source.read_text(encoding="utf-8"))))
+        found.update(PUBLIC_INTERFACE.findall(COMMENTS_AND_LITERALS.sub(" ", read_java(source))))
     return sorted(found)
 
 
@@ -209,9 +209,9 @@ def check_architecture_test_policy(test: Path = ARCHITECTURE_TEST, reader: Path 
         if not source.is_file():
             fail(f"A17 ArchUnit policy source is missing: {source.name}")
     code = COMMENTS_AND_LITERALS.sub(lambda m: m.group(0) if m.group(0).startswith('"') else " ",
-                                     test.read_text(encoding="utf-8"))
+                                     read_java(test))
     reader_code = COMMENTS_AND_LITERALS.sub(lambda m: m.group(0) if m.group(0).startswith('"') else " ",
-                                            reader.read_text(encoding="utf-8"))
+                                            read_java(reader))
     problems = []
     if not POLICY_READ.search(code):
         problems.append(f"{test.name} no longer reads the policy through ModuleBoundaryPolicy.load")

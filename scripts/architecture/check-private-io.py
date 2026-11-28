@@ -67,6 +67,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from gate_runner import run_gate
+from java_escapes import decode_unicode_escapes
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST = Path(__file__).resolve().parent / "private-io-allowlist.json"
@@ -210,14 +211,8 @@ _ADVICE = {
     MESSAGE_PATH_RULE: "name the entry by its role or its file name (getFileName(), PublicErrorMessages.leafName), "
                        "never by its absolute path",
 }
-_UNICODE_ESCAPE = re.compile(r"(?<!\\)((?:\\\\)*)\\u+([0-9a-fA-F]{4})")
 
 _MIN_JUSTIFICATION_CHARS = 20
-
-
-def decode_unicode_escapes(source: str) -> str:
-    """Decode unicode escapes before lexing, as the Java compiler does (an escaped backslash is not one)."""
-    return _UNICODE_ESCAPE.sub(lambda match: match.group(1) + chr(int(match.group(2), 16)), source)
 
 
 def strip_comments_and_literals(source: str) -> str:
