@@ -1,4 +1,4 @@
-"""PreToolUse (Bash) : garde-fous de gouvernance Git et GitHub de MINOS.
+"""PreToolUse (Bash, PowerShell) : garde-fous de gouvernance Git et GitHub de MINOS.
 
 Refuse : push forcé, push qui met à jour `main` (destination `main`, ou push sans destination nommée ou vers
 `HEAD` depuis `main`), contournement des hooks (`--no-verify`, signature désactivée), `gh pr merge --admin`,
@@ -13,6 +13,9 @@ Quand un push dépend de cette branche et qu'elle ne peut pas être établie, il
 illisible, HEAD détachée, `cd` ailleurs qu'en tête, `--git-dir`, `--work-tree`, `GIT_DIR`, autre changement de
 branche dans la même commande.
 
+L'outil de l'événement (`tool_name`) choisit la lecture de la commande (`_shell.py`). En PowerShell, un push
+dont la destination est une variable, un splat ou une expression est refusé.
+
 Tout le reste passe. Voir docs/developer/ai-configuration.md.
 """
 from __future__ import annotations
@@ -22,11 +25,10 @@ import re
 from pathlib import Path
 
 from _common import PROTECTED_BRANCHES, current_branch, permission, read_event
-from _shell import KEYWORDS, segments, strip_wrappers, tokens
+from _shell import UNKNOWN, bash_commands, powershell_commands
 
 RELEASE_TAG = re.compile(r"^(?:refs/tags/)?v\d+\.\d+\.\d+")
 REDIRECTION = re.compile(r"^(?:\d*|&)(?:>>|>|<<<|<<|<)(.*)$")
-GIT_REDIRECTED = re.compile(r"^GIT_(?:DIR|WORK_TREE)=")
 GIT_VALUE_OPTIONS = ("-c", "--namespace", "--config-env", "--attr-source")
 PUSH_VALUE_OPTIONS = ("-o", "--push-option", "--receive-pack", "--exec", "--repo")
 NEW_BRANCH_OPTIONS = {"switch": ("-c", "-C", "--create", "--force-create"), "checkout": ("-b", "-B")}
@@ -50,11 +52,11 @@ def without_redirections(words: list[str]) -> list[str]:
     return kept
 
 
-def resolve_directory(base: Path | None, target: str) -> Path | None:
+def resolve_directory(base: Path | None, target: str, msys: bool) -> Path | None:
     """Le dossier désigné par `target` depuis `base`, ou None quand il ne peut pas être établi."""
-    if target == "-" or any(character in target for character in "$`*?"):
+    if target == "-" or any(character in target for character in ("$", "`", "*", "?", UNKNOWN)):
         return None
-    if os.name == "nt":
+    if msys and os.name == "nt":
         target = re.sub(r"^/([A-Za-z])(?=/|$)", r"\1:/", target)  # Git Bash : /n/depot désigne n:/depot
         if target.startswith("/"):  # montage MSYS (/tmp, /usr) inconnu de Windows
             return None
@@ -70,14 +72,14 @@ def resolve_directory(base: Path | None, target: str) -> Path | None:
         return None
 
 
-def changed_directory(base: Path | None, arguments: list[str]) -> Path | None:
+def changed_directory(base: Path | None, arguments: list[str], msys: bool) -> Path | None:
     targets = [a for a in without_redirections(arguments) if a not in ("-L", "-P", "--")]
     if len(targets) > 1:
         return None
-    return resolve_directory(base, targets[0] if targets else "~")
+    return resolve_directory(base, targets[0] if targets else "~", msys)
 
 
-def parse_git(words: list[str], directory: Path | None) -> tuple[str, list[str], Path | None]:
+def parse_git(words: list[str], directory: Path | None, msys: bool) -> tuple[str, list[str], Path | None]:
     """Sous-commande, arguments et dossier effectif, options globales de git (`-C`, `-c`…) retirées."""
     redirected = False
     index = 1
@@ -86,7 +88,7 @@ def parse_git(words: list[str], directory: Path | None) -> tuple[str, list[str],
         value = words[index + 1] if index + 1 < len(words) else ""
         if option == "-C":
             if value:
-                directory = resolve_directory(directory, value)
+                directory = resolve_directory(directory, value, msys)
             index += 2
         elif option in ("--git-dir", "--work-tree"):
             redirected = True
@@ -140,7 +142,12 @@ def check_git_push(args: list[str], directory: Path | None, known: str | None) -
             target = a.lstrip(":")
             if RELEASE_TAG.match(target):
                 permission("deny", "Suppression d'un tag de release refusée : les tags vX.Y.Z sont immuables.")
-    refspecs = [spec.lstrip("+") for spec in positional_arguments(args)[1:]]
+    positional = positional_arguments(args)
+    refspecs = [spec.lstrip("+") for spec in positional[1:]]
+    named = [spec.split(":", 1)[-1] for spec in refspecs] or positional[:1]  # seule, la variable porte tout
+    if any(UNKNOWN in name for name in named):
+        permission("deny", "Push refusé : sa destination dépend d'une variable ou d'une expression PowerShell. "
+                           "Écrire la branche (`git push origin <branche>`) ou `git push origin HEAD`.")
     if any(a in ("--all", "--mirror", "--branches") for a in args) or ":" in refspecs:
         permission("deny", "Push de toutes les branches refusé : il inclut main. Nommer la branche thématique.")
     for spec in refspecs:
@@ -195,33 +202,31 @@ def new_branch(words: list[str], sub: str, rest: list[str]) -> str | None:
     if sub not in NEW_BRANCH_OPTIONS or "--" in rest[:-1]:  # `checkout -- fichier` ne change pas de branche
         return None
     for option, name in zip(rest, rest[1:]):
-        if option in NEW_BRANCH_OPTIONS[sub] and not any(c in name for c in "$`"):
+        if option in NEW_BRANCH_OPTIONS[sub] and not any(c in name for c in ("$", "`", UNKNOWN)):
             return name
     return ""
 
 
-def check_command(command: str, cwd: str) -> None:
+def check_command(command: str, cwd: str, powershell: bool) -> None:
     """Contrôle chaque commande simple en suivant le dossier et la branche dans lesquels elle s'exécutera."""
     directory = Path(cwd) if cwd and os.path.isdir(cwd) else None  # chemin littéral, sans expansion de shell
     redirected = False
     created: str | None = None  # branche fixée par la commande ("" : inconnue)
     created_in: Path | None = None
     at_head = True
-    for segment, separator in segments(command):
-        raw = tokens(segment)
-        words = strip_wrappers(raw)
-        grouped = segment.startswith(("(", "{")) or (raw[:1] != [] and raw[0] in KEYWORDS)
+    msys = not powershell  # `/n/depot` désigne n:/depot en Git Bash seulement
+    commands = powershell_commands(command) if powershell else bash_commands(command)
+    for words, separator, grouped, redirects_git in commands:
         at_head = at_head and not grouped
-        prefix = raw if words[:1] == ["export"] else raw[:len(raw) - len(words)]
-        redirected = redirected or any(GIT_REDIRECTED.match(word) for word in prefix)
+        redirected = redirected or redirects_git
         if words[:1] in (["cd"], ["pushd"], ["popd"]):
             followed = at_head and words[0] == "cd" and separator in ("&&", ";", "\n", "")
-            directory = changed_directory(directory, words[1:]) if followed else None
+            directory = changed_directory(directory, words[1:], msys) if followed else None
         elif words and not words[0].startswith("#"):
             at_head = False
             sub, rest, target = "", [], directory
             if words[0] == "git":
-                sub, rest, target = parse_git(words, directory)
+                sub, rest, target = parse_git(words, directory, msys)
                 target = None if redirected else target
                 known = created if created == "" or (target and target == created_in) else None
                 check_git(sub, rest, words, target, known)
@@ -236,7 +241,7 @@ def check_command(command: str, cwd: str) -> None:
 def main() -> None:
     event = read_event()
     command = (event.get("tool_input") or {}).get("command") or ""
-    check_command(command, event.get("cwd") or "")
+    check_command(command, event.get("cwd") or "", event.get("tool_name") == "PowerShell")
 
 
 if __name__ == "__main__":
