@@ -29,6 +29,8 @@ Relu au commit `4f4cac814` (PR #829), le 2026-11-27.
 2. **Notes de version.** `unreleased.md` (sections aux lignes 5, 14, 23 et 28) n'annonce ni le retrait des fabriques, ni les méthodes ajoutées au port `MinosApplicationComposer`. Un hôte qui lit les notes ne voit pas ces ruptures.
 3. **AUD-QUA-10, second recoupement.** La fiche cite aussi `SUIVI.md:169` et le design archivé de `tenir-le-contrat-de-la-facade-par-le-garde`, qui écrivent que `ProjectInspectionService.view` « s'appelle `statusView` ». Les deux méthodes existent (`ProjectInspectionService.java:140`, `:169`). Le design archivé est de l'historique, non modifié. La ligne du suivi est corrigée par le coordinateur (tâche 3.3), hors de ce changement.
 4. **Décompte de l'audit.** L'audit compte 335 cas avec `test_gate_runner.py`. Ce fichier teste le lanceur partagé, pas une règle du garde : le décompte des règles est 332. Le nombre est de toute façon retiré (D2).
+5. **Constructeur public de l'orchestration.** `ProjectIndexingUseCase(Dependencies, UnaryOperator<IndexerExecutor>)` et le record `Dependencies` sont publics (`ProjectIndexingUseCase.java:87`, `:181`), comme en 1.3.0. Ils ne rendent pas le service de la fabrique retirée : l'hôte doit assembler lui-même les quinze ports, que la façade construit en privé (`MinosApplication.java:417-434`). La ligne de la table borne donc l'affirmation de D1 à la façade (« sur la façade, la décoration des exécuteurs est réservée aux tests ») ; l'indexation distante de la façade décore elle aussi les exécuteurs (`MinosApplication.java:402`).
+6. **Méthode du port non annoncée.** `MinosApplicationComposer` gagne depuis `v1.3.0` cinq méthodes abstraites. `java-api.md` en décrit quatre (sections des fournisseurs embarqués et de l'historique d'import) ; `semanticProjectionStore(Path)` (commit `fd876d996`) n'y figure pas. Hors de ce changement : le paragraphe des notes de version ne donne aucun décompte et ne se présente pas comme la liste complète.
 
 ## Décisions
 
@@ -64,7 +66,9 @@ Une exigence de `controles-de-fusion` interdit le retour d'un tel nombre. Sa pre
 
 ## Traçabilité
 
-| Constat | Exigence | Tâches | Preuve attendue |
-|---|---|---|---|
-| AUD-QUA-09 | frontieres-de-modules › La table de rupture de la façade ne promet aucun remplaçant absent (`MODIFIED`) | 1.1 à 1.4 | `git grep` vide ; titre « prochaine version » ; paragraphe des notes |
-| AUD-QUA-10 | controles-de-fusion › Les documents d'état ne citent aucun décompte d'auto-test non relu | 2.1 à 2.3 | `git grep` vide ; `check-current-docs.py` et `product-facts.py --check` verts |
+| Constat | Exigence | Tâches | Preuve attendue | Preuve exécutée |
+|---|---|---|---|---|
+| AUD-QUA-09 | frontieres-de-modules › La table de rupture de la façade ne promet aucun remplaçant absent (`MODIFIED`) | 1.1 à 1.4 | `git grep` vide ; titre « prochaine version » ; paragraphe des notes | Rouge : `git grep` de `projectIndexing(executorDecorator)` rend `java-api.md:372` (code 0). Après correction : aucune ligne (code 1) ; `git grep` de `retentionService()` sans ligne (code 1) ; liens relatifs des deux pages résolus ; `check-current-docs.py`, `check-toolchain-baseline.py`, `check-module-boundaries.py` verts |
+| AUD-QUA-10 | controles-de-fusion › Les documents d'état ne citent aucun décompte d'auto-test non relu | 2.1 à 2.3 | `git grep` vide ; `check-current-docs.py` et `product-facts.py --check` verts | Rouge : `git grep` rend `STATUS.md:19` et `ROADMAP.md:23` (code 0). Après correction : aucune ligne (code 1) ; `check-current-docs.py`, `product-facts.py --check`, `check-audit-remediation-v2.py`, `check-post228-hardening.py` verts ; `run_gates.py --fast` 30/30 |
+
+Validation du 2026-11-27 sur la branche `docs/aligner-la-documentation-apres-le-sprint-11` : `openspec validate --all --strict` 27/27, `check-capability-dossiers.py` vert, `archgate check` 9/9 ; exigence `MODIFIED` de 393 caractères.
