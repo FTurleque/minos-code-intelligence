@@ -55,7 +55,7 @@ Aucune.
 - **Modules du reactor** : aucun.
 - **Surfaces publiques** : aucune signature ni sortie ; la documentation de l'API Java est corrigée.
 - **ADR** : aucun créé ni amendé.
-- **Gates à rejouer** : `scripts/docs/check-current-docs.py`, `scripts/docs/product-facts.py --check`, `scripts/docs/check-capability-dossiers.py`, `scripts/quality/check-toolchain-baseline.py` (liste fermée de documents, dont des pages de `docs/`), `scripts/quality/check-audit-remediation-v2.py` et `scripts/quality/check-post228-hardening.py` (ils lisent `STATUS.md` et `ROADMAP.md`), `python .claude/scripts/run_gates.py --fast`. Aucun scope JaCoCo.
+- **Gates à rejouer** : `scripts/docs/check-current-docs.py`, `scripts/docs/product-facts.py --check`, `scripts/docs/check-capability-dossiers.py`, `scripts/quality/check-toolchain-baseline.py` (liste fermée de documents, dont des pages de `docs/`), `scripts/remediation/check-audit-remediation-v2.py` et `scripts/remediation/check-post228-hardening.py` (ils lisent `STATUS.md` et `ROADMAP.md`), `python .claude/scripts/run_gates.py --fast`. Aucun scope JaCoCo.
 - **Plateformes** : sans objet (documentation).
 - **Documentation durable** : `docs/user/java-api.md`, `docs/user/release-notes/unreleased.md`, `STATUS.md`, `ROADMAP.md`, dossiers `frontieres-de-modules.md` et `controles-de-fusion.md` (traçabilité à l'archivage).
 
