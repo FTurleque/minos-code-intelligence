@@ -1,13 +1,14 @@
 ---
 name: audit-2026-11-15-clos
-description: Audit 2026-11-15 : 11 sprints fusionnés et archivés au 2026-11-26 (sprint 11 : #821-#828) ; restes manuels ; pièges CI, Dependabot et fusion en série
+description: Audit 2026-11-15 : 12 sprints fusionnés et archivés au 2026-11-28 (sprint 12 : #831-#834, #838) ; suites A11 (#835-#837) ; restes manuels ; pièges CI, Dependabot et fusion en série
 metadata:
   type: project
 ---
 
-Les onze sprints de l'audit 2026-11-15 sont fusionnés et archivés au 2026-11-26 ; aucun changement OpenSpec de cet
-audit n'est actif. Les restes vivent dans `docs/project/audits/2026-11-15/SUIVI.md` (colonne « Statut », « Tâches
-manuelles ») et dans les tâches non cochées des archives `openspec/changes/archive/2026-11-{19,20,24,26}-*`.
+Les douze sprints de l'audit 2026-11-15 sont fusionnés et archivés au 2026-11-28. Suites d'AUD-ARC-17 au 2026-11-28 :
+cinq changements fusionnés (#835, #836, #837) et non archivés. Les restes
+vivent dans `docs/project/audits/2026-11-15/SUIVI.md` (colonne « Statut », « Tâches manuelles ») et dans les tâches non
+cochées des archives `openspec/changes/archive/2026-11-{19,20,24,26}-*`.
 
 **Why:** des changements fusionnés sont restés actifs des jours faute d'archivage (sprints 2, 3, 4, 7) : l'utilisateur
 attend qu'une PR fusionnée soit suivie de l'archivage OpenSpec et de la mise à jour du SUIVI sans qu'il le demande.

@@ -13,6 +13,6 @@ Changement indépendant des autres du sprint 12 ; seul à toucher du code Java (
 ## 2. Clôture
 
 - [x] 2.1 AUD-TST-15 — Mettre à jour la matrice de traçabilité du design.
-- [ ] 2.2 AUD-TST-15 — **(manuelle)** Sur la PR, constater `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts avec les deux cas exécutés.
-- [ ] 2.3 AUD-TST-15 — Valider : `openspec validate --all --strict` vert ; après archivage, ligne de l'exigence ajoutée dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` ; `python scripts/docs/check-capability-dossiers.py` vert.
-- [ ] 2.4 AUD-TST-15 — Documents à mettre à jour avant archivage : dossier de capacité (2.3), ligne AUD-TST-15 du suivi de l'audit (coordinateur, après fusion).
+- [x] 2.2 AUD-TST-15 — **(manuelle)** Sur la PR, constater `Verify (ubuntu-24.04)` et `Verify (windows-2022)` verts avec les deux cas exécutés. Constat : PR #831, les deux classes de test sans échec ni cas sauté sous Ubuntu et Windows.
+- [x] 2.3 AUD-TST-15 — Valider : `openspec validate --all --strict` vert ; après archivage, ligne de l'exigence ajoutée dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` ; `python scripts/docs/check-capability-dossiers.py` vert. Constat : archivé le 2026-11-28, lignes ajoutées au dossier, `openspec validate --all --strict` 23/23 et `check-capability-dossiers.py` vert.
+- [x] 2.4 AUD-TST-15 — Documents à mettre à jour avant archivage : dossier de capacité (2.3), ligne AUD-TST-15 du suivi de l'audit (coordinateur, après fusion). Constat : dossier et suivi de l'audit mis à jour à l'archivage.

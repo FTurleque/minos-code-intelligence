@@ -14,10 +14,10 @@ Mutations : sur des copies du dépôt dans le scratchpad, jamais sur le dépôt.
 ## 2. Documentation (AUD-ARC-17)
 
 - [x] 2.1 AUD-ARC-17 — `docs/developer/quality-gates.md`, puce « A11, accesseurs de `MinosApplication` » : une phrase sur les méthodes génériques (bornes comprises) et le refus d'un import joker du moteur. Vérifier : `python scripts/docs/check-current-docs.py` vert, liens vérifiés, `python scripts/architecture/test_check_module_boundaries_documents.py` vert.
-- [ ] 2.2 AUD-ARC-17 — **(manuelle)** Ajouter à la proposition de mise à jour d'ARCH-0087 (« Compliance and Enforcement », tâche manuelle du sprint 11) la ligne de cette règle. Aucun ADR modifié pendant la spécification.
+- [x] 2.2 AUD-ARC-17 — **(manuelle)** Ajouter à la proposition de mise à jour d'ARCH-0087 (« Compliance and Enforcement », tâche manuelle du sprint 11) la ligne de cette règle. Aucun ADR modifié pendant la spécification. Constat : lignes consignées dans « Tâches manuelles » du suivi de l'audit ; la proposition au propriétaire reste à faire.
 
 ## 3. Clôture
 
 - [x] 3.1 AUD-ARC-17 — Mettre à jour la matrice de traçabilité du design (mutations rouges, auto-test, garde au HEAD).
-- [ ] 3.2 AUD-ARC-17 — Valider : `openspec validate --all --strict` vert ; après archivage, ligne de l'exigence ajoutée dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` ; `python scripts/docs/check-capability-dossiers.py` vert.
-- [ ] 3.3 AUD-ARC-17 — Documents à mettre à jour avant archivage : `quality-gates.md` (2.1), dossier de capacité (3.2), ligne AUD-ARC-17 du suivi de l'audit (coordinateur, après fusion). Vérifier : chacun est fait ou nommé comme reste dans la PR.
+- [x] 3.2 AUD-ARC-17 — Valider : `openspec validate --all --strict` vert ; après archivage, ligne de l'exigence ajoutée dans `docs/architecture/diagrams/capacites/frontieres-de-modules.md` ; `python scripts/docs/check-capability-dossiers.py` vert. Constat : archivé le 2026-11-28, lignes ajoutées au dossier, `openspec validate --all --strict` 23/23 et `check-capability-dossiers.py` vert.
+- [x] 3.3 AUD-ARC-17 — Documents à mettre à jour avant archivage : `quality-gates.md` (2.1), dossier de capacité (3.2), ligne AUD-ARC-17 du suivi de l'audit (coordinateur, après fusion). Vérifier : chacun est fait ou nommé comme reste dans la PR. Constat : dossier et suivi de l'audit mis à jour à l'archivage.
