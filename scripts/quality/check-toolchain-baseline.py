@@ -149,6 +149,17 @@ def stated_versions(text: str, pattern: re.Pattern[str]) -> list[str]:
     return [match.group("version").strip() for match in pattern.finditer(text)]
 
 
+def stated_in_document(root: Path, relative: str, pattern: re.Pattern[str],
+                       not_stated: str) -> tuple[list[str], list[str]]:
+    """(failures, versions stated) for a document that must exist and state at least one version; ``not_stated`` follows
+    the path in the failure of a document that states none."""
+    text = read(root, relative)
+    if text is None:
+        return [f"{relative} is missing"], []
+    stated = stated_versions(text, pattern)
+    return ([] if stated else [f"{relative} {not_stated}"]), stated
+
+
 def check_gradle(root: Path) -> tuple[list[str], str, int]:
     """(failures, wrapper version, number of places compared with it)."""
     failures: list[str] = []
@@ -161,17 +172,12 @@ def check_gradle(root: Path) -> tuple[list[str], str, int]:
     version = distributions[0]
     compared = 0
     for relative, pattern, form in ((POLICY, POLICY_VERSION, "Gradle: **X**"), (AGENTS, AGENTS_VERSION, "Gradle **X**")):
-        text = read(root, relative)
-        if text is None:
-            failures.append(f"{relative} is missing")
-            continue
-        stated = stated_versions(text, pattern)
-        if not stated:
-            failures.append(f"{relative} does not state the Gradle baseline (expected `{form}`)")
-        for other in stated:
-            compared += 1
-            if other != version:
-                failures.append(f"{relative} states Gradle {other}, the wrapper is {version}")
+        unstated, stated = stated_in_document(root, relative, pattern,
+                                              f"does not state the Gradle baseline (expected `{form}`)")
+        compared += len(stated)
+        failures.extend(unstated)
+        failures.extend(f"{relative} states Gradle {other}, the wrapper is {version}"
+                        for other in stated if other != version)
     failures.extend(workflow_gradle_versions(root))
     return failures, version, compared
 
@@ -266,17 +272,11 @@ def java_documents_failures(root: Path, version: str, expected_range: str) -> tu
             if match.group("version") != version:
                 failures.append(f"{POLICY} dates the support of Java {match.group('version')}, the POM compiles for {version}")
     for relative, pattern in ((AGENTS, AGENTS_JAVA), (OPENSPEC_CONFIG, CONFIG_JAVA)):
-        text = read(root, relative)
-        if text is None:
-            failures.append(f"{relative} is missing")
-            continue
-        stated = stated_versions(text, pattern)
-        if not stated:
-            failures.append(f"{relative} does not state the Java baseline of the product")
-        for other in stated:
-            compared += 1
-            if other != version:
-                failures.append(f"{relative} states Java {other} for the product, the POM compiles for {version}")
+        unstated, versions = stated_in_document(root, relative, pattern, "does not state the Java baseline of the product")
+        compared += len(versions)
+        failures.extend(unstated)
+        failures.extend(f"{relative} states Java {other} for the product, the POM compiles for {version}"
+                        for other in versions if other != version)
     return failures, compared
 
 
