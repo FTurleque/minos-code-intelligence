@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Auto-test du garde `.claude/hooks/guard_bash.py` (push et branche du dossier d'exécution).
+"""Auto-test du garde `.claude/hooks/guard_bash.py` (outils Bash et PowerShell, branche du dossier d'exécution).
 
 Le garde est lancé comme le fait Claude Code : événement JSON sur l'entrée standard, `CLAUDE_PROJECT_DIR`
 désignant le dossier principal. Les dépôts sont temporaires : un dossier principal et un arbre de travail sous
@@ -54,6 +54,7 @@ class Layout:
 
 
 class GuardCase(unittest.TestCase):
+    tool = "Bash"
     root_branch = "main"
     tree_branch = "fix/theme"
 
@@ -71,7 +72,7 @@ class GuardCase(unittest.TestCase):
 
     def decision(self, command: str, cwd: Path | None) -> str:
         """`deny`, `ask`, ou `passe` quand le garde ne dit rien."""
-        event = {"tool_name": "Bash", "tool_input": {"command": command}}
+        event = {"tool_name": self.tool, "tool_input": {"command": command}}
         if cwd is not None:
             event["cwd"] = str(cwd)
         done = subprocess.run(
@@ -234,6 +235,168 @@ class MainFolderOnThematicBranchTest(GuardCase):
     def test_push_from_the_thematic_main_folder_is_accepted(self) -> None:
         self.accepted("git push", self.layout.root)
         self.accepted(f"git -C {quoted(self.layout.root)} push", self.layout.tree)
+
+
+def literal(path: Path) -> str:
+    """Le chemin en chaîne PowerShell littérale, avec les séparateurs du système."""
+    return "'" + str(path).replace("'", "''") + "'"
+
+
+class PowerShellMainFolderOnMainTest(GuardCase):
+    """Outil PowerShell : dossier principal sur `main`, arbre de travail sur une branche thématique."""
+
+    tool = "PowerShell"
+
+    def test_pushes_of_the_thematic_tree_are_accepted(self) -> None:
+        for command in ("git push", "git push -u origin HEAD", "git push 2>&1 | Select-Object -Last 5",
+                        "git push *> journal.txt", "git push 2>$null", "& git push", "rtk git push",
+                        "git push -u origin $(git branch --show-current)", "git status; if ($?) { git push }",
+                        "git push $distant fix/theme"):
+            self.accepted(command, self.layout.tree)
+
+    def test_git_dash_c_reads_a_native_path(self) -> None:
+        root, tree = self.layout.root, self.layout.tree
+        self.accepted(f"git -C {literal(tree)} push", root)
+        if " " not in str(tree):
+            self.accepted(f"git -C {tree} push", root)  # `\` est un caractère ordinaire
+        self.accepted("git -C .claude/worktrees/wt push", root)
+        self.refused(f"git -C {literal(root)} push", tree)
+
+    def test_leading_location_change_designates_the_directory(self) -> None:
+        root, tree = self.layout.root, self.layout.tree
+        for command in (f"Set-Location {literal(tree)}; git push", f"Push-Location {literal(tree)}\ngit push",
+                        f"cd {literal(tree)} && git push", f"sl -LiteralPath {literal(tree)}; git push",
+                        f"SET-LOCATION -Path {literal(tree)}; git status; git push",
+                        f"$ErrorActionPreference = 'Stop'\nchdir {literal(tree)}\ngit push",
+                        f"$ErrorActionPreference='Stop'; $n=3; $env:X =\"y\"; cd {literal(tree)}; git push",
+                        f"# envoi\npushd {literal(tree)}; git push"):
+            self.accepted(command, root)
+        for command in (f"Set-Location {literal(root)}; git push", f"cd {literal(root)} && git push",
+                        f"Push-Location -Path {literal(root)}; git push", f"chdir {literal(root)}\ngit push"):
+            self.refused(command, tree)
+
+    def test_unfollowed_location_is_refused(self) -> None:
+        root, tree = self.layout.root, self.layout.tree
+        for command in ("Set-Location $env:AILLEURS; git push", "Set-Location absent; git push", "Pop-Location; git push",
+                        "Set-Location; git push", "Set-Location -; git push", "cd..; git push", "N:; git push",
+                        "$env:GIT_DIR = 'autre'; git push", "$env:GIT_WORK_TREE='autre'; git push",
+                        "Set-Item env:GIT_DIR autre; git push", "git --git-dir=autre/.git push"):
+            self.refused(command, tree)
+        for command in (f"if ($true) {{ Set-Location {literal(tree)} }}; git push",
+                        f"Get-Date; Set-Location {literal(tree)}; git push",
+                        f"$a = Get-Date; Set-Location {literal(tree)}; git push",
+                        f"Set-Location {literal(tree)} | git push", f"Set-Location {literal(tree)} || git push"):
+            self.refused(command, root)
+
+    def test_pushes_towards_main_are_refused_in_every_shape(self) -> None:
+        for command in ("git push origin main", "& git push origin main", "GIT push origin main",
+                        "git.exe push origin main", "& 'C:\\Program Files\\Git\\cmd\\git.exe' push origin main",
+                        ". git push origin main", "if ($?) { git push origin main }",
+                        "if ($a) { 'x' } else { git push origin main }", "try { git push origin main } finally { }",
+                        "1..2 | ForEach-Object { git push origin main }", "$r = git push origin main",
+                        "$r=git push origin main", "$a, $b = git push origin main",
+                        "[string]$r += git push origin main", "[void](git push origin main)", "$(git push origin main)",
+                        'Write-Host "envoi : $(git push origin main)"', '@"\n$(git push origin main)\n"@',
+                        "git status\ngit push origin main", "git push `\n  origin main", "git push origin ma`in",
+                        "git push origin main>journal.txt", "git push origin main 2>$null",
+                        "git push origin \u2018main\u2019", "git --% push origin main",
+                        'Write-Host "C:\\"; git push origin main', "git push origin main; Write-Host 'ouvert",
+                        "Start-Job { git push origin main } &",
+                        "foreach ($l in git push origin main) { $l }",
+                        "if ($?) { git status } git push origin main"):
+            self.refused(command, self.layout.tree)
+
+    def test_unresolved_destination_is_refused(self) -> None:
+        for command in ("$b='main'; git push origin $b", "$b = 'fix/x'\ngit push origin ${b}",
+                        'git push origin "$b"', 'git push origin "HEAD:$b"', "git push origin $env:BRANCHE",
+                        "git push origin ($b)", "git push origin $($b.Trim())", "$a = 'origin','main'; git push $a",
+                        "git push @a", "git push origin @a", "1 | ForEach-Object { git push origin $_ }",
+                        "git push origin \"$(Get-Content branche.txt)\""):
+            self.refused(command, self.layout.tree)
+
+    def test_quoted_text_comments_and_here_strings_are_data(self) -> None:
+        for command in ("git commit -m 'docs: a; git push origin main'; git push",
+                        "git commit -m @'\ncd ailleurs\ngit push origin main\nl'arbre \"x\"\n'@\ngit push",
+                        'git commit -m @"\ngit push origin main\n"@; git push',
+                        "# git push origin main\ngit push", "<# git push origin main\n#> git push",
+                        "git commit -m 'l''arbre; git push origin main'; git push",
+                        'git commit -m "dire `"non`"; git push origin main"; git push',
+                        'git commit -m "`$(git push origin main)"; git push',
+                        "git commit -m '$(git push origin main)'; git push", "git push origin ma\\in"):
+            self.accepted(command, self.layout.tree)
+        self.refused("@'\ngit push origin main\n'@ | Invoke-Expression", self.layout.tree)
+
+    def test_other_rules_apply(self) -> None:
+        tree = self.layout.tree
+        for command in ("git push --force", "git push -f origin fix/theme", "git push --no-verify",
+                        "$null = git commit --no-verify -m x", "gh pr merge 12 --admin",
+                        "if ($?) { gh release delete v1.0.0 }", "git tag -d v1.0.0",
+                        "git -c commit.gpgsign=false commit -m x"):
+            self.refused(command, tree)
+        for command in ("git reset --hard", "git status; if ($?) { git clean -fd }", "git restore ."):
+            with self.subTest(command=command):
+                self.assertEqual("ask", self.decision(command, tree))
+
+    def test_crlf_line_endings_are_read_like_lf(self) -> None:
+        tree = self.layout.tree
+        for command in ("git push `\r\n  origin main", "git push origin `\r\n  main", "git push `\r\n  --force",
+                        "git push `\r\n  --no-verify", "gh pr merge 12 `\r\n  --admin"):
+            self.refused(command, tree)
+        self.accepted("git push `\r\n  origin fix/theme", self.layout.root)
+        self.accepted("git commit -m @'\r\ngit push origin main\r\n'@\r\ngit push", tree)
+
+    def test_program_or_subcommand_held_by_a_variable(self) -> None:
+        tree = self.layout.tree
+        for command in ("& $git push origin main", "& $git push --force origin fix/theme",
+                        "$g = 'git'; & $g -C . push origin main"):
+            self.refused(command, tree)
+        self.accepted("& $git push origin fix/theme", self.layout.root)
+        self.accepted("if ($mode -eq 'push') { git status }", self.layout.root)
+        for command in ("$sub = 'push'; git $sub origin main", "$a = 'push','origin','main'; git @a"):
+            with self.subTest(command=command):
+                self.assertEqual("ask", self.decision(command, tree))
+
+    def test_typed_targets_and_joined_options(self) -> None:
+        tree = self.layout.tree
+        self.refused("[string[]]$out = git push origin main", tree)
+        self.refused("[int[]]$n = 1; [object[]]$o = git push --force", tree)
+        self.accepted(f"Set-Location {literal(tree)} -ErrorAction:Stop; git push", self.layout.root)
+
+    def test_too_deep_nesting_is_read_literally(self) -> None:
+        self.refused("(" * 5000 + "\ngit push origin main\n" + ")" * 5000, self.layout.tree)
+
+    def test_branch_change_inside_the_command(self) -> None:
+        tree = self.layout.tree
+        self.accepted("git switch -c fix/neuve && git push -u origin HEAD", tree)
+        self.refused("git switch -c fix/neuve; git push", tree)
+        self.refused("git switch main; git push origin $(git branch --show-current)", tree)
+        self.refused("if ($a) { git switch -c fix/neuve }; git push", tree)
+
+
+class PowerShellMainFolderOnThematicBranchTest(GuardCase):
+    """Sens inverse pour l'outil PowerShell."""
+
+    tool = "PowerShell"
+    root_branch = "fix/dossier-principal"
+    tree_branch = "main"
+
+    def test_the_directory_decides(self) -> None:
+        root, tree = self.layout.root, self.layout.tree
+        self.accepted("git push", root)
+        self.accepted(f"Set-Location {literal(root)}; git push", tree)
+        self.refused("git push", tree)
+        self.refused(f"Set-Location {literal(tree)}; git push", root)
+        self.refused(f"git -C {literal(tree)} push", root)
+        self.refused("git push -u origin $(git branch --show-current)", tree)
+
+
+class SettingsWiringTest(unittest.TestCase):
+    def test_the_guard_is_wired_to_both_shells(self) -> None:
+        settings = json.loads((HOOK.parents[1] / "settings.json").read_text(encoding="utf-8"))
+        wired = {tool for entry in settings["hooks"]["PreToolUse"]
+                 if any(HOOK.name in hook["command"] for hook in entry["hooks"])
+                 for tool in entry["matcher"].split("|")}
+        self.assertEqual({"Bash", "PowerShell"}, wired)
 
 
 if __name__ == "__main__":
