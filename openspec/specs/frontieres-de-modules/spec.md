@@ -1616,7 +1616,7 @@ Hors des relevés figés (`docs/project/history/`, `docs/project/audits/`, archi
 - **THEN** la commande rend la ligne d'ARCH-0087 et se termine avec le code 0
 
 ### Requirement: La table de rupture de la façade ne promet aucun remplaçant absent
-Dans `docs/user/java-api.md`, chaque remplaçant d'un accesseur retiré de `MinosApplication` SHALL être une méthode publique qui rend ce service. `retentionService()` SHALL être documenté sans remplaçant à la demande, la rétention suivant chaque indexation et chaque import qui publie un snapshot.
+Dans `docs/user/java-api.md`, chaque remplaçant donné par une table de rupture de `MinosApplication` ou de ses cas d'usage SHALL être une méthode ou un constructeur public qui rend ce service, ou SHALL être écrit « aucun remplaçant public ». `retentionService()` SHALL être documenté sans remplaçant à la demande, la rétention suivant chaque indexation et chaque import qui publie un snapshot.
 
 #### Scenario: Rétention sans remplaçant promis
 - **GIVEN** le dépôt après correction
@@ -1626,6 +1626,17 @@ Dans `docs/user/java-api.md`, chaque remplaçant d'un accesseur retiré de `Mino
 #### Scenario: Promesse réintroduite
 - **GIVEN** une copie de travail où la ligne `retentionService()` de la table redonne `new LocalProjectOperations(application)` comme remplaçant
 - **WHEN** la même commande est exécutée
+- **THEN** elle rend cette ligne et se termine avec le code 0, ce que la revue refuse
+
+#### Scenario: Décoration des exécuteurs sans remplaçant public
+- **GIVEN** le dépôt après correction
+- **WHEN** `git grep -n 'projectIndexing(executorDecorator)' -- docs/user/java-api.md` est exécuté
+- **THEN** la commande ne rend aucune ligne et se termine avec le code 1
+- **AND** la ligne de `ProjectIndexingUseCase.of(MinosApplication, UnaryOperator<IndexerExecutor>)` contient « aucun remplaçant public »
+
+#### Scenario: Méthode privée au package promise de nouveau
+- **GIVEN** une copie de travail où cette ligne redonne `application.projectIndexing(executorDecorator)` comme remplaçant
+- **WHEN** la commande `git grep` du scénario précédent est exécutée
 - **THEN** elle rend cette ligne et se termine avec le code 0, ce que la revue refuse
 
 ### Requirement: Le test-jar de l'application ne publie que la classe d'accès
@@ -1728,6 +1739,79 @@ Le paragraphe « Règles du garde » de `docs/architecture/diagrams/capacites/fr
 - **GIVEN** une copie du dépôt où l'amorce « Règles du garde » du paragraphe est réécrite
 - **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
 - **THEN** l'auto-test se termine avec le code 1 au lieu de réussir sur un ensemble vide
+
+### Requirement: Les points d'entrée publics des opérations locales sont éprouvés sur une application
+Un test de `minos-application` SHALL faire passer un import SCIP publié par `new LocalProjectOperations(application)` et affirmer la publication, l'état et la rétention de cette application, dans cet ordre. Un test SHALL affirmer par un appel observable que `new LocalProjectSymbolQuery(application)` lit le registre de cette application.
+
+#### Scenario: Import publié par le constructeur sur application
+- **GIVEN** une application construite sur les ports de la fixture de `LocalProjectOperationsRetentionTest`
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test "-Dtest=LocalProjectOperationsRetentionTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le cas sur application constate les événements `publish`, `state` puis `retention` du snapshot importé
+
+#### Scenario: Rétention de l'assemblage retirée
+- **GIVEN** une copie de travail où `localProjectOperationsDependencies()` passe une autre rétention que `stores.retentionService()`
+- **WHEN** la même commande est exécutée
+- **THEN** le cas sur application échoue
+
+#### Scenario: Requête de symboles sur le registre de l'application
+- **GIVEN** une application dont le registre double enregistre ses appels
+- **WHEN** `./mvnw -B -ntp -pl minos-application -am test "-Dtest=LocalOperationsAssemblyTest" "-Dsurefire.failIfNoSpecifiedTests=false"` est exécuté
+- **THEN** le cas constate qu'une recherche de symboles par `LocalProjectSymbolQuery(application)` a appelé ce registre
+
+### Requirement: Une méthode générique ou un import joker de la façade ne contourne pas A11
+A11 SHALL lire les méthodes publiques, statiques comprises, et les constructeurs publics de `MinosApplication`, y compris quand ils déclarent des paramètres de type à bornes imbriquées. Un type de `minos-engine` nommé dans une borne SHALL compter comme rendu et pris par la méthode ; une méthode statique qui rend un tel type SHALL échouer. Un import joker d'un package de `minos-engine` dans `MinosApplication` SHALL faire échouer A11 en nommant le package.
+
+#### Scenario: Paramètre typé moteur d'une méthode générique
+- **GIVEN** une copie du dépôt où `MinosApplication` déclare `public <T> void leakGeneric(com.minos.registry.ProjectRegistry r) {}`
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté dans la copie
+- **THEN** le garde se termine avec le code 1 en A11 et nomme `leakGeneric` et `registry.ProjectRegistry`
+
+#### Scenario: Retour typé moteur d'une méthode générique
+- **GIVEN** une copie du dépôt où `MinosApplication` déclare `public <T> com.minos.registry.ProjectRegistry leakRet() { return null; }`
+- **WHEN** le garde est exécuté dans la copie
+- **THEN** il se termine avec le code 1 en A11 et nomme `leakRet`
+
+#### Scenario: Retour typé moteur d'une méthode statique
+- **GIVEN** l'auto-test du garde, avec `public static ProjectRegistry leakStatic()` puis `public static <T> ProjectRegistry leakStaticGeneric()`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque variante est refusée en A11, message nommant la méthode et `registry.ProjectRegistry`
+
+#### Scenario: Type du moteur porté par une borne
+- **GIVEN** l'auto-test du garde, avec `public <T extends ProjectRegistry> void leakBound(T r)` puis `public <T extends java.util.Map<String, ProjectRegistry>> T nested()`
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_ratchets.py` est exécuté
+- **THEN** chaque variante est refusée en A11, message nommant la méthode et `registry.ProjectRegistry`
+
+#### Scenario: Import joker d'un package du moteur
+- **GIVEN** l'auto-test du garde, avec `import com.minos.registry.*;` dans `MinosApplication`
+- **WHEN** le même auto-test est exécuté
+- **THEN** le cas constate le refus en A11 et le message qui nomme `com.minos.registry`
+
+#### Scenario: Méthode générique sans type du moteur
+- **GIVEN** l'auto-test du garde, avec `public <T extends Comparable<T>> java.util.List<T> sorted(java.util.List<T> values)`
+- **WHEN** le même auto-test est exécuté
+- **THEN** la règle des paramètres et celle des retours réussissent
+
+#### Scenario: Façade au HEAD
+- **WHEN** `python scripts/architecture/check-module-boundaries.py` est exécuté sur le dépôt
+- **THEN** il se termine avec le code 0
+
+### Requirement: Le dossier des frontières n'écrit aucun décompte de la politique
+`docs/architecture/diagrams/capacites/frontieres-de-modules.md` SHALL ne contenir aucun nombre en chiffres suivi d'un module, d'une dépendance, d'une découverte, d'un package ou d'un cycle. Aucune preuve d'écart SHALL nommer une méthode que `MinosApplication` ne déclare plus. `test_check_module_boundaries_documents.py` SHALL échouer en nommant chaque ligne fautive.
+
+#### Scenario: Dossier sans décompte
+- **GIVEN** le dépôt après correction
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté
+- **THEN** l'auto-test se termine avec le code 0
+
+#### Scenario: Décompte réintroduit
+- **GIVEN** une copie du dépôt où une ligne du dossier écrit « minos-app dépend des 12 autres modules »
+- **WHEN** `python scripts/architecture/test_check_module_boundaries_documents.py` est exécuté dans la copie
+- **THEN** l'auto-test se termine avec le code 1 et nomme la ligne
+
+#### Scenario: Preuve d'écart sur des accesseurs retirés
+- **GIVEN** le dépôt après correction
+- **WHEN** `git grep -nE "gitIntelligence\(\)|hostedControlPlaneService\(\)" -- docs/architecture/diagrams/capacites/frontieres-de-modules.md` est exécuté
+- **THEN** la commande ne rend aucune ligne et se termine avec le code 1
 
 ## Documentation liée
 
